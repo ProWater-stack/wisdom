@@ -1,0 +1,13 @@
+{
+  "name": "auto-gs-scheduler",
+  "version": "1.0.0",
+  "description": "Daily cron that raises Freshdesk GS-service tickets on day 14 of each society's 15-day cycle",
+  "main": "auto-gs-scheduler.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node auto-gs-scheduler.js"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.0.0"
+  }
+}
