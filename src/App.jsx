@@ -154,9 +154,10 @@ const allAccess = (level) => Object.fromEntries(MODULES.map(m => [m.id, level]))
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.1.1";
 const VERSION_DATE = "2026-07-10";
 const VERSION_HISTORY = [
+  { v: "2.1.1", note: "Live Dashboard: added \"Only apartments with leads\" toggle (on by default); revenue join now falls back to matching a paying customer to a lead by phone/email to inherit the society, since Zoho Billing customers often have no society field (was leaving revenue blank)." },
   { v: "2.1.0", note: "Analytics: new Live Dashboard (combines apartments + leads + billing → Apartment, flats, Installed, Penetration %, Target left, recharge Revenue for last two months) and is now the Analytics landing tab. Earned Revenue table now filters to the selected month only; the Earned-vs-recharge chart shows ₹ value labels on bars + line." },
   { v: "2.0.5", note: "Rate-limit hardening 2: removed the eager on-login prefetch of all 4 datasets (now fetched on-demand per module); detect Zoho code-45 (\"exceeded maximum call rate limit of 1,000\") returned as 500 and back off 5 min while serving cache; cache windows extended to 3h (leads 1h); paginator read-ahead reduced to 2 so a rate-limit stops paging immediately." },
   { v: "2.0.4", note: "Rate-limit fix: dropped the heavy _raw payload from leads/apartments so the localStorage cache no longer silently overflows quota (which was forcing a full Zoho refetch on every reload); LS.set now reports write failures; added a GLOBAL request gate (max 2 concurrent Zoho requests, ~150ms apart) so a cold load can't burst into a 429; extended cache TTL to 60m (leads 30m)." },
@@ -8623,6 +8624,7 @@ function LiveDashboard() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [q, setQ] = useState("");
+  const [onlyWithLeads, setOnlyWithLeads] = useState(true);
   useEffect(() => {
     api.logView(user.username, "Viewed Live Dashboard");
     Promise.all([apartmentApi.getAll(), salesApi.getDeals(), billingApi.getInvoices(), customerApi.getCustomers()])
@@ -8637,15 +8639,30 @@ function LiveDashboard() {
   const col1 = { key: `${c1y}-${c1m}`, label: _monthLong(c1y, c1m).split(" ")[0] };
   const col2 = { key: `${c2y}-${c2m}`, label: _monthLong(c2y, c2m).split(" ")[0] };
 
-  // Customer → society lookup (to attribute invoices to an apartment).
+  // Customer lookup (invoice → customer via any shared key).
   const custBy = {};
-  data.cust.forEach(c => { [c.zohoId, c.id, c.zohoCustomerId].filter(Boolean).forEach(k => { custBy[k] = c; }); });
-  const societyOf = (i) => (custBy[i.zohoCustomerId] || custBy[i.zohoId] || custBy[i.customerNumber])?.society || "";
+  data.cust.forEach(c => { [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber].filter(Boolean).forEach(k => { custBy[k] = c; }); });
+  const custFor = (i) => custBy[i.customerNumber] || custBy[i.zohoCustomerId] || custBy[i.zohoId] || null;
+
+  // Fallback society source: match a customer to a LEAD by phone/email (Zoho Billing
+  // customers frequently have no `society` field, which was leaving revenue blank).
+  const digits = s => String(s || "").replace(/\D/g, "").slice(-10);
+  const emailKey = s => String(s || "").trim().toLowerCase();
+  const socByPhone = {}, socByEmail = {};
+  data.deals.forEach(d => { if (!d.society) return; const p = digits(d.phone); if (p) socByPhone[p] = d.society; const e = emailKey(d.email); if (e) socByEmail[e] = d.society; });
+  const societyForInvoice = (i) => {
+    const c = custFor(i);
+    if (c?.society) return c.society;
+    const cp = digits(c?.phone); if (cp && socByPhone[cp]) return socByPhone[cp];
+    const ce = emailKey(c?.email); if (ce && socByEmail[ce]) return socByEmail[ce];
+    const ie = emailKey(i.email); if (ie && socByEmail[ie]) return socByEmail[ie];
+    return "";
+  };
 
   // Recharge collected by society × month (recharge = paid total − deposit).
   const rechargeBy = {};
   data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).forEach(i => {
-    const soc = norm(societyOf(i)); if (!soc) return;
+    const soc = norm(societyForInvoice(i)); if (!soc) return;
     const d = new Date(i.date); if (isNaN(d.getTime())) return;
     const mk = `${d.getFullYear()}-${d.getMonth() + 1}`;
     const recharge = Math.max(0, (i.total || 0) - depositForPlan(i.plan || "", i.total || 0));
@@ -8653,9 +8670,9 @@ function LiveDashboard() {
     rechargeBy[soc][mk] = (rechargeBy[soc][mk] || 0) + recharge;
   });
 
-  // Installed leads by society (lookup match on the leads API, status = Installed).
-  const installedBy = {};
-  data.deals.forEach(d => { if (norm(d.rawStatus) === "installed") { const s = norm(d.society); installedBy[s] = (installedBy[s] || 0) + 1; } });
+  // Leads by society — total (for the "with leads" filter) and installed (penetration).
+  const leadsBy = {}, installedBy = {};
+  data.deals.forEach(d => { const s = norm(d.society); if (!s) return; leadsBy[s] = (leadsBy[s] || 0) + 1; if (norm(d.rawStatus) === "installed") installedBy[s] = (installedBy[s] || 0) + 1; });
 
   // One row per (deduped) apartment.
   const seen = new Set(); let rows = [];
@@ -8664,10 +8681,11 @@ function LiveDashboard() {
     const flats = a.flats || 0;
     const installed = installedBy[k] || 0;
     const pen = flats ? (installed / flats) * 100 : 0;
-    rows.push({ name: a.name, flats, installed, pen, targetLeft: Math.max(0, 100 - pen), rev1: rechargeBy[k]?.[col1.key] || 0, rev2: rechargeBy[k]?.[col2.key] || 0 });
+    rows.push({ name: a.name, flats, installed, leads: leadsBy[k] || 0, pen, targetLeft: Math.max(0, 100 - pen), rev1: rechargeBy[k]?.[col1.key] || 0, rev2: rechargeBy[k]?.[col2.key] || 0 });
   });
   rows.sort((a, b) => b.installed - a.installed);
-  const filtered = rows.filter(r => r.name.toLowerCase().includes(q.toLowerCase()));
+  const withLeadsCount = rows.filter(r => r.leads > 0).length;
+  const filtered = rows.filter(r => (!onlyWithLeads || r.leads > 0) && r.name.toLowerCase().includes(q.toLowerCase()));
 
   const tot = filtered.reduce((a, r) => ({ flats: a.flats + r.flats, installed: a.installed + r.installed, rev1: a.rev1 + r.rev1, rev2: a.rev2 + r.rev2 }), { flats: 0, installed: 0, rev1: 0, rev2: 0 });
   const overallPen = tot.flats ? (tot.installed / tot.flats) * 100 : 0;
@@ -8700,7 +8718,13 @@ function LiveDashboard() {
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 16 }}>
         <Toolbar q={q} setQ={setQ} placeholder="Search apartment…" count={filtered.length}
-          right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />
+          right={<>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "var(--slate)", cursor: "pointer" }}>
+              <input type="checkbox" checked={onlyWithLeads} onChange={e => setOnlyWithLeads(e.target.checked)} style={{ width: 15, height: 15, accentColor: "var(--teal)" }} />
+              Only apartments with leads ({withLeadsCount})
+            </label>
+            <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
+          </>} />
         <Card pad={false}>
           <Table head={["Apartment Name", "Number of flats", "Installed", "Penetration %", "Target left", `Revenue - ${col1.label}`, `Revenue - ${col2.label}`]} maxHeight="calc(100vh - 400px)">
             {filtered.map((r, i) => (
