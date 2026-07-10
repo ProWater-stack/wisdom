@@ -154,9 +154,11 @@ const allAccess = (level) => Object.fromEntries(MODULES.map(m => [m.id, level]))
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.0.3";
-const VERSION_DATE = "2026-07-09";
+const APP_VERSION = "2.0.5";
+const VERSION_DATE = "2026-07-10";
 const VERSION_HISTORY = [
+  { v: "2.0.5", note: "Rate-limit hardening 2: removed the eager on-login prefetch of all 4 datasets (now fetched on-demand per module); detect Zoho code-45 (\"exceeded maximum call rate limit of 1,000\") returned as 500 and back off 5 min while serving cache; cache windows extended to 3h (leads 1h); paginator read-ahead reduced to 2 so a rate-limit stops paging immediately." },
+  { v: "2.0.4", note: "Rate-limit fix: dropped the heavy _raw payload from leads/apartments so the localStorage cache no longer silently overflows quota (which was forcing a full Zoho refetch on every reload); LS.set now reports write failures; added a GLOBAL request gate (max 2 concurrent Zoho requests, ~150ms apart) so a cold load can't burst into a 429; extended cache TTL to 60m (leads 30m)." },
   { v: "2.0.3", note: "Device Replacement popup redesigned into a shorter 2-step window (Old device details → New device details) with clearer labels/placeholders (Name, Phone “10-digit”, Email ID, Device Type “Select…”, auto uninstall date) and a live old-device ageing line; the irreversible confirm is now a compact separate popup. Device Type is required." },
   { v: "2.0.2", note: "Device Replacement now persists each confirmed swap to the DB via POST /device-replacement/add (old_device/new_device payload); phone is now a required field to match the backend; a toast confirms DB save or reports the server message." },
   { v: "2.0.1", note: "All data tables now fully centre-aligned — flipped every per-cell left/right override (names, addresses, POC, totals rows, chevron & detail columns) to centre; form labels & the Net-Revenue day-matrix keep their intentional alignment." },
@@ -280,7 +282,6 @@ function mapZohoLead(z) {
     updated: z.modified_time || z.Modified_Time || z.created_time || z.Created_Time || "",
     created: z.created_time || z.Created_Time || "",
     note: z.description || z.Description || "",
-    _raw: z, // keep the source lead so we can map any custom field precisely
   };
 }
 
@@ -339,7 +340,6 @@ function mapApartment(r) {
     pincode:       pickAptField(r, "pincode", "pin_code", "zip", "postal_code") || "",
     flats:         Number(pickAptField(r, "number_of_flats", "no_of_flats", "flats", "total_flats")) || 0,
     createdTime:   pickAptField(r, "created_time", "created_at", "createdon", "created") || "",
-    _raw: r,
   };
 }
 const apartmentApi = {
@@ -810,9 +810,44 @@ async function fetchAllPaged(path, listKeys) {
    NOT retried (it's a hard Zoho error). Falls back to sequential has_more paging
    when no total is known.
    ============================================================================ */
+// ── GLOBAL Zoho request gate ────────────────────────────────────────────────
+// Every paginated Zoho fetch funnels through fetchPage. This gate caps how many
+// run CONCURRENTLY across ALL endpoints (customers+subs+invoices+leads together)
+// and enforces a minimum gap between request starts, so even a cold load can't
+// burst into Zoho's per-second/per-minute rate limit.
+const ZOHO_MAX_CONCURRENT = 2;   // never more than 2 Zoho requests in flight at once
+const ZOHO_MIN_GAP_MS = 150;     // and space their starts ~150ms apart
+let _zohoActive = 0;
+let _zohoNextAt = 0;
+const _zohoQueue = [];
+function _zohoAcquire() {
+  return new Promise(resolve => {
+    const attempt = () => {
+      if (_zohoActive < ZOHO_MAX_CONCURRENT) {
+        _zohoActive++;
+        const now = Date.now();
+        const wait = Math.max(0, _zohoNextAt - now);
+        _zohoNextAt = Math.max(now, _zohoNextAt) + ZOHO_MIN_GAP_MS;
+        setTimeout(resolve, wait);
+      } else {
+        _zohoQueue.push(attempt);
+      }
+    };
+    attempt();
+  });
+}
+function _zohoRelease() {
+  _zohoActive = Math.max(0, _zohoActive - 1);
+  const next = _zohoQueue.shift();
+  if (next) next();
+}
+
 async function fetchPage(url) {
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(url, { headers: authHeaders() });
+    await _zohoAcquire();
+    let res;
+    try { res = await fetch(url, { headers: authHeaders() }); }
+    finally { _zohoRelease(); }
     if (res.status === 429) {
       if (attempt >= 5) throw new Error(`429: too many requests`);
       const ra = Number(res.headers.get("Retry-After"));
@@ -830,7 +865,7 @@ async function fetchPage(url) {
   }
 }
 
-async function fetchAllPagesFast(urlFor, pickRows, { maxPages = 60, concurrency = 4 } = {}) {
+async function fetchAllPagesFast(urlFor, pickRows, { maxPages = 60, concurrency = 2 } = {}) {
   const first = await fetchPage(urlFor(1));
   const rows = pickRows(first) || [];
   const total = Number(first.total ?? first.pagination?.total ?? first.info?.count);
@@ -919,7 +954,7 @@ const LS = {
     catch { return fallback; }
   },
   set(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* ignore */ }
+    try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch { return false; }
   },
 };
 
@@ -971,7 +1006,9 @@ function pushLog(entry) {
    rows in localStorage (pw_cache_*) so a reload — or a rate-limited fetch — can
    serve real data instead of failing. Defined AFTER LS so it can use it.
    ============================================================================ */
-const PERSIST_TTL = { customers: 30 * 60 * 1000, subscriptions: 30 * 60 * 1000, invoices: 30 * 60 * 1000, leads: 15 * 60 * 1000 };
+// Long windows so a normal work session never auto-refetches (use the Refresh
+// button for a manual, forced update). Trades a little staleness for zero rate-limit risk.
+const PERSIST_TTL = { customers: 3 * 60 * 60 * 1000, subscriptions: 3 * 60 * 60 * 1000, invoices: 3 * 60 * 60 * 1000, leads: 60 * 60 * 1000 };
 const _memCache = {};    // { key: { rows, at } } — session mirror of the persisted cache
 const _inflight = {};    // { key: Promise } — in-flight dedup (_custInflight/_subInflight/…)
 
@@ -979,10 +1016,19 @@ function loadPersistedRows(key) {
   const o = LS.get("pw_cache_" + key, null);
   return o && Array.isArray(o.rows) ? o : null;
 }
-function savePersistedRows(key, rows) { LS.set("pw_cache_" + key, { rows, at: Date.now() }); }
+function savePersistedRows(key, rows) {
+  // Strip any heavy _raw payload defensively so the cache stays small enough for
+  // localStorage — a silent quota failure here means every reload refetches Zoho.
+  const slim = rows.map(r => (r && r._raw !== undefined) ? (({ _raw, ...rest }) => rest)(r) : r);
+  const ok = LS.set("pw_cache_" + key, { rows: slim, at: Date.now() });
+  if (!ok) console.warn(`[cache] pw_cache_${key} too big to persist — will refetch on reload`);
+  return ok;
+}
 
-const isRateLimit = (msg) => /429|rate limit|too many request|exceeded the maximum call/i.test(String(msg || ""));
-let _rateLimitedUntil = 0;                                   // shared 1-min cooldown across all sources
+// Matches Zoho's rate-limit signals, incl. code 45 ("exceeded the maximum call
+// rate limit of 1,000") which the backend returns as a 500 body.
+const isRateLimit = (msg) => /429|rate limit|too many request|exceeded the maximum call|"code"\s*:\s*45\b/i.test(String(msg || ""));
+let _rateLimitedUntil = 0;                                   // shared cooldown across all sources
 const inRateLimitCooldown = () => Date.now() < _rateLimitedUntil;
 
 // Shared cache wrapper for the four heavy Zoho lists (customers/subs/invoices/leads).
@@ -1007,7 +1053,7 @@ async function getCached(key, source, endpoint, doFetch, fallback, force = false
       markSample(source, false);
       return rows;
     } catch (e) {
-      if (isRateLimit(e.message)) _rateLimitedUntil = Date.now() + 60000;
+      if (isRateLimit(e.message)) _rateLimitedUntil = Date.now() + 5 * 60 * 1000; // back off 5 min on a Zoho rate-limit
       if (cached?.rows?.length) { markSample(source, false); return cached.rows; }  // serve stale, don't flag sample
       markSample(source, true, { endpoint, reason: e.message });
       return fallback;
@@ -1563,16 +1609,14 @@ export default function App() {
   }, [user]);
   // ─────────────────────────────────────────────────────────────────────────
 
-  // On login (or token-restored reload): repopulate the session IP and warm the
-  // heavy Zoho caches once, so module screens open from cache instead of each
-  // firing its own cold fetch (§5 + §12). Cache-respecting — not a force refresh.
+  // On login (or token-restored reload): just repopulate the session IP.
+  // NOTE: we deliberately do NOT eagerly prefetch customers/subs/invoices/leads
+  // here — that fired 4 full Zoho pulls even for modules the user never opened,
+  // burning the org's shared Zoho rate limit. Each module fetches (and caches)
+  // its own data on demand instead.
   useEffect(() => {
     if (!user) return;
     api.ensureSession();
-    customerApi.getCustomers().catch(() => {});
-    billingApi.getSubscriptions().catch(() => {});
-    billingApi.getInvoices().catch(() => {});
-    salesApi.getDeals().catch(() => {});
   }, [user]);
 
   return (
