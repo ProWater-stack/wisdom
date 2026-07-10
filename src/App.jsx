@@ -154,9 +154,10 @@ const allAccess = (level) => Object.fromEntries(MODULES.map(m => [m.id, level]))
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.0.5";
+const APP_VERSION = "2.1.0";
 const VERSION_DATE = "2026-07-10";
 const VERSION_HISTORY = [
+  { v: "2.1.0", note: "Analytics: new Live Dashboard (combines apartments + leads + billing → Apartment, flats, Installed, Penetration %, Target left, recharge Revenue for last two months) and is now the Analytics landing tab. Earned Revenue table now filters to the selected month only; the Earned-vs-recharge chart shows ₹ value labels on bars + line." },
   { v: "2.0.5", note: "Rate-limit hardening 2: removed the eager on-login prefetch of all 4 datasets (now fetched on-demand per module); detect Zoho code-45 (\"exceeded maximum call rate limit of 1,000\") returned as 500 and back off 5 min while serving cache; cache windows extended to 3h (leads 1h); paginator read-ahead reduced to 2 so a rate-limit stops paging immediately." },
   { v: "2.0.4", note: "Rate-limit fix: dropped the heavy _raw payload from leads/apartments so the localStorage cache no longer silently overflows quota (which was forcing a full Zoho refetch on every reload); LS.set now reports write failures; added a GLOBAL request gate (max 2 concurrent Zoho requests, ~150ms apart) so a cold load can't burst into a 429; extended cache TTL to 60m (leads 30m)." },
   { v: "2.0.3", note: "Device Replacement popup redesigned into a shorter 2-step window (Old device details → New device details) with clearer labels/placeholders (Name, Phone “10-digit”, Email ID, Device Type “Select…”, auto uninstall date) and a live old-device ageing line; the irreversible confirm is now a compact separate popup. Device Type is required." },
@@ -2010,7 +2011,7 @@ function Shell({ module = "referral", onHome }) {
   const isModuleAdmin = moduleAccess === "admin" || moduleAccess === "devops";
   const [tab, setTab] = useState(
     module === "sales" ? "sales_leads"
-    : module === "analytics" ? "analytics"
+    : module === "analytics" ? "an_live"
     : module === "employee" ? "emp_users"
     : module === "devicereplace" ? "dr_list"
     : module === "about" ? "about_docs"
@@ -2085,6 +2086,7 @@ function Shell({ module = "referral", onHome }) {
       { id: "sales_errors", label: "Error Correction", icon: AlertCircle },
     ],
     analytics: [
+      { id: "an_live", label: "Live Dashboard", icon: LayoutDashboard },
       { id: "analytics", label: "Referral", icon: BarChart3 },
       { id: "an_sales", label: "Sales", icon: Briefcase },
       { id: "an_earned", label: "Earned Revenue", icon: Scale },
@@ -2235,6 +2237,7 @@ function Shell({ module = "referral", onHome }) {
             {tab === "referees" && <Referees key={refreshKey} />}
             {tab === "credits" && <Credits key={refreshKey} />}
             {tab === "tracker" && <Tracker key={refreshKey} />}
+            {tab === "an_live" && <LiveDashboard key={refreshKey} />}
             {tab === "analytics" && <Analytics key={refreshKey} />}
             {tab === "an_sales" && <SalesInsights key={refreshKey} />}
             {tab === "an_earned" && <EarnedRevenue key={refreshKey} />}
@@ -8083,6 +8086,8 @@ function IoTDevices() {
    =========================================================================== */
 const momPct = (cur, prev) => (prev ? Math.round(((cur - prev) / prev) * 100) : null);
 const inr2 = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Compact ₹ label for chart data-labels (₹43k / ₹8.1k / ₹950).
+const kLabel = (v) => { const n = Number(v) || 0; return n >= 1000 ? "₹" + (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : "₹" + Math.round(n); };
 const _addMonths = (y, m, n) => { const idx = y * 12 + (m - 1) + n; return [Math.floor(idx / 12), (idx % 12) + 1]; };
 const _monthShort = (y, m) => new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
 const _monthLong = (y, m) => new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
@@ -8170,7 +8175,8 @@ function EarnedRevenue() {
     { label: "Contributing recharges", value: collectedThis.filter(r => r.recharge > 0).length, icon: Receipt, sub: `paid in ${monLabel}` },
   ];
 
-  const tableRows = [...rows].sort((a, b) => earnedFor(b, selY, selM) - earnedFor(a, selY, selM));
+  // Only rows whose term actually overlaps the selected month (so "July" shows July's rows, not every invoice).
+  const tableRows = rows.filter(r => daysInMonthFor(r, selY, selM) > 0).sort((a, b) => earnedFor(b, selY, selM) - earnedFor(a, selY, selM));
   const totRow = tableRows.reduce((a, r) => ({ total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge, earnedMonth: a.earnedMonth + earnedFor(r, selY, selM) }), { total: 0, deposit: 0, recharge: 0, earnedMonth: 0 });
 
   const exportCsv = () => exportToCsv(`prowater-earned-${ym}.csv`, [
@@ -8201,8 +8207,12 @@ function EarnedRevenue() {
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={52} />
               <Tooltip content={<TT prefix="₹" />} />
               <Legend />
-              <Bar dataKey="earned" name="Earned" fill="#5a7863" radius={[5, 5, 0, 0]} isAnimationActive={false} />
-              <Line dataKey="recharge" name="Recharge collected" stroke="#c2671e" strokeWidth={2} dot={false} isAnimationActive={false} />
+              <Bar dataKey="earned" name="Earned" fill="#5a7863" radius={[5, 5, 0, 0]} isAnimationActive={false}>
+                <LabelList dataKey="earned" position="top" formatter={kLabel} style={{ fontSize: 10.5, fill: "var(--f)", fontWeight: 700 }} />
+              </Bar>
+              <Line dataKey="recharge" name="Recharge collected" stroke="#c2671e" strokeWidth={2} dot={{ r: 3, fill: "#c2671e" }} isAnimationActive={false}>
+                <LabelList dataKey="recharge" position="top" formatter={kLabel} style={{ fontSize: 10.5, fill: "#c2671e", fontWeight: 700 }} />
+              </Line>
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
@@ -8603,6 +8613,122 @@ function ApartmentLeads() {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+/* Live Dashboard — one combined view across apartments + leads + billing:
+   penetration (installed leads ÷ flats) and recharge collected per apartment/month. */
+function LiveDashboard() {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    api.logView(user.username, "Viewed Live Dashboard");
+    Promise.all([apartmentApi.getAll(), salesApi.getDeals(), billingApi.getInvoices(), customerApi.getCustomers()])
+      .then(([apts, deals, inv, cust]) => setData({ apts, deals: deals.filter(notHiddenLead), inv, cust }))
+      .catch(() => setData({ apts: [], deals: [], inv: [], cust: [] }));
+  }, []);
+  if (!data) return <Loading />;
+
+  const now = new Date();
+  const [c2y, c2m] = [now.getFullYear(), now.getMonth() + 1];   // current month (e.g. July)
+  const [c1y, c1m] = _addMonths(c2y, c2m, -1);                  // previous month (e.g. June)
+  const col1 = { key: `${c1y}-${c1m}`, label: _monthLong(c1y, c1m).split(" ")[0] };
+  const col2 = { key: `${c2y}-${c2m}`, label: _monthLong(c2y, c2m).split(" ")[0] };
+
+  // Customer → society lookup (to attribute invoices to an apartment).
+  const custBy = {};
+  data.cust.forEach(c => { [c.zohoId, c.id, c.zohoCustomerId].filter(Boolean).forEach(k => { custBy[k] = c; }); });
+  const societyOf = (i) => (custBy[i.zohoCustomerId] || custBy[i.zohoId] || custBy[i.customerNumber])?.society || "";
+
+  // Recharge collected by society × month (recharge = paid total − deposit).
+  const rechargeBy = {};
+  data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).forEach(i => {
+    const soc = norm(societyOf(i)); if (!soc) return;
+    const d = new Date(i.date); if (isNaN(d.getTime())) return;
+    const mk = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    const recharge = Math.max(0, (i.total || 0) - depositForPlan(i.plan || "", i.total || 0));
+    rechargeBy[soc] = rechargeBy[soc] || {};
+    rechargeBy[soc][mk] = (rechargeBy[soc][mk] || 0) + recharge;
+  });
+
+  // Installed leads by society (lookup match on the leads API, status = Installed).
+  const installedBy = {};
+  data.deals.forEach(d => { if (norm(d.rawStatus) === "installed") { const s = norm(d.society); installedBy[s] = (installedBy[s] || 0) + 1; } });
+
+  // One row per (deduped) apartment.
+  const seen = new Set(); let rows = [];
+  data.apts.forEach(a => {
+    const k = norm(a.name); if (!a.name || seen.has(k)) return; seen.add(k);
+    const flats = a.flats || 0;
+    const installed = installedBy[k] || 0;
+    const pen = flats ? (installed / flats) * 100 : 0;
+    rows.push({ name: a.name, flats, installed, pen, targetLeft: Math.max(0, 100 - pen), rev1: rechargeBy[k]?.[col1.key] || 0, rev2: rechargeBy[k]?.[col2.key] || 0 });
+  });
+  rows.sort((a, b) => b.installed - a.installed);
+  const filtered = rows.filter(r => r.name.toLowerCase().includes(q.toLowerCase()));
+
+  const tot = filtered.reduce((a, r) => ({ flats: a.flats + r.flats, installed: a.installed + r.installed, rev1: a.rev1 + r.rev1, rev2: a.rev2 + r.rev2 }), { flats: 0, installed: 0, rev1: 0, rev2: 0 });
+  const overallPen = tot.flats ? (tot.installed / tot.flats) * 100 : 0;
+  const penColor = (p) => p >= 60 ? "#1f7a3f" : p >= 30 ? "#9a6a16" : "#b4232a";
+
+  const stats = [
+    { label: "Apartments", value: filtered.length, icon: Boxes, sub: `${tot.flats.toLocaleString("en-IN")} flats`, hero: true },
+    { label: "Installed", value: tot.installed.toLocaleString("en-IN"), icon: CheckCircle2, sub: "leads marked Installed" },
+    { label: "Overall penetration", value: `${overallPen.toFixed(1)}%`, icon: TrendingUp, sub: `${(100 - overallPen).toFixed(1)}% target left` },
+    { label: `Recharge · ${col2.label}`, value: inr(Math.round(tot.rev2)), icon: Wallet, sub: `${col1.label}: ${inr(Math.round(tot.rev1))}`, delta: momPct(tot.rev2, tot.rev1) },
+  ];
+
+  const exportCsv = () => exportToCsv("prowater-live-dashboard.csv", [
+    { label: "Apartment Name", get: r => r.name }, { label: "Number of flats", get: r => r.flats },
+    { label: "Installed", get: r => r.installed }, { label: "Penetration %", get: r => r.pen.toFixed(1) },
+    { label: "Target left %", get: r => r.targetLeft.toFixed(1) },
+    { label: `Revenue - ${col1.label}`, get: r => Math.round(r.rev1) }, { label: `Revenue - ${col2.label}`, get: r => Math.round(r.rev2) },
+  ], filtered);
+
+  return (
+    <div className="fade-up">
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap", background: "linear-gradient(135deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#eaf5ee", borderRadius: "var(--radius)", padding: "18px 22px", boxShadow: "var(--shadow)", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", right: -30, top: -30, width: 130, height: 130, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.35),transparent 70%)" }} />
+        <div style={{ width: 46, height: 46, borderRadius: 13, background: "rgba(255,255,255,.12)", display: "grid", placeItems: "center", flexShrink: 0 }}><LayoutDashboard size={24} color="#fff" /></div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 18, color: "#fff" }}>Live Dashboard</div>
+          <div style={{ fontSize: 12.5, color: "#bfe0cb" }}>Apartments × installs × recharge — combined from apartments, leads & billing APIs</div>
+        </div>
+      </div>
+      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+      <div style={{ marginTop: 16 }}>
+        <Toolbar q={q} setQ={setQ} placeholder="Search apartment…" count={filtered.length}
+          right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />
+        <Card pad={false}>
+          <Table head={["Apartment Name", "Number of flats", "Installed", "Penetration %", "Target left", `Revenue - ${col1.label}`, `Revenue - ${col2.label}`]} maxHeight="calc(100vh - 400px)">
+            {filtered.map((r, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "left" }}>{r.name}</td>
+                <td style={td}>{r.flats || "—"}</td>
+                <td style={{ ...td, fontWeight: 600 }}>{r.installed}</td>
+                <td style={td}><span style={{ fontWeight: 700, color: penColor(r.pen) }}>{r.pen.toFixed(1)}%</span></td>
+                <td style={td}>{r.targetLeft.toFixed(1)}%</td>
+                <td style={td}>{r.rev1 ? inr(Math.round(r.rev1)) : "—"}</td>
+                <td style={{ ...td, fontWeight: 600, color: "var(--teal-d)" }}>{r.rev2 ? inr(Math.round(r.rev2)) : "—"}</td>
+              </tr>
+            ))}
+            {filtered.length > 0 && (
+              <tr>
+                <td style={{ ...ftd, textAlign: "left" }}>Total ({filtered.length})</td>
+                <td style={ftd}>{tot.flats}</td>
+                <td style={ftd}>{tot.installed}</td>
+                <td style={ftd}>{overallPen.toFixed(1)}%</td>
+                <td style={ftd}>{(100 - overallPen).toFixed(1)}%</td>
+                <td style={ftd}>{inr(Math.round(tot.rev1))}</td>
+                <td style={ftd}>{inr(Math.round(tot.rev2))}</td>
+              </tr>
+            )}
+          </Table>
+          {filtered.length === 0 && <Empty msg="No apartments found. (Apartment Leads API returns the list.)" />}
+        </Card>
+      </div>
     </div>
   );
 }
