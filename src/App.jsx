@@ -154,9 +154,10 @@ const allAccess = (level) => Object.fromEntries(MODULES.map(m => [m.id, level]))
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.1.3";
+const APP_VERSION = "2.1.4";
 const VERSION_DATE = "2026-07-10";
 const VERSION_HISTORY = [
+  { v: "2.1.4", note: "Live Dashboard paused as a \"Work in progress\" card — it no longer calls any API when opened (Analytics again lands on Referral). About module gains an \"APIs used\" section listing every backend / Firebase / external endpoint the app calls." },
   { v: "2.1.3", note: "Live Dashboard revenue join reworked per real data: apartment name is fuzzy-matched to the customers API `society` (e.g. \"MJR Clique Hydra\" ⊂ \"MJR Clique Hydra Apartment\"), then the customer's subscription `amount` is summed (bucketed by activation month). Uses customers + subscriptions instead of the lead name/email guess." },
   { v: "2.1.2", note: "Live Dashboard revenue now comes from the subscriptions API `amount` (not invoices), matched to an apartment by the subscription's customer_email → customer_name → phone against the leads' society; bucketed by activation month. Drops the invoices+customers fetches (fewer API calls)." },
   { v: "2.1.1", note: "Live Dashboard: added \"Only apartments with leads\" toggle (on by default); revenue join now falls back to matching a paying customer to a lead by phone/email to inherit the society, since Zoho Billing customers often have no society field (was leaving revenue blank)." },
@@ -2014,7 +2015,7 @@ function Shell({ module = "referral", onHome }) {
   const isModuleAdmin = moduleAccess === "admin" || moduleAccess === "devops";
   const [tab, setTab] = useState(
     module === "sales" ? "sales_leads"
-    : module === "analytics" ? "an_live"
+    : module === "analytics" ? "analytics"
     : module === "employee" ? "emp_users"
     : module === "devicereplace" ? "dr_list"
     : module === "about" ? "about_docs"
@@ -3306,6 +3307,35 @@ const MODULE_DOCS = [
   { id: "about", label: "About", summary: "This page — version history and per-module documentation.", points: ["Full changelog", "Searchable module docs"], source: "in-app" },
 ];
 
+// Every external call this file makes, grouped by source (shown in About).
+const API_USAGE = [
+  { group: "ProWater backend · api-7ca73ntgua-el.a.run.app (Bearer auth)", items: [
+    { m: "GET", path: "/admin/get-all-customers", use: "Customer accounts (Zoho Contacts) — Customer, Analytics" },
+    { m: "GET", path: "/admin/get-all-subscriptions", use: "Subscriptions (Zoho Billing) — Billing, Earned Revenue" },
+    { m: "GET", path: "/admin/get-all-invoices", use: "Invoices (Zoho Billing) — Billing, Analytics" },
+    { m: "GET", path: "/admin/zoho/get-all-leads", use: "Zoho CRM leads — Sales, Analytics" },
+    { m: "GET", path: "/admin/zoho/get-all-apartments/data", use: "Apartment leads — Sales" },
+    { m: "GET", path: "/admin/get-app-logs", use: "Server app logs — Analytics · App Logs" },
+    { m: "POST", path: "/device-replacement/add", use: "Save a device-replacement record" },
+    { m: "POST", path: "/admin/notify-failure", use: "Email alert on API failure (needs backend route)" },
+    { m: "GET", path: "/api/admin/all-referrals", use: "Referrers + referees + credits — Referral" },
+    { m: "GET/POST", path: "/api/tickets", use: "Freshdesk tickets: list + create — Ticketing, Auto Scheduler" },
+    { m: "GET/POST", path: "/api/gs-schedules", use: "Auto GS schedules (optional; local-first)" },
+  ] },
+  { group: "Google / Firebase", items: [
+    { m: "POST", path: "identitytoolkit.googleapis.com/…:signInWithPassword", use: "Login — email/password auth" },
+    { m: "POST", path: "firestore.googleapis.com/…:runQuery", use: "App Logs source (Firestore)" },
+    { m: "GET", path: "fonts.googleapis.com", use: "Web fonts (Playfair Display + DM Sans)" },
+  ] },
+  { group: "External utility APIs", items: [
+    { m: "GET", path: "ipapi.co/json", use: "Client IP + ISP + approx city (audit log)" },
+    { m: "GET", path: "api.ipify.org", use: "Client IP fallback" },
+    { m: "GET", path: "api.bigdatacloud.net/…/reverse-geocode-client", use: "GPS → city name (audit log)" },
+    { m: "GET/POST", path: "…execute-api.ap-southeast-2.amazonaws.com/prod", use: "IoT device status + history (IoT Core)" },
+  ] },
+];
+const apiMethodBadge = (m) => { const c = m.includes("POST") ? ["#3a6ea5", "#e7eef7"] : ["#1f7a3f", "#e6f4ea"]; return { fontSize: 11, fontWeight: 700, color: c[0], background: c[1], padding: "2px 8px", borderRadius: 7, fontFamily: "ui-monospace,monospace", whiteSpace: "nowrap" }; };
+
 function AboutModule() {
   const { user } = useAuth();
   const [q, setQ] = useState("");
@@ -3384,6 +3414,27 @@ function AboutModule() {
           })}
         </div>
         {docs.length === 0 && <Empty msg="No modules match." />}
+      </div>
+
+      {/* APIs used */}
+      <div style={{ marginTop: 22 }}>
+        <h3 style={{ fontSize: 17 }}>APIs used</h3>
+        <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 12 }}>Every external call this dashboard makes, by source.</div>
+        <div style={{ display: "grid", gap: 14 }}>
+          {API_USAGE.map(g => (
+            <Card key={g.group} pad={false} title={g.group}>
+              <Table head={["Method", "Endpoint", "Used for"]}>
+                {g.items.map((it, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={td}><span style={apiMethodBadge(it.m)}>{it.m}</span></td>
+                    <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, textAlign: "left", wordBreak: "break-all" }}>{it.path}</td>
+                    <td style={{ ...td, textAlign: "left", fontSize: 12.5 }}>{it.use}</td>
+                  </tr>
+                ))}
+              </Table>
+            </Card>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -8624,138 +8675,21 @@ function ApartmentLeads() {
    penetration (installed leads ÷ flats) and recharge collected per apartment/month. */
 function LiveDashboard() {
   const { user } = useAuth();
-  const [data, setData] = useState(null);
-  const [q, setQ] = useState("");
-  const [onlyWithLeads, setOnlyWithLeads] = useState(true);
-  useEffect(() => {
-    api.logView(user.username, "Viewed Live Dashboard");
-    Promise.all([apartmentApi.getAll(), salesApi.getDeals(), billingApi.getSubscriptions(), customerApi.getCustomers()])
-      .then(([apts, deals, subs, cust]) => setData({ apts, deals: deals.filter(notHiddenLead), subs, cust }))
-      .catch(() => setData({ apts: [], deals: [], subs: [], cust: [] }));
-  }, []);
-  if (!data) return <Loading />;
-
-  const now = new Date();
-  const [c2y, c2m] = [now.getFullYear(), now.getMonth() + 1];   // current month (e.g. July)
-  const [c1y, c1m] = _addMonths(c2y, c2m, -1);                  // previous month (e.g. June)
-  const col1 = { key: `${c1y}-${c1m}`, label: _monthLong(c1y, c1m).split(" ")[0] };
-  const col2 = { key: `${c2y}-${c2m}`, label: _monthLong(c2y, c2m).split(" ")[0] };
-
-  const emailKey = s => String(s || "").trim().toLowerCase();
-  // Loose name key for society matching: lowercase, alphanumerics+spaces only.
-  const normStr = s => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
-  // Index customers by every key a subscription might reference (customer_number /
-  // zoho id / email) so we can go subscription → customer → customer.society.
-  const custBy = {};
-  data.cust.forEach(c => { [c.id, c.zohoId, c.zohoCustomerId, emailKey(c.email)].filter(Boolean).forEach(k => { custBy[k] = c; }); });
-  const custForSub = (s) => custBy[s.customerNumber] || custBy[s.zohoCustomerId] || custBy[s.zohoId] || custBy[emailKey(s.email)] || null;
-
-  // Revenue = subscription `amount`, attributed to the customer's SOCIETY (from the
-  // customers API — e.g. "MJR Clique Hydra Apartment"), bucketed by activation month.
-  const revBySoc = {};   // normSociety -> { "y-m": amount }
-  data.subs.forEach(s => {
-    const c = custForSub(s);
-    const society = c?.society; if (!society) return;
-    const amt = Number(s.amount) || 0; if (!amt) return;
-    const d = new Date(s.activatedAt); if (isNaN(d.getTime())) return;
-    const key = normStr(society); if (!key) return;
-    const mk = `${d.getFullYear()}-${d.getMonth() + 1}`;
-    revBySoc[key] = revBySoc[key] || {};
-    revBySoc[key][mk] = (revBySoc[key][mk] || 0) + amt;
-  });
-  // Fuzzy: apartment "MJR Clique Hydra" matches society "MJR Clique Hydra Apartment".
-  const revForApt = (aptName) => {
-    const a = normStr(aptName); let r1 = 0, r2 = 0;
-    if (a) for (const key in revBySoc) {
-      if (key === a || key.includes(a) || a.includes(key)) { r1 += revBySoc[key][col1.key] || 0; r2 += revBySoc[key][col2.key] || 0; }
-    }
-    return { r1, r2 };
-  };
-
-  // Leads by society — total (for the "with leads" filter) and installed (penetration).
-  const leadsBy = {}, installedBy = {};
-  data.deals.forEach(d => { const s = norm(d.society); if (!s) return; leadsBy[s] = (leadsBy[s] || 0) + 1; if (norm(d.rawStatus) === "installed") installedBy[s] = (installedBy[s] || 0) + 1; });
-
-  // One row per (deduped) apartment.
-  const seen = new Set(); let rows = [];
-  data.apts.forEach(a => {
-    const k = norm(a.name); if (!a.name || seen.has(k)) return; seen.add(k);
-    const flats = a.flats || 0;
-    const installed = installedBy[k] || 0;
-    const pen = flats ? (installed / flats) * 100 : 0;
-    const rev = revForApt(a.name);
-    rows.push({ name: a.name, flats, installed, leads: leadsBy[k] || 0, pen, targetLeft: Math.max(0, 100 - pen), rev1: rev.r1, rev2: rev.r2 });
-  });
-  rows.sort((a, b) => b.installed - a.installed);
-  const withLeadsCount = rows.filter(r => r.leads > 0).length;
-  const filtered = rows.filter(r => (!onlyWithLeads || r.leads > 0) && r.name.toLowerCase().includes(q.toLowerCase()));
-
-  const tot = filtered.reduce((a, r) => ({ flats: a.flats + r.flats, installed: a.installed + r.installed, rev1: a.rev1 + r.rev1, rev2: a.rev2 + r.rev2 }), { flats: 0, installed: 0, rev1: 0, rev2: 0 });
-  const overallPen = tot.flats ? (tot.installed / tot.flats) * 100 : 0;
-  const penColor = (p) => p >= 60 ? "#1f7a3f" : p >= 30 ? "#9a6a16" : "#b4232a";
-
-  const stats = [
-    { label: "Apartments", value: filtered.length, icon: Boxes, sub: `${tot.flats.toLocaleString("en-IN")} flats`, hero: true },
-    { label: "Installed", value: tot.installed.toLocaleString("en-IN"), icon: CheckCircle2, sub: "leads marked Installed" },
-    { label: "Overall penetration", value: `${overallPen.toFixed(1)}%`, icon: TrendingUp, sub: `${(100 - overallPen).toFixed(1)}% target left` },
-    { label: `Recharge · ${col2.label}`, value: inr(Math.round(tot.rev2)), icon: Wallet, sub: `${col1.label}: ${inr(Math.round(tot.rev1))}`, delta: momPct(tot.rev2, tot.rev1) },
-  ];
-
-  const exportCsv = () => exportToCsv("prowater-live-dashboard.csv", [
-    { label: "Apartment Name", get: r => r.name }, { label: "Number of flats", get: r => r.flats },
-    { label: "Installed", get: r => r.installed }, { label: "Penetration %", get: r => r.pen.toFixed(1) },
-    { label: "Target left %", get: r => r.targetLeft.toFixed(1) },
-    { label: `Revenue - ${col1.label}`, get: r => Math.round(r.rev1) }, { label: `Revenue - ${col2.label}`, get: r => Math.round(r.rev2) },
-  ], filtered);
-
+  // Intentionally does NOT call any API — this section is paused while the
+  // apartment penetration + recharge model is being finalised.
+  useEffect(() => { api.logView(user.username, "Viewed Live Dashboard (WIP)"); }, []);
   return (
     <div className="fade-up">
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap", background: "linear-gradient(135deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#eaf5ee", borderRadius: "var(--radius)", padding: "18px 22px", boxShadow: "var(--shadow)", position: "relative", overflow: "hidden" }}>
-        <div style={{ position: "absolute", right: -30, top: -30, width: 130, height: 130, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.35),transparent 70%)" }} />
-        <div style={{ width: 46, height: 46, borderRadius: 13, background: "rgba(255,255,255,.12)", display: "grid", placeItems: "center", flexShrink: 0 }}><LayoutDashboard size={24} color="#fff" /></div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 18, color: "#fff" }}>Live Dashboard</div>
-          <div style={{ fontSize: 12.5, color: "#bfe0cb" }}>Apartments × installs × recharge — combined from apartments, leads & billing APIs</div>
+      <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "56px 24px", display: "grid", placeItems: "center", textAlign: "center" }}>
+        <div style={{ width: 74, height: 74, borderRadius: 20, background: "var(--mint-2)", color: "var(--teal)", display: "grid", placeItems: "center", marginBottom: 18 }}>
+          <Construction size={36} />
         </div>
-      </div>
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
-      <div style={{ marginTop: 16 }}>
-        <Toolbar q={q} setQ={setQ} placeholder="Search apartment…" count={filtered.length}
-          right={<>
-            <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, color: "var(--slate)", cursor: "pointer" }}>
-              <input type="checkbox" checked={onlyWithLeads} onChange={e => setOnlyWithLeads(e.target.checked)} style={{ width: 15, height: 15, accentColor: "var(--teal)" }} />
-              Only apartments with leads ({withLeadsCount})
-            </label>
-            <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
-          </>} />
-        <Card pad={false}>
-          <Table head={["Apartment Name", "Number of flats", "Installed", "Penetration %", "Target left", `Revenue - ${col1.label}`, `Revenue - ${col2.label}`]} maxHeight="calc(100vh - 400px)">
-            {filtered.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "left" }}>{r.name}</td>
-                <td style={td}>{r.flats || "—"}</td>
-                <td style={{ ...td, fontWeight: 600 }}>{r.installed}</td>
-                <td style={td}><span style={{ fontWeight: 700, color: penColor(r.pen) }}>{r.pen.toFixed(1)}%</span></td>
-                <td style={td}>{r.targetLeft.toFixed(1)}%</td>
-                <td style={td}>{r.rev1 ? inr(Math.round(r.rev1)) : "—"}</td>
-                <td style={{ ...td, fontWeight: 600, color: "var(--teal-d)" }}>{r.rev2 ? inr(Math.round(r.rev2)) : "—"}</td>
-              </tr>
-            ))}
-            {filtered.length > 0 && (
-              <tr>
-                <td style={{ ...ftd, textAlign: "left" }}>Total ({filtered.length})</td>
-                <td style={ftd}>{tot.flats}</td>
-                <td style={ftd}>{tot.installed}</td>
-                <td style={ftd}>{overallPen.toFixed(1)}%</td>
-                <td style={ftd}>{(100 - overallPen).toFixed(1)}%</td>
-                <td style={ftd}>{inr(Math.round(tot.rev1))}</td>
-                <td style={ftd}>{inr(Math.round(tot.rev2))}</td>
-              </tr>
-            )}
-          </Table>
-          {filtered.length === 0 && <Empty msg="No apartments found. (Apartment Leads API returns the list.)" />}
-        </Card>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#9a6a16", background: "#fdf3e0", padding: "3px 10px", borderRadius: 999, marginBottom: 12 }}>Work in progress</span>
+        <h2 style={{ fontSize: 24, marginBottom: 8 }}>Live Dashboard</h2>
+        <p style={{ color: "var(--slate)", fontSize: 14.5, maxWidth: 480, lineHeight: 1.6, marginBottom: 6 }}>
+          We're finalising how apartment penetration and recharge revenue are combined across the apartments, leads and billing APIs. This view will be switched on soon.
+        </p>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>No data is fetched while this section is paused.</span>
       </div>
     </div>
   );
