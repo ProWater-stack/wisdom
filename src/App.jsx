@@ -5992,10 +5992,10 @@ function NetRevenue() {
   const now = new Date();
   const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() }); // selected month
 
-  useEffect(() => {
-    api.logView(user.username, "Viewed Net Revenue");
-    billingApi.getInvoices(true).then(setInvs).catch(e => setErr(e.message || "Could not load revenue."));
-  }, []);
+ useEffect(() => {
+  api.logView(user.username, "Viewed Net Revenue");
+  billingApi.getInvoices().then(setInvs).catch(e => setErr(e.message || "Could not load revenue."));
+}, []);
   if (err) return <ApiError msg={err} />;
   if (!invs) return <Loading />;
 
@@ -6154,16 +6154,16 @@ function BillingAnalytics() {
   const [toDraft, setToDraft] = useState("");
   const [range, setRange] = useState({ from: "", to: "" });
 
-  useEffect(() => {
-    api.logView(user.username, "Viewed Billing analytics");
-    Promise.all([
-      billingApi.getSubscriptions(true),
-      billingApi.getInvoices(true),
-      customerApi.getCustomers().catch(() => []),  // for society VLOOKUP by Zoho customer id
-    ])
-      .then(([subs, invs, customers]) => setData({ subs, invs, customers }))
-      .catch(e => setErr(e.message || "Could not load billing analytics."));
-  }, []);
+useEffect(() => {
+  api.logView(user.username, "Viewed Billing analytics");
+  Promise.all([
+    billingApi.getSubscriptions(),
+    billingApi.getInvoices(),
+    customerApi.getCustomers().catch(() => []),  // for society VLOOKUP by Zoho customer id
+  ])
+    .then(([subs, invs, customers]) => setData({ subs, invs, customers }))
+    .catch(e => setErr(e.message || "Could not load billing analytics."));
+}, []);
   if (err) return <ApiError msg={err} />;
   if (!data) return <Loading />;
 
