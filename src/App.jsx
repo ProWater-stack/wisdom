@@ -8198,11 +8198,10 @@ function EarnedRevenue() {
   const [pY, pM] = _addMonths(selY, selM, -1);
   const monLabel = _monthLong(selY, selM);
 
-  const earnedThis = rows.reduce((s, r) => s + earnedFor(r, selY, selM), 0);
-  const earnedPrev = rows.reduce((s, r) => s + earnedFor(r, pY, pM), 0);
   const collectedThis = rows.filter(r => paidInMonth(r, selY, selM));
   const collectedPrev = rows.filter(r => paidInMonth(r, pY, pM));
   const totalThis = collectedThis.reduce((s, r) => s + r.total, 0);
+  const totalPrev = collectedPrev.reduce((s, r) => s + r.total, 0);
   const rechargeThis = collectedThis.reduce((s, r) => s + r.recharge, 0);
   const rechargePrev = collectedPrev.reduce((s, r) => s + r.recharge, 0);
   const depositThis = totalThis - rechargeThis;
@@ -8223,14 +8222,14 @@ function EarnedRevenue() {
   });
 
   const stats = [
-    { label: "Earned this month", value: inr(Math.round(earnedThis)), icon: Scale, sub: monLabel, hero: true, delta: momPct(earnedThis, earnedPrev) },
+    { label: "Earned this month", value: inr(Math.round(totalThis)), icon: Scale, sub: monLabel, hero: true, delta: momPct(totalThis, totalPrev) },
     { label: "Recharge collected", value: inr(Math.round(rechargeThis)), icon: Wallet, sub: `revenue portion · total ${inr(totalThis)}`, delta: momPct(rechargeThis, rechargePrev) },
     { label: "Deposit collected", value: inr(Math.round(depositThis)), icon: Coins, sub: "total − recharge" },
     { label: "Contributing recharges", value: collectedThis.filter(r => r.recharge > 0).length, icon: Receipt, sub: `paid in ${monLabel}` },
   ];
 
-  // Only rows whose term actually overlaps the selected month (so "July" shows July's rows, not every invoice).
-  const tableRows = rows.filter(r => daysInMonthFor(r, selY, selM) > 0).sort((a, b) => earnedFor(b, selY, selM) - earnedFor(a, selY, selM));
+  // Only invoices actually paid in the selected month (so "July" shows invoices paid in July, not every overlapping term).
+  const tableRows = rows.filter(r => paidInMonth(r, selY, selM)).sort((a, b) => earnedFor(b, selY, selM) - earnedFor(a, selY, selM));
   const totRow = tableRows.reduce((a, r) => ({ total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge, earnedMonth: a.earnedMonth + earnedFor(r, selY, selM) }), { total: 0, deposit: 0, recharge: 0, earnedMonth: 0 });
 
   const exportCsv = () => exportToCsv(`prowater-earned-${ym}.csv`, [
@@ -8254,18 +8253,18 @@ function EarnedRevenue() {
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 18 }}>
         <Card title="Earned vs recharge collected" sub="Bars = revenue recognised that month (accrual) · line = recharge cash collected">
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={timeline} margin={{ left: -8, right: 8, top: 8 }}>
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={timeline} margin={{ left: 8, right: 12, top: 24 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={52} />
+              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} tickMargin={12} height={38} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={64} />
               <Tooltip content={<TT prefix="₹" />} />
-              <Legend />
-              <Bar dataKey="earned" name="Earned" fill="#5a7863" radius={[5, 5, 0, 0]} isAnimationActive={false}>
-                <LabelList dataKey="earned" position="top" formatter={kLabel} style={{ fontSize: 10.5, fill: "var(--f)", fontWeight: 700 }} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="earned" name="Earned" fill="#5a7863" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                <LabelList dataKey="earned" position="top" formatter={(v) => v ? kLabel(v) : ""} style={{ fontSize: 10.5, fill: "var(--f)", fontWeight: 700 }} />
               </Bar>
               <Line dataKey="recharge" name="Recharge collected" stroke="#c2671e" strokeWidth={2} dot={{ r: 3, fill: "#c2671e" }} isAnimationActive={false}>
-                <LabelList dataKey="recharge" position="top" formatter={kLabel} style={{ fontSize: 10.5, fill: "#c2671e", fontWeight: 700 }} />
+                <LabelList dataKey="recharge" position="bottom" offset={10} formatter={(v) => v ? kLabel(v) : ""} style={{ fontSize: 10.5, fill: "#c2671e", fontWeight: 700 }} />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
@@ -8286,7 +8285,7 @@ function EarnedRevenue() {
                 <td style={td}>{inr(Math.round(r.recharge / (r.months || 1)))}</td>
                 <td style={{ ...td, whiteSpace: "nowrap" }}>{inr2(r.perDay)}</td>
                 <td style={td}>{daysInMonthFor(r, selY, selM)}</td>
-                <td style={{ ...td, fontWeight: 600, color: "var(--forest)" }}>{inr2(earnedFor(r, selY, selM))}</td>
+                <td style={{ ...td, fontWeight: 600, color: "var(--forest)" }}>{inr(Math.round(earnedFor(r, selY, selM)))}</td>
               </tr>
             ))}
             {tableRows.length > 0 && (
@@ -8299,7 +8298,7 @@ function EarnedRevenue() {
                 <td style={ftd}></td>
                 <td style={ftd}></td>
                 <td style={ftd}></td>
-                <td style={ftd}>{inr2(totRow.earnedMonth)}</td>
+                <td style={ftd}>{inr(Math.round(totRow.earnedMonth))}</td>
               </tr>
             )}
           </Table>
@@ -8477,13 +8476,15 @@ function SalesInsights() {
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 18 }}>
         <Card title="Leads by status" sub={society === "all" ? "Across all societies" : society}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={chartData} margin={{ left: -10, right: 8, top: 8 }}>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} margin={{ left: -10, right: 8, top: 18 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
               <XAxis dataKey="name" tick={axisTick} axisLine={false} tickLine={false} interval={0} angle={-15} textAnchor="end" height={60} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
               <Tooltip content={<TT />} />
-              <Bar dataKey="leads" fill="#3a6ea5" radius={[5, 5, 0, 0]} isAnimationActive={false} />
+              <Bar dataKey="leads" fill="#3a6ea5" radius={[5, 5, 0, 0]} maxBarSize={54} isAnimationActive={false}>
+                <LabelList dataKey="leads" position="top" style={{ fontSize: 11, fill: "var(--f)", fontWeight: 700 }} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
           <div style={{ marginTop: 12 }}>
