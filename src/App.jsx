@@ -157,9 +157,20 @@ const allAccess = (level) => Object.fromEntries(MODULES.map(m => [m.id, level]))
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.4.1";
+const APP_VERSION = "2.5.2";
 const VERSION_DATE = "2026-07-14";
 const VERSION_HISTORY = [
+  { v: "2.5.2", note: "IoT Core: the Online KPI card now has a slow rain-drop animation drifting down it (when at least one device is online). Confirmed the Offline KPI stays a plain card with no red/ripple effect when the offline count is 0." },
+  { v: "2.5.1", note: "IoT Core: (1) Fault & alert center — a fleet-wide panel listing offline devices + channel faults (critical/warning, click to inspect), an \"all systems nominal\" bar when clear, and a toast when a new alert appears mid-session. (2) Live consumption — diffs the cumulative totalVolumeLitres across the live history window to show water drawn per channel + total, with a pulsing \"Flowing/Idle\" indicator and current L/min." },
+  { v: "2.5.0", note: "IoT Core: the Offline KPI card now uses a water-ripple effect — deep red sweeps in from the right and fades to amber as it dissipates (KPI only). Device rows dropped the red breathing fill for a status-coloured border: green when online, red when offline (thicker when selected)." },
+  { v: "2.4.9", note: "IoT Core: the device-detail header (device ID + RO/firmware line) now uses the app's DM Sans UI font instead of the Playfair serif — the serif looked out of place on the alphanumeric device IDs." },
+  { v: "2.4.8", note: "IoT Core: softened the offline breathing red to a faded, desaturated palette (#fdf3f3 ↔ #f6d6d6) with a gentler glow and slightly slower 3.6s loop — less alarming, easier on the eye." },
+  { v: "2.4.7", note: "IoT Core: the Offline KPI card and any offline device rows now pulse with a \"breathing\" effect — light red on the exhale, deep red on the inhale (3s ease loop, respects prefers-reduced-motion). Selected device is still marked with a teal outline." },
+  { v: "2.4.6", note: "IoT Core Recent heartbeats: page size reduced to 10 rows, and the timestamp column header renamed \"Sync history\"." },
+  { v: "2.4.5", note: "IoT Core Recent heartbeats: paginated at 20 rows per page with a Prev / Next CTA and a \"1 / N\" page indicator (page resets to 1 on device switch)." },
+  { v: "2.4.4", note: "IoT Core Recent heartbeats: removed the 360px scroll cap so the full heartbeat log renders, and centre-aligned every value (channel totals were right-aligned)." },
+  { v: "2.4.3", note: "IoT Core Recent heartbeats table: the Time column now shows full date + time (was time-only, which was confusing across days), and the Pressure column was dropped (it's constant 0 for these devices)." },
+  { v: "2.4.2", note: "IoT Core revamp + offline fix: online/last-seen now come from the newest /devices/history heartbeat instead of the stale /devices/status snapshot (status was serving a day-old timestamp so live devices showed Offline). The dashboard now polls history for every device in the roster and merges the freshest reading. Recent heartbeats table rebuilt as a timestamp × channel matrix showing totalVolumeLitres per channelId (columns built dynamically per device, so it works for 4-channel and 2-channel units), and the flow-rate chart now draws a line per channel." },
   { v: "2.4.1", note: "Task Planner: imported the technician-app / Zoho Desk-sync meeting action items (22 tasks, duplicates skipped) auto-categorised (Technician App, Ticketing, Customer App, Backend & APIs, Messaging, IoT, Zoho FSM, Ops & Finance, Review & QA)." },
   { v: "2.4.0", note: "Admin \"Modify Tasks\" panel (Task Planner, admin-only) to add/remove Statuses, Sprints & Categories — no longer capped at Sprint 1–4. About module gains App Releases & Technician Releases sections (free-text Sprint / version / notes; Publish stamps date+time), and every user gets a \"what's new\" release popup on login for releases they haven't seen." },
   { v: "2.3.7", note: "Societies view: frozen table header, centre-aligned cells, a subtotal row under each expanded society, and status-coloured customer rows (inactive = red, dunning = amber)." },
@@ -8548,19 +8559,80 @@ const IOT_API_BASE = "https://xb2sxpw2k0.execute-api.ap-southeast-2.amazonaws.co
 const iotTimeAgo = (ts) => { if (!ts) return "Unknown"; const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s / 60)}m ago`; return `${Math.floor(s / 3600)}h ago`; };
 const iotOnline = (ts) => !!ts && (Date.now() - new Date(ts).getTime()) / 1000 < 120;
 const iotClock = (ts) => ts ? new Date(ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+const iotStamp = (ts) => ts ? new Date(ts).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
+const iotVol = (v) => (v == null || v === "") ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+// Newest heartbeat wins: /devices/status serves a cached (often day-old) snapshot,
+// so liveness + last-seen are driven off the freshest /devices/history record.
+const iotMergeLatest = (statusDev, historyList) => {
+  const latest = Array.isArray(historyList) ? historyList[0] : null; // history is newest-first
+  return latest ? { ...statusDev, ...latest } : statusDev;
+};
 const ValveBadge = ({ state }) => (
   <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: state === "OPEN" ? "#1f7a3f" : "#b4232a" }}>{state ?? "—"}</span>
 );
 
+// Offline KPI card: a "water ripple" of deep red that sweeps in from the right and
+// fades to amber as it dissipates (dedicated to this card, not the generic Stat).
+function IoTOfflineStat({ label, value, icon: Icon, sub }) {
+  return (
+    <div style={{ position: "relative", overflow: "hidden", background: "#fff6f4", border: "1px solid #f0cfc6", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)" }}>
+      <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
+        <span className="iot-ripple-ring" style={{ animationDelay: "0s" }} />
+        <span className="iot-ripple-ring" style={{ animationDelay: "1.2s" }} />
+        <span className="iot-ripple-ring" style={{ animationDelay: "2.4s" }} />
+      </div>
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <span className="eyebrow" style={{ color: "#a83b41" }}>{label}</span>
+          <Icon size={18} color="#a83b41" />
+        </div>
+        <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "#8f1b21", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 12, color: "#a83b41" }}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+// Online KPI card: a slow, gentle rain of droplets drifting down the card.
+const IOT_RAIN = [
+  { left: "9%", delay: "0s", dur: "4.6s" }, { left: "20%", delay: "1.9s", dur: "5.4s" },
+  { left: "31%", delay: "0.9s", dur: "4.1s" }, { left: "43%", delay: "2.7s", dur: "5.0s" },
+  { left: "55%", delay: "1.3s", dur: "4.4s" }, { left: "67%", delay: "3.1s", dur: "5.6s" },
+  { left: "79%", delay: "0.4s", dur: "4.9s" }, { left: "90%", delay: "2.2s", dur: "4.2s" },
+];
+function IoTOnlineStat({ label, value, icon: Icon, sub }) {
+  return (
+    <div style={{ position: "relative", overflow: "hidden", background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)" }}>
+      <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
+        {IOT_RAIN.map((r, i) => <span key={i} className="iot-rain-drop" style={{ left: r.left, animationDelay: r.delay, animationDuration: r.dur }} />)}
+      </div>
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <span className="eyebrow" style={{ color: "var(--muted)" }}>{label}</span>
+          <Icon size={18} color="var(--teal)" />
+        </div>
+        <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "var(--f)", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)" }}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+const IOT_FLOW_COLORS = ["#0f6e3f", "#90ab8b", "#0d7a8c", "#c99a2e", "#7a5bd6", "#b4232a"];
+
 function IoTDevices() {
   const { user } = useAuth();
-  const [devices, setDevices] = useState([]);
-  const [history, setHistory] = useState([]);
+  const [roster, setRoster] = useState([]);            // from /devices/status (device roster + fallback metadata)
+  const [historyByDevice, setHistoryByDevice] = useState({}); // deviceId -> [heartbeats] (newest-first, live)
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [hbPage, setHbPage] = useState(1); // Recent heartbeats pagination (20 rows/page)
 
-  // Poll device status every 10s.
+  // Reset to the first page whenever a different device is selected.
+  useEffect(() => { setHbPage(1); }, [selected]);
+
+  // Poll device roster every 10s (which devices exist + fallback metadata).
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -8569,7 +8641,7 @@ function IoTDevices() {
         const data = await res.json();
         if (!alive) return;
         const list = Array.isArray(data) ? data : [];
-        setDevices(list); setErr("");
+        setRoster(list); setErr("");
         setSelected(prev => prev || (list[0]?.deviceId ?? null));
       } catch { if (alive) setErr("Could not reach the IoT device API."); }
       finally { if (alive) setLoading(false); }
@@ -8580,49 +8652,173 @@ function IoTDevices() {
     return () => { alive = false; clearInterval(t); };
   }, []);
 
-  // Poll history for the selected device every 15s.
+  // Poll /history for EVERY device in the roster every 8s. This is the source of
+  // truth for liveness — /status ships a stale (often day-old) timestamp, so live
+  // devices were showing Offline. History is capped at 50 records (~37KB) each.
+  const deviceIdsKey = roster.map(d => d.deviceId).join(",");
   useEffect(() => {
-    if (!selected) return;
+    if (!deviceIdsKey) return;
+    const ids = deviceIdsKey.split(",");
     let alive = true;
     const load = async () => {
-      try {
-        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}`);
-        const data = await res.json();
-        if (alive) setHistory(Array.isArray(data) ? data.slice().reverse() : []);
-      } catch { /* keep previous */ }
+      const results = await Promise.all(ids.map(async (id) => {
+        try {
+          const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${id}`);
+          const data = await res.json();
+          return [id, Array.isArray(data) ? data : null];
+        } catch { return [id, null]; }
+      }));
+      if (!alive) return;
+      setHistoryByDevice(prev => {
+        const next = { ...prev };
+        for (const [id, data] of results) if (data) next[id] = data;
+        return next;
+      });
     };
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(load, 8000);
     return () => { alive = false; clearInterval(t); };
-  }, [selected]);
+  }, [deviceIdsKey]);
 
-  if (loading) return <Loading />;
-
+  // Merge the freshest heartbeat over each roster device → live timestamp/pressure/channels.
+  const devices = roster.map(d => iotMergeLatest(d, historyByDevice[d.deviceId]));
   const device = devices.find(d => d.deviceId === selected);
   const channels = device?.payload?.units?.[0]?.channels ?? [];
-  const chartData = history.map(item => ({
-    time: iotClock(item.timestamp),
-    pressure: parseFloat(item.payload?.inputPressure ?? 0),
-    flow_CH01: parseFloat(item.payload?.units?.[0]?.channels?.find(c => c.channelId === "CH_01")?.flowRateLpm ?? 0),
-    flow_CH02: parseFloat(item.payload?.units?.[0]?.channels?.find(c => c.channelId === "CH_02")?.flowRateLpm ?? 0),
-  }));
+
+  const history = historyByDevice[selected] ?? []; // newest-first
+  const chrono = [...history].reverse();           // oldest-first, for time-series charts
+  // Recent heartbeats pagination — 20 rows per page.
+  const HB_PER_PAGE = 10;
+  const hbTotalPages = Math.max(1, Math.ceil(history.length / HB_PER_PAGE));
+  const hbPageClamped = Math.min(hbPage, hbTotalPages);
+  const hbRows = history.slice((hbPageClamped - 1) * HB_PER_PAGE, hbPageClamped * HB_PER_PAGE);
+  // Channel ids present anywhere in this device's history (handles 2- vs 4-channel units).
+  const chanIds = Array.from(new Set(
+    chrono.flatMap(h => (h.payload?.units?.[0]?.channels ?? []).map(c => c.channelId))
+  )).sort();
+  const chartData = chrono.map(item => {
+    const chs = item.payload?.units?.[0]?.channels ?? [];
+    const row = { time: iotClock(item.timestamp), pressure: parseFloat(item.payload?.inputPressure ?? 0) };
+    chanIds.forEach(id => { row["flow_" + id] = parseFloat(chs.find(c => c.channelId === id)?.flowRateLpm ?? 0); });
+    return row;
+  });
 
   const online = devices.filter(d => iotOnline(d.timestamp)).length;
   const faulty = devices.filter(d => (d.payload?.units?.[0]?.channels ?? []).some(c => c.fault)).length;
+
+  // ---- Fault & alert center: aggregate offline devices + channel faults across the fleet.
+  const alerts = [];
+  devices.forEach(d => {
+    if (!iotOnline(d.timestamp)) {
+      alerts.push({ key: `off:${d.deviceId}`, sev: "critical", device: d.deviceId, title: "Device offline", detail: `No heartbeat · last seen ${iotTimeAgo(d.timestamp)}` });
+    }
+    (d.payload?.units?.[0]?.channels ?? []).forEach(c => {
+      if (c.fault) alerts.push({ key: `flt:${d.deviceId}:${c.channelId}:${c.fault}`, sev: "warning", device: d.deviceId, title: "Channel fault", detail: `${c.channelId} — ${c.fault}` });
+    });
+  });
+  alerts.sort((a, b) => (a.sev === b.sev ? 0 : a.sev === "critical" ? -1 : 1));
+
+  // Toast when a NEW alert appears mid-session (skip the initial set on first load).
+  const alertKeys = alerts.map(a => a.key).join("|");
+  const prevAlertKeysRef = useRef(null);
+  const [toast, setToast] = useState("");
+  useEffect(() => {
+    const prev = prevAlertKeysRef.current;
+    if (prev !== null) {
+      const prevSet = new Set(prev ? prev.split("|") : []);
+      const fresh = (alertKeys ? alertKeys.split("|") : []).filter(k => k && !prevSet.has(k));
+      if (fresh.length) { setToast(`⚠ ${fresh.length} new alert${fresh.length > 1 ? "s" : ""} detected`); const t = setTimeout(() => setToast(""), 3200); return () => clearTimeout(t); }
+    }
+    prevAlertKeysRef.current = alertKeys;
+  }, [alertKeys]);
+
+  // ---- Live consumption: diff cumulative totalVolumeLitres across the history window.
+  const winFirst = chrono[0], winLast = chrono[chrono.length - 1];
+  const winSecs = (winFirst && winLast) ? Math.max(0, (new Date(winLast.timestamp) - new Date(winFirst.timestamp)) / 1000) : 0;
+  const winLabel = winSecs >= 60 ? `${Math.round(winSecs / 60)} min` : `${Math.round(winSecs)} s`;
+  const volOf = (rec, id) => { const c = (rec?.payload?.units?.[0]?.channels ?? []).find(x => x.channelId === id); return c == null ? null : Number(c.totalVolumeLitres); };
+  const consumption = chanIds.map(id => {
+    const first = volOf(winFirst, id), last = volOf(winLast, id);
+    const consumed = (first != null && last != null) ? Math.max(0, last - first) : 0; // clamp: meters only increase
+    const flow = Number((winLast?.payload?.units?.[0]?.channels ?? []).find(x => x.channelId === id)?.flowRateLpm || 0);
+    return { id, consumed, flowing: flow > 0, flow };
+  });
+  const totalConsumed = consumption.reduce((s, c) => s + c.consumed, 0);
+  const canMeasure = chrono.length > 1;
+
   const stats = [
     { label: "Devices", value: devices.length, icon: Cpu, sub: "monitored", hero: true },
-    { label: "Online", value: online, icon: CheckCircle2, sub: "seen in last 120s" },
-    { label: "Offline", value: devices.length - online, icon: AlertCircle, sub: "no recent ping" },
+    { label: "Online", value: online, icon: CheckCircle2, sub: "seen in last 120s", rain: online > 0 },
+    { label: "Offline", value: devices.length - online, icon: AlertCircle, sub: "no recent ping", ripple: (devices.length - online) > 0 },
     { label: "With faults", value: faulty, icon: AlertCircle, sub: "channel fault active" },
   ];
+
+  if (loading) return <Loading />;
 
   return (
     <div className="fade-up">
       {err && <ApiError msg={err} />}
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+      {toast && <div style={{ ...toastStyle, background: "#9a2620" }}><AlertCircle size={16} /> {toast}</div>}
+      <div style={grid4}>{stats.map((s, i) => s.ripple ? <IoTOfflineStat key={i} {...s} /> : s.rain ? <IoTOnlineStat key={i} {...s} /> : <Stat key={i} {...s} />)}</div>
+
+      {/* Fault & alert center */}
+      <div style={{ marginTop: 18 }}>
+        {alerts.length === 0 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 16px", borderRadius: 12, border: "1px solid #cfe6d5", background: "#f1f9f2", color: "#1f7a3f", fontSize: 13, fontWeight: 600 }}>
+            <CheckCircle2 size={16} /> All systems nominal — no active faults or offline devices.
+          </div>
+        ) : (
+          <Card title={`Active alerts (${alerts.length})`} sub="Offline devices and channel faults across the fleet · click to inspect." pad={false}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {alerts.map((a, i) => {
+                const crit = a.sev === "critical";
+                return (
+                  <button key={a.key} onClick={() => setSelected(a.device)} style={{
+                    display: "flex", alignItems: "center", gap: 12, textAlign: "left", width: "100%", cursor: "pointer",
+                    padding: "12px 16px", background: "transparent", borderBottom: i < alerts.length - 1 ? "1px solid var(--border)" : "none"
+                  }}>
+                    <span style={{ width: 9, height: 9, borderRadius: 999, flexShrink: 0, background: crit ? "#c0392b" : "#d99a1e" }} />
+                    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: crit ? "#c0392b" : "#9a6a16", width: 66, flexShrink: 0 }}>{crit ? "Critical" : "Warning"}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)", width: 130, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.device}</span>
+                    <span style={{ fontSize: 13, color: "var(--f)", fontWeight: 600, flexShrink: 0 }}>{a.title}</span>
+                    <span style={{ fontSize: 12.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {a.detail}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Card>
+        )}
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 18, marginTop: 18 }} className="iot-grid">
-        <style>{`@media(max-width:900px){.iot-grid{grid-template-columns:1fr!important}}`}</style>
+        <style>{`
+          @media(max-width:900px){.iot-grid{grid-template-columns:1fr!important}}
+          .iot-ripple-ring{
+            position:absolute; top:50%; right:-48px;
+            width:130px; height:130px; border-radius:50%;
+            transform:translateY(-50%) scale(.18);
+            background:radial-gradient(circle, transparent 46%, rgba(138,15,20,.62) 55%, rgba(176,35,42,.5) 62%, transparent 72%);
+            opacity:0; will-change:transform,opacity,filter;
+            animation:iotRipple 3.6s ease-out infinite;
+          }
+          @keyframes iotRipple{
+            0%{transform:translateY(-50%) scale(.18); opacity:0; filter:hue-rotate(0deg) saturate(1.5)}
+            12%{opacity:.95}
+            60%{filter:hue-rotate(20deg) saturate(1.4) brightness(1.06)}
+            100%{transform:translateY(-50%) scale(3.6); opacity:0; filter:hue-rotate(42deg) saturate(1.35) brightness(1.2)}
+          }
+          @media(prefers-reduced-motion:reduce){.iot-ripple-ring{animation:none}}
+          @keyframes iotFlowPulse{0%,100%{opacity:.35}50%{opacity:1}}
+          .iot-flow-dot{animation:iotFlowPulse 1.1s ease-in-out infinite}
+          @media(prefers-reduced-motion:reduce){.iot-flow-dot{animation:none}}
+          .iot-rain-drop{
+            position:absolute; top:-14px; width:2px; height:13px; border-radius:2px;
+            background:linear-gradient(to bottom, rgba(45,140,160,0), rgba(45,140,160,.5));
+            opacity:0; animation-name:iotRain; animation-timing-function:linear; animation-iteration-count:infinite;
+          }
+          @keyframes iotRain{0%{transform:translateY(0);opacity:0}12%{opacity:.6}88%{opacity:.6}100%{transform:translateY(130px);opacity:0}}
+          @media(prefers-reduced-motion:reduce){.iot-rain-drop{animation:none;opacity:0}}
+        `}</style>
 
         {/* Device list */}
         <Card title={`Devices (${devices.length})`} pad={false}>
@@ -8633,7 +8829,9 @@ function IoTDevices() {
               return (
                 <button key={d.deviceId} onClick={() => setSelected(d.deviceId)} style={{
                   textAlign: "left", padding: "11px 12px", borderRadius: 12, cursor: "pointer",
-                  border: "1.5px solid " + (sel ? "var(--teal)" : "var(--border)"), background: sel ? "var(--mint-2)" : "#fff", transition: ".15s"
+                  border: `${sel ? 2 : 1.5}px solid ${on ? "#1f7a3f" : "#c0392b"}`,
+                  background: sel ? (on ? "var(--mint-2)" : "#fdf3f3") : "#fff",
+                  transition: ".15s"
                 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
                     <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{d.deviceId}</span>
@@ -8655,8 +8853,8 @@ function IoTDevices() {
         <div style={{ minWidth: 0 }}>
           {!device ? <Card><Empty msg="Select a device from the list." /></Card> : <>
             <div style={{ marginBottom: 16 }}>
-              <h2 style={{ fontSize: 21, lineHeight: 1.1 }}>{device.deviceId}</h2>
-              <div style={{ fontSize: 13, color: "var(--muted)" }}>{device.roUnitId} · Firmware {device.firmwareVersion || "—"}</div>
+              <h2 style={{ fontSize: 22, lineHeight: 1.1, fontFamily: "'DM Sans',system-ui,-apple-system,sans-serif", fontWeight: 800, letterSpacing: "-.01em", color: "var(--f)" }}>{device.deviceId}</h2>
+              <div style={{ fontSize: 13, color: "var(--muted)", fontFamily: "'DM Sans',system-ui,-apple-system,sans-serif" }}>{device.roUnitId} · Firmware {device.firmwareVersion || "—"}</div>
             </div>
 
             <div style={grid4}>
@@ -8681,6 +8879,32 @@ function IoTDevices() {
                   ))}
                   {channels.length === 0 && <div style={{ gridColumn: "1/-1" }}><Empty msg="No channels reported." /></div>}
                 </div>
+              </Card>
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <Card title="Live consumption" sub={canMeasure ? `Water drawn per channel over the live ${winLabel} window (cumulative meter deltas).` : "Gathering readings…"}>
+                {!canMeasure ? <Empty msg="Not enough heartbeats yet to measure consumption." /> : <>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+                    <span style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "var(--f)", lineHeight: 1 }}>{iotVol(totalConsumed)} L</span>
+                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>total across {consumption.length} channel{consumption.length !== 1 ? "s" : ""} · last {winLabel}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    {consumption.map(c => (
+                      <div key={c.id} style={{ borderRadius: 12, border: "1px solid var(--border)", background: c.flowing ? "#eef7f0" : "var(--mint)", padding: 14 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{c.id}</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: c.flowing ? "#1f7a3f" : "#9aa8a0", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            {c.flowing && <span className="iot-flow-dot" style={{ width: 6, height: 6, borderRadius: 999, background: "#fff" }} />}
+                            {c.flowing ? "Flowing" : "Idle"}
+                          </span>
+                        </div>
+                        <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 22, color: "var(--f)", lineHeight: 1 }}>{iotVol(c.consumed)} <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>L</span></div>
+                        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>now {c.flow} L/min</div>
+                      </div>
+                    ))}
+                  </div>
+                </>}
               </Card>
             </div>
 
@@ -8709,8 +8933,9 @@ function IoTDevices() {
                       <XAxis dataKey="time" tick={axisTick} axisLine={false} tickLine={false} interval="preserveStartEnd" />
                       <YAxis tick={axisTick} axisLine={false} tickLine={false} />
                       <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                      <Line type="monotone" dataKey="flow_CH01" name="CH_01 (L/min)" stroke="#0f6e3f" strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                      <Line type="monotone" dataKey="flow_CH02" name="CH_02 (L/min)" stroke="#90ab8b" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                      {chanIds.map((id, i) => (
+                        <Line key={id} type="monotone" dataKey={"flow_" + id} name={`${id} (L/min)`} stroke={IOT_FLOW_COLORS[i % IOT_FLOW_COLORS.length]} strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                      ))}
                     </LineChart>
                   </ResponsiveContainer>
                 </Card>
@@ -8718,26 +8943,45 @@ function IoTDevices() {
             )}
 
             <div style={{ marginTop: 18 }}>
-              <Card title="Recent heartbeats" sub="Each row is one message from the device · refreshes every 15s." pad={false}>
-                <Table head={["Time", "Pressure", "CH_01 Flow", "CH_01 Valve", "CH_02 Flow", "CH_02 Valve", "Fault"]} maxHeight={360}>
-                  {[...history].reverse().map((item, i) => {
-                    const ch1 = item.payload?.units?.[0]?.channels?.find(c => c.channelId === "CH_01");
-                    const ch2 = item.payload?.units?.[0]?.channels?.find(c => c.channelId === "CH_02");
-                    const fault = ch1?.fault || ch2?.fault;
+              <Card title="Recent heartbeats" sub="Total volume (litres) per channel · one row per heartbeat · refreshes every 8s." pad={false}>
+                <Table head={["Sync history", ...chanIds.map(id => `${id} · Total vol (L)`), "Fault"]}>
+                  {hbRows.map((item, i) => {
+                    const chs = item.payload?.units?.[0]?.channels ?? [];
+                    const byId = Object.fromEntries(chs.map(c => [c.channelId, c]));
+                    const fault = chs.map(c => c.fault).filter(Boolean).join(", ");
                     return (
                       <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: fault ? "#fdf9ef" : "transparent" }}>
-                        <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, color: "var(--muted)" }}>{iotClock(item.timestamp)}</td>
-                        <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600 }}>{item.payload?.inputPressure} bar</td>
-                        <td style={td}>{ch1?.flowRateLpm} L/min</td>
-                        <td style={{ ...td, textAlign: "center" }}><ValveBadge state={ch1?.valveState} /></td>
-                        <td style={td}>{ch2?.flowRateLpm} L/min</td>
-                        <td style={{ ...td, textAlign: "center" }}><ValveBadge state={ch2?.valveState} /></td>
-                        <td style={{ ...td, color: "#9a6a16", fontWeight: 600 }}>{fault ?? "—"}</td>
+                        <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{iotStamp(item.timestamp)}</td>
+                        {chanIds.map(id => {
+                          const c = byId[id];
+                          return (
+                            <td key={id} style={{ ...td, fontVariantNumeric: "tabular-nums", color: c?.fault ? "#9a6a16" : "var(--f)" }}>
+                              {iotVol(c?.totalVolumeLitres)}
+                            </td>
+                          );
+                        })}
+                        <td style={{ ...td, color: "#9a6a16", fontWeight: 600 }}>{fault || "—"}</td>
                       </tr>
                     );
                   })}
-                  {history.length === 0 && <tr><td colSpan={7} style={{ padding: 0 }}><Empty msg="No heartbeats yet." /></td></tr>}
+                  {history.length === 0 && <tr><td colSpan={chanIds.length + 2} style={{ padding: 0 }}><Empty msg="No heartbeats yet." /></td></tr>}
                 </Table>
+                {history.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
+                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+                      Showing {(hbPageClamped - 1) * HB_PER_PAGE + 1}–{Math.min(hbPageClamped * HB_PER_PAGE, history.length)} of {history.length}
+                    </span>
+                    <button onClick={() => setHbPage(p => Math.max(1, p - 1))} disabled={hbPageClamped <= 1}
+                      style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "#fff", color: hbPageClamped <= 1 ? "var(--muted)" : "var(--f)", cursor: hbPageClamped <= 1 ? "not-allowed" : "pointer", opacity: hbPageClamped <= 1 ? 0.5 : 1 }}>
+                      Prev
+                    </button>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)", minWidth: 40, textAlign: "center" }}>{hbPageClamped} / {hbTotalPages}</span>
+                    <button onClick={() => setHbPage(p => Math.min(hbTotalPages, p + 1))} disabled={hbPageClamped >= hbTotalPages}
+                      style={{ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--teal)", background: hbPageClamped >= hbTotalPages ? "#fff" : "var(--teal)", color: hbPageClamped >= hbTotalPages ? "var(--muted)" : "#fff", cursor: hbPageClamped >= hbTotalPages ? "not-allowed" : "pointer", opacity: hbPageClamped >= hbTotalPages ? 0.5 : 1 }}>
+                      Next
+                    </button>
+                  </div>
+                )}
               </Card>
             </div>
           </>}
