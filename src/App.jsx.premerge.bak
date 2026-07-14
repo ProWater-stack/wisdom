@@ -5,7 +5,7 @@ import {
   LogOut, Search, Plus, Eye, EyeOff, Shield, ShieldCheck, Filter,
   TrendingUp, Award, Wallet, ChevronRight, X, CheckCircle2, Clock,
   AlertCircle, Download, Lock, ArrowUpRight, Trash2, KeyRound, Menu,
-  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Mail, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket
+  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Mail, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -157,29 +157,9 @@ const allAccess = (level) => Object.fromEntries(MODULES.map(m => [m.id, level]))
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.4.1";
-const VERSION_DATE = "2026-07-14";
+const APP_VERSION = "2.1.9";
+const VERSION_DATE = "2026-07-13";
 const VERSION_HISTORY = [
-  { v: "2.4.1", note: "Task Planner: imported the technician-app / Zoho Desk-sync meeting action items (22 tasks, duplicates skipped) auto-categorised (Technician App, Ticketing, Customer App, Backend & APIs, Messaging, IoT, Zoho FSM, Ops & Finance, Review & QA)." },
-  { v: "2.4.0", note: "Admin \"Modify Tasks\" panel (Task Planner, admin-only) to add/remove Statuses, Sprints & Categories — no longer capped at Sprint 1–4. About module gains App Releases & Technician Releases sections (free-text Sprint / version / notes; Publish stamps date+time), and every user gets a \"what's new\" release popup on login for releases they haven't seen." },
-  { v: "2.3.7", note: "Societies view: frozen table header, centre-aligned cells, a subtotal row under each expanded society, and status-coloured customer rows (inactive = red, dunning = amber)." },
-  { v: "2.3.6", note: "Customer module → Societies: each society row is now expandable — click it to see that society's customers (ID, name, purifier ID, device, phone, plan, status)." },
-  { v: "2.3.5", note: "Customer module: new Societies tab — customer count per society (with active count + Own/Normal/Hot&Cold device mix), sortable, searchable, CSV export, grand-total footer." },
-  { v: "2.3.4", note: "Synced this build with all v2.1.5–2.3.3 changes (Task Planner, Penetration Tracker, Revenue vertical breakdown, Customer KPI cards, Zoho Desk ticketing, sprint-board import, P0–P3 priorities + Sprint field, etc.) while keeping this build's API Usage tab (Logs Tracker) and admin-email lib." },
-  { v: "2.3.3", note: "Task Planner: Category and Sprint in the task editor are now editable comboboxes — pick from the list or type a custom value." },
-  { v: "2.3.2", note: "Task Planner: imported the product sprint board (~49 tasks, duplicates skipped by title) each filed under its sheet Category (Customer App, PW Website, Zoho CRM/ERP/Billing/Inventory/FSM, Freshdesk, Bug Fixes, Form, Wisdom, IoT, Technician App). Priority switched to the P0–P3 scale and a Sprint field/dropdown added (editor, card, list, filters). Added member Pranshu. Fixed the editor font — inputs now use the dashboard's DM Sans instead of the browser-default monospace." },
-  { v: "2.3.1", note: "Penetration Tracker now builds from the subscriptions API: each subscription's created_at is the sign-up date, joined to the customer's society via customer_id → zoho_customer_id. Cohort M1..Mn per society as before. Added `createdAt` to the subscription mapping." },
-  { v: "2.3.0", note: "Penetration Tracker: robust sign-up date parsing — `since`/created_time values that plain new Date() can't read (e.g. 19-Jan-2026, 19/01/2026, epoch, +0530 offsets) are now parsed, so societies build correctly from the customer API's society + since fields." },
-  { v: "2.2.9", note: "Penetration Tracker: fixed the empty view on live data — Zoho customer records usually lack `society`, so it now enriches society by matching each customer to a lead by phone/email (leads carry the society), falling back to the billing address. The empty state now reports how many customers resolved a society vs a sign-up date so gaps are visible." },
-  { v: "2.2.8", note: "Penetration Tracker reworked to a cohort matrix: each society is aligned to its own M1 = the month of its first sign-up (derived from the customer API created_time), so columns are M1..Mn months-since-launch (like the source sheet). Added a derived Launch column, blanks for months a society hasn't reached, and per-M column totals." },
-  { v: "2.2.7", note: "Analytics: new Penetration Tracker — a month-on-month matrix of cumulative customers per society (built from the customer API by sign-up date), with a totals row across the top, a frozen Society Name column, month-grew highlighting and CSV export. Launch-date-relative M1..Mn alignment is left for later." },
-  { v: "2.2.6", note: "Customer module: added KPI cards for Active Customers, Inactive Customers, and the device mix (Own / Normal / Hot & Cold, derived from the purifier ID prefix)." },
-  { v: "2.2.5", note: "Task Planner: removed the \"Summarise via AI\" option from the task Notes (reverted to a plain notes field)." },
-  { v: "2.2.4", note: "Analytics > Revenue: weekend rows (Sat/Sun) in the daily breakdown are highlighted amber. Task Planner: module now opens on the Weekly View by default; the \"Scoping\" status column was removed (old Scoping tasks map to New); the Email field was dropped from the task editor." },
-  { v: "2.2.3", note: "Analytics > Revenue: daily breakdown dropped the Deposit/Recharge rows (revenue only) and switched from one wide horizontal table to three vertical day-columns — Days 1–10, 11–20, 21–31 — each with its own column total, plus a grand total at the bottom. CSV export simplified to Date + Revenue." },
-  { v: "2.2.2", note: "Task Planner: added a 2nd task batch (WhatsApp/Meta/Twilio integration + Zoho rate-limit & end-to-end automation follow-ups) under a new \"Messaging\" category. Seeding now works in append-once batches (tracked in pw_tasks_imported) so new batches land on existing boards without duplicating older tasks." },
-  { v: "2.2.1", note: "Task Planner attachments can now be stored in Firebase Cloud Storage (shared across devices) via the Storage REST API using the existing login idToken — enabled by setting VITE_FIREBASE_STORAGE_BUCKET; falls back to local IndexedDB when unset or on upload failure. Each attachment shows a CLOUD/LOCAL badge; only a lightweight URL/metadata is kept in localStorage." },
-  { v: "2.2.0", note: "Task Planner fixes: attachment files now live in IndexedDB (large quota) with only metadata in localStorage — this fixes edits silently failing to save and the \"can't add more than one attachment\" bug, both caused by base64 files overflowing the ~5 MB localStorage limit. Per-file cap raised to 15 MB; legacy inline attachments auto-migrate to IndexedDB. The task editor now shows Created and Last edited timestamps." },
   { v: "2.1.9", note: "Task Planner: Weekly View is now a business-facing analytics dashboard (delivery-status donut, scope-size chart, completion KPIs) where each scope expands to its tasks on click. Start date auto-fills when a task moves to Picked Up and end date auto-fills when it goes Live. Board columns are now fixed-height with a pinned header and their own scrollbar, so the status header stays visible while scrolling the cards." },
   { v: "2.1.8", note: "Ticketing migrated from Freshdesk to Zoho Desk — all Freshdesk API code removed; the module now reads live tickets from the backend GET /tickets (authenticated with the same login idToken as the other Zoho APIs), with string-based Zoho Desk statuses/priorities. Task Planner: \"The Group\" now resolves to exactly Anis, Sujan, Harsh, Sri & Arjun (group tasks show for any of them when filtering); every task has a Category; added a Weekly View (business requirements grouped by category with completion bars); and status changes now raise persistent notifications (bell + unread badge) waiting at next login." },
   { v: "2.1.7", note: "Task Planner: cards now support MULTIPLE assignees (avatar stack on cards, multi-select chips in the editor) and a new \"The Group\" member for team-wide tasks. Seeded the board with the agreed 33-item next-steps backlog (imported once into a fresh board) — each task carries its owner(s) and a description." },
@@ -692,7 +672,6 @@ function mapSubscription(s) {
     rawStatus:      p.status || p.subscription_status || "",
     nextBilling:    p.next_billing_at || p.next_billing_date || p.current_term_ends_at || "",
     activatedAt:    p.activated_at || p.created_at || p.created_time || "",
-    createdAt:      p.created_at || p.created_time || p.activated_at || "", // when the subscription was created
     zohoId:         p.customer_id || p.zoho_customer_id || p.zoho_subscription_id || "",
     // Join key to customers: invoices/subscriptions expose customer_id, which
     // equals the customer endpoint's zoho_customer_id.
@@ -1135,17 +1114,15 @@ function fmtDowntime(ms) {
   return `${h}h ${min}m`;
 }
 
-// >>> WIRE: In production the BACKEND should record the real client IP + network from the request
-// (e.g. req.headers['x-forwarded-for'] and a GeoIP lookup). This browser-side lookup is a stand-in.
-//
-// IP geolocation only resolves to the ISP's *registered* city — e.g. it reports
-// "Bengaluru" for connections backhauled through a metro POP even when the user
-// is elsewhere (Andaman & Nicobar, etc.). So we prefer the browser's GPS/Wi-Fi
-// location when the user consents, and fall back to the (approximate) IP city.
-
-// External API usage tracker + persistent IP cache (fixes ipapi.co 1,000/day
-// exhaustion; ipCache is SEPARATE from the session so logout doesn't force a
-// re-fetch). See src/lib/apiUsageTracker.js + notifyAdmin.js.
+// ============================================================================
+// API USAGE TRACKER + PERSISTENT IP CACHE
+// ----------------------------------------------------------------------------
+// Root cause of the ipapi.co 1,000/day exhaustion: getIpNetwork() was called
+// fresh on every login, and logout wiped the cached location (_session) — so
+// the auto-logout every 55 minutes (pw_tokenExpiry) forced a brand-new
+// ipapi.co call for every user, all day. `ipCache` below is intentionally
+// SEPARATE from `_session`/pw_session, so clearing the session on logout no
+// longer forces a re-fetch. See src/lib/apiUsageTracker.js + notifyAdmin.js.
 const API_USAGE_LIMITS = {
   "ipapi.co": 1000,       // confirmed: ipapi.co free tier = 1000/day
   "ipify.org": 100000,    // fallback provider, no hard published daily cap
@@ -1165,12 +1142,18 @@ const apiTracker = new ApiUsageTracker({
 const ipCache = makeCache("pw_ip_cache", 6 * 60 * 60 * 1000); // 6h — survives logout
 
 /* ============================================================================
-   ApiUsageDashboard — the UI widget for the "API Usage" tab. Named differently
-   from the imported ApiUsageTracker class on purpose (rendering the class as JSX
-   would crash React); this component just reads the tracker's numbers.
+   ApiUsageDashboard — the actual UI widget for the "API Usage" tab.
+   NOTE: named differently from the imported `ApiUsageTracker` class on
+   purpose — that class does the tracking/storage, this component just reads
+   its numbers and renders them. Rendering the class itself as JSX (e.g.
+   <ApiUsageTracker />) is a runtime crash: React tries to call a class as a
+   plain function component and blows up the tree, which is what caused the
+   blank screen.
    ============================================================================ */
 function ApiUsageDashboard() {
   const [, force] = useState(0);
+  // Poll every 5s so counts update live if calls happen elsewhere while this
+  // tab is open (e.g. another tab in the same browser triggers a login).
   useEffect(() => {
     const t = setInterval(() => force(n => n + 1), 5000);
     return () => clearInterval(t);
@@ -1179,6 +1162,7 @@ function ApiUsageDashboard() {
   const rows = apiTracker.statusAll();
   const totalUsed = rows.reduce((s, r) => s + r.count, 0);
   const anyOver80 = rows.some(r => r.percent >= 80);
+
   const barColor = (pct) => pct >= 95 ? "#b4232a" : pct >= 80 ? "#9a6a16" : "#1f7a3f";
 
   return (
@@ -1229,9 +1213,18 @@ function ApiUsageDashboard() {
   );
 }
 
+// >>> WIRE: In production the BACKEND should record the real client IP + network from the request
+// (e.g. req.headers['x-forwarded-for'] and a GeoIP lookup). This browser-side lookup is a stand-in.
+//
+// IP geolocation only resolves to the ISP's *registered* city — e.g. it reports
+// "Bengaluru" for connections backhauled through a metro POP even when the user
+// is elsewhere (Andaman & Nicobar, etc.). So we prefer the browser's GPS/Wi-Fi
+// location when the user consents, and fall back to the (approximate) IP city.
+
 // IP address + ISP/network + coarse (ISP-registered) location.
 async function getIpNetwork() {
-  // 1) Serve from the persistent cache first (fixes the 1,000/day exhaustion).
+  // 1) Serve from the persistent cache first — this is the actual fix for the
+  // 1,000/day exhaustion (see comment block above).
   const cached = ipCache.get();
   if (cached) return cached;
 
@@ -1265,7 +1258,7 @@ async function getIpNetwork() {
       const r2 = await fetch("https://api.ipify.org?format=json");
       const j2 = await r2.json();
       const result = { ip: j2.ip || "—", network: "—", city: "", country: "", lat: null, lon: null };
-      ipCache.set(result);
+      ipCache.set(result); // still cache it, so we don't hit ipify repeatedly either
       return result;
     }
   } catch { /* ignore */ }
@@ -1756,7 +1749,6 @@ export default function App() {
         {!user ? <Login />
           : activeModule ? <Shell module={activeModule} onHome={() => setActiveModule(null)} />
           : <Home onPick={setActiveModule} />}
-        {user && <ReleasePopup />}
       </Auth.Provider>
     </div>
   );
@@ -2124,7 +2116,7 @@ function Shell({ module = "referral", onHome }) {
   const isModuleAdmin = moduleAccess === "admin" || moduleAccess === "devops";
   const [tab, setTab] = useState(
     module === "sales" ? "sales_leads"
-    : module === "planner" ? "plan_weekly"
+    : module === "planner" ? "plan_board"
     : module === "analytics" ? "analytics"
     : module === "employee" ? "emp_users"
     : module === "devicereplace" ? "dr_list"
@@ -2182,16 +2174,16 @@ function Shell({ module = "referral", onHome }) {
     return `${h}:${m}:${sec}`;
   };
 
-  const moduleTabs = {
-    referral: [
-      { id: "overview", label: "Overview", icon: LayoutDashboard },
-      { id: "referrers", label: "Referrers", icon: Users },
-      { id: "referees", label: "Referees", icon: GitBranch },
-      { id: "credits", label: "Credits", icon: Coins },
-      { id: "tracker", label: "Tracker", icon: Trophy },
-      { id: "analytics", label: "Analytics", icon: BarChart3 },
-      ...(isModuleAdmin ? [{ id: "backtrack", label: "Backtrack", icon: Undo2 }] : []),
-    ],
+ const moduleTabs = {
+  referral: [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "referrers", label: "Referrers", icon: Users },
+    { id: "referees", label: "Referees", icon: GitBranch },
+    { id: "credits", label: "Credits", icon: Coins },
+    { id: "tracker", label: "Tracker", icon: Trophy },
+    { id: "analytics", label: "Analytics", icon: BarChart3 },
+    ...(isModuleAdmin ? [{ id: "backtrack", label: "Backtrack", icon: Undo2 }] : []),
+  ],
     sales: [
       { id: "sales_overview", label: "Pipeline", icon: LayoutDashboard },
       { id: "sales_leads", label: "Leads & Deals", icon: Briefcase },
@@ -2202,7 +2194,6 @@ function Shell({ module = "referral", onHome }) {
     planner: [
       { id: "plan_board", label: "Task Board", icon: LayoutGrid },
       { id: "plan_weekly", label: "Weekly View", icon: CalendarRange },
-      ...(isModuleAdmin ? [{ id: "plan_admin", label: "Modify Tasks", icon: PencilLine }] : []),
     ],
     analytics: [
       { id: "an_live", label: "Live Dashboard", icon: LayoutDashboard },
@@ -2212,7 +2203,6 @@ function Shell({ module = "referral", onHome }) {
       { id: "an_apartment", label: "Apartment Performance", icon: Boxes },
       { id: "an_billing", label: "Billing", icon: Receipt },
       { id: "an_revenue", label: "Revenue", icon: TrendingUp },
-      { id: "an_penetration", label: "Penetration Tracker", icon: Boxes },
       { id: "an_credits", label: "Credits", icon: Coins },
       { id: "an_applogs", label: "App Logs", icon: ScrollText },
     ],
@@ -2225,7 +2215,6 @@ function Shell({ module = "referral", onHome }) {
     ],
     customer: [
       { id: "cust_list", label: "Customers", icon: UserRound },
-      { id: "cust_societies", label: "Societies", icon: Boxes },
     ],
     billing: [
       { id: "bill_overview", label: "Overview", icon: LayoutDashboard },
@@ -2253,14 +2242,12 @@ function Shell({ module = "referral", onHome }) {
     ],
     about: [
       { id: "about_docs", label: "About", icon: Info },
-      { id: "about_app_rel", label: "App Releases", icon: Rocket },
-      { id: "about_tech_rel", label: "Technician Releases", icon: Wrench },
     ],
     logtracker: [
-      { id: "log_all", label: "All Logs", icon: ScrollText },
-      { id: "log_failures", label: "Failures", icon: AlertCircle },
-      { id: "log_api", label: "API Usage", icon: BarChart3 },
-    ],
+    { id: "log_all", label: "All Logs", icon: ScrollText },
+    { id: "log_failures", label: "Failures", icon: AlertCircle },
+    { id: "log_api", label: "API Usage", icon: BarChart3 },   // ← NEW TAB
+  ],
   };
 
   const sharesAdminTabs = false; // User Management → Employee module; logs → Logs Tracker module
@@ -2368,12 +2355,10 @@ function Shell({ module = "referral", onHome }) {
             {tab === "an_apartment" && <ApartmentPerformance key={refreshKey} />}
             {tab === "an_billing" && <BillingAnalytics key={refreshKey} />}
             {tab === "an_revenue" && <NetRevenue key={refreshKey} />}
-            {tab === "an_penetration" && <PenetrationTracker key={refreshKey} />}
             {tab === "an_credits" && <CreditsAnalytics key={refreshKey} />}
             {tab === "an_applogs" && <AppLogs key={refreshKey} />}
             {tab === "plan_board" && <TaskPlanner key={`board-${refreshKey}`} />}
             {tab === "plan_weekly" && <TaskPlanner key={`weekly-${refreshKey}`} initialView="weekly" />}
-            {tab === "plan_admin" && isModuleAdmin && <TaskAdmin key={refreshKey} />}
             {tab === "sales_overview" && <SalesPipeline key={refreshKey} />}
             {tab === "sales_leads" && <SalesLeads key={refreshKey} isAdmin={isModuleAdmin} />}
             {tab === "sales_apartments" && <ApartmentLeads key={refreshKey} />}
@@ -2382,15 +2367,12 @@ function Shell({ module = "referral", onHome }) {
             {tab === "emp_users" && <UsersAdmin key={refreshKey} />}
             {tab === "dr_list" && <DeviceReplacement key={refreshKey} />}
             {tab === "about_docs" && <AboutModule key={refreshKey} />}
-            {tab === "about_app_rel" && <ReleaseManager key={refreshKey} kind="app" isAdmin={isModuleAdmin} />}
-            {tab === "about_tech_rel" && <ReleaseManager key={refreshKey} kind="technician" isAdmin={isModuleAdmin} />}
             {tab === "log_all" && <Logs key={refreshKey} />}
             {tab === "log_failures" && <Failures key={refreshKey} />}
             {tab === "log_api" && <ApiUsageDashboard key={refreshKey} />}
             {tab === "tk_overview" && <TicketOverview key={refreshKey} />}
             {tab === "tk_tickets" && <TicketList key={refreshKey} isAdmin={isModuleAdmin} />}
             {tab === "cust_list" && <Customers key={refreshKey} accessLevel={moduleAccess} />}
-            {tab === "cust_societies" && <CustomerSocieties key={refreshKey} />}
             {tab === "bill_overview" && <BillingOverview key={refreshKey} />}
             {tab === "bill_subs" && <Subscriptions key={refreshKey} />}
             {tab === "bill_invoices" && <Invoices key={refreshKey} />}
@@ -3454,7 +3436,6 @@ const API_USAGE = [
   { group: "Google / Firebase", items: [
     { m: "POST", path: "identitytoolkit.googleapis.com/…:signInWithPassword", use: "Login — email/password auth" },
     { m: "POST", path: "firestore.googleapis.com/…:runQuery", use: "App Logs source (Firestore)" },
-    { m: "POST/GET/DELETE", path: "firebasestorage.googleapis.com/v0/b/…/o", use: "Task Planner attachments (Firebase Storage, when VITE_FIREBASE_STORAGE_BUCKET is set)" },
     { m: "GET", path: "fonts.googleapis.com", use: "Web fonts (Playfair Display + DM Sans)" },
   ] },
   { group: "External utility APIs", items: [
@@ -3465,114 +3446,6 @@ const API_USAGE = [
   ] },
 ];
 const apiMethodBadge = (m) => { const c = m.includes("POST") ? ["#3a6ea5", "#e7eef7"] : ["#1f7a3f", "#e6f4ea"]; return { fontSize: 11, fontWeight: 700, color: c[0], background: c[1], padding: "2px 8px", borderRadius: 7, fontFamily: "ui-monospace,monospace", whiteSpace: "nowrap" }; };
-
-/* ===========================================================================
-   RELEASES — App & Technician release notes (free text). Admins publish; the
-   publish stamps date+time. On login every user gets a "what's new" popup for
-   releases they haven't seen. Stored in localStorage (pw_releases).
-   =========================================================================== */
-const getReleases = () => { const r = LS.get("pw_releases", null); return (r && typeof r === "object") ? { app: r.app || [], technician: r.technician || [] } : { app: [], technician: [] }; };
-const saveReleases = (obj) => LS.set("pw_releases", obj);
-
-function ReleaseManager({ kind, isAdmin }) {
-  const { user } = useAuth();
-  const [data, setData] = useState(() => getReleases());
-  const [sprint, setSprint] = useState("");
-  const [version, setVersion] = useState("");
-  const [notes, setNotes] = useState("");
-  const [flash, setFlash] = useState("");
-  const title = kind === "app" ? "App" : "Technician";
-  useEffect(() => { api.logView(user.username, `Viewed ${title} Releases`); }, []);
-  const list = data[kind] || [];
-  const toast = (m) => { setFlash(m); setTimeout(() => setFlash(""), 1800); };
-  const persist = (next) => { const all = { ...getReleases(), [kind]: next }; setData(all); saveReleases(all); };
-  const publish = () => {
-    if (!sprint.trim() && !version.trim() && !notes.trim()) return toast("Fill at least one field");
-    persist([{ id: crypto.randomUUID(), kind, sprint: sprint.trim(), version: version.trim(), notes: notes.trim(), publishedAt: new Date().toISOString(), by: user.name }, ...list]);
-    setSprint(""); setVersion(""); setNotes(""); toast("Release published");
-  };
-  const remove = (id) => persist(list.filter(r => r.id !== id));
-  const lbl = { fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6, display: "block" };
-
-  return (
-    <div className="fade-up">
-      {isAdmin && (
-        <Card title={`Publish a ${title} release`} sub="All fields are free text. Publishing stamps the current date & time.">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div><label style={lbl}>Sprint</label><input value={sprint} onChange={e => setSprint(e.target.value)} placeholder="e.g. Sprint 5" style={inp} /></div>
-            <div><label style={lbl}>{title} release version</label><input value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. v3.2.0" style={inp} /></div>
-            <div style={{ gridColumn: "1 / -1" }}><label style={lbl}>Notes — what was released</label><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="What went out in this release…" style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} /></div>
-          </div>
-          <div style={{ display: "flex", marginTop: 14 }}>
-            <button onClick={publish} style={{ ...btnPrimary, marginLeft: "auto" }}><Check size={16} /> Publish release</button>
-          </div>
-        </Card>
-      )}
-      <div style={{ marginTop: isAdmin ? 18 : 0 }}>
-        <Card pad={false} title={`${title} Releases · ${list.length}`} sub="Newest first">
-          {list.length === 0 ? <Empty msg="No releases yet." /> : (
-            <div>
-              {list.map(r => (
-                <div key={r.id} style={{ display: "flex", gap: 12, padding: "14px 18px", borderTop: "1px solid var(--border)" }}>
-                  <span style={{ display: "inline-flex", width: 32, height: 32, borderRadius: 9, background: "var(--mint-2)", color: "var(--forest)", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Rocket size={16} /></span>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      {r.version && <span style={{ fontWeight: 700, fontSize: 14.5, color: "var(--f)" }}>{r.version}</span>}
-                      {r.sprint && <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--forest)", background: "var(--mint-2)", padding: "2px 9px", borderRadius: 999 }}>{r.sprint}</span>}
-                      <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{fmtTime(r.publishedAt)}{r.by ? ` · ${r.by}` : ""}</span>
-                    </div>
-                    {r.notes && <div style={{ fontSize: 13, color: "var(--slate)", marginTop: 5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{r.notes}</div>}
-                  </div>
-                  {isAdmin && <button onClick={() => remove(r.id)} title="Delete" style={{ ...iconBtn, padding: 6, background: "var(--mint)", flexShrink: 0 }}><Trash2 size={15} /></button>}
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-      {flash && <div style={toastStyle}><CheckCircle2 size={16} /> {flash}</div>}
-    </div>
-  );
-}
-
-// Login "what's new" popup — shows releases published since the user last saw it.
-function ReleasePopup() {
-  const [rels, setRels] = useState(() => {
-    const all = getReleases();
-    const seen = LS.get("pw_releases_seen", 0);
-    return [...(all.app || []), ...(all.technician || [])]
-      .filter(r => r.publishedAt && new Date(r.publishedAt).getTime() > seen)
-      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-  });
-  if (!rels.length) return null;
-  const dismiss = () => { LS.set("pw_releases_seen", Date.now()); setRels([]); };
-  return createPortal(
-    <div onClick={dismiss} style={{ ...overlay, alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1200 }}>
-      <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(460px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 24, boxShadow: "var(--shadow-lg)", maxHeight: "calc(100vh - 60px)", overflowY: "auto", fontFamily: "'DM Sans',system-ui,-apple-system,sans-serif" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <span style={{ display: "inline-flex", width: 36, height: 36, borderRadius: 10, background: "var(--mint-2)", color: "var(--forest)", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Rocket size={18} /></span>
-          <div><p className="eyebrow" style={{ margin: 0 }}>What's new</p><h2 style={{ fontSize: 19, margin: 0 }}>Latest releases</h2></div>
-          <button onClick={dismiss} style={{ ...iconBtn, marginLeft: "auto" }}><X size={18} /></button>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-          {rels.slice(0, 6).map(r => (
-            <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "11px 13px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: r.kind === "app" ? "#3a6ea5" : "#9a3b6e", background: r.kind === "app" ? "#eef4ff" : "#fbeaf3", padding: "2px 8px", borderRadius: 999 }}>{r.kind === "app" ? "APP" : "TECHNICIAN"}</span>
-                {r.version && <span style={{ fontWeight: 700, fontSize: 14, color: "var(--f)" }}>{r.version}</span>}
-                {r.sprint && <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--forest)" }}>{r.sprint}</span>}
-              </div>
-              {r.notes && <div style={{ fontSize: 12.5, color: "var(--slate)", marginTop: 5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.notes}</div>}
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>{fmtTime(r.publishedAt)}</div>
-            </div>
-          ))}
-        </div>
-        <button onClick={dismiss} style={{ ...btnPrimary, width: "100%", marginTop: 16 }}>Got it</button>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
 function AboutModule() {
   const { user } = useAuth();
@@ -4581,146 +4454,6 @@ function SortHeader({ label, k, sort, onSort }) {
   );
 }
 
-/* ===========================================================================
-   CUSTOMER MODULE — Societies: how many customers per society (+ active &
-   device mix), sortable, searchable, with a grand-total footer.
-   =========================================================================== */
-function CustomerSocieties() {
-  const { user } = useAuth();
-  const [rows, setRows] = useState(null);
-  const [q, setQ] = useState("");
-  const [sort, setSort] = useState({ key: "count", dir: "desc" });
-  const toggleSort = (k) => setSort(s => s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: k === "society" ? "asc" : "desc" });
-  const [expanded, setExpanded] = useState(() => new Set());
-  const toggleExpand = (k) => setExpanded(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
-  useEffect(() => { api.logView(user.username, "Viewed Societies"); customerApi.getCustomers().then(setRows).catch(() => setRows([])); }, []);
-  if (!rows) return <Loading />;
-
-  const NONE = "— No society —";
-  const groups = {};
-  rows.forEach(c => {
-    const soc = (c.society && String(c.society).trim() && c.society !== "—") ? String(c.society).trim() : NONE;
-    const g = groups[soc] || (groups[soc] = { society: soc, count: 0, active: 0, inactive: 0, dunning: 0, own: 0, normal: 0, hotcold: 0, customers: [] });
-    g.customers.push(c);
-    g.count++;
-    const st = String(c.status || "").toLowerCase();
-    if (st === "active") g.active++;
-    else if (st === "inactive") g.inactive++;
-    else if (st === "dunning") g.dunning++;
-    const dt = deviceType(c.purifier_id);
-    if (dt === "Own Device") g.own++;
-    else if (dt === "Normal Device") g.normal++;
-    else if (dt === "Hot & Cold") g.hotcold++;
-  });
-  const all = Object.values(groups);
-  const namedSocieties = all.filter(g => g.society !== NONE).length;
-  const biggest = all.filter(g => g.society !== NONE).reduce((b, g) => g.count > (b?.count || 0) ? g : b, null);
-
-  const filtered = all.filter(g => g.society.toLowerCase().includes(q.toLowerCase()));
-  const dir = sort.dir === "asc" ? 1 : -1;
-  filtered.sort((a, b) => sort.key === "society" ? a.society.localeCompare(b.society) * dir : (a[sort.key] - b[sort.key]) * dir);
-  const tot = filtered.reduce((a, g) => ({ count: a.count + g.count, active: a.active + g.active, own: a.own + g.own, normal: a.normal + g.normal, hotcold: a.hotcold + g.hotcold }), { count: 0, active: 0, own: 0, normal: 0, hotcold: 0 });
-
-  const stats = [
-    { label: "Societies", value: namedSocieties, icon: Boxes, sub: "with at least one customer", hero: true },
-    { label: "Customers", value: rows.length.toLocaleString("en-IN"), icon: UserRound, sub: "across all societies" },
-    { label: "Avg / society", value: namedSocieties ? Math.round(rows.filter(c => c.society && c.society !== "—").length / namedSocieties) : 0, icon: TrendingUp, sub: "customers per society" },
-    { label: "Largest society", value: biggest ? biggest.count : 0, icon: Award, sub: biggest ? biggest.society : "—" },
-  ];
-
-  const exportCsv = () => exportToCsv("prowater-societies.csv", [
-    { label: "Society", get: g => g.society }, { label: "Customers", get: g => g.count }, { label: "Active", get: g => g.active },
-    { label: "Own", get: g => g.own }, { label: "Normal", get: g => g.normal }, { label: "Hot & Cold", get: g => g.hotcold },
-  ], filtered);
-
-  return (
-    <div className="fade-up">
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
-      <div style={{ marginTop: 16 }}>
-        <Toolbar q={q} setQ={setQ} placeholder="Search society…" count={filtered.length}
-          right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />
-        <Card pad={false}>
-          <Table head={[
-            <SortHeader key="s" label="Society" k="society" sort={sort} onSort={toggleSort} />,
-            <SortHeader key="c" label="Customers" k="count" sort={sort} onSort={toggleSort} />,
-            <SortHeader key="a" label="Active" k="active" sort={sort} onSort={toggleSort} />,
-            "Own", "Normal", "Hot & Cold"]} maxHeight="calc(100vh - 340px)">
-            {filtered.map((g, i) => { const open = expanded.has(g.society); return (
-              <React.Fragment key={i}>
-                <tr onClick={() => toggleExpand(g.society)} title="Click to see customers" style={{ borderBottom: "1px solid var(--border)", cursor: "pointer", background: open ? "var(--mint)" : undefined }}>
-                  <td style={{ ...td, fontWeight: 600, color: g.society === NONE ? "var(--muted)" : "var(--f)" }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
-                      <ChevronRight size={15} style={{ color: "var(--muted)", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
-                      {g.society}
-                    </span>
-                  </td>
-                  <td style={{ ...td, fontWeight: 700 }}>{g.count}</td>
-                  <td style={{ ...td, color: "var(--forest)", fontWeight: 600 }}>{g.active}</td>
-                  <td style={td}>{g.own || "—"}</td>
-                  <td style={td}>{g.normal || "—"}</td>
-                  <td style={td}>{g.hotcold || "—"}</td>
-                </tr>
-                {open && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 0, background: "var(--mint)", borderBottom: "1px solid var(--border)" }}>
-                      <div style={{ overflowX: "auto", padding: "6px 14px 14px" }}>
-                        <table style={{ borderCollapse: "collapse", width: "100%", background: "#fff", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-                          <thead>
-                            <tr style={{ background: "var(--mint-2)" }}>
-                              {["Customer ID", "Name", "Purifier ID", "Device", "Phone", "Plan", "Status"].map(h => (
-                                <th key={h} style={{ textAlign: "center", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", padding: "8px 12px", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" }}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {g.customers.map((c, ci) => {
-                              const st = String(c.status || "").toLowerCase();
-                              const rowBg = st === "inactive" ? "#fdf2f2" : st === "dunning" ? "#fdf3e0" : undefined;
-                              const stColor = st === "inactive" ? "#b4232a" : st === "dunning" ? "#9a6a16" : st === "active" ? "#1f7a3f" : "var(--muted)";
-                              const cell = { fontSize: 12.5, padding: "8px 12px", whiteSpace: "nowrap", textAlign: "center" };
-                              return (
-                              <tr key={ci} style={{ borderTop: ci ? "1px solid #eef2f0" : "none", background: rowBg }}>
-                                <td style={{ ...cell, color: "var(--slate)" }}>{c.id || "—"}</td>
-                                <td style={{ ...cell, fontSize: 13, fontWeight: 600, color: "var(--f)" }}>{c.name || "—"}</td>
-                                <td style={cell}>{c.purifier_id || "—"}</td>
-                                <td style={cell}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
-                                <td style={cell}>{fmtPhone(c.phone)}</td>
-                                <td style={cell}>{c.plan || "—"}</td>
-                                <td style={cell}><span style={{ fontSize: 11.5, fontWeight: 700, color: stColor, textTransform: "capitalize" }}>{c.status || "—"}</span></td>
-                              </tr>
-                              );
-                            })}
-                            <tr style={{ background: "var(--mint-2)", borderTop: "2px solid var(--border)" }}>
-                              <td colSpan={7} style={{ fontSize: 12, fontWeight: 700, color: "var(--f)", padding: "9px 12px", textAlign: "center" }}>
-                                Subtotal · {g.count} customer{g.count !== 1 ? "s" : ""} · {g.active} active{g.inactive ? ` · ${g.inactive} inactive` : ""}{g.dunning ? ` · ${g.dunning} dunning` : ""}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            ); })}
-            {filtered.length > 0 && (
-              <tr>
-                <td style={ftd}>Total ({filtered.length})</td>
-                <td style={ftd}>{tot.count}</td>
-                <td style={ftd}>{tot.active}</td>
-                <td style={ftd}>{tot.own}</td>
-                <td style={ftd}>{tot.normal}</td>
-                <td style={ftd}>{tot.hotcold}</td>
-              </tr>
-            )}
-          </Table>
-          {filtered.length === 0 && <Empty msg="No societies to show." />}
-        </Card>
-      </div>
-    </div>
-  );
-}
-
 function Customers({ accessLevel = "view" }) {
   const { user } = useAuth();
   const [rows, setRows] = useState(null);
@@ -4758,11 +4491,6 @@ function Customers({ accessLevel = "view" }) {
 
   // Active-customers KPI + month-on-month growth in new sign-ups (by `since`).
   const activeCount = rows.filter(c => c.status === "active").length;
-  const inactiveCount = rows.length - activeCount;
-  // Device-mix KPIs, derived from the purifier ID prefix (see deviceType()).
-  const ownCount = rows.filter(c => deviceType(c.purifier_id) === "Own Device").length;
-  const normalCount = rows.filter(c => deviceType(c.purifier_id) === "Normal Device").length;
-  const hotColdCount = rows.filter(c => deviceType(c.purifier_id) === "Hot & Cold").length;
   const now = new Date();
   const inMonth = (dateStr, y, m) => { const d = new Date(dateStr); return !isNaN(d.getTime()) && d.getFullYear() === y && d.getMonth() === m; };
   const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -4829,10 +4557,6 @@ function Customers({ accessLevel = "view" }) {
             <div style={{ fontSize: 11.5, color: "#a9c9b6", marginTop: 4 }}>No dated sign-ups to compare month-on-month.</div>
           )}
         </div>
-        <Stat label="Inactive Customers" value={inactiveCount.toLocaleString("en-IN")} icon={Ban} sub={`of ${rows.length.toLocaleString("en-IN")} total`} />
-        <Stat label="Own Device" value={ownCount.toLocaleString("en-IN")} icon={Cpu} sub="OWN- purifiers" />
-        <Stat label="Normal Device" value={normalCount.toLocaleString("en-IN")} icon={Droplets} sub="standard units" />
-        <Stat label="Hot & Cold Device" value={hotColdCount.toLocaleString("en-IN")} icon={Sun} sub="HAC- purifiers" />
       </div>
 
       <Toolbar q={q} setQ={setQ} placeholder="Search customer, email, phone, ID…" count={filtered.length}
@@ -6466,7 +6190,9 @@ function NetRevenue() {
 
   const exportCsv = () => exportToCsv(`prowater-net-revenue-${ym.y}-${String(ym.m + 1).padStart(2, "0")}.csv`, [
     { label: "Date", get: r => r.dateLabel },
-    { label: "Revenue", get: r => r.revenue },
+    { label: "Deposit", get: r => r.deposit },
+    { label: "Recharge", get: r => r.recharge },
+    { label: "Net Revenue", get: r => r.revenue },
   ], daily);
 
   return (
@@ -6528,225 +6254,35 @@ function NetRevenue() {
         </ResponsiveContainer>
       </Card>
 
-      {/* daily breakdown — vertical, split into three day-columns, each with a
-          column total; grand total shown at the very bottom */}
+      {/* daily breakdown table */}
       <Card pad={false} style={{ marginTop: 18 }} title="Daily breakdown" sub={`${MONTHS[ym.m]} ${ym.y} · ${inr(thisMonth)} total`}>
-        <div style={{ padding: 18 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }} className="nr-breakdown">
-            <style>{`@media(max-width:760px){.nr-breakdown{grid-template-columns:1fr!important}}`}</style>
-            {[
-              { title: "Days 1–10", days: daily.slice(0, 10) },
-              { title: "Days 11–20", days: daily.slice(10, 20) },
-              { title: "Days 21–31", days: daily.slice(20) },
-            ].map((seg, si) => {
-              const segTotal = seg.days.reduce((s, d) => s + d.revenue, 0);
-              const cellDate = { padding: "9px 16px", textAlign: "left", fontSize: 12.5, color: "var(--slate)", whiteSpace: "nowrap" };
-              const cellNum = { padding: "9px 16px", textAlign: "right", fontSize: 13, whiteSpace: "nowrap" };
-              return (
-                <div key={si} style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", alignSelf: "start" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                    <thead>
-                      <tr style={{ background: "var(--mint-2)" }}>
-                        <th style={{ ...cellDate, fontWeight: 700, color: "var(--f)", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>{seg.title}</th>
-                        <th style={{ ...cellNum, fontWeight: 700, color: "var(--f)", padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>Revenue</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {seg.days.map(d => {
-                        const dow = new Date(ym.y, ym.m, d.day).getDay();
-                        const wknd = dow === 0 || dow === 6; // Sun / Sat → amber
-                        return (
-                        <tr key={d.day} style={{ borderBottom: "1px solid #eef2f0", background: wknd ? "#fdf3e0" : undefined }}>
-                          <td style={{ ...cellDate, color: wknd ? "#9a6a16" : "var(--slate)", fontWeight: wknd ? 600 : 400 }}>{d.dateLabel}{wknd ? ` · ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dow]}` : ""}</td>
-                          <td style={{ ...cellNum, color: d.revenue > 0 ? (wknd ? "#9a6a16" : "var(--f)") : "var(--muted)", fontWeight: d.revenue > 0 ? 600 : 400 }}>{inr(d.revenue)}</td>
-                        </tr>
-                        );
-                      })}
-                      <tr style={{ background: "var(--mint)", borderTop: "2px solid var(--border)" }}>
-                        <td style={{ ...cellDate, fontWeight: 700, color: "var(--f)" }}>Total</td>
-                        <td style={{ ...cellNum, fontWeight: 700, color: "var(--forest)" }}>{inr(segTotal)}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16, padding: "14px 18px", background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#fff", borderRadius: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 14 }}>Grand total · {MONTHS[ym.m]} {ym.y}</span>
-            <span style={{ fontWeight: 800, fontSize: 20 }}>{inr(thisMonth)}</span>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-// Robust date parser for mixed Zoho / spreadsheet date strings — plain
-// `new Date()` fails on formats like "19-Jan-2026", "19/01/2026" or a "+0530"
-// offset without a colon. Returns a Date, or null if truly unparseable.
-function parseFlexDate(v) {
-  if (v == null || v === "") return null;
-  if (typeof v === "number") return new Date(v < 1e12 ? v * 1000 : v);
-  const s = String(v).trim();
-  if (/^\d{10}$/.test(s)) return new Date(Number(s) * 1000);   // epoch seconds
-  if (/^\d{13}$/.test(s)) return new Date(Number(s));          // epoch millis
-  let d = new Date(s);
-  if (!isNaN(d.getTime())) return d;
-  d = new Date(s.replace(" ", "T").replace(/([+-]\d{2})(\d{2})$/, "$1:$2")); // "…+0530" → "…+05:30"
-  if (!isNaN(d.getTime())) return d;
-  const MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-  let m = s.match(/^(\d{1,2})[-/ ]([A-Za-z]{3,})[-/ ,]*\s*(\d{2,4})$/); // 19-Jan-2026 / 19 Jan 26
-  if (m) { const mo = MON.indexOf(m[2].slice(0, 3).toLowerCase()); if (mo >= 0) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, mo, +m[1]); } }
-  m = s.match(/^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})$/); // 2026-01-19 or 19/01/2026 (day-first)
-  if (m) { let a = +m[1], b = +m[2], c = +m[3]; if (a > 31) return new Date(a, b - 1, c); let y = c < 100 ? c + 2000 : c; return new Date(y, b - 1, a); }
-  return null;
-}
-
-/* ===========================================================================
-   PENETRATION TRACKER — month-on-month customer count per society (cumulative
-   sign-ups by calendar month, from the customer API). Launch-date-relative
-   (M1..Mn) alignment can be layered on later once launch dates are wired in.
-   =========================================================================== */
-function PenetrationTracker() {
-  const { user } = useAuth();
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    api.logView(user.username, "Viewed Penetration Tracker");
-    // Subscriptions give the created_at (sign-up) date; customers give the
-    // society. Join on subscription.customer_id ↔ customer.zoho_customer_id.
-    Promise.all([billingApi.getSubscriptions(), customerApi.getCustomers()])
-      .then(([subs, custs]) => setData({ subs: subs || [], custs: custs || [] }))
-      .catch(e => setErr(e.message || "Could not load subscriptions."));
-  }, []);
-  if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
-
-  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const keyLc = (x) => String(x || "").toLowerCase().trim();
-
-  // Society lookup, keyed on every customer id we might match a subscription by
-  // (zoho_customer_id / customer_number / email).
-  const socByCust = {};
-  data.custs.forEach(c => {
-    const soc = (c.society && c.society !== "—") ? c.society : "";
-    if (!soc) return;
-    [c.zohoId, c.id, c.email].forEach(k => { if (k) socByCust[keyLc(k)] = soc; });
-  });
-  const societyOfSub = (s) =>
-    socByCust[keyLc(s.zohoCustomerId)] || socByCust[keyLc(s.zohoId)] ||
-    socByCust[keyLc(s.customerNumber)] || socByCust[keyLc(s.email)] || "";
-
-  // One subscription = one sign-up: society (from the customer join) + created_at.
-  const custs = data.subs
-    .map(s => ({ society: societyOfSub(s), since: parseFlexDate(s.createdAt || s.activatedAt) }))
-    .filter(x => x.society && x.since);
-
-  if (!custs.length) {
-    const total = data.subs.length;
-    const withSoc = data.subs.filter(s => societyOfSub(s)).length;
-    const withDate = data.subs.filter(s => parseFlexDate(s.createdAt || s.activatedAt)).length;
-    return (
-      <div className="fade-up">
-        <div style={{ marginBottom: 12, fontSize: 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
-        <Empty msg={`Nothing to track yet. Loaded ${total} subscription${total !== 1 ? "s" : ""} and ${data.custs.length} customers — ${withSoc} subscriptions matched a society (via customer_id → zoho_customer_id) and ${withDate} have a created date. The tracker needs both.`} />
-      </div>
-    );
-  }
-
-  // Absolute month number (year*12 + month) so we can do month arithmetic.
-  const idxOf = (d) => d.getFullYear() * 12 + d.getMonth();
-  const now = new Date();
-  const nowIdx = idxOf(now);
-  const labelOf = (idx) => `${MONTHS[((idx % 12) + 12) % 12]} '${String(Math.floor(idx / 12)).slice(2)}`;
-  const monthEndTs = (idx) => new Date(Math.floor(idx / 12), (idx % 12) + 1, 0, 23, 59, 59).getTime();
-
-  // Group by society; each society's launch = the month of its FIRST sign-up.
-  // M1 = that month, M2 = the next, … so every society is aligned to its own M1.
-  const bySoc = {};
-  custs.forEach(c => { (bySoc[c.society] = bySoc[c.society] || []).push(c.since.getTime()); });
-  const societies = Object.keys(bySoc).map(s => {
-    const times = bySoc[s].sort((a, b) => a - b);
-    const launchIdx = idxOf(new Date(times[0]));
-    return { society: s, times, launchIdx, span: nowIdx - launchIdx + 1 };
-  }).sort((a, b) => a.launchIdx - b.launchIdx || a.society.localeCompare(b.society));
-
-  const maxM = Math.min(24, Math.max(...societies.map(s => s.span))); // cap M-columns
-  const mCols = Array.from({ length: maxM }, (_, k) => k); // 0-based → M(k+1)
-
-  // Cumulative customers in a society by the end of its k-th month since launch.
-  // null once we run past the current calendar month (that M hasn't happened yet).
-  const matrix = societies.map(s => ({
-    society: s.society,
-    launch: labelOf(s.launchIdx),
-    total: s.times.length,
-    cells: mCols.map(k => {
-      const mIdx = s.launchIdx + k;
-      if (mIdx > nowIdx) return null;
-      const end = monthEndTs(mIdx);
-      return s.times.filter(t => t <= end).length;
-    }),
-  }));
-  const colTotals = mCols.map(k => matrix.reduce((sum, r) => sum + (r.cells[k] ?? 0), 0));
-  const grand = matrix.reduce((s, r) => s + r.total, 0);
-
-  const exportCsv = () => exportToCsv("prowater-penetration.csv",
-    [{ label: "Society", get: r => r.society }, { label: "Launch", get: r => r.launch },
-     ...mCols.map(k => ({ label: `M${k + 1}`, get: r => r.cells[k] ?? "" }))],
-    matrix);
-
-  const thBase = { fontWeight: 700, fontSize: 12, padding: "10px 14px", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" };
-  const tdNum = { padding: "10px 14px", textAlign: "right", fontSize: 13, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
-  const stickyL = (bg, left, z) => ({ position: "sticky", left, zIndex: z, background: bg });
-
-  return (
-    <div className="fade-up">
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <div>
-          <div className="eyebrow">Analytics</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
-        </div>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{matrix.length} societ{matrix.length === 1 ? "y" : "ies"} · {grand} sign-ups to date · months since each society’s first subscription (M1 = launch month)</span>
-        <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
-      </div>
-
-      <Card pad={false}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
             <thead>
-              {/* column totals across the top (only societies that reached that M) */}
-              <tr style={{ background: "var(--mint-2)" }}>
-                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 0, 3), textAlign: "left", color: "var(--f)" }}>Total</th>
-                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 210, 3), textAlign: "left" }} />
-                {colTotals.map((t, i) => <th key={i} style={{ ...thBase, textAlign: "right", color: "var(--forest)", fontSize: 13 }}>{t}</th>)}
-              </tr>
               <tr>
-                <th style={{ ...thBase, ...stickyL("#fff", 0, 3), textAlign: "left", color: "var(--f)", minWidth: 210 }}>Society Name</th>
-                <th style={{ ...thBase, ...stickyL("#fff", 210, 3), textAlign: "left", color: "var(--muted)", minWidth: 88, borderRight: "1px solid var(--border)" }}>Launch</th>
-                {mCols.map(k => <th key={k} style={{ ...thBase, textAlign: "right", color: "var(--muted)", minWidth: 56 }}>M{k + 1}</th>)}
+                <th style={{ position: "sticky", left: 0, zIndex: 2, background: "var(--mint-2)", fontWeight: 700, textAlign: "left", padding: "12px 16px", fontSize: 12.5, whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" }}>Date</th>
+                {daily.map(d => (
+                  <th key={d.day} style={{ fontWeight: 700, color: "var(--muted)", padding: "10px 14px", fontSize: 11.5, whiteSpace: "nowrap", textAlign: "right", minWidth: 78, borderBottom: "1px solid var(--border)" }}>{d.dateLabel}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {matrix.map((r, ri) => (
-                <tr key={ri} style={{ borderBottom: "1px solid #eef2f0" }}>
-                  <td style={{ ...stickyL("#fff", 0, 2), fontWeight: 600, color: "var(--f)", padding: "10px 14px", fontSize: 13, whiteSpace: "nowrap" }}>{r.society}</td>
-                  <td style={{ ...stickyL("#fff", 210, 2), padding: "10px 14px", fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", borderRight: "1px solid var(--border)" }}>{r.launch}</td>
-                  {r.cells.map((v, ci) => {
-                    if (v == null) return <td key={ci} style={{ ...tdNum, color: "#c9d2cc" }} />;
-                    const prev = ci > 0 ? r.cells[ci - 1] : 0;
-                    const grew = v > (prev ?? 0);
-                    return <td key={ci} style={{ ...tdNum, color: v > 0 ? "var(--f)" : "var(--muted)", fontWeight: grew ? 700 : v > 0 ? 500 : 400, background: grew ? "#e9f7ee" : undefined }}>{v}</td>;
-                  })}
+              {[
+                { key: "deposit", label: "Deposit", get: d => d.deposit, strong: false },
+                { key: "recharge", label: "Recharge", get: d => d.recharge, strong: false },
+                { key: "revenue", label: "Net Revenue", get: d => d.revenue, strong: true },
+              ].map(row => (
+                <tr key={row.key} style={{ borderTop: row.strong ? "1px solid var(--border)" : "none" }}>
+                  <td style={{ position: "sticky", left: 0, zIndex: 1, background: "var(--white)", fontWeight: 700, padding: "12px 16px", fontSize: 12.5, whiteSpace: "nowrap", borderRight: "1px solid var(--border)" }}>{row.label}</td>
+                  {daily.map(d => { const v = row.get(d); return (
+                    <td key={d.day} style={{ padding: "12px 14px", textAlign: "right", whiteSpace: "nowrap", fontSize: 12.5, color: v > 0 ? "var(--f)" : "var(--muted)", fontWeight: v > 0 && row.strong ? 700 : v > 0 ? 600 : 400 }}>{inr(v)}</td>
+                  ); })}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </Card>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
-        Each row is aligned to the society’s own <b>M1</b> = the month of its first subscription (subscriptions API <code>created_at</code>, joined to the customer’s society via customer_id → zoho_customer_id). Cells are cumulative sign-ups by that month; blank = that month hasn’t occurred yet for the society. Green = grew that month.
-      </div>
     </div>
   );
 }
@@ -9051,7 +8587,8 @@ function ApartmentPerformance() {
    assignee, email, notes, attachments, start/end dates and a priority, and
    move across 7 status columns via drag-and-drop.
    =========================================================================== */
-const PLAN_STATUSES_DEFAULT = [
+const PLAN_STATUSES = [
+  { key: "Scoping",      color: "#6b7280", bg: "#f3f4f6" },
   { key: "New",          color: "#2563eb", bg: "#eef4ff" },
   { key: "Picked Up",    color: "#7c3aed", bg: "#f4f0ff" },
   { key: "In-Progress",  color: "#c2671e", bg: "#fef3e2" },
@@ -9059,22 +8596,18 @@ const PLAN_STATUSES_DEFAULT = [
   { key: "Staging",      color: "#4f46e5", bg: "#eef0ff" },
   { key: "Live",         color: "#1f7a3f", bg: "#e9f7ee" },
 ];
-const PLAN_USERS = ["Anis", "Sujan", "Harsh", "Sri", "Arjun", "Pranshu", "Arun", "IQ Labs", "Zoho Vendor", "The Group"];
-// Priority scale (P0 = highest). Colours mirror the source sprint sheet.
+const PLAN_USERS = ["Anis", "Sujan", "Harsh", "Sri", "Arjun", "Arun", "IQ Labs", "Zoho Vendor", "The Group"];
 const PLAN_PRIORITIES = [
-  { key: "P0", color: "#b4232a" },
-  { key: "P1", color: "#c2671e" },
-  { key: "P2", color: "#1f7a3f" },
-  { key: "P3", color: "#3a6ea5" },
+  { key: "Low",    color: "#6b7280" },
+  { key: "Medium", color: "#2563eb" },
+  { key: "High",   color: "#c2671e" },
+  { key: "Urgent", color: "#b4232a" },
 ];
-const PLAN_SPRINTS_DEFAULT = ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Backlog"];
-// Legacy priority labels → P-scale (for tasks created before the switch).
-const PLAN_PRIO_MIGRATE = { Low: "P3", Medium: "P2", High: "P1", Urgent: "P0" };
-const PLAN_AVATAR_COLORS = ["#5a7863", "#2b7a78", "#0f6e3f", "#8a5a2b", "#9a3b6e", "#0d7a8c", "#3a6ea5", "#6d4fb5", "#b5694f", "#7a4fb5"];
+const PLAN_AVATAR_COLORS = ["#5a7863", "#2b7a78", "#0f6e3f", "#8a5a2b", "#9a3b6e", "#0d7a8c", "#3a6ea5", "#6d4fb5", "#b5694f"];
 // "The Group" tag means exactly these five people (not the vendors / Arun).
 const PLAN_GROUP = ["Anis", "Sujan", "Harsh", "Sri", "Arjun"];
 // Business-requirement categories every task is filed under.
-const PLAN_CATEGORIES_DEFAULT = [
+const PLAN_CATEGORIES = [
   { key: "Infrastructure",    color: "#0d7a8c" },
   { key: "Accounts & Access", color: "#6d4fb5" },
   { key: "Marketing",         color: "#c2671e" },
@@ -9084,43 +8617,8 @@ const PLAN_CATEGORIES_DEFAULT = [
   { key: "Ticketing",         color: "#9a3b6e" },
   { key: "Ops & Finance",     color: "#1f7a3f" },
   { key: "Review & QA",       color: "#16545c" },
-  { key: "Messaging",         color: "#128c7e" },
   { key: "Personal",          color: "#6b7280" },
-  // Sprint-board categories (from the product task sheet).
-  { key: "Customer App",      color: "#4c8c3f" },
-  { key: "Technician App",    color: "#2b7a78" },
-  { key: "PW Website",        color: "#3a6ea5" },
-  { key: "Zoho CRM",          color: "#c2671e" },
-  { key: "Zoho ERP",          color: "#8a5a2b" },
-  { key: "Zoho Billing",      color: "#9a3b6e" },
-  { key: "Zoho Inventory",    color: "#6d4fb5" },
-  { key: "Zoho FSM",          color: "#16766e" },
-  { key: "Freshdesk",         color: "#0d7a8c" },
-  { key: "Bug Fixes",         color: "#b4232a" },
-  { key: "Form",              color: "#5a7863" },
-  { key: "Wisdom",            color: "#7a4fb5" },
 ];
-
-/* ---- Editable task config (admins manage via the "Modify Tasks" panel) ------
-   Statuses, Sprints and Categories start from the defaults above but can be
-   extended/edited by an admin; overrides persist to localStorage. */
-const PLAN_PALETTE = ["#0d7a8c", "#6d4fb5", "#c2671e", "#2b7a78", "#3a6ea5", "#8a5a2b", "#9a3b6e", "#1f7a3f", "#16545c", "#128c7e", "#b4232a", "#5a7863", "#7a4fb5", "#4c8c3f"];
-const planPickColor = (i) => PLAN_PALETTE[(i >= 0 ? i : 0) % PLAN_PALETTE.length];
-// A light background tint of a status colour (for the board column bg).
-const planTint = (hex) => {
-  const h = String(hex || "#888").replace("#", "");
-  const full = h.length === 3 ? h.split("").map(x => x + x).join("") : h;
-  const n = parseInt(full, 16) || 0;
-  const mix = (c) => Math.round(c + (255 - c) * 0.88);
-  const r = mix((n >> 16) & 255), g = mix((n >> 8) & 255), b = mix(n & 255);
-  return `#${[r, g, b].map(x => x.toString(16).padStart(2, "0")).join("")}`;
-};
-let PLAN_STATUSES = LS.get("pw_plan_statuses", null) || PLAN_STATUSES_DEFAULT;
-let PLAN_SPRINTS = LS.get("pw_plan_sprints", null) || PLAN_SPRINTS_DEFAULT;
-let PLAN_CATEGORIES = LS.get("pw_plan_categories", null) || PLAN_CATEGORIES_DEFAULT;
-const setPlanStatuses = (v) => { PLAN_STATUSES = v; LS.set("pw_plan_statuses", v); };
-const setPlanSprints = (v) => { PLAN_SPRINTS = v; LS.set("pw_plan_sprints", v); };
-const setPlanCategories = (v) => { PLAN_CATEGORIES = v; LS.set("pw_plan_categories", v); };
 const planCatMeta = (k) => PLAN_CATEGORIES.find(c => c.key === k) || { key: k || "General", color: "#8a968f" };
 
 // Seed backlog — the agreed "next steps" list. Imported once into a fresh board
@@ -9160,106 +8658,6 @@ const PLAN_SEED_TASKS = [
   { t: "Grant Access", n: "Provide Google Play store console access to team members.", a: ["Arjun"], c: "Accounts & Access" },
   { t: "Share Credentials", n: "Provide the new AWS IoT core credentials to other team members.", a: ["Harsh"], c: "Accounts & Access" },
 ];
-
-// Second batch — WhatsApp/Meta/Twilio integration + Zoho follow-ups (appended
-// once to every board, new or existing, via PLAN_IMPORTS below).
-const PLAN_SEED_TASKS_2 = [
-  { t: "Configure WhatsApp Number", n: "Disable the 'triple 15' alternate number (already configured for DrinkPrime) from the Freshchat account so it can be linked to the new Facebook + WhatsApp Business infrastructure. A brand-new virtual number isn't feasible for the Indian market via current providers, so we're reusing this existing number. (WhatsApp currently fails on the trial plan — messages sit in the queue undelivered.)", a: ["Anis"], priority: "High", c: "Messaging" },
-  { t: "Share Meta URL", n: "Share the Meta Business Manager connection URL so the team can access the required configuration page.", a: ["Arjun"], c: "Messaging" },
-  { t: "Verify Twilio Number", n: "Assess the Twilio virtual number's status and configuration for WhatsApp integration. Note: obtaining a new virtual number for the Indian market is not currently feasible through our providers.", a: ["Anis"], c: "Messaging" },
-  { t: "Review Meta Account", n: "Confirm the existing Meta / Facebook business account is correctly linked and configured for this project. WhatsApp Business setup via Meta involves a complex, lengthy document-verification review that can be rejected — avoid new-account routes (e.g. LiveChat) that add delay.", a: ["Anis"], c: "Messaging" },
-  { t: "Monitor Zoho Limits", n: "Investigate Wisdom 2.0's Zoho API usage — we hit the 1,000-request/day cap and must wait until midnight for a reset. Shift data retrieval to local database caching instead of real-time API calls (data is already synced via webhooks).", a: ["Arjun"], priority: "High", c: "Backend & APIs" },
-  { t: "Zoho End-to-End Automation", n: "Zoho Inventory, ERP & Books — end-to-end automation across the stack: Zoho CRM order → create order in Zoho FSM → delivery & issue → create subscription in Billing → technician assignment via Zoho FSM for issues, drawing spares from Zoho Inventory.", a: ["Anis"], c: "Backend & APIs" },
-];
-
-// Third batch — the product sprint board (Customer App / Website / Zoho / IoT).
-// { t: title, n: notes, a: assignees, c: category, p: P-priority, sp: sprint, st: status }.
-const PLAN_SEED_TASKS_3 = [
-  { t: "Dynamic Discounts", n: "3M, 6M, 12M percentage-wise discount for all plans, society-wise.", a: ["Sri", "Harsh"], c: "Customer App", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Referral Pivot", n: "Currency only (no validity extensions).", a: ["Sri"], c: "Customer App", p: "P0", sp: "Sprint 2", st: "Live" },
-  { t: "AMC Buyback", n: "Credit amount to wallet for recharge/topup.", a: ["Sri"], c: "Customer App", p: "P1", sp: "Sprint 3", st: "New" },
-  { t: "Pause Option", n: "1 day/week free pause; tenure-based logic; 50% carry forward.", a: ["Sri"], c: "Customer App", p: "P2", sp: "Sprint 2", st: "New" },
-  { t: "Auto Mandate", n: "Enable recurring payment mandates.", a: ["Arjun"], c: "Customer App", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Points System", n: "Wallet points conversion to currency.", a: ["Sri", "Harsh"], c: "Customer App", p: "P1", sp: "Sprint 2", st: "New" },
-  { t: "ERP Subscription", n: "Take Zoho ERP subscription.", a: ["Anis"], c: "Zoho ERP", p: "P3", sp: "Sprint 3", st: "In-Progress" },
-  { t: "Offline Process", n: "Start with offline ERP process workflow.", a: ["Anis"], c: "Zoho ERP", p: "P3", sp: "Sprint 3", st: "In-Progress" },
-  { t: "Installation Flow", n: "Basic design for installation flow.", a: ["Anis"], c: "Technician App", p: "P0", sp: "Sprint 3", st: "In-Progress" },
-  { t: "Device Display", n: "Remove plans; show device types (Own, Normal, Hot).", a: ["Harsh"], c: "PW Website", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "RWA Benefits", n: "Redirect to a different page with content.", a: ["Harsh"], c: "PW Website", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Testimonials", n: "Blocked. Add customer testimonials to the website.", a: ["Harsh"], c: "PW Website", p: "P3", sp: "Sprint 2", st: "In-Progress" },
-  { t: "Iconography", n: "Change icons for the 'Benefits of Using ProWater' section.", a: ["Harsh"], c: "PW Website", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Remove Section", n: "Remove the 'Custom-Built with IoT Technology' image/section.", a: ["Harsh"], c: "PW Website", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Comparison Matrix", n: "Modify 'ProWater vs Normal RO' and 'Rental VS Subscribe VS Buy'.", a: ["Harsh"], c: "PW Website", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Lead creation in Firebase", n: "Lead Creation / Modification / Deletion — workflow rules.", a: ["Anis"], c: "Zoho CRM", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Recharge to credit points", n: "3M, 6M, 12M — same points added to wallet. Every recharge credits points; for every ₹100, 1 point is credited.", a: ["Sri", "Arjun", "Anis"], c: "Customer App", p: "P0", sp: "Sprint 3", st: "New" },
-  { t: "Monthly Views of the revenue", n: "", a: ["Arjun", "Anis"], c: "Zoho CRM", p: "P1", sp: "Sprint 2", st: "Testing & QA" },
-  { t: "Increase regression coverage for the App", n: "Check the app end to end; also add the test cases.", a: ["Sri"], c: "Customer App", p: "P2", sp: "Sprint 1", st: "Live" },
-  { t: "Automation testing coverage to be added", n: "", a: [], c: "Customer App", p: "P2", sp: "Sprint 2", st: "Live" },
-  { t: "App login logs to be cleaned up", n: "Correct login IP, device model and status should be passed.", a: ["Sri", "Arjun"], c: "Wisdom", p: "P0", sp: "Sprint 2", st: "Live" },
-  { t: "Change layout", n: "Blocked. Redesign the apartment-code entry screen to reduce drop-offs.", a: ["Harsh"], c: "Zoho Billing", p: "P3", sp: "Sprint 2", st: "In-Progress" },
-  { t: "Login Issues", n: "User unable to login using number (8519801115); doesn't pass through the OTP flow. Also capture logs against unregistered users — once a phone number is entered and validated, logs should be captured against it.", a: ["Sri"], c: "Customer App", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Tracking and Serialization", n: "Capture all inventory stock items in Zoho Inventory to record them.", a: ["Anis", "Arjun"], c: "Zoho Inventory", p: "P3", sp: "Sprint 2", st: "New" },
-  { t: "Offline Mobile Content", n: "Over-the-top changes to text/images using remote config.", a: ["Sri"], c: "Customer App", p: "P1", sp: "Sprint 2", st: "Live" },
-  { t: "Manage Technicians", n: "Descoped. Track technicians and their installation and service jobs.", a: ["Arjun"], c: "Zoho FSM", p: "P0", sp: "Sprint 3", st: "New" },
-  { t: "Migrate old customers", n: "Blocked. Migrate the DP customers to ProWater subscription.", a: ["Anis", "Arjun"], c: "Zoho Billing", p: "P0", sp: "Sprint 2", st: "In-Progress" },
-  { t: "Language Translation", n: "Multi-language support on the customer and technician app.", a: ["Anis", "Arjun"], c: "Customer App", p: "P2", sp: "Sprint 3", st: "New" },
-  { t: "Society Name", n: "Explicitly show the Society Name in the app.", a: ["Sri"], c: "Customer App", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Device Replacement", n: "Blocked. Show on the CRM when a device has been replaced, with correct installation and uninstallation dates. Benefit transfer also has to be tracked. (App Changes / Inventory-ERP / Zoho Billing / CRM.)", a: ["Anis", "Arjun"], c: "Zoho Billing", p: "P1", sp: "", st: "In-Progress" },
-  { t: "Custom App", n: "Build a custom app for churn and lost leads.", a: ["Arjun"], c: "Zoho CRM", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Purifier ID & Apartment Name", n: "Show the details in the app.", a: ["Sri"], c: "Customer App", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "Pass the Purifier ID and Apartment name to be added", n: "Pass the Purifier ID and Apartment name to the relevant fields in Freshdesk.", a: ["Harsh"], c: "Freshdesk", p: "P1", sp: "Sprint 2", st: "Live" },
-  { t: "Architecture Revamp", n: "Secure all APIs.", a: ["Harsh"], c: "Bug Fixes", p: "P0", sp: "Sprint 2", st: "Testing & QA" },
-  { t: "Technician App", n: "Build the technician app.", a: ["Sri"], c: "Technician App", p: "P0", sp: "Sprint 3", st: "In-Progress" },
-  { t: "web Forms", n: "Build the user registration and referral form.", a: ["Harsh"], c: "Form", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "AWS IoT", n: "Set up an IoT instance of the Junction Box.", a: ["Pranshu"], c: "IoT", p: "P0", sp: "Sprint 3", st: "In-Progress" },
-  { t: "Leads creation from RWA website", n: "Leads created from the RWA website and stored in Firebase.", a: ["Anis", "Harsh"], c: "PW Website", p: "P0", sp: "Sprint 1", st: "Live" },
-  { t: "In-App Notifications", n: "Descoped. Enable push notifications on the app.", a: ["Sri"], c: "Customer App", p: "P3", sp: "Sprint 2", st: "New" },
-  { t: "Live TDS", n: "Blocked. Show the live TDS to customers.", a: ["IQ Labs"], c: "IoT", p: "P0", sp: "Sprint 3", st: "In-Progress" },
-  { t: "Bug fixes related to Login/Logout", n: "", a: ["Sri"], c: "Bug Fixes", p: "P1", sp: "Sprint 1", st: "Live" },
-  { t: "Redesign Website", n: "Revamp the entire website based on the RWA theme.", a: ["Harsh", "Anis"], c: "PW Website", p: "P2", sp: "Sprint 2", st: "Live" },
-  { t: "Redesign Customer App", n: "Redesign the entire customer-app UI based on the color theme of the website.", a: ["Anis", "Sri"], c: "Customer App", p: "P2", sp: "Sprint 4", st: "New" },
-  { t: "GS service Job", n: "Create a maintenance GS job every 15 days for central RO.", a: ["Anis", "Sri", "Arjun", "Harsh"], c: "Freshdesk", p: "P0", sp: "Sprint 3", st: "New" },
-  { t: "UPI Mandate", n: "Descoped. Auto recharge for UPI.", a: ["Anis", "Arjun"], c: "Customer App", p: "P3", sp: "Sprint 2", st: "New" },
-  { t: "Registration UI Fix", n: "Move single-page forms into ProWater.in; pull data from the query string.", a: ["Anis", "Harsh"], c: "PW Website", p: "P1", sp: "Sprint 2", st: "Live" },
-  { t: "End to end manual QA", n: "", a: ["Arjun"], c: "Customer App", p: "P1", sp: "Sprint 2", st: "New" },
-  { t: "Biometrics Authentication — Customer App", n: "Authentication for the Customer App.", a: ["Sri"], c: "Customer App", p: "P1", sp: "Sprint 3", st: "Testing & QA" },
-  { t: "Biometrics Authentication — Technician App", n: "Authentication for the Technician App.", a: ["Sri"], c: "Technician App", p: "P1", sp: "Sprint 3", st: "Testing & QA" },
-];
-
-// Fourth batch — technician-app build-out + Zoho Desk sync meeting action items.
-const PLAN_SEED_TASKS_4 = [
-  { t: "Handle API Errors", n: "Handle Twilio API errors and implement AWS SNS as a fallback service.", a: ["Sri", "Sujan"], c: "Messaging" },
-  { t: "Document Meeting Notes", n: "Record all discussion points and requirements in the Soro group.", a: ["Anis"], c: "Ops & Finance" },
-  { t: "Map Technicians", n: "Develop a mapping table to assign technicians based on customer society.", a: ["Sri"], c: "Zoho FSM" },
-  { t: "Configure Workflow", n: "Set up ticket status categories in Zoho Desk.", a: ["Anis"], c: "Ticketing" },
-  { t: "Update Job Interface", n: "Populate job details in the app and implement a Start Job button to trigger a status update.", a: ["Sri", "Sujan"], c: "Technician App" },
-  { t: "Integrate OCR", n: "Implement scanning functionality to verify purifier IDs against customer tickets.", a: ["Sri", "Sujan"], c: "Technician App" },
-  { t: "Update Spares UI", n: "Change the spares selection input to a multi-select checkbox interface.", a: ["Sri", "Sujan"], c: "Technician App" },
-  { t: "Enable Image Uploads", n: "Configure the app to support image attachments and store them via API or file-system reference.", a: ["Sri", "Sujan"], c: "Technician App" },
-  { t: "Create Webhooks", n: "Develop webhooks to synchronize ticket data from Zoho Desk to the local system.", a: ["Anis"], c: "Backend & APIs" },
-  { t: "Capture Location", n: "Implement location tracking to record coordinates when a technician starts a job.", a: ["Sri", "Sujan"], c: "Technician App" },
-  { t: "Update UI", n: "Hide unused interface elements including ratings, edit profile, notifications, and location-verification blocks across the application.", a: ["The Group"], c: "Customer App" },
-  { t: "Add Webhooks", n: "Implement webhooks to track ticket statuses and water-quality updates.", a: ["The Group"], c: "Backend & APIs" },
-  { t: "Add Flow Rate", n: "Replace the TDS button with a functional flow-rate feature in the system-performance block.", a: ["The Group"], c: "IoT" },
-  { t: "Add Logout", n: "Add a log out button to the technician application.", a: ["The Group"], c: "Technician App" },
-  { t: "Add Biometric Login", n: "Integrate biometric login functionality into the user authentication flow.", a: ["The Group"], c: "Customer App" },
-  { t: "Improve OTP Handling", n: "Develop error-handling logic for OTP verification in the customer application.", a: ["Sri"], c: "Customer App" },
-  { t: "Formalize Release Process", n: "Document all new features in release notes and request approval from Arjun prior to pushing updates to production.", a: ["The Group"], c: "Review & QA" },
-  { t: "Add Ticket Tracking", n: "Implement a 'Track My Tickets' page on the interface.", a: ["The Group"], c: "Customer App" },
-  { t: "Sync Zoho Tickets", n: "Synchronize ticket status data between the application and the Zoho platform.", a: ["The Group"], c: "Ticketing" },
-  { t: "Assign Zoho Owner", n: "Configure Sathish as the designated technician owner within the Zoho account.", a: ["The Group"], c: "Zoho FSM" },
-  { t: "Share Priority List", n: "Distribute a consolidated, priority-based list of tasks to the team for better focus.", a: ["Arjun"], c: "Ops & Finance" },
-  { t: "Consolidate Tasks", n: "Consolidate all action items from the meeting chat into the main tracking list.", a: ["Anis"], c: "Ops & Finance" },
-];
-
-// Seed batches. Each imports exactly once per board (tracked in pw_tasks_imported),
-// and any task whose title already exists is skipped (no duplicates).
-const PLAN_IMPORTS = [
-  { id: "backlog-2026-07-13", tasks: PLAN_SEED_TASKS },
-  { id: "whatsapp-zoho-2026-07-13", tasks: PLAN_SEED_TASKS_2 },
-  { id: "sprint-board-2026-07-13", tasks: PLAN_SEED_TASKS_3 },
-  { id: "tech-app-2026-07-14", tasks: PLAN_SEED_TASKS_4 },
-];
 const planStatusMeta = (k) => PLAN_STATUSES.find(s => s.key === k) || PLAN_STATUSES[0];
 const planPrioMeta = (k) => PLAN_PRIORITIES.find(p => p.key === k) || PLAN_PRIORITIES[1];
 const planInitials = (name) => String(name || "?").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
@@ -9270,76 +8668,6 @@ const planReadFile = (file) => new Promise((resolve, reject) => {
   r.onerror = reject;
   r.readAsDataURL(file);
 });
-
-/* ---- Attachment store (IndexedDB) ----------------------------------------
-   Attachment BYTES live in IndexedDB (hundreds of MB quota), keyed by id. The
-   task in localStorage keeps only lightweight metadata { id, name, type, size }
-   — so a couple of photos can't overflow the ~5 MB localStorage limit and
-   silently break saving. */
-const PLAN_IDB_NAME = "pw_planner", PLAN_IDB_STORE = "attachments";
-let _planIdb = null;
-function planIdb() {
-  if (_planIdb) return _planIdb;
-  _planIdb = new Promise((resolve, reject) => {
-    const req = indexedDB.open(PLAN_IDB_NAME, 1);
-    req.onupgradeneeded = () => { const db = req.result; if (!db.objectStoreNames.contains(PLAN_IDB_STORE)) db.createObjectStore(PLAN_IDB_STORE, { keyPath: "id" }); };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  return _planIdb;
-}
-async function planIdbPut(rec) {
-  const db = await planIdb();
-  return new Promise((res, rej) => { const tx = db.transaction(PLAN_IDB_STORE, "readwrite"); tx.objectStore(PLAN_IDB_STORE).put(rec); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
-}
-async function planIdbGet(id) {
-  const db = await planIdb();
-  return new Promise((res, rej) => { const tx = db.transaction(PLAN_IDB_STORE, "readonly"); const r = tx.objectStore(PLAN_IDB_STORE).get(id); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
-}
-async function planIdbDel(id) {
-  const db = await planIdb();
-  return new Promise((res) => { try { const tx = db.transaction(PLAN_IDB_STORE, "readwrite"); tx.objectStore(PLAN_IDB_STORE).delete(id); tx.oncomplete = () => res(); tx.onerror = () => res(); } catch { res(); } });
-}
-/* ---- Firebase Cloud Storage (attachment bytes, shared across devices) -----
-   Uses the Storage REST API with the same Firebase login idToken as the rest of
-   the app — no SDK. Enabled only when VITE_FIREBASE_STORAGE_BUCKET is set;
-   otherwise attachments fall back to IndexedDB (local). Bucket looks like
-   "your-project.appspot.com" (the part after gs:// in the Storage console). */
-const FIREBASE_STORAGE_BUCKET = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "";
-const fbStorageEnabled = () => !!FIREBASE_STORAGE_BUCKET;
-async function fbStorageUpload(path, file) {
-  const token = sessionStorage.getItem("pw_idToken");
-  const res = await fetch(`https://firebasestorage.googleapis.com/v0/b/${FIREBASE_STORAGE_BUCKET}/o?name=${encodeURIComponent(path)}`, {
-    method: "POST",
-    headers: { "Content-Type": file.type || "application/octet-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: file,
-  });
-  if (!res.ok) throw new Error(`Storage ${res.status}`);
-  const meta = await res.json();
-  const dtoken = (meta.downloadTokens || "").split(",")[0];
-  const url = `https://firebasestorage.googleapis.com/v0/b/${FIREBASE_STORAGE_BUCKET}/o/${encodeURIComponent(path)}?alt=media${dtoken ? `&token=${dtoken}` : ""}`;
-  return { url, path };
-}
-async function fbStorageDelete(path) {
-  const token = sessionStorage.getItem("pw_idToken");
-  try { await fetch(`https://firebasestorage.googleapis.com/v0/b/${FIREBASE_STORAGE_BUCKET}/o/${encodeURIComponent(path)}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} }); } catch { /* best effort */ }
-}
-
-// Trigger a browser download/open for an attachment. Firebase attachments carry
-// a `url`; local ones read bytes from IDB (or an inline legacy dataUrl).
-async function planDownloadAttachment(a) {
-  let href = a.url;
-  if (!href) {
-    const rec = a.dataUrl ? a : await planIdbGet(a.id).catch(() => null);
-    if (!rec || !rec.dataUrl) return false;
-    href = rec.dataUrl;
-  }
-  const link = document.createElement("a");
-  link.href = href; link.download = a.name || "attachment"; link.target = "_blank"; link.rel = "noopener";
-  document.body.appendChild(link); link.click(); link.remove();
-  return true;
-}
-
 
 const PlanAvatar = ({ name, size = 24 }) => (
   <span title={name === "The Group" ? `The Group: ${PLAN_GROUP.join(", ")}` : name} style={{ width: size, height: size, borderRadius: 999, background: planUserColor(name), color: "#fff", fontSize: size * 0.38, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -9364,123 +8692,26 @@ const AssigneeStack = ({ names, size = 24 }) => {
   );
 };
 
-// Normalise a priority to the P-scale (maps legacy Low/Medium/High/Urgent).
-const planPrio = (p) => PLAN_PRIO_MIGRATE[p] || (PLAN_PRIORITIES.some(x => x.key === p) ? p : "P2");
-// Normalise legacy tasks to the current shape (assignees[], category, P-scale, sprint).
-const planMigrate = (t) => ({
-  ...t,
-  assignees: Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []),
-  category: t.category || "General",
-  status: t.status === "Scoping" ? "New" : (t.status || "New"),
-  priority: planPrio(t.priority),
-  sprint: t.sprint || "",
-});
+// Normalise legacy single-assignee tasks to the assignees[] shape (+ category).
+const planMigrate = (t) => ({ ...t, assignees: Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []), category: t.category || "General" });
 const planMakeTask = (s) => {
   const now = new Date().toISOString();
-  return { id: crypto.randomUUID(), title: s.t, notes: s.n || "", status: s.st || s.status || "New", assignees: s.a || [], category: s.c || "General", sprint: s.sp || "", email: "", priority: planPrio(s.p || s.priority), startDate: "", endDate: "", attachments: [], createdBy: "Import", createdAt: now, updatedAt: now };
+  return { id: crypto.randomUUID(), title: s.t, notes: s.n || "", status: s.status || "New", assignees: s.a || [], category: s.c || "General", email: "", priority: s.priority || "Medium", startDate: "", endDate: "", attachments: [], createdBy: "Import", createdAt: now, updatedAt: now };
 };
-
-/* ===========================================================================
-   MODIFY TASKS (admin) — add/remove the Status columns, Sprints and Categories
-   available to every task. Persists to localStorage; the board reads it live.
-   =========================================================================== */
-function TaskAdmin() {
-  const { user } = useAuth();
-  const [, force] = useState(0);
-  const rerender = () => force(n => n + 1);
-  const [nSprint, setNSprint] = useState("");
-  const [nCat, setNCat] = useState("");
-  const [nStatus, setNStatus] = useState("");
-  const [flash, setFlash] = useState("");
-  useEffect(() => { api.logView(user.username, "Viewed Modify Tasks"); }, []);
-  const toast = (m) => { setFlash(m); setTimeout(() => setFlash(""), 1800); };
-
-  const addSprint = () => { const v = nSprint.trim(); if (!v) return; if (PLAN_SPRINTS.includes(v)) return toast("Sprint already exists"); setPlanSprints([...PLAN_SPRINTS, v]); setNSprint(""); rerender(); toast("Sprint added"); };
-  const removeSprint = (s) => { setPlanSprints(PLAN_SPRINTS.filter(x => x !== s)); rerender(); };
-  const addCat = () => { const v = nCat.trim(); if (!v) return; if (PLAN_CATEGORIES.some(c => c.key === v)) return toast("Category already exists"); setPlanCategories([...PLAN_CATEGORIES, { key: v, color: planPickColor(PLAN_CATEGORIES.length) }]); setNCat(""); rerender(); toast("Category added"); };
-  const removeCat = (k) => { setPlanCategories(PLAN_CATEGORIES.filter(c => c.key !== k)); rerender(); };
-  const addStatus = () => { const v = nStatus.trim(); if (!v) return; if (PLAN_STATUSES.some(s => s.key === v)) return toast("Status already exists"); const color = planPickColor(PLAN_STATUSES.length); setPlanStatuses([...PLAN_STATUSES, { key: v, color, bg: planTint(color) }]); setNStatus(""); rerender(); toast("Status added"); };
-  const removeStatus = (k) => { if (PLAN_STATUSES.length <= 1) return toast("Keep at least one status"); setPlanStatuses(PLAN_STATUSES.filter(s => s.key !== k)); rerender(); };
-  const resetAll = () => { setPlanStatuses(PLAN_STATUSES_DEFAULT); setPlanSprints(PLAN_SPRINTS_DEFAULT); setPlanCategories(PLAN_CATEGORIES_DEFAULT); rerender(); toast("Reset to defaults"); };
-
-  const addRow = (val, setVal, onAdd, placeholder) => (
-    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-      <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === "Enter" && onAdd()} placeholder={placeholder} style={{ ...inp, padding: "9px 12px" }} />
-      <button onClick={onAdd} style={{ ...btnPrimary, padding: "9px 14px", whiteSpace: "nowrap" }}><Plus size={15} /> Add</button>
-    </div>
-  );
-  const pill = (label, color, onRemove) => (
-    <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 11px", borderRadius: 10, border: "1px solid var(--border)", background: "#fff" }}>
-      <span style={{ width: 11, height: 11, borderRadius: 4, background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--f)", flex: 1 }}>{label}</span>
-      <button onClick={onRemove} title="Remove" style={{ ...iconBtn, padding: 5, background: "var(--mint)" }}><X size={14} /></button>
-    </div>
-  );
-
-  return (
-    <div className="fade-up">
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-        <div>
-          <div className="eyebrow">Admin</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--f)" }}>Modify Tasks</div>
-        </div>
-        <button onClick={resetAll} style={{ ...btnGhost, marginLeft: "auto" }}><RotateCcw size={15} /> Reset to defaults</button>
-      </div>
-      <p style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 16 }}>Manage the options every task can use. Changes save instantly and apply to the board, list and task editor.</p>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 18 }}>
-        <Card title="Status columns" sub="Board columns, left → right">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {PLAN_STATUSES.map(s => pill(s.key, s.color, () => removeStatus(s.key)))}
-          </div>
-          {addRow(nStatus, setNStatus, addStatus, "New status…")}
-        </Card>
-
-        <Card title="Sprints" sub="Sprint options for every task">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {PLAN_SPRINTS.map((s, i) => pill(s, planPickColor(i), () => removeSprint(s)))}
-          </div>
-          {addRow(nSprint, setNSprint, addSprint, "e.g. Sprint 5")}
-        </Card>
-
-        <Card title="Categories" sub="Business-requirement categories">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 360, overflowY: "auto" }}>
-            {PLAN_CATEGORIES.map(c => pill(c.key, c.color, () => removeCat(c.key)))}
-          </div>
-          {addRow(nCat, setNCat, addCat, "New category…")}
-        </Card>
-      </div>
-      {flash && <div style={toastStyle}><CheckCircle2 size={16} /> {flash}</div>}
-    </div>
-  );
-}
 
 function TaskPlanner({ initialView = "board" }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState(() => {
-    const raw = LS.get("pw_tasks", null);
-    let list = Array.isArray(raw) ? raw.map(planMigrate) : [];
-    // Which seed batches have already landed on this board.
-    const imported = new Set(LS.get("pw_tasks_imported", []));
-    // Migrate the legacy single-flag: an already-seeded board has the 1st batch.
-    if (LS.get("pw_tasks_seeded", false)) imported.add(PLAN_IMPORTS[0].id);
-    let changed = false;
-    const norm = (s) => String(s || "").trim().toLowerCase();
-    const seenTitles = new Set(list.map(t => norm(t.title)));
-    for (const batch of PLAN_IMPORTS) {
-      if (imported.has(batch.id)) continue;
-      // Skip any task whose title already exists on the board (no duplicates).
-      const fresh = batch.tasks.filter(s => { const k = norm(s.t); if (seenTitles.has(k)) return false; seenTitles.add(k); return true; });
-      list = [...fresh.map(planMakeTask), ...list];
-      imported.add(batch.id);
-      changed = true;
-    }
-    if (changed) {
-      LS.set("pw_tasks", list);
-      LS.set("pw_tasks_imported", [...imported]);
+    const existing = LS.get("pw_tasks", null);
+    if (Array.isArray(existing)) return existing.map(planMigrate);
+    // First-ever open: import the agreed next-steps backlog into the board.
+    if (!LS.get("pw_tasks_seeded", false)) {
+      const seeded = PLAN_SEED_TASKS.map(planMakeTask);
+      LS.set("pw_tasks", seeded);
       LS.set("pw_tasks_seeded", true);
+      return seeded;
     }
-    return list;
+    return [];
   });
   const [view, setView] = useState(initialView); // board | list | weekly
   const [editing, setEditing] = useState(null);   // task being edited/created (or null)
@@ -9490,7 +8721,6 @@ function TaskPlanner({ initialView = "board" }) {
   const [fAssignee, setFAssignee] = useState("all");
   const [fPriority, setFPriority] = useState("all");
   const [fCategory, setFCategory] = useState("all");
-  const [fSprint, setFSprint] = useState("all");
   const [warn, setWarn] = useState("");
   // Status-change notifications (persist so they're waiting at next login).
   const [notifs, setNotifs] = useState(() => LS.get("pw_task_notifications", []));
@@ -9498,24 +8728,6 @@ function TaskPlanner({ initialView = "board" }) {
   const [notifOpen, setNotifOpen] = useState(false);
 
   useEffect(() => { api.logView(user.username, "Viewed Task Planner"); }, []);
-
-  // One-time cleanup: move any pre-IndexedDB inline attachment bytes out of
-  // localStorage (they used to overflow quota and break saving) into IDB,
-  // leaving only metadata on the task.
-  useEffect(() => {
-    let dirty = false;
-    const migrated = tasks.map(t => {
-      if (!t.attachments?.some(a => a.dataUrl)) return t;
-      dirty = true;
-      return { ...t, attachments: t.attachments.map(a => {
-        if (!a.dataUrl) return a;
-        const id = a.id || crypto.randomUUID();
-        planIdbPut({ id, name: a.name, type: a.type, size: a.size, dataUrl: a.dataUrl });
-        return { id, name: a.name, type: a.type, size: a.size };
-      }) };
-    });
-    if (dirty) { setTasks(migrated); LS.set("pw_tasks", migrated); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const persist = (next) => {
     setTasks(next);
@@ -9546,8 +8758,8 @@ function TaskPlanner({ initialView = "board" }) {
   const unread = notifs.filter(n => n.ts > notifSeen).length;
 
   const blank = (status) => ({
-    id: crypto.randomUUID(), title: "", status: status || "New", assignees: [], category: "General", sprint: "",
-    email: "", priority: "P2", startDate: "", endDate: "", notes: "", attachments: [],
+    id: crypto.randomUUID(), title: "", status: status || "Scoping", assignees: [], category: "General",
+    email: "", priority: "Medium", startDate: "", endDate: "", notes: "", attachments: [],
     createdBy: user.name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), _new: true,
   });
 
@@ -9557,7 +8769,6 @@ function TaskPlanner({ initialView = "board" }) {
     (fAssignee === "all" || assignedTo(t, fAssignee)) &&
     (fPriority === "all" || t.priority === fPriority) &&
     (fCategory === "all" || t.category === fCategory) &&
-    (fSprint === "all" || (t.sprint || "") === fSprint) &&
     (!q || t.title.toLowerCase().includes(q.toLowerCase()) || (t.notes || "").toLowerCase().includes(q.toLowerCase()) || (t.email || "").toLowerCase().includes(q.toLowerCase()));
   const filtered = tasks.filter(matches);
   const byStatus = (k) => filtered.filter(t => t.status === k);
@@ -9590,10 +8801,6 @@ function TaskPlanner({ initialView = "board" }) {
           <option value="all">All priorities</option>
           {PLAN_PRIORITIES.map(p => <option key={p.key} value={p.key}>{p.key}</option>)}
         </select>
-        <select value={fSprint} onChange={e => setFSprint(e.target.value)} style={selectStyle}>
-          <option value="all">All sprints</option>
-          {PLAN_SPRINTS.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
         <div style={{ position: "relative", marginLeft: "auto" }}>
           <button onClick={toggleNotifs} title="Status-change notifications" style={{ ...btnGhost, padding: "9px 11px", position: "relative" }}>
             <Bell size={16} />
@@ -9618,7 +8825,7 @@ function TaskPlanner({ initialView = "board" }) {
             </div>
           )}
         </div>
-        <button onClick={() => setEditing(blank("New"))} style={btnPrimary}><Plus size={16} /> New Task</button>
+        <button onClick={() => setEditing(blank("Scoping"))} style={btnPrimary}><Plus size={16} /> New Task</button>
       </div>
 
       {warn && <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#9a6a16", background: "#fdf3e0", border: "1px solid #f0dcae", padding: "10px 14px", borderRadius: 11, marginBottom: 14 }}><AlertCircle size={16} />{warn}</div>}
@@ -9668,17 +8875,17 @@ function TaskPlanner({ initialView = "board" }) {
 
       {view === "list" && (
         <Card pad={false}>
-          <Table head={["Task", "Category", "Sprint", "Status", "Assignees", "Priority", "Start", "Due", "Files"]} maxHeight="calc(100vh - 380px)">
+          <Table head={["Task", "Category", "Status", "Assignees", "Priority", "Start", "Due", "Email", "Files"]} maxHeight="calc(100vh - 380px)">
             {filtered.map(t => { const sm = planStatusMeta(t.status), pm = planPrioMeta(t.priority), cm = planCatMeta(t.category); return (
               <tr key={t.id} style={trStyle} onClick={() => setEditing(t)}>
                 <td style={{ ...td, textAlign: "left", fontWeight: 600, color: "var(--f)" }}>{t.title || <span style={{ color: "var(--muted)" }}>Untitled</span>}</td>
                 <td style={td}><span style={{ fontSize: 11.5, fontWeight: 600, color: cm.color, background: `${cm.color}18`, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap" }}>{t.category || "—"}</span></td>
-                <td style={{ ...td, fontSize: 12.5, whiteSpace: "nowrap", color: t.sprint ? "var(--slate)" : "var(--muted)" }}>{t.sprint || "—"}</td>
                 <td style={td}><span style={{ fontSize: 12, fontWeight: 600, color: sm.color, background: sm.bg, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>{t.status}</span></td>
                 <td style={td}><AssigneeStack names={t.assignees} size={22} /></td>
                 <td style={td}><span style={{ fontSize: 12, fontWeight: 700, color: pm.color }}>{t.priority}</span></td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{t.startDate ? fmtDate(t.startDate) : "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5, color: isOverdue(t) ? "#b4232a" : undefined, fontWeight: isOverdue(t) ? 700 : 400 }}>{t.endDate ? fmtDate(t.endDate) : "—"}</td>
+                <td style={{ ...td, fontSize: 12.5 }}>{t.email || "—"}</td>
                 <td style={td}>{t.attachments?.length ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--teal)" }}><Paperclip size={13} />{t.attachments.length}</span> : "—"}</td>
               </tr>
             ); })}
@@ -9709,7 +8916,7 @@ function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
 
   const total = tasks.length;
   const done = tasks.filter(t => t.status === "Live").length;
-  const notStarted = tasks.filter(t => t.status === "New").length;
+  const notStarted = tasks.filter(t => ["Scoping", "New"].includes(t.status)).length;
   const inProgress = total - done - notStarted;
   const pct = total ? Math.round(done / total * 100) : 0;
 
@@ -9816,9 +9023,9 @@ function TaskCard({ t, overdue, onOpen, onDragStart, onDragEnd, dragging }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, color: pm.color, background: `${pm.color}18`, padding: "2px 8px", borderRadius: 999 }}>{t.priority}</span>
         {t.category && t.category !== "General" && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 600, color: cm.color, background: `${cm.color}14`, padding: "2px 8px", borderRadius: 999 }}><Tag size={10} />{t.category}</span>}
-        {t.sprint && <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--slate)", background: "var(--mint-2)", padding: "2px 8px", borderRadius: 999 }}>{t.sprint}</span>}
         {t.endDate && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: overdue ? "#b4232a" : "var(--slate)" }}><CalendarDays size={12} />{fmtDate(t.endDate)}</span>}
         {t.attachments?.length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "var(--teal)" }}><Paperclip size={12} />{t.attachments.length}</span>}
+        {t.email && <Mail size={12} style={{ color: "var(--muted)" }} />}
         <span style={{ marginLeft: "auto" }}><AssigneeStack names={t.assignees} size={24} /></span>
       </div>
     </div>
@@ -9837,43 +9044,17 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
     setBusy(true);
-    const LIMIT = 15 * 1024 * 1024; // per-file cap (IndexedDB handles the volume)
-    const tooBig = files.filter(f => f.size > LIMIT);
-    if (tooBig.length) onWarn?.(`Skipped ${tooBig.length} file(s) over 15 MB.`);
-    const ok = files.filter(f => f.size <= LIMIT);
+    const tooBig = files.filter(f => f.size > 3 * 1024 * 1024);
+    if (tooBig.length) onWarn?.(`Skipped ${tooBig.length} file(s) over 3 MB — attachments are stored in the browser, so keep them small.`);
+    const ok = files.filter(f => f.size <= 3 * 1024 * 1024);
     try {
-      // Upload each file to Firebase Storage (shared/cloud); if that's not
-      // configured or fails, stash the bytes in IndexedDB (local). Either way
-      // the task keeps only lightweight metadata.
-      const metas = [];
-      let usedLocal = false;
-      for (const f of ok) {
-        const id = crypto.randomUUID();
-        const base = { id, name: f.name, type: f.type, size: f.size };
-        if (fbStorageEnabled()) {
-          try {
-            const { url, path } = await fbStorageUpload(`planner/${t.id}/${id}-${f.name}`, f);
-            metas.push({ ...base, store: "firebase", url, path });
-            continue;
-          } catch { /* fall through to local */ usedLocal = true; }
-        }
-        const r = await planReadFile(f);
-        await planIdbPut({ id, name: r.name, type: r.type, size: r.size, dataUrl: r.dataUrl });
-        metas.push({ ...base, store: "idb" });
-      }
-      if (usedLocal && fbStorageEnabled()) onWarn?.("Some files couldn't reach Firebase and were saved to this browser instead.");
-      if (metas.length) setT(prev => ({ ...prev, attachments: [...(prev.attachments || []), ...metas] }));
+      const read = await Promise.all(ok.map(planReadFile));
+      setT(prev => ({ ...prev, attachments: [...(prev.attachments || []), ...read] }));
     } catch { onWarn?.("Could not read one of the files."); }
     setBusy(false);
     if (fileRef.current) fileRef.current.value = "";
   };
-  const removeAttachment = (i) => setT(prev => {
-    const target = (prev.attachments || [])[i];
-    if (target?.path) fbStorageDelete(target.path);
-    else if (target?.id) planIdbDel(target.id);
-    return { ...prev, attachments: prev.attachments.filter((_, idx) => idx !== i) };
-  });
-  const openAttachment = async (a) => { if (!(await planDownloadAttachment(a))) onWarn?.("Attachment not found in this browser."); };
+  const removeAttachment = (i) => setT(prev => ({ ...prev, attachments: prev.attachments.filter((_, idx) => idx !== i) }));
 
   const label = { fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6, display: "block" };
   const fmtSize = (b) => b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
@@ -9881,7 +9062,7 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
 
   return createPortal(
     <div onClick={onClose} style={{ ...overlay, alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}>
-      <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(680px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 26, boxShadow: "var(--shadow-lg)", maxHeight: "calc(100vh - 80px)", overflowY: "auto", fontFamily: "'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" }}>
+      <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(680px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 26, boxShadow: "var(--shadow-lg)", maxHeight: "calc(100vh - 80px)", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, gap: 12 }}>
           <div><p className="eyebrow">{isNew ? "New task" : "Edit task"}</p><h2 style={{ fontSize: 22 }}>{isNew ? "Create a task" : (t.title || "Task")}</h2></div>
           <button onClick={onClose} style={{ ...iconBtn, flexShrink: 0 }}><X size={18} /></button>
@@ -9918,15 +9099,12 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
               {PLAN_PRIORITIES.map(p => <option key={p.key} value={p.key}>{p.key}</option>)}
             </select>
           </div>
-          <div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <label style={label}>Category</label>
-            <input list="plan-cat-list" value={t.category === "General" ? "" : (t.category || "")} onChange={e => set("category", e.target.value || "General")} placeholder="Pick or type a category" style={inp} />
-            <datalist id="plan-cat-list">{PLAN_CATEGORIES.map(c => <option key={c.key} value={c.key} />)}</datalist>
-          </div>
-          <div>
-            <label style={label}>Sprint</label>
-            <input list="plan-sprint-list" value={t.sprint || ""} onChange={e => set("sprint", e.target.value)} placeholder="Pick or type a sprint" style={inp} />
-            <datalist id="plan-sprint-list">{PLAN_SPRINTS.map(s => <option key={s} value={s} />)}</datalist>
+            <select value={t.category || "General"} onChange={e => set("category", e.target.value)} style={{ ...inp, cursor: "pointer" }}>
+              {!PLAN_CATEGORIES.some(c => c.key === (t.category || "General")) && <option value={t.category || "General"}>{t.category || "General"}</option>}
+              {PLAN_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.key}</option>)}
+            </select>
           </div>
           <div>
             <label style={label}>Start date</label>
@@ -9935,6 +9113,10 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
           <div>
             <label style={label}>End date</label>
             <input type="date" value={t.endDate} min={t.startDate || undefined} onChange={e => set("endDate", e.target.value)} style={{ ...inp, cursor: "pointer" }} />
+          </div>
+          <div style={{ gridColumn: "1 / -1" }}>
+            <label style={label}>Email</label>
+            <input type="email" value={t.email} onChange={e => set("email", e.target.value)} placeholder="name@example.com" style={inp} />
           </div>
         </div>
 
@@ -9952,8 +9134,7 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
               {t.attachments.map((a, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--mint)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px" }}>
                   <Paperclip size={14} style={{ color: "var(--teal)", flexShrink: 0 }} />
-                  <button onClick={() => openAttachment(a)} title="Download" style={{ fontSize: 13, color: "var(--f)", fontWeight: 600, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, background: "none", border: "none", cursor: "pointer", padding: 0 }}>{a.name}</button>
-                  <span title={a.store === "firebase" ? "Stored in Firebase (cloud)" : "Stored in this browser"} style={{ fontSize: 10, fontWeight: 700, color: a.store === "firebase" ? "#0f6e3f" : "#8a968f", background: a.store === "firebase" ? "#e9f7ee" : "#eef0ef", borderRadius: 999, padding: "2px 7px", flexShrink: 0 }}>{a.store === "firebase" ? "CLOUD" : "LOCAL"}</span>
+                  <a href={a.dataUrl} download={a.name} onClick={e => e.stopPropagation()} style={{ fontSize: 13, color: "var(--f)", fontWeight: 600, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{a.name}</a>
                   <span style={{ fontSize: 11.5, color: "var(--muted)", flexShrink: 0 }}>{fmtSize(a.size)}</span>
                   <button onClick={() => removeAttachment(i)} title="Remove" style={{ ...iconBtn, padding: 5, background: "#fff" }}><Trash2 size={14} /></button>
                 </div>
@@ -9961,13 +9142,6 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
             </div>
           )}
         </div>
-
-        {!isNew && (t.updatedAt || t.createdAt) && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 14px", fontSize: 11.5, color: "var(--muted)", marginBottom: 14 }}>
-            {t.createdAt && <span>Created {fmtTime(t.createdAt)}{t.createdBy ? ` · ${t.createdBy}` : ""}</span>}
-            {t.updatedAt && <span>Last edited {fmtTime(t.updatedAt)}</span>}
-          </div>
-        )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {!isNew && <button onClick={() => onDelete(t)} style={{ ...btnGhost, color: "#b4232a", borderColor: "#f0c9c9" }}><Trash2 size={15} /> Delete</button>}
@@ -10349,7 +9523,6 @@ function Drawer({ title, sub, children, onClose }) {
     document.body
   );
 }
-
 function Modal({ title, sub, children, onClose }) {
   return createPortal(
     <div onClick={onClose} style={{ ...overlay, alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}>
@@ -10413,7 +9586,7 @@ const ApiError = ({ msg }) => (
 );
 
 /* ---------- inline style objects ---------- */
-const inp = { width: "100%", padding: "10px 12px", border: "1.5px solid var(--border)", borderRadius: 11, fontSize: 14, color: "var(--f)", background: "#fff", outline: "none", marginBottom: 0, fontFamily: "'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" };
+const inp = { width: "100%", padding: "10px 12px", border: "1.5px solid var(--border)", borderRadius: 11, fontSize: 14, color: "var(--f)", background: "#fff", outline: "none", marginBottom: 0 };
 const selectStyle = { ...inp, width: "auto", padding: "9px 12px", cursor: "pointer" };
 const btnPrimary = { display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 12, background: "var(--grad-btn)", color: "#fff", fontWeight: 600, fontSize: 14, boxShadow: "0 8px 18px -8px rgba(22,84,92,.6)", justifyContent: "center" };
 const btnGhost = { display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 11, border: "1.5px solid var(--border)", background: "#fff", color: "var(--slate)", fontWeight: 600, fontSize: 13 };
@@ -10430,6 +9603,4 @@ const toastStyle = { position: "fixed", bottom: 24, left: "50%", transform: "tra
 /* ---------- helpers ---------- */
 const fmtDate = d => new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 const fmtTime = d => new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
-
 

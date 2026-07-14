@@ -4,13 +4,13 @@
   "homepage": "https://soroai.github.io/Wisdom2.0",
   "version": "0.0.0",
   "type": "module",
-"scripts": {
-  "dev": "vite",
-  "build": "vite build",
-  "lint": "eslint .",
-  "preview": "vite preview",
-  "deploy": "gh-pages -d dist"
-},
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "deploy": "gh-pages -d dist"
+  },
   "dependencies": {
     "lucide-react": "^1.21.0",
     "react": "^19.2.6",
