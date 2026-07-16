@@ -629,6 +629,9 @@ const customerApi = {
     const fields = Object.keys(changes).join(", ");
     pushLog({ type: "customer_updated", actor, module: "Customer", detail: `Updated ${id} (${fields})` });
   },
+
+  // Force a fresh pull, bypassing the 3-hour cache.
+  forceRefresh: async () => { _memCache.customers = null; _inflight.customers = null; await customerApi.getCustomers(true); },
 };
 
 const refresh = (force = false) => customerApi.getCustomers(force).then(setRows).catch(() => setRows([]));
@@ -724,11 +727,11 @@ function mapInvoice(iv) {
     status:         mapInvoiceStatus(p.status || p.invoice_status),
     rawStatus:      p.status || p.invoice_status || "",
     date:           p.invoice_date || p.date || p.created_at || p.created_time || "",
+    lastModified:   p.last_modified_time || p.modified_time || "",   // 👈 ADD THIS LINE
     dueDate:        p.due_date || p.due_at || "",
     plan:           p.plan_name || p.plan || "",
     interval:       p.interval_unit || p.billing_interval || p.interval || p.plan_interval || "",
     zohoId:         p.customer_id || p.zoho_customer_id || p.zoho_invoice_id || "",
-    // Join key to customers: invoice customer_id == customer zoho_customer_id.
     zohoCustomerId: p.customer_id || p.zoho_customer_id || "",
   };
 }
@@ -2174,16 +2177,24 @@ function Shell({ module = "referral", onHome }) {
   }, [loginAt]);
 
   // Refresh: clear the API cache, then re-mount the current page so it re-fetches.
-  const doRefresh = async () => {
+const doRefresh = async () => {
     setRefreshing(true);
     try {
       if (module === "billing") await billingApi.forceRefresh();
       else if (module === "sales") await salesApi.forceRefresh();
+      else if (module === "analytics" || module === "customer") {
+        await Promise.all([
+          billingApi.forceRefresh(),
+          salesApi.forceRefresh(),
+          customerApi.forceRefresh(),
+          api.forceRefresh(),
+        ]);
+      }
       else await api.forceRefresh();
     } catch { /* page will show its own error */ }
     setRefreshKey(k => k + 1);
     setTimeout(() => setRefreshing(false), 400);
-  };
+};
 
   const fmtClock = (d) => d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true });
   const fmtElapsed = (s) => {
@@ -6423,10 +6434,12 @@ function NetRevenue() {
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   // Sum collected cash for a given year/month.
-  const collectedIn = (y, m) => paid.reduce((s, i) => {
-    const d = new Date(i.date); if (isNaN(d)) return s;
-    return (d.getFullYear() === y && d.getMonth() === m) ? s + i.total : s;
-  }, 0);
+const collectedIn = (y, m) => paid.reduce((s, i) => {
+    const dateStr = (i.lastModified || i.date || "").slice(0, 10);
+    const [dy, dm] = dateStr.split("-").map(Number);
+    if (!dy || !dm) return s;
+    return (dy === y && dm - 1 === m) ? s + i.total : s;
+}, 0);
 
   const thisMonth = collectedIn(ym.y, ym.m);
   const prevM = ym.m === 0 ? { y: ym.y - 1, m: 11 } : { y: ym.y, m: ym.m - 1 };
@@ -6444,16 +6457,18 @@ function NetRevenue() {
     const label = String(day).padStart(2, "0");
     daily.push({ day, label, dateLabel: `${label} ${MONTHS[ym.m]}`, revenue: 0, deposit: 0, recharge: 0 });
   }
-  paid.forEach(i => {
-    const d = new Date(i.date); if (isNaN(d)) return;
-    if (d.getFullYear() === ym.y && d.getMonth() === ym.m) {
-      const cell = daily[d.getDate() - 1];
+paid.forEach(i => {
+    const dateStr = (i.lastModified || i.date || "").slice(0, 10);
+    const [dy, dm, dd] = dateStr.split("-").map(Number);
+    if (!dy || !dm || !dd) return;
+    if (dy === ym.y && dm - 1 === ym.m) {
+      const cell = daily[dd - 1];
       const dep = depositForPlan(i.plan, i.total);
       cell.revenue += i.total;
       cell.deposit += dep;
       cell.recharge += Math.max(0, i.total - dep);
     }
-  });
+});
   const activeDays = daily.filter(x => x.revenue > 0).length;
   const avgPerActiveDay = activeDays ? Math.round(thisMonth / activeDays) : 0;
   const bestDay = daily.reduce((b, x) => x.revenue > (b?.revenue || 0) ? x : b, null);
