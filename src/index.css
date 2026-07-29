@@ -1,3 +1,4 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body, #root { margin: 0; padding: 0; width: 100%; min-height: 100vh; background: #0a1a0f; }
-body { background: #0a1a0f; }
+/* Ink, darker step — matches --shell-0 in App.jsx; shows behind the app shell. */
+html, body, #root { margin: 0; padding: 0; width: 100%; min-height: 100vh; background: #06100B; }
+body { background: #06100B; }

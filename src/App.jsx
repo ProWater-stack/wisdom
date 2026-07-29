@@ -5,7 +5,7 @@ import {
   LogOut, Search, Plus, Eye, EyeOff, Shield, ShieldCheck, Filter,
   TrendingUp, Award, Wallet, ChevronRight, X, CheckCircle2, Clock,
   AlertCircle, Download, Lock, ArrowUpRight, Trash2, KeyRound, Menu,
-  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Mail, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket
+  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Mail, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -23,28 +23,99 @@ import { notifyAdminEmail } from "./lib/notifyAdmin";
    "// >>> WIRE:" comments to find every integration point.
    ============================================================================ */
 
+/* Categorical chart colors, drawn only from the brand palette and ordered so
+   adjacent series stay tellable apart. Seven is the ceiling — past that the
+   palette has no further distinct hues, so prefer grouping to an 8th slice. */
+const CHART_PALETTE = ["#0A9D6E", "#2A86D6", "#986315", "#DC4141", "#0B6F52", "#7D8A83", "#A9B3AC"];
+
+/* Donut slice label: absolute value + share, set outside the ring with a leader
+   line. Recharts hands `percent` back as a 0..1 fraction. Zero-value slices are
+   skipped — Recharts still calls this for them and the label would sit orphaned
+   on the ring with no slice under it. */
+const PIE_LABEL_OFFSET = 14;
+const renderPieLabel = ({ cx, cy, midAngle, outerRadius, value, percent }) => {
+  if (!value) return null;
+  const rad = Math.PI / 180;
+  const r = outerRadius + PIE_LABEL_OFFSET;
+  const x = cx + r * Math.cos(-midAngle * rad);
+  const y = cy + r * Math.sin(-midAngle * rad);
+  return (
+    <text x={x} y={y} textAnchor={x > cx ? "start" : "end"} dominantBaseline="central"
+      style={{ fontSize: 11, fontWeight: 700, fill: "var(--f)" }}>
+      {value.toLocaleString("en-IN")} · {Math.round(percent * 100)}%
+    </text>
+  );
+};
+const pieLabelLine = { stroke: "var(--faint)", strokeWidth: 1 };
+
 /* ---------- Design tokens (injected once) ---------- */
 const TOKENS = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
+  /* ProWater palette. The 11 brand hexes are the source of truth; everything
+     below is either one of them or a documented derivation (tints ≈ 12% of the
+     hue over Surface, tint-borders ≈ 30%). Don't introduce new hues — map to a
+     token instead, so a palette change stays a one-file edit. */
   :root{
-    --forest:#1a2f1e; --forest-2:#243d28; --teal:#5a7863; --teal-d:#4c6654;
-    --lime:#90ab8b; --lime-d:#7d9a78;
-    --mint:#f3f8ec; --mint-2:#ebf4dd;
-    --f:#28323a;            /* ink for headings (from slate charcoal) */
-    --slate:#46555d;        /* body text */
-    --muted:#8a968f;        /* labels / captions */
-    --border:#dde7da;
-    --white:#ffffff;
-    --grad:linear-gradient(135deg,var(--teal) 0%, var(--lime) 140%);
-    --grad-btn:linear-gradient(120deg,#5a7863 0%, #90ab8b 130%);
-    --shadow:0 1px 2px rgba(40,50,58,.04), 0 8px 24px -12px rgba(40,50,58,.18);
-    --shadow-lg:0 24px 60px -20px rgba(40,50,58,.32);
+    --brand:#0A9D6E;        /* brand green — primary actions, positive series */
+    --green:#08805A;        /* green · text — success text, strong accents      */
+    --deep:#0B6F52;         /* deep green — dark accents, second green series   */
+    --mint:#EEF7F3;         /* mint — app background                            */
+    --f:#0A1A12;            /* ink · text — headings                            */
+    --slate:#0A1A12;        /* ink · text — body                                */
+    --muted:#7D8A83;        /* muted text — labels / captions                   */
+    --faint:#A9B3AC;        /* faint text — disabled / placeholder              */
+    --border:#ECEEED;       /* hairline                                         */
+    --white:#FFFFFF;        /* surface                                          */
+    --amber:#986315;        /* amber · warn — the brand amber (#E0921F) darkened
+                               to the same hue/sat until it passes AA as text     */
+    --danger:#DC4141;       /* red · danger                                     */
+    --blue:#2A86D6;         /* blue · progress                                  */
+
+    /* derived — washes for status rows/badges and their borders */
+    --mint-2:#E2F0EA;
+    --green-t:#E2F3EE; --amber-t:#FBF0E0; --danger-t:#FBE8E8; --blue-t:#E5F0FA;
+    --green-b:#B5E2D4; --amber-b:#F6DEBC; --danger-b:#F5BFBF;
+
+    /* shell — the palette's ink, stepped for depth. Deep green #0B6F52 was
+       tried here and rejected as too light; ink keeps the dark shell the app
+       has always had. Deep green stays a content accent. */
+    --shell:#0A1A12; --shell-2:#16261D; --shell-0:#06100B;
+
+    /* legacy aliases — older code still reads these names */
+    --forest:var(--shell); --forest-2:var(--shell-2);
+    --teal:var(--brand); --teal-d:var(--green);
+    --lime:var(--brand); --lime-d:var(--green);
+
+    --grad:linear-gradient(135deg,#0A9D6E 0%, #0B6F52 140%);
+    --grad-btn:linear-gradient(120deg,#0A9D6E 0%, #08805A 130%);
+    --shadow:0 1px 2px rgba(10,26,18,.04), 0 8px 24px -12px rgba(10,26,18,.16);
+    --shadow-lg:0 24px 60px -20px rgba(10,26,18,.28);
     --radius:16px;
+  }
+  /* ---- Dark theme (neutral black; keeps the green accent) ---- */
+  :root[data-theme="dark"]{
+    --mint:#0c0d0f; --mint-2:#191b1f;
+    --f:#eaeef2; --slate:#dfe4ea; --muted:#8b95a1; --faint:#5f6874;
+    --border:#262a31; --white:#15171b;
+    --green-t:#14231b; --amber-t:#2a2213; --danger-t:#2a1616; --blue-t:#132231;
+    --shell:#0e0f12; --shell-2:#181a1e; --shell-0:#060607;
+    --forest:#0e0f12; --forest-2:#181a1e;
+  }
+  /* ---- Aesthetic theme (violet accent on white; no green) ---- */
+  :root[data-theme="aesthetic"]{
+    --brand:#6D5EF0; --green:#5A49E0; --deep:#4A3CCB;
+    --teal:#6D5EF0; --teal-d:#5A49E0; --lime:#6D5EF0; --lime-d:#5A49E0;
+    --mint:#F6F5FC; --mint-2:#ECEAFB; --border:#E7E5F3;
+    --green-t:#ECEAFB; --green-b:#D8D3F6;
+    --grad:linear-gradient(135deg,#6D5EF0 0%,#5A49E0 140%);
+    --grad-btn:linear-gradient(120deg,#6D5EF0 0%,#5A49E0 130%);
+    --shell:#241F45; --shell-2:#332A63; --shell-0:#171334;
+    --forest:#241F45; --forest-2:#332A63;
   }
   *{box-sizing:border-box}
   html,body,#root{margin:0;padding:0;width:100%;min-height:100vh}
-  body{margin:0;padding:0;background:#0a1a0f}
-#root{margin:0;padding:0;background:#0a1a0f;min-height:100vh;width:100%}
+  body{margin:0;padding:0;background:var(--shell-0)}
+#root{margin:0;padding:0;background:var(--shell-0);min-height:100vh;width:100%}
 
   .pw-root{font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--slate);
     background:var(--mint);min-height:100vh;width:100%;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;letter-spacing:-.003em}
@@ -59,13 +130,16 @@ const TOKENS = `
   .pw-root button:not(:disabled):hover{filter:brightness(1.03)}
   .pw-root button:not(:disabled):active{transform:scale(.985)}
   .pw-root input,.pw-root select,.pw-root textarea{font-family:inherit;transition:border-color .15s ease, box-shadow .15s ease}
-  .pw-root input:focus,.pw-root select:focus,.pw-root textarea:focus{border-color:var(--lime-d);box-shadow:0 0 0 3px rgba(144,171,139,.22);outline:none}
+  .pw-root input:focus,.pw-root select:focus,.pw-root textarea:focus{border-color:var(--lime-d);box-shadow:0 0 0 3px rgba(10,157,110,.20);outline:none}
   .pw-root select{appearance:none;-webkit-appearance:none;padding-right:32px!important;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a968f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237D8A83' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     background-repeat:no-repeat;background-position:right 11px center}
   /* alive, hover-highlighted table rows (inline-styled rows keep their own bg) */
   .pw-root tbody tr{transition:background .12s ease}
-  .pw-root tbody tr:hover{background:#eef5e2}
+  .pw-root tbody tr:hover{background:#EEF7F3}
+  /* Card hover — subtle zoom + brand-green highlight so it's clear which card you're on */
+  .pw-root .pw-card{transition:transform .16s ease, box-shadow .18s ease, border-color .16s ease}
+  .pw-root .pw-card:hover{transform:translateY(-3px) scale(1.012); border-color:var(--lime-d)!important; box-shadow:0 22px 40px -22px rgba(5,48,30,.55), 0 0 0 1px rgba(10,157,110,.30)!important}
   .scroll-thin::-webkit-scrollbar{width:9px;height:9px}
   .pw-root ::-webkit-scrollbar{width:11px;height:11px}
   .pw-root ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:2px solid transparent;background-clip:content-box}
@@ -133,38 +207,172 @@ const TOKENS = `
 
 // The platform modules. `access` per user maps module id → "none" | "view" | "admin".
 const MODULES = [
-  { id: "sales",     label: "Sales",                  icon: "Briefcase",  desc: "Leads, pipeline & deals",          built: true,  color: "#5a7863" },
-  { id: "customer",  label: "Customer",               icon: "UserRound",  desc: "Accounts & plan management",       built: true,  color: "#2b7a78" },
-  { id: "billing",   label: "Billing & Subscription", icon: "Receipt",    desc: "Invoices, plans & renewals",       built: true,  color: "#0f6e3f" },
-  { id: "erp",       label: "ERP & Inventory",        icon: "Boxes",      desc: "Stock, purifiers & supply",        built: true,  soon: true, color: "#8a5a2b" },
-  { id: "fsm",       label: "FSM System",             icon: "Wrench",     desc: "Field service & installations",    built: true,  soon: true, color: "#9a3b6e" },
-  { id: "iot",       label: "IoT Core",               icon: "Cpu",        desc: "Device telemetry & connectivity",  built: true,  color: "#0d7a8c" },
-  { id: "referral",  label: "Referral",               icon: "GitBranch",  desc: "Referrers, referees & rewards",    built: true,  color: "#90ab8b" },
-  { id: "ticketing", label: "Ticketing",              icon: "Ticket",     desc: "Support tickets & resolution",     built: true,  color: "#c2671e" },
-  { id: "autoscheduler", label: "Auto Scheduler",     icon: "CalendarClock", desc: "Recurring service scheduling & IoT alerts", built: true, color: "#16545c" },
-  { id: "analytics", label: "Analytics",              icon: "BarChart3",  desc: "Cross-module reporting",           built: true,  color: "#3a6ea5" },
-  { id: "planner",   label: "Task Planner",           icon: "LayoutGrid", desc: "Kanban board, tasks & projects",   built: true,  color: "#6d4fb5" },
-  { id: "employee",  label: "Employee",               icon: "UserCog",    desc: "Add & manage dashboard users",     built: true,  color: "#7a4fb5" },
-  { id: "devicereplace", label: "Device Replacement", icon: "Repeat",     desc: "Swap an old purifier for a new one", built: true, color: "#4f6f8f" },
-  { id: "logtracker",label: "Logs Tracker",           icon: "ScrollText", desc: "Audit trail across all modules",   built: true,  color: "#b5694f" },
-  { id: "about",     label: "About",                  icon: "Info",       desc: "Version history & module docs",    built: true,  color: "#5a7863" },
+  { id: "sales",     label: "Sales",                  icon: "Briefcase",  desc: "Leads, pipeline & deals",          built: true,  color: "#0A9D6E" },
+  { id: "customer",  label: "Customer",               icon: "UserRound",  desc: "Accounts & plan management",       built: true,  color: "#0B6F52" },
+  { id: "billing",   label: "Billing & Subscription", icon: "Receipt",    desc: "Invoices, plans & renewals",       built: true,  color: "#0B6F52" },
+  { id: "erp",       label: "ERP & Inventory",        icon: "Boxes",      desc: "Stock, purifiers & supply",        built: true,  soon: true, color: "#986315" },
+  { id: "fsm",       label: "FSM System",             icon: "Wrench",     desc: "Field service & installations",    built: true,  soon: true, color: "#DC4141" },
+  { id: "iot",       label: "IoT Core",               icon: "Cpu",        desc: "Device telemetry & connectivity",  built: true,  color: "#2A86D6" },
+  { id: "referral",  label: "Referral",               icon: "GitBranch",  desc: "Referrers, referees & rewards",    built: true,  color: "#0A9D6E" },
+  { id: "ticketing", label: "Ticketing",              icon: "Ticket",     desc: "Support tickets & resolution",     built: true,  color: "#986315" },
+  { id: "autoscheduler", label: "Auto Scheduler",     icon: "CalendarClock", desc: "Recurring service scheduling & IoT alerts", built: true, color: "#0B6F52" },
+  { id: "analytics", label: "Analytics",              icon: "BarChart3",  desc: "Cross-module reporting",           built: true,  color: "#2A86D6" },
+  { id: "planner",   label: "Task Planner",           icon: "LayoutGrid", desc: "Kanban board, tasks & projects",   built: true,  color: "#2A86D6" },
+  { id: "employee",  label: "Employee",               icon: "UserCog",    desc: "Add & manage dashboard users",     built: true,  color: "#2A86D6" },
+  { id: "devicereplace", label: "Device Replacement", icon: "Repeat",     desc: "Swap an old purifier for a new one", built: true, color: "#2A86D6" },
+  { id: "logtracker",label: "Logs Tracker",           icon: "ScrollText", desc: "Audit trail across all modules",   built: true,  color: "#DC4141" },
+  { id: "about",     label: "About",                  icon: "Info",       desc: "Version history & module docs",    built: true,  color: "#0A9D6E" },
 ];
 
 // Default access for an admin: admin on everything.
 const allAccess = (level) => Object.fromEntries(MODULES.map(m => [m.id, level]));
 
+// Home page grouping of modules under section headers. Every module id maps to
+// exactly one group; a group only renders if the user can see ≥1 of its modules.
+const MODULE_GROUPS = [
+  { title: "Marketing / Growth", ids: ["sales", "customer", "referral"] },
+  { title: "Ops / Logistics / ERP", ids: ["erp", "fsm"] },
+  { title: "Analytics", ids: ["analytics"] },
+  { title: "IoT & Communications", ids: ["iot", "autoscheduler"] },
+  { title: "Customer Support", ids: ["ticketing", "devicereplace", "billing"] },
+  { title: "Tech", ids: ["planner", "employee", "logtracker", "about"] },
+];
+
+// The sections (tabs) that live under each module. This is the catalog the
+// per-user section-access UI reads. It MUST mirror `moduleTabs` inside the
+// Dashboard component (which additionally attaches icons + admin-only gating).
+// `adminOnly` sections only exist when the user has admin/devops on the module.
+const MODULE_SECTIONS = {
+  referral:      [{ id: "overview", label: "Overview" }, { id: "referrers", label: "Referrers" }, { id: "referees", label: "Referees" }, { id: "credits", label: "Credits" }, { id: "tracker", label: "Tracker" }, { id: "analytics", label: "Analytics" }, { id: "backtrack", label: "Backtrack", adminOnly: true }],
+  sales:         [{ id: "sales_overview", label: "Pipeline" }, { id: "sales_leads", label: "Leads & Deals" }, { id: "sales_apartments", label: "Apartment Leads" }, { id: "sales_analytics", label: "Sales Analytics" }, { id: "sales_errors", label: "Error Correction" }],
+  planner:       [{ id: "plan_board", label: "Task Board" }, { id: "plan_weekly", label: "Weekly View" }, { id: "plan_admin", label: "Modify Tasks", adminOnly: true }],
+  analytics:     [{ id: "an_overview", label: "Overview" }, { id: "analytics", label: "Referral" }, { id: "an_sales", label: "Sales" }, { id: "an_earned", label: "Earned Revenue" }, { id: "an_aop", label: "AOP", adminOnly: true }, { id: "an_apartment", label: "Apartment Performance" }, { id: "an_billing", label: "Billing" }, { id: "an_revenue", label: "Revenue" }, { id: "an_penetration", label: "Penetration Tracker" }, { id: "an_credits", label: "Credits" }, { id: "an_applogs", label: "App Logs" }],
+  employee:      [{ id: "emp_users", label: "Users" }],
+  ticketing:     [{ id: "tk_overview", label: "Overview" }, { id: "tk_tickets", label: "Tickets" }, { id: "tk_ops", label: "Ops Tickets" }],
+  customer:      [{ id: "cust_list", label: "Customers" }, { id: "cust_all", label: "All Customers" }, { id: "cust_societies", label: "Societies" }],
+  billing:       [{ id: "bill_overview", label: "Overview" }, { id: "bill_subs", label: "Subscriptions" }, { id: "bill_invoices", label: "Invoices" }, { id: "bill_deposits", label: "Deposits & Refunds" }],
+  fsm:           [{ id: "fsm_track", label: "Track Technician" }, { id: "fsm_amc", label: "AMC / Maintenance" }, { id: "fsm_quality", label: "Water Quality" }],
+  erp:           [{ id: "erp_assets", label: "Asset Lifecycle" }],
+  autoscheduler: [{ id: "as_society", label: "Auto GS - Society" }, { id: "as_iot", label: "IoT Alerts" }],
+  iot:           [{ id: "iot_devices", label: "Device Monitor" }],
+  devicereplace: [{ id: "dr_list", label: "Replacements" }],
+  about:         [{ id: "about_docs", label: "About" }, { id: "about_app_rel", label: "App Releases" }, { id: "about_tech_rel", label: "Technician Releases" }],
+  logtracker:    [{ id: "log_all", label: "All Logs" }, { id: "log_failures", label: "Failures" }, { id: "log_api", label: "API Usage" }],
+};
+
+// A user's per-section override for a module/tab, or null when it should inherit
+// the module level. Stored at user.sections[moduleId][tabId] as
+// "hidden" | "view" | "edit". Absent everywhere => full access (all shown),
+// so users created before this feature are unaffected.
+function sectionOverride(user, moduleId, tabId) {
+  const m = user && user.sections && user.sections[moduleId];
+  return (m && m[tabId]) || null;
+}
+
+// Immutably apply a section-access choice to a `sections` map. `level` is one of
+// "default" | "hidden" | "view" | "edit"; "default" removes the override so the
+// section inherits the module level. Empty module maps are pruned so a cleared
+// user carries no `sections` cruft.
+function setSectionOverride(sections, moduleId, tabId, level) {
+  const modMap = { ...((sections && sections[moduleId]) || {}) };
+  if (level === "default") delete modMap[tabId];
+  else modMap[tabId] = level;
+  const next = { ...sections };
+  if (Object.keys(modMap).length) next[moduleId] = modMap;
+  else delete next[moduleId];
+  return next;
+}
+
 /* ---------- App version + changelog ----------
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.5.2";
-const VERSION_DATE = "2026-07-14";
+const APP_VERSION = "2.29.11";
+const VERSION_DATE = "2026-07-29";
 const VERSION_HISTORY = [
+  { v: "2.29.11", note: "Customer Profile — dropped the \"AI summary\" card (it only stitched numbers into long sentences) per feedback. The profile fields table now surfaces Support tickets and Complaints as fields, and every value is highlighted only when it is a concern — amber (warning) or red (critical) — while healthy values stay plain: Status (red if not active), LTV (red if 0), Discounts (amber ≥20% of LTV / red ≥30%), Support tickets (amber ≥5 / red ≥8), Complaints (amber ≥1 / red ≥2). The Customer/Technician/Device score cards stay. The Spares-used card lost its \"AI analysis\" paragraph too — now just a readable spare→count table with a one-line factual sub." },
+  { v: "2.29.10", note: "Fix: Customer Profile Device score could read 0.0 (\"Poor\") for a device with ZERO complaints — routine maintenance was over-penalised (every spare −0.35 and every ticket −0.10, so 12 spares + 20 service jobs drove it negative → clamped to 0). Reworked so complaints (real faults) are the primary driver (−1.3 each) while spares + above-routine service rate are capped \"wear\" (max −2 pts); a fault-free device now scores at least 3.0. Also fixed the contradictory AI line \"Device shows wear — 0 complaints\": with no complaints it now reads \"No faults logged, but heavy servicing (N spares, M jobs) — worth keeping an eye on.\"" },
+  { v: "2.29.9", note: "Customer > All Customers Profile — 360° scoring + de-duplication (per feedback). Added three 0–5 scores with conditional colour formatting (green ≥4 / amber ≥2.5 / red < 2.5 / grey = no data): Customer score (loyalty + value + engagement, dinged by complaints & heavy discounting), Technician score (field-service quality — job timing + TDS reduction, null when there are no ops jobs) and Device score (health — dinged by complaints & spares). The Spares-used analysis moved onto the Profile page (from the Ops tab). The AI summary was reworked to interpretation only — it no longer restates the field values (LTV / deposit / discounts / referrals); it now reads the scores in plain English (\"strong customer\", \"device looks healthy\") with severity-coloured Focus areas highlighting the negatives." },
+  { v: "2.29.8", note: "Credit notes + customer-360 additions. Analytics > Credits now maps each note's remaining balance and date: a \"Credit balance available\" KPI plus Balance and Last-given columns in the per-customer table. Customer > All Customers: Profile adds a Security Deposit row (the tiered refundable deposit via depositForPlan) and shows the unused credit balance next to discounts; the AI summary card is now amber-themed with its Focus-area items colour-coded by severity (red critical / amber warning / green healthy) to highlight the negatives, and it folds in the security deposit and remaining credit balance. New Ops sub-screen analysis: \"Spares used\" aggregates Parts_Used across the purifier's ops jobs into a spare→count table with a deterministic AI read (most-replaced part, parts-per-visit, and heuristics — e.g. frequent RO-membrane changes flag high input TDS). All deterministic, no LLM." },
+  { v: "2.29.7", note: "IoT Core > Device Monitor: the RO-tank \"Recent readings\" table renamed its first column Heartbeat → \"Sync History\" with a click-to-sort toggle (newest↔oldest, newest-first by default), centre-aligned values, and out-of-range highlighting — each Tank / pH / TDS / Temperature cell turns amber (borderline) or red (critical) using the same water-quality thresholds (tank: ≤25% red, ≤50% amber). Analytics > Credits: the Society filter is now a searchable multi-select (choose several societies at once; all selected by default, uncheck to exclude) instead of a single dropdown." },
+  { v: "2.29.6", note: "Analytics > Credits rebuilt around the live credit-notes API. Removed the old unused-credit KPIs, the Credits-by-society / Credits-by-plan bar charts and the Customers-holding-credits table. The section now shows only the discounts from GET /admin/get-all-creditnotes — total discount given, note count, customers discounted and avg/note, plus a per-customer table (joined by Zoho customer id) — with a Period (date-range preset) filter and a Society filter, a searchable table and CSV export." },
+  { v: "2.29.5", note: "Credit notes (discounts) + tank refill alert. (1) New creditNoteApi wired to GET /admin/get-all-creditnotes (Bearer-authed, tolerant mapper, 60s cache, sample fallback). (2) Analytics > Credits gains a \"Credit notes (discounts)\" section — total discount given, note count, customers discounted, avg/note, and a per-customer table (joined to customers by Zoho customer id). (3) Customer > All Customers: Profile shows a Discounts (credit notes) row (amount + count), and the AI summary now accumulates discounts — how many credit notes, total amount and % of LTV — plus a \"heavy discounting\" focus flag when discounts exceed 20% of LTV. (4) IoT Core: RO-tank detail shows a red \"SWITCH ON the pump to refill.\" banner when the tank level is at or below 25%." },
+  { v: "2.29.4", note: "Customer > All Customers overhaul. (1) Search now matches Purifier ID, phone, name AND email (was Purifier ID only). (2) The full-page customer view gains three sub-screens beyond Profile/Transactions: Tickets and Ops (a Purifier-ID lookup into the Ticketing feed, counted month-wise as Jan'26 · N; each month row expands/collapses to its Issue-Category / issue-type breakdown — Ops reuses the Ticketing > Ops filter, Issue Category ≠ Complaint), and Referral (how many referrals the customer made, converted/pending, referral code, and the referee list — joined to the referral API by any shared key). (3) Profile adds LTV (lifetime value = sum of all paid invoices), the referral code, referrals-made, and an AI summary card: bullet insights across transactions/tickets/ops/referrals plus rule-based \"Focus areas\" (what to prioritise for this customer). Deterministic, no LLM. (4) IoT Core tank: added rising water bubbles inside the transparent tank (respects prefers-reduced-motion)." },
+  { v: "2.29.3", note: "IoT Core > Device Monitor refinements. (1) Water-quality now uses precise 3-tier thresholds — pH green 6.5–8.5 / amber 6.0–6.4·8.6–9.0 / red <6·>9; TDS green 50–300 / amber 301–500 / red <50·>500; temp green 15–25 / amber 10–14.9·25.1–32 / red <10·>32 — with GOOD/WARNING/CRITICAL badges. (2) The AI summary moved INTO the Water Quality card (removed from the page top): an overall verdict plus a plain-English note per metric. (3) RO-tank liveness now uses a 25-minute window (these units report ~every 20 min) so a healthy tank no longer shows Offline; junctionBox units keep the 120s window. (4) The transparent tank graphic is smaller, and the Online/Offline KPI ECGs are now glass-masked (fade in/out, clear of the number) instead of a hard line through the text. (5) Device-list cards fixed (full IDs + clean status pill, no cramming) and the tank/water-quality columns rebalanced to remove empty gaps." },
+  { v: "2.29.2", note: "IoT Core > Device Monitor polish. (1) The RO-tank graphic is now a transparent see-through Sintex-style storage tank — dark screw lid + moulded neck, blue water filling to the live level % with two continuously-moving wave layers, moulding bands and a side highlight (respects prefers-reduced-motion). (2) The Online KPI card now animates a live green ECG heartbeat when any device is online; the Offline KPI card shows a red flatline (\"dead\") ECG. (3) New AI summary strip at the top — a deterministic, in-app read of the fleet: device counts, the selected tank level, water-quality status and active alerts (no LLM call). (4) The RO-tank Recent readings table is paginated at 10 rows per page with Prev/Next and a page indicator. Water-quality ranges now ignore non-positive sensor dropouts so a stray 0 doesn't skew the min." },
+  { v: "2.29.1", note: "IoT Core > Device Monitor: reworked the RO-tank view to the ProWater design spec. The tank is now a single realistic semi-transparent plastic storage tank (CSS-built: moulded ribs, neck + cap, edge highlights) whose water block height tracks the level % with a continuously animated two-layer wave surface (respects prefers-reduced-motion); the 100/75/50/25/0 scale sits alongside it. The RO-tank detail now uses an aligned 3-column layout — Devices · Tank Level (with the device name/firmware in the card header) · Water Quality — and the Water Quality panel uses Green/Amber/Red RAG badges with an overall status callout. KPI label reads \"Total devices\". Same data + telemetry APIs as 2.29.0." },
+  { v: "2.29.0", note: "IoT Core > Device Monitor: RO-tank devices now show a Tank Level + Water Quality view driven by /devices/history?deviceId=…&days=1. The device-detail branches on device schema: RO-tank units (tankLevel + waterQuality heartbeats) get a water-tank illustration with the four float-switch states (25/50/75/100%) and a live fill %, plus a Water Quality panel showing pH / TDS / Temperature as the min–max range over the last day against their ideal bands, each rated GOOD / AMBER / CHECK, with an overall \"Water quality is excellent\" summary; a Recent readings table lists tank % · pH · TDS · temp per heartbeat. junctionBox units keep the existing pressure/flow/channels/consumption view (those channel-only sections are hidden for tank units, which the feed doesn't report). Known tank device E05A1B9C2DD4 is always kept in the roster + polled and selected by default. Device list + detail header are now schema-aware (firmware from firmwareVersion or FIRMWARE_VERSION; tank % vs bar pressure)." },
+  { v: "2.28.22", note: "Customer > All Customers: clicking a Purifier ID now opens a FULL-PAGE customer view (was a side drawer) with two sub-screen tabs — Profile (customer details + Installed date from the subscription start + Total paid) and Transactions (a full-width payment table: Date · Invoice · Amount · Plan · Status, newest-first, with Total paid / Payments summary). A back arrow returns to the search list." },
+  { v: "2.28.21", note: "Customer module: new \"All Customers\" section (tab between Customers and Societies). Search a customer by Purifier ID; the results table lists Purifier ID · Customer · Society · Plan · Status. Clicking a row opens a detail drawer with the customer's info, the Installed date (taken from the subscription start / activated date), Total paid, and the full transaction history — every invoice/payment newest-first with amount, date, invoice number and paid/pending status. Customers ↔ subscriptions ↔ invoices are joined by any shared key (customer number / zoho customer id / email)." },
+  { v: "2.28.20", note: "Ticketing: mapped the feed's \"Ticket Created Time\" into the ticket's created field (so the Created column + date filter use the real created timestamp). Ops Tickets: the date filter now scopes by Ticket Created Time (was Job Start Time). Tickets tab: added the same page filters as Ops — a Ticket-Created-date filter plus the status filter, and hid the (data-less) priority filter — so both ticket views filter the same way." },
+  { v: "2.28.19", note: "Home sidebar: hid the vertical scrollbar on the module list (scrollbar-width:none + ::-webkit-scrollbar display:none) — the list still scrolls and the profile stays pinned, just without the visible bar." },
+  { v: "2.28.18", note: "Removed the last live GET /tickets call — the Auto GS create-ticket flow had a fallback that fetched the whole GET /tickets list to resolve a human-readable ticket number; that fallback is deleted (it now uses the create response's number, else the returned id). Tickets themselves already read from GET /tickets/formattedforwisdom. Also updated the stale ticketing comment + console log to the correct endpoint and dropped the /tickets path from the WIRE stub notes. (Historical VERSION_HISTORY entries that mention the old /tickets are left as-is — they record past behaviour.)" },
+  { v: "2.28.17", note: "Analytics > AOP: added an \"AI Summary\" card at the top summarising the annual operating plan — the FY subscription target, recharges collected and % achieved (with an on-track/behind read), the amount remaining to hit target, the strongest and weakest months, and how many months with targets have reached 100%. Follows the selected financial year. Computed deterministically from the plan (not an LLM call), matching the Overview AI Summary style." },
+  { v: "2.28.16", note: "Analytics > Overview: added an \"AI Summary\" card at the top that auto-summarises the whole dashboard in plain English — total collection (with recharge/deposit/earned split and vs-prev delta), active customer base + new sign-ups, MRR and top plan, outstanding + collection efficiency + avg collection days, the top-performing society, and active referrers / open tickets / next-month forecast. It follows the page's date-range and society filters. The summary is computed deterministically from the same figures shown below (not an LLM call)." },
+  { v: "2.28.15", note: "Fixed the invisible topbar avatar — the global `.pw-root button{background:none}` reset was overriding `.premium-avatar`, so its initials rendered white-on-transparent (invisible on the white topbar); gave it an explicit gradient background. Also prototyped Dark + Aesthetic themes with a top-right picker, but DISABLED them (THEMES = [\"light\"]) after review: dark mode left module tables unreadable (their hardcoded light colours don't invert) and the violet aesthetic wasn't wanted. The theme CSS is left dormant pending a decision on a proper themeable refactor." },
+  { v: "2.28.14", note: "Home polish: the module group headers are now larger with a green left-to-right fading gradient pill background (light + dark variants) instead of the small underlined label. Fixed a stray horizontal scrollbar that appeared at the bottom of the sidebar module list — pinned overflow-x:hidden (setting only overflow-y:auto had made overflow-x compute to auto)." },
+  { v: "2.28.13", note: "Home redesign pass. (1) Modules are now grouped under section headers in the Workspace directory: Marketing/Growth (Sales, Customer, Referral), Ops/Logistics/ERP (ERP & Inventory, FSM System), Analytics, IoT & Communications (IoT Core, Auto Scheduler), Customer Support (Ticketing, Device Replacement, Billing & Subscription), Tech (Task Planner, Employee, Logs Tracker, About). (2) Replaced the hero banner card with a plain \"Good <time>, <name>.\" greeting at the top. (3) Fixed the sidebar profile/photo button being hidden below a long module list — the module list now scrolls internally so the profile stays pinned and visible, and the avatar got a camera badge. (4) Added a light/dark theme toggle (persisted, in the sidebar profile row). Dark mode is a FIRST PASS scoped to the Home page (CSS-variable + class overrides); module interiors still use light-only hardcoded colours and need a follow-up pass." },
+  { v: "2.28.12", note: "Home: removed the four workspace stat cards (Modules enabled / Production modules / Elevated access / Current version) entirely — the right sidebar now goes straight to Quick access. Shortened the hero banner further (less padding, smaller heading) and added a 20px gap below it so the hero and the \"Choose where to work\" card no longer touch." },
+  { v: "2.28.11", note: "Home layout tidy-up. The hero banner is ~half its previous height — removed its \"Open <module>\" and \"Browse all modules\" buttons and cut padding/heading size. The four workspace stats (Modules enabled / Production modules / Elevated access / Current version) moved out of the full-width strip under the hero into the right-hand sidebar, stacked vertically above Quick access. Removed the \"Search modules\" box from the Workspace directory (the module grid shows all assigned modules)." },
+  { v: "2.28.10", note: "Home hero slimmed down: removed the \"Workspace access\" panel (modules count / production-ready / elevated / current build) from the hero banner, and made the banner itself shorter — it's now a single full-width column with reduced padding (34→24px), smaller heading (max 52→38px) and tighter spacing, so it takes much less vertical space above the module grid. The same figures still appear in the KPI strip and the Access summary card below, so nothing was lost." },
+  { v: "2.28.9", note: "Home: made the module cards more compact — reduced tile min-height (178→138px), padding (17→13px), icon (42→34px) and internal spacing, with slightly smaller title/description type, so more cards fit on screen without scrolling. Mobile tile height and the decorative corner accent were scaled down to match. Purely visual; grid stays 3-up on desktop." },
+  { v: "2.28.8", note: "Session + navigation fixes. (1) Hard refresh now keeps you on the SAME page instead of bouncing to Home — the open module (pw_active_module) and each module's sub-tab (pw_tab_<module>) are persisted to sessionStorage and restored on reload (a stale tab falls back to the first visible section). (2) Auto-logout hardened: logs out after 1 hour of inactivity (any mouse/keyboard/scroll/touch resets the idle clock) AND when the calendar day rolls over — enforced both on load and on a 30s timer; the Firebase token cap was raised 55m→60m so idle timeout isn't pre-empted. NOTE: because the Firebase ID token lives ~1h, an active session is still capped at ~1h until token-refresh is added. (3) Ops Tickets: removed the Work Start Address column (added in 2.28.7)." },
+  { v: "2.28.7", note: "Ticketing > Ops Tickets overhaul. Table: removed the Status column and added Work Start Address as a clickable Google Maps link (opens the job's Work Start lat/long, falling back to the address text). Filters: added a job-date filter (scopes by Job Start Time date, IST) and kept the status filter; removed the priority filter. New KPI cards (scoped by the date filter): Jobs with timing, Total job duration and Avg job duration (both computed from Job Start→End Time), plus Avg TDS reduction when TDS is present. New analytics: a \"Spares used by issue type\" table correlating Parts_Used with Issue Category, and a \"Water Quality — Input vs Output TDS\" table — each with computed AI Insights (top spare, strongest part↔issue pattern, spare intensity; avg TDS reduction, high-output-TDS and low-reduction flags, best performer). Insights are calculated in-app (deterministic), not an LLM call. The regular Tickets tab is unchanged. Also added mapped fields Input/Output TDS + Central RO/Junction Box issue, and guarded date formatters. NOTE: the short ticket number still needs its exact label from the feed — currently shows the long Ticket ID." },
+  { v: "2.28.6", note: "Ticketing: fixed both Tickets and Ops Tickets showing every row blank (\"—\", status \"Open\", \"Invalid Date\"). The GET /tickets/formattedforwisdom feed returns a FLAT object keyed by human labels (\"Ticket ID\", \"Status\", \"Society Name\", \"Purifier ID\", \"Issue Category\", \"Phone\", \"Job Start Time\", \"Technician Visit Date\", …), which the old Zoho-Desk mapper didn't understand. Added mapWisdomTicket (tolerant of label case/spacing) + a shape detector so this feed maps correctly; the table + drawer now populate. Guarded fmtDate/fmtTime to show \"—\" for missing/invalid dates instead of \"Invalid Date\". NOTE: this feed carries no customer NAME (Customer column shows the Ticket Owner), and no Priority or Created-time field (those columns show \"—\"); if the backend adds them the tolerant lookup will pick them up." },
+  { v: "2.28.5", note: "Section access (2.28.4) UX fix: the \"Sections\" control now shows for every multi-section module up front — even while the module is still set to None — so it's discoverable when creating a user (previously it only appeared after granting the module, which read as the feature being missing). Expanding an ungranted module shows an amber \"grant this module for these rules to take effect\" note. No change to how overrides are stored or enforced." },
+  { v: "2.28.4", note: "Access control now goes one level deeper — per SECTION (tab) inside each module, on top of the existing per-module View/Supervisor/Admin/DevOps. In the Create-user and Edit-access screens every granted multi-section module gets a \"Sections\" expander where each section can be set to Default (inherit the module level — the default, so every section stays shown), Hidden (removed from that user's sidebar), View (read-only even if the module is Admin) or Edit (editable even if the module is only View). Stored per user at user.sections[moduleId][tabId]; absent = inherit, so all existing users are unchanged and keep full access. The sidebar hides Hidden sections, the header shows the section's effective View/Admin badge, and content components receive the section's effective edit rights. If every section of a module is hidden the module shows a \"No sections enabled\" notice instead of a blank page." },
+  { v: "2.28.3", note: "Ticketing: live tickets now come from the backend GET /tickets/formattedforwisdom (was GET /tickets) — the endpoint returns rows already shaped for Wisdom. Still Bearer-authed with the login idToken like every other API; the raw-vs-mapped detection and sample-data fallback are unchanged." },
+  { v: "2.28.2", note: "Added a developer tech-doc at src/DOCUMENTATION.md — architecture, auth/roles, backends & Firebase, data/caching/lookups, every storage key, and a per-module reference (how it works · APIs · logic · lookups · storage), releases, conventions, deploy and open dependencies. It's kept in sync with code changes like VERSION_HISTORY (stamped with the current APP_VERSION). Also synced the in-app About docs: Device Replacement now correctly reads \"saved via backend POST /device-replacement/add + localStorage\" (was still describing the reverted direct-Firestore write), and the API Usage list re-adds POST /device-replacement/add and trims the stale Firestore save line." },
+  { v: "2.28.1", note: "Device Replacement: confirmed swaps are transferred to Firebase via the BACKEND API (POST /device-replacement/add) again — reverting the v2.21.0 direct-Firestore write, since the backend endpoint is the intended path to move the data to Firebase. The frontend now also keeps a localStorage copy (pw_device_replacements) so a saved swap shows immediately and survives reloads regardless of Firestore rules; the read-back list still makes a best-effort Firestore query on device_replacements for cross-device display and falls back to the local copy. Toast confirms the DB save or reports the server message." },
+  { v: "2.28.0", note: "App & Technician Releases are now SHARED across all users. Instead of localStorage (which only reached the browser that published), releases are stored in a Cloud Firestore collection (backend-prowater · prowaterdb · wisdom2.0_releases). Publishing writes the release to Firestore; the \"what's new\" login popup pulls from Firestore on login and every 3 minutes, so a release published by an admin pops up for everyone who logs in (scheduled releases still honour their Announce-from time). A localStorage copy remains as an offline cache, and any releases previously saved only in a browser are uploaded to the shared collection on first load so nothing is lost. Needs Firestore rules allowing the logged-in client to read/write wisdom2.0_releases (the collection is auto-created on first publish). \"Seen\" tracking stays per-user/per-browser." },
+  { v: "2.27.1", note: "Analytics > Overview > Top Performing Societies: the Total Months column now counts the number of calendar months from the society's LAUNCH month to the current month (inclusive), using the same launch the Penetration Tracker uses — the earliest subscription sign-up, or the admin's launch override — instead of the customer's first sign-up date. So an admin editing a society's launch month in the Penetration Tracker also updates its Total Months here." },
+  { v: "2.27.0", note: "Penetration Tracker: the Launch month is now editable per society — but only for admins (user.role === admin) in the standalone Analytics view; everyone else (and the Overview's embedded tracker) sees it read-only. An admin picks a launch month (YYYY-MM) which realigns that society's M1..Mn cohort columns; a revert button restores the derived launch (month of the first sign-up). Overrides persist to localStorage (pw_launch_overrides) and are reflected everywhere the tracker renders." },
+  { v: "2.26.0", note: "Analytics: removed the Live Dashboard section entirely (tab + WIP placeholder). Overview: the Active Customers KPI now counts cumulative sign-ups the Penetration Tracker way (subscriptions joined to a society by created date, as of the period end) with a delta showing the month-on-month increase, and follows the society/date filters. Replaced the Collection Efficiency gauge with an \"Ops Appointments\" card showing technician-visit counts for D0–D3 (today, +1, +2, +3 days) from the ticket \"Technician Visit Date\" field — these are fixed to the real current date and deliberately do NOT change with the page's date/society filter. (Collection Efficiency is still computed for the CSV export.)" },
+  { v: "2.25.1", note: "Analytics > Overview: the referral KPI now shows \"Active Referrers\" (referrers live from the referral API) instead of \"Active Referees\" (converted referees), so it matches the Referral module's headline count — previously it read 0 (no converted referees yet) while Referral showed 1 active referrer. Scoped by the society filter (so it matches the Referral page when \"All societies\" is selected) with the delta & sparkline following the date range by the referrer join date." },
+  { v: "2.25.0", note: "Analytics > Overview: every chart now honours the date-range + society filters. Revenue by Plan (MRR) is scoped to active subscriptions in the selected societies as of the period end; the Penetration Tracker is now embedded filter-aware (society filter narrows the societies, the period end sets the as-of month) instead of loading all-time data ignoring the filters. Replaced the Growth Rate KPI with an \"Active Referees\" tile (converted referees; society-scoped value, date-scoped delta & sparkline). Forecast vs Actual gained ₹ data labels on both the actual and forecast lines. Removed the Report Shortcuts card and added the Week-over-Week collected chart (last 8 weeks, Mon start) from Billing analytics — society-filtered and anchored to the selected period's end. Layout regrouped to Efficiency + Forecast, then a full-width Week-over-Week." },
+  { v: "2.24.0", note: "Analytics > Overview + Auto GS access tweaks. (1) Top Performing Societies: the Total Flats value is now inline-editable for Admin & DevOps (persists to localStorage pw_flats_overrides and overrides the apartments-feed count, feeding Penetration %); everyone else sees it read-only. (2) Revenue by Plan now shows the same chart as Billing analytics — MRR by plan (monthly recurring value of active subscriptions), scoped by the society filter — instead of the recharge horizontal bars. (3) Customer Growth was replaced by the Penetration Tracker cohort view embedded in the Overview. (4) Auto GS - Society: the \"Add new society\" button is now Admin/DevOps-only (all inline field edits were already gated to admin/devops); view-access users still get the Create-ticket action and a \"View only\" indicator." },
+  { v: "2.23.0", note: "Analytics > Overview chart & table upgrades. Revenue Overview now shows ₹ value labels on every non-zero point of the current-period line (previously hidden whenever the range had >14 buckets, e.g. any daily/‘This Month’ view). Revenue by Plan changed from a donut to a full-width horizontal bar chart with ₹ value labels at each bar end (biggest plan first, top 12). Customer Growth bars gained value labels above each bar. Top Performing Societies was rebuilt to the requested columns: Apartment Name, Total Flats (from the apartments feed, joined by society name), Onboarded Flats (customers in the society), Penetration % (onboarded ÷ total flats, rounded to 0), Active Customers (active-status customers in the society), Total Months (calendar months since the society's first sign-up), and Revenue for the previous & current calendar month (recharge collected = paid total − deposit), with a Total row. The Overview now also loads the apartments endpoint for flat counts." },
+  { v: "2.22.0", note: "Card hover feedback: hovering any card now gives a clear cue — a subtle zoom (scale) plus a brand-green highlighted border/ring and a lift — so it's obvious which card the pointer is on. Applied app-wide via the shared Card component; the home module cards additionally highlight in their own module colour on hover and zoom a little more." },
+  { v: "2.21.0", note: "Device Replacement + Task Planner attachment fixes. Device Replacement now persists each confirmed swap straight to Cloud Firestore (project backend-prowater · db prowaterdb · collection device_replacements) using the login idToken, and reads the list back from Firestore on load — so saved swaps survive reloads and show on every device (previously the record lived only in memory and vanished on refresh; the old /device-replacement/add backend POST is replaced by the direct Firestore write). If a write is refused by Firestore rules the record still shows for the session and the toast says \"Saved locally\". Task Planner attachments now upload through the backend: each file is POSTed to /documents/add?email=<signed-in user> as multipart form-data (field `documents`), the same API verified in Postman — previously the code tried a never-configured Firebase Storage path and silently fell back to local IndexedDB. The email is taken from the signed-in session (the address entered on the sign-in page), the returned Storage path is turned into a download URL, files carry the CLOUD badge, and any failure still falls back to local so the task saves." },
+  { v: "2.20.0", note: "Analytics > Overview: reworked the KPI row to Total Collection, Earned Revenue, Recharge collected, Deposit collected, Active Customers and Growth Rate (Total Collection = Recharge + Deposit). Growth Rate now measures customer growth (new customers in the period ÷ existing base). The Customer Growth and Forecast-vs-Actual charts (and the KPI sparklines) now follow the date filter — their trailing window anchors to the selected period's end (capped at today), and Customer Growth's headline shows new customers in the period. Revenue Overview gained ₹ value labels on the current-period points (shown for ≤14 buckets). \"Revenue by Category\" renamed to \"Revenue by Plan\" (it was already grouped by plan). Collection Efficiency unchanged (cash collected ÷ billed in the period)." },
+  { v: "2.19.2", note: "IoT Core > Device Monitor: the status-card and Water-pressure card background waveforms now match the mockup exactly — an ECG heart-monitor pulse line on the dark Devices & Water-pressure cards, equalizer bars on Online, and a smooth ripple wave on Offline & With-faults (new IoTWave component; replaced the generic area sparkline)." },
+  { v: "2.19.1", note: "IoT Core > Device Monitor: restored the \"Consumption — last 2 days (12-hour blocks)\" table (dropped in the 2.19.0 redesign), now full-width and restyled to match the new premium look, placed between the charts row and Recent heartbeats." },
+  { v: "2.19.0", note: "IoT Core > Device Monitor: redesigned to the premium dashboard look. Status KPI cards (Devices/Online/Offline/With faults) gained live activity sparklines; Active alerts became a cleaner list with severity pills, time-ago and a row chevron. The selected-device detail now leads with the device name + a Last-heartbeat card, a dark Water-pressure hero and a Unit-health card, then the Channels (pipes) grid. Live consumption, Pressure-over-time and Flow-rate-over-time now sit in one full-width three-column row, and Recent heartbeats spans full width with numbered pagination (1 2 … N). Headings use the app sans (DM Sans). Same live device/heartbeat data (/devices/status + /devices/history); the standalone 12-hour consumption table was dropped from this view." },
+  { v: "2.18.0", note: "Analytics > Overview: removed the AI Insights panel (no real AI analysis) — Revenue Overview now spans full width — and removed the Quick Actions card. The top date-range picker and the Filters control are now functional: the date picker (This Month / Quarter / Year / Custom …) re-scopes every KPI, chart and table to the selected period and compares against the previous equal period, and Filters is a Society multi-select that scopes the whole dashboard. The Pending Receivables KPI is replaced by Earned Revenue (recognised recharge, day-weighted from the recharge date); outstanding still shows in the bottom strip. Dead bell/theme header icons removed." },
+  { v: "2.17.1", note: "Analytics > Overview: switched the dashboard's headings and big-number type from the global Playfair serif to the app sans (DM Sans) for a cleaner, more consistent look across the KPI tiles, section titles, gauge and stat strip." },
+  { v: "2.17.0", note: "Analytics > Overview: rebuilt into a dense command dashboard — greeting header with period/export controls; a six-tile KPI row (Total Revenue, Net Revenue, Active Customers, Collections, Pending Receivables, Growth Rate) each with a sparkline and month-on-month delta; a Revenue Overview chart comparing this period vs the previous period by day; a derived AI Insights panel; Revenue by Category (donut, grouped by plan), Customer Growth (6-month bars), a Collection Efficiency gauge and Quick Actions; and a Forecast-vs-Actual (linear projection) chart, a Top Performing Societies table (revenue/growth/efficiency/status), Report Shortcuts and a bottom KPI strip (societies, users, water connections, avg collection days, outstanding, open tickets). All figures aggregate the live customer/billing/sales/referral/ticket feeds; brand-token styling and non-animated charts throughout." },
+  { v: "2.16.0", note: "Analytics: new premium Overview tab — now the module's landing page (ahead of Live Dashboard). Aggregates the live customer, billing (subscriptions + invoices), sales-lead and referral feeds into one command view: a gradient summary banner (MRR/ARR, cash MTD, customer base), an eight-tile KPI grid with month-on-month deltas (active customers, new-this-month, cash this month, total collected, outstanding, open leads, win rate, referral conversions), a trailing-6-month collected-revenue trend and a sales-pipeline snapshot by stage. First pass (premium layout + KPI section); revenue/growth & customer deep-dives, advanced filters and table redesigns follow next. Existing analytics tabs and data flows are unchanged." },
+  { v: "2.15.0", note: "Premium post-login dashboard rebuild: replaced the basic module launcher with a refined operations command center featuring a responsive navigation rail, personalised hero, workspace/access metrics, searchable module directory, recent-module quick access, profile controls, polished responsive states and a cohesive premium visual system. Existing permissions, module routing and data flows remain unchanged." },
+  { v: "2.14.3", note: "Ticketing > Ops Tickets: the table (and CSV) drop the Customer, Society and Priority columns (via a new hideColumns prop on the shared list; the main Tickets table keeps them). In the ticket drawer, Work Start Latitude/Longitude are combined into a single \"Open in maps\" button linking to Google Maps (q=lat,lng), shown only when both coordinates exist; Parts_Used, reason for postpone, rescheduled_Date and Society Name remain in the drawer." },
+  { v: "2.14.2", note: "Ticketing: Job Start Time and Job End Time (UTC ISO timestamps from the API) now render in IST — e.g. \"22 Jul 2026, 01:34 pm\" — in the Ops Tickets table columns and the ticket detail drawer. Technician Visit Date (date-only) and Slot (a label) are shown as-is." },
+  { v: "2.14.1", note: "Ticketing > Ops Tickets: the table (and its CSV) now shows four more API custom fields — Technician Visit Date, Technician Visit Slot, Job Start Time, Job End Time. These columns are Ops-only via a new extraColumns prop on the shared ticket list; the regular Tickets table is unchanged." },
+  { v: "2.14.0", note: "Ticketing: the Tickets table drops the \"Type\" column and its Issue Type column now comes from the API's \"Issue Category\" custom field (also drives the Overview \"by issue type\" chart). The ticket drawer now shows the full detail set — Ticket ID, Ticket Owner, Status, Subject, Description, Zoho Customer ID, Email ID, Phone, Purifier ID, Issue Category, Society Name, Address (as a link when it's a URL), Job Start/End Time, Work Start Lat/Long/Address, reason for postpone, rescheduled_Date, Parts_Used. New \"Ops Tickets\" tab reuses the same list filtered to Issue Category ≠ Complaint." },
+  { v: "2.13.3", note: "Auto GS - Society create-ticket: confirmed working end-to-end against the live backend — the endpoint now reads the payload's subject field, so raised tickets get subject \"Auto GS Schedule\" while apName still feeds the Society Name field. No payload change from 2.13.2; comment updated to reflect the backend fix." },
+  { v: "2.13.2", note: "Auto GS - Society create-ticket: apName is back to the real apartment name (from the Apartments column) and address back to the society's own address; subject is still sent as \"Auto GS Schedule\" (applies once the backend reads the subject field). Reverts the v2.13.1 apName workaround." },
+  { v: "2.13.0", note: "Auto GS - Society: every schedule column is now inline-editable for Admin-level access (admin/devops) and read-only for everyone else — No of Flats, No of Towers, CRO Installed Date, CRO - 250 LPH Type, Last service Backwash/Dozing dates, Address, and Next service. Next service takes a manual override that wins over the computed backwash+15-days (lets Admin reschedule a visit); editing the backwash date still recomputes it when no manual override is set. Text/number fields commit on blur; dates and the CRO-type dropdown commit on change. All edits persist to the local override store and are sent on the best-effort PATCH." },
+  { v: "2.12.5", note: "Auto GS - Society: added an Address column to the table — inline-editable (text, commits on blur) for Admin/DevOps, read-only otherwise — and an Address field in the Add-new-society form; edits persist to the same local override store as the service dates. The Create-ticket call now sends that society's address (falling back to \"Testing\" if blank so the endpoint's non-blank check passes). Ticket subject is now the fixed \"Auto GS Schedule\" (apartment name removed)." },
+  { v: "2.12.4", note: "Auto GS - Society: the raised ticket now shows the human-readable Zoho ticket number (e.g. #156) instead of the long internal id (244734000001189001) — the create response's ticketNumber is preferred, and if only the internal id comes back it's looked up via GET /tickets. Also sends a subject \"Auto GS - <apartment>\" so tickets read that way instead of \"AP Ticket - …\" (the endpoint must honour the subject field; the prefix is otherwise set server-side)." },
+  { v: "2.12.3", note: "Auto GS - Society: Create-ticket now sends address hardcoded as \"Testing\" (the endpoint rejects a blank address with 400), keeping apName = society and technicianPhoneNumber = 9876543210." },
+  { v: "2.12.2", note: "Auto GS - Society: corrected the Create-ticket endpoint to POST /apartments/create-ticket (no /api prefix — the /api one 404s) with the body { apName, address, technicianPhoneNumber } (apName = society, address blank, phone hardcoded 9876543210). Still Bearer-authed; spinner-until-ticket-id and error toast unchanged." },
+  { v: "2.12.1", note: "Auto GS - Society: the \"Create ticket\" button now calls the real backend POST /api/apartments/create-ticket (Bearer-authed with the login idToken, like every other API) instead of the local stub. While the request is in flight the button shows a spinning loader (\"Creating…\"); once the backend returns a ticket id it replaces the button with the ticket-id chip in the table. Response id is read flexibly (ticketId / ticket_id / ticketNumber / id / data.*), and errors surface as a toast." },
+  { v: "2.12.0", note: "Employee > Users: existing users can now have their per-module access edited (previously only settable at creation). A new \"Edit module access\" action (shield icon) opens the same access grid used to create users; it appears only for Admin & DevOps actors, and the modal + save are guarded to those roles. Saving updates the user's access and re-derives their overall role from the strongest level granted (api.updateAccess, logged as user_access_updated). The access grid was extracted into a shared AccessEditor used by both create and edit." },
+  { v: "2.11.2", note: "Analytics > Earned Revenue: the Per-invoice recognition table's \"Paid on\" column header is now click-to-sort (ascending/descending by paid date, with an arrow indicator); default sort stays by earned revenue, descending." },
+  { v: "2.11.1", note: "Analytics > Earned Revenue: reworked the Per-invoice recognition table to the AOP/Excel model. Removed the Term column. Earned revenue = ((month end − paid date + 1) × recharge) ÷ days in the paid month, with the month end taken dynamically (30/31/28/29). New columns: Month End Date, Days remaining (month end − paid date), Earned revenue; Earned/day fixed to recharge ÷ days-in-month. The Earned Revenue card and CSV follow the new figure. The Earned-vs-recharge trend now starts at Jan 2026 (never earlier) and its Earned bars use the same recognition model." },
+  { v: "2.11.0", note: "Analytics: new AOP (Annual Operating Plan) section, visible only to Admin & DevOps. Pick a financial year (2026 / 2027 / 2028 → Apr–Mar), then enter/modify each month's \"Target - Subscription Revenue (Incl GST)\" (persisted to localStorage pw_aop_targets). Each month's target is checked against the recharge cash collected (same total−deposit split as Earned Revenue), with a per-month Target Achieved % colour-coded <30% red / 30–80% amber / >80% green. Summary cards: Subscription target, Recharges collected, Target to be achieved (colour-coded % for the year) and Recharge received (recharges ÷ target, 2 decimals). CSV export of the whole plan." },
+  { v: "2.10.1", note: "IoT Core tables (12-hour consumption + Recent heartbeats): litre values now show as rounded integers with the unit inline (152.48 → \"152 L\") instead of 2-decimal numbers, and the redundant \"(L)\" was dropped from those column headers. Headers and cells are centre-aligned (the 12h table's value columns were right-aligned)." },
+  { v: "2.10.0", note: "IoT Core regression fix: /devices/history now returns { items:[…] } instead of a bare array, so the live poll's Array.isArray check yielded null and the Recent heartbeats table, Live consumption and the pressure/flow charts all went blank — now unwraps .items. The live window is longer (downsampled ~2 days), so the Live-consumption label shows hours when the span is long. Analytics > Earned Revenue: the \"Earned this month\" card is renamed \"Total Collection\" (it always showed cash collected), and a new \"Earned Revenue\" card sits next to it showing the recognised revenue for the period (the \"Earned in period\" column total). Filters gained an Apartment (society) dropdown and the standard date-range picker (Today / This Week / … / Custom) replacing the month dropdown; cards, per-invoice table and CSV are now range- and apartment-scoped, while the 12-month trend chart stays as trailing context anchored on the range's end month." },
+  { v: "2.9.0", note: "IoT Core: new \"Consumption — last 2 days (12-hour blocks)\" table on the device detail. Fetches /devices/history?deviceId=…&days=2 for the selected device and splits litres drawn per channel into IST calendar half-day blocks (00:00–12:00 / 12:00–24:00), with a Total-per-block column, a 2-day totals row, and an average-per-day row (total ÷ actual data-span in days, so it self-adjusts when a full 2 days is present). Litres consumed = sum of positive increases in the cumulative totalVolumeLitres meter, which survives the occasional meter-reset dip that a simple last−first would mis-count. Times shown in IST." },
+  { v: "2.8.2", note: "Auto GS - Society: the \"Last service Date For Backwash\" and \"Last service Date For Dozing\" columns are now editable inline — but ONLY for Admin & DevOps access (moduleAccess === admin/devops). All other access levels see the dates as read-only text, exactly as before. Editing a backwash date immediately recomputes Next service / Days left (the cycle is anchored on it). Edits persist to localStorage (pw_gs_date_overrides) and are applied over the seed/endpoint data so they survive reloads; a WIRE stub for PATCH /api/gs-schedules/:society is in place for when the backend endpoint exists." },
+  { v: "2.8.1", note: "About > Changelog: cards are now a fixed 232×196 instead of stretching to fit their text — one long entry was making the whole strip ~780px tall. The version number + build badge row is pinned and only the note scrolls inside each card." },
+  { v: "2.8.0", note: "Releases can be scheduled: the publish form gained an \"Announce from\" date & time (empty = announce now), the button reads \"Schedule release\" when a future time is set, and pending releases carry a SCHEDULED badge in the list until they fall due. The what's-new popup now shows every release that is due and unseen — so a user who doesn't log in on the scheduled day still gets it on their next login — and it appears mid-session (30s tick) if a release falls due while someone is already signed in. \"Seen\" is now tracked per USER and by release id (pw_releases_seen_by) rather than one per-browser timestamp: the old stamp would have marked a future-scheduled release as already seen, and a shared machine only ever showed the popup to the first person. The old stamp is migrated on first run so existing users aren't re-shown old releases. NOTE: releases still live in localStorage (pw_releases), so a published release is only visible in the browser it was published from — shared storage (e.g. the Firestore the App Logs module already uses) is still required for this to reach other users." },
+  { v: "2.7.1", note: "Charts: pie/donut charts were running Recharts' default ~1.5s enter animation — every <Bar>/<Line> in the app already had isAnimationActive={false} but no <Pie> ever did, so pies appeared to \"load slowly\". All 5 pies are now static, along with 7 more Bars/Areas that were also still animating (33/33 chart primitives now static). Donut slices gained labels showing the absolute value and share (e.g. \"8 · 40%\") drawn outside the ring with leader lines; pie containers grew 250→290 / 260→300px to fit them." },
+  { v: "2.7.0", note: "Rebrand: the whole dashboard moves to the ProWater palette (brand green #0A9D6E, green #08805A, deep green #0B6F52, mint #EEF7F3, ink #0A1A12, muted #7D8A83, faint #A9B3AC, hairline #ECEEED, surface #FFFFFF, amber, red #DC4141, blue #2A86D6). 568 hardcoded hexes across App.jsx were mapped onto those tokens — no off-palette hue remains except the WhatsApp brand marks. The :root block is now the single source of truth: the 11 brand hexes plus documented derivations (status tints ≈12% over surface, tint borders ≈30%, a stepped ink shell). Module accents and chart categoricals collapse to the palette via a shared CHART_PALETTE (7 max distinct hues). Amber ships as #986315 — the specified #E0921F at the same hue and saturation but darkened, because the original failed WCAG AA as text (2.25:1 on its own tint) and amber is used as text in 27 places. The shell stays dark — the palette's ink #0A1A12 (stepped #16261D / #06100B); deep green #0B6F52 was trialled as the shell and rejected as too light, and remains a content accent. The brand-green active nav pill is kept (5.18:1 on ink). Legacy --forest/--teal/--lime names are kept as aliases." },
+  { v: "2.6.0", note: "Analytics > Revenue: the month dropdown is replaced by a standard date-range picker — Today / This Week / This Month / This Quarter / This Year / Yesterday / Previous Week / Previous Month / Previous Quarter / Previous Year / Custom (From–To). Cards now compare the selected period against the previous equal period (calendar-aware for month/quarter/year) and against the same span a year earlier; the chart and breakdown follow the range, switching from per-day to per-month buckets once the span passes ~2 months. Shared DateRangePicker + resolveRange/prevRange helpers added for roll-out to the remaining Analytics reports. Customers: the society dropdown is now a searchable multi-select (all selected by default, uncheck to exclude)." },
   { v: "2.5.2", note: "IoT Core: the Online KPI card now has a slow rain-drop animation drifting down it (when at least one device is online). Confirmed the Offline KPI stays a plain card with no red/ripple effect when the offline count is 0." },
   { v: "2.5.1", note: "IoT Core: (1) Fault & alert center — a fleet-wide panel listing offline devices + channel faults (critical/warning, click to inspect), an \"all systems nominal\" bar when clear, and a toast when a new alert appears mid-session. (2) Live consumption — diffs the cumulative totalVolumeLitres across the live history window to show water drawn per channel + total, with a pulsing \"Flowing/Idle\" indicator and current L/min." },
   { v: "2.5.0", note: "IoT Core: the Offline KPI card now uses a water-ripple effect — deep red sweeps in from the right and fades to amber as it dissipates (KPI only). Device rows dropped the red breathing fill for a status-coloured border: green when online, red when offline (thicker when selected)." },
   { v: "2.4.9", note: "IoT Core: the device-detail header (device ID + RO/firmware line) now uses the app's DM Sans UI font instead of the Playfair serif — the serif looked out of place on the alphanumeric device IDs." },
-  { v: "2.4.8", note: "IoT Core: softened the offline breathing red to a faded, desaturated palette (#fdf3f3 ↔ #f6d6d6) with a gentler glow and slightly slower 3.6s loop — less alarming, easier on the eye." },
+  { v: "2.4.8", note: "IoT Core: softened the offline breathing red to a faded, desaturated palette (#FBE8E8 ↔ #F5BFBF) with a gentler glow and slightly slower 3.6s loop — less alarming, easier on the eye." },
   { v: "2.4.7", note: "IoT Core: the Offline KPI card and any offline device rows now pulse with a \"breathing\" effect — light red on the exhale, deep red on the inhale (3s ease loop, respects prefers-reduced-motion). Selected device is still marked with a teal outline." },
   { v: "2.4.6", note: "IoT Core Recent heartbeats: page size reduced to 10 rows, and the timestamp column header renamed \"Sync history\"." },
   { v: "2.4.5", note: "IoT Core Recent heartbeats: paginated at 20 rows per page with a Prev / Next CTA and a \"1 / N\" page indicator (page resets to 1 on device switch)." },
@@ -249,12 +457,12 @@ const notHiddenLead = (d) => !HIDDEN_LEAD_STATUSES.has(norm(d.rawStatus));
 /* ---- Sales module SAMPLE data (replace with a real Sales API later) ----
    >>> WIRE: swap salesApi.getDeals() to fetch from your Sales/CRM backend. */
 const SALES_STAGES = [
-  { id: "new",        label: "New Lead",     color: "#869089" },
-  { id: "contacted",  label: "Contacted",    color: "#3a6ea5" },
-  { id: "demo",       label: "Demo Booked",  color: "#9a6a16" },
-  { id: "proposal",   label: "Proposal",     color: "#8a5a2b" },
-  { id: "won",        label: "Won",          color: "#1f7a3f" },
-  { id: "lost",       label: "Lost",         color: "#b4232a" },
+  { id: "new",        label: "New Lead",     color: "#A9B3AC" },
+  { id: "contacted",  label: "Contacted",    color: "#2A86D6" },
+  { id: "demo",       label: "Demo Booked",  color: "#986315" },
+  { id: "proposal",   label: "Proposal",     color: "#986315" },
+  { id: "won",        label: "Won",          color: "#08805A" },
+  { id: "lost",       label: "Lost",         color: "#DC4141" },
 ];
 const SEED_DEALS = [
   { id: "d1", customer: "Aarav Mehta", email: "aarav.m@example.com", phone: "9876500011", flatNo: "A-1203", existingRo: "Yes - Kent", referralCode: "PW-REF-8821", society: "Prestige Lakeside", plan: "Home Annual", value: 9600, stage: "demo", rawStatus: "Pre-Qualified", owner: "anis", updated: "2026-06-16T09:20:00Z", note: "Wants a weekend demo slot." },
@@ -401,10 +609,34 @@ const apartmentApi = {
       return [];
     }
   },
+  // Create a Zoho service ticket for a society's Auto-GS visit. Bearer-authed
+  // (login idToken) like every other backend call. Returns the new ticket id.
+  // NOTE: real route is /apartments/create-ticket (no /api prefix).
+  createTicket: async (actor, payload) => {
+    const res = await fetch(`${API_ORIGIN}/apartments/create-ticket`, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const e = await res.json(); msg = e.message || e.error || msg; } catch { /* keep status */ }
+      throw new Error(msg);
+    }
+    const json = await res.json().catch(() => ({}));
+    const d = json.data || json;
+    // Prefer the human-readable Zoho ticket number (e.g. "156") over the long
+    // internal id (e.g. "244734000001189001").
+    const num = d.ticketNumber || d.ticket_number || d.number || d.ticketNo;
+    const longId = d.id || d.ticketId || d.ticket_id || (typeof json === "string" ? json : null);
+    // (The old GET /tickets fallback lookup for the human-readable number was
+    // removed — the create response's number is used, else the returned id.)
+    const id = num || longId;
+    if (actor) pushLog({ type: "ticket_created", actor, module: "Auto Scheduler", detail: `Created GS ticket ${id || "(no id returned)"} for ${payload.apName}` });
+    return id;
+  },
 };
 
 /* ---- Ticketing module — Zoho Desk integration ----
-   Live tickets come from the ProWater backend GET /tickets (Zoho Desk),
+   Live tickets come from the ProWater backend GET /tickets/formattedforwisdom (Zoho Desk),
    authenticated with the same Firebase idToken as every other Zoho API
    (authHeaders() carries the Bearer token from login). Zoho Desk statuses and
    priorities are free-form STRINGS, so the UI colours them by keyword and
@@ -416,26 +648,39 @@ const ZD_DEFAULT_STATUSES = ["Open", "In Progress", "On Hold", "Escalated", "Clo
 // Colour a status string by family keyword so the list stays readable.
 const zdStatusColor = (label) => {
   const s = String(label || "").toLowerCase();
-  if (/cancel/.test(s)) return "#6a7670";
-  if (/clos/.test(s)) return "#6a7670";
-  if (/resolv|complet|done/.test(s)) return "#1f7a3f";
-  if (/hold|pending|wait/.test(s)) return "#9a6a16";
-  if (/escalat/.test(s)) return "#b4232a";
-  if (/progress|assign/.test(s)) return "#3a6ea5";
-  if (/install/.test(s)) return "#7a4fb5";
-  if (/open|new/.test(s)) return "#c2671e";
-  return "#5a7863";
+  if (/cancel/.test(s)) return "#7D8A83";
+  if (/clos/.test(s)) return "#7D8A83";
+  if (/resolv|complet|done/.test(s)) return "#08805A";
+  if (/hold|pending|wait/.test(s)) return "#986315";
+  if (/escalat/.test(s)) return "#DC4141";
+  if (/progress|assign/.test(s)) return "#2A86D6";
+  if (/install/.test(s)) return "#2A86D6";
+  if (/open|new/.test(s)) return "#986315";
+  return "#0A9D6E";
 };
 const zdIsClosed = (label) => /clos|resolv|complet|cancel|done/i.test(String(label || ""));
 
 const ZD_PRIORITIES = ["Low", "Medium", "High", "Urgent"];
-const zdPriorityColor = (label) => ({ low: "#6a7670", medium: "#9a6a16", high: "#c2671e", urgent: "#b4232a" }[String(label || "").toLowerCase()] || "#6a7670");
+const zdPriorityColor = (label) => ({ low: "#7D8A83", medium: "#986315", high: "#986315", urgent: "#DC4141" }[String(label || "").toLowerCase()] || "#7D8A83");
 // Auto-generated tickets pass a numeric priority (1–4); coerce to a Zoho label.
 const zdPriorityLabel = (p) => typeof p === "number" ? (["", "Low", "Medium", "High", "Urgent"][p] || "Medium") : (p || "Medium");
 
 // Map a raw Zoho Desk ticket → the shape the UI uses. Defensive: handles Zoho
 // Desk field names, snake_case backend variants, and nested contact / custom
 // fields, so it survives whatever exact shape the backend forwards.
+// Format a UTC ISO timestamp in IST (UTC+5:30), e.g. "22 Jul 2026, 01:34 pm".
+// Non-dates pass through unchanged; null/empty → "—".
+const fmtIST = (v) => {
+  if (v == null || v === "") return "—";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return String(v);
+  const ist = new Date(d.getTime() + 5.5 * 3600000); // shift to IST, then read UTC fields
+  const pad = (n) => String(n).padStart(2, "0");
+  const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  let h = ist.getUTCHours(); const ap = h >= 12 ? "pm" : "am"; h = h % 12 || 12;
+  return `${pad(ist.getUTCDate())} ${MON[ist.getUTCMonth()]} ${ist.getUTCFullYear()}, ${pad(h)}:${pad(ist.getUTCMinutes())} ${ap}`;
+};
+
 function mapZohoDeskTicket(t) {
   const cf = t.cf || t.customFields || t.custom_fields || {};
   const pick = (...keys) => {
@@ -449,30 +694,155 @@ function mapZohoDeskTicket(t) {
   const contactName = [contact.firstName, contact.lastName].filter(Boolean).join(" ")
     || contact.name || pick("contactName", "customer_name", "cf_customer_name") || t.email || "—";
   const num = t.ticketNumber ?? t.ticket_number ?? t.number ?? t.id;
+  // Human-readable custom fields from this backend (e.g. "Issue Category", "Society Name").
+  const cfh = t.customFields || {};
+  const hv = (k) => (cfh[k] != null && cfh[k] !== "") ? cfh[k] : null; // custom-field value or null
   return {
     id: String(t.id ?? num ?? crypto.randomUUID()),
+    zohoId: String(t.id ?? ""),
     ticketNo: num != null ? `#${num}` : "—",
-    purifierId: pick("cf_purifier_id", "purifierId", "purifier_id") || "—",
-    society: pick("cf_society_name766799", "cf_society_name", "society", "society_name") || "—",
+    ticketNumber: num != null ? String(num) : "",
+    purifierId: hv("Purifier ID") ?? pick("cf_purifier_id", "purifierId", "purifier_id") ?? "—",
+    society: hv("Society Name") ?? pick("cf_society_name766799", "cf_society_name", "society", "society_name") ?? "—",
     customer: contactName,
-    issueType: pick("category", "cf_l1_issue_type", "classification") || "—",
-    fieldAppIssueType: pick("subCategory", "sub_category", "cf_field_app_issue_type") || "—",
-    type: pick("classification", "channel", "type") || "—",
+    issueCategory: hv("Issue Category"),                 // ← drives the table's Issue Type column + Ops filter
     status: String(t.status ?? t.statusType ?? "Open"),
     priority: t.priority ? String(t.priority) : "",
-    subject: t.subject || pick("category") || `Ticket ${num}`,
+    subject: t.subject || `Ticket ${num}`,
     created: t.createdTime || t.created_time || t.created_at || t.createdAt || "",
     updated: t.modifiedTime || t.modified_time || t.updated_at || t.updatedAt || t.createdTime || "",
     note: t.description || t.description_text || "",
+    // Full ticket-detail fields (shown in the drawer).
+    ticketOwner: t.assigneeId ?? null,
+    description: t.description ?? null,
+    zohoCustomerId: hv("Zoho Customer ID"),
+    emailId: t.email ?? hv("Email ID") ?? null,
+    phone: t.phone ?? hv("Phone") ?? null,
+    address: hv("Address"),
+    jobStartTime: hv("Job Start Time"),
+    jobEndTime: hv("Job End Time"),
+    technicianVisitDate: hv("Technician Visit Date"),
+    technicianVisitSlot: hv("Technician Visit Slot"),
+    workStartLat: hv("Work Start Latitude"),
+    workStartLng: hv("Work Start Longitude"),
+    workStartAddress: hv("Work Start Address"),
+    reasonForPostpone: hv("reason for postpone"),
+    rescheduledDate: hv("rescheduled_Date"),
+    partsUsed: hv("Parts_Used"),
   };
 }
 
+// Map a row from GET /tickets/formattedforwisdom → the shape the UI uses. This
+// feed is a FLAT object keyed by human labels ("Ticket ID", "Status", "Society
+// Name", …), not the raw Zoho Desk shape. Lookup is tolerant of case/spacing so
+// minor label drift on the backend won't blank the table again.
+function mapWisdomTicket(t) {
+  const norm = {};
+  for (const k of Object.keys(t || {})) norm[k.toLowerCase().replace(/[\s_]+/g, "")] = t[k];
+  const g = (...labels) => {
+    for (const l of labels) {
+      const nk = String(l).toLowerCase().replace(/[\s_]+/g, "");
+      if (norm[nk] != null && norm[nk] !== "") return norm[nk];
+    }
+    return null;
+  };
+  const id = g("Ticket ID", "TicketID", "id") ?? "";
+  const num = g("Ticket Number", "TicketNumber", "ticketNo") ?? id;
+  const created = g("Ticket Created Time", "Created Time", "Created", "Created_Time", "createdTime", "created_at", "created");
+  return {
+    id: String(id || num || crypto.randomUUID()),
+    zohoId: String(id || ""),
+    ticketNo: num ? `#${num}` : "—",
+    ticketNumber: num ? String(num) : "",
+    purifierId: g("Purifier ID") ?? "—",
+    society: g("Society Name") ?? "—",
+    // The feed carries no customer NAME — only a Ticket Owner (the agent) + Phone.
+    customer: g("Ticket Owner") ?? g("Phone") ?? "—",
+    issueCategory: g("Issue Category"),
+    status: String(g("Status") ?? "Open"),
+    priority: g("Priority") ? String(g("Priority")) : "",
+    subject: g("Subject") || (num ? `Ticket ${num}` : "Ticket"),
+    created: created || "",
+    updated: g("Modified Time", "Modified", "updated_at") || created || "",
+    note: g("Description") || "",
+    // Full ticket-detail fields (shown in the drawer).
+    ticketOwner: g("Ticket Owner"),
+    description: g("Description"),
+    zohoCustomerId: g("Zoho Customer ID"),
+    emailId: g("Email ID"),
+    phone: g("Phone"),
+    address: g("Address"),
+    jobStartTime: g("Job Start Time"),
+    jobEndTime: g("Job End Time"),
+    technicianVisitDate: g("Technician Visit Date"),
+    technicianVisitSlot: g("Technician Visit Slot"),
+    workStartLat: g("Work Start Latitude"),
+    workStartLng: g("Work Start Longitude"),
+    workStartAddress: g("Work Start Address"),
+    reasonForPostpone: g("reason for postpone"),
+    rescheduledDate: g("rescheduled_Date"),
+    partsUsed: g("Parts_Used"),
+    inputTds: g("Input Tds", "Input TDS", "InputTds"),
+    outputTds: g("Output Tds", "Output TDS", "OutputTds"),
+    centralRoIssue: g("Central RO Issue"),
+    junctionBoxIssue: g("Junction Box Issue"),
+  };
+}
+
+/* ---- Ops Tickets helpers (job duration, spares, maps) --------------------- */
+// Parse the Parts_Used field (a JSON-string array like "[\"Sediment Filter\"]",
+// or a plain comma-separated string) into a clean array of spare names.
+function parsePartsUsed(v) {
+  if (!v) return [];
+  if (Array.isArray(v)) return v.map(s => String(s).trim()).filter(Boolean);
+  const s = String(v).trim();
+  if (!s || s === "[]" || s.toLowerCase() === "null") return [];
+  try { const a = JSON.parse(s); if (Array.isArray(a)) return a.map(x => String(x).trim()).filter(Boolean); } catch { /* not JSON */ }
+  return s.replace(/^\[|\]$/g, "").split(",").map(x => x.replace(/^["'\s]+|["'\s]+$/g, "")).filter(Boolean);
+}
+// Job duration in whole minutes from Job Start/End Time, or null if unusable.
+function jobDurationMin(t) {
+  if (!t.jobStartTime || !t.jobEndTime) return null;
+  const a = new Date(t.jobStartTime).getTime(), b = new Date(t.jobEndTime).getTime();
+  if (isNaN(a) || isNaN(b) || b < a) return null;
+  return Math.round((b - a) / 60000);
+}
+// Minutes → "2h 05m" / "45m".
+function fmtDuration(min) {
+  if (min == null || isNaN(min)) return "—";
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+}
+// The IST calendar date ("YYYY-MM-DD") of an ISO timestamp — used to scope the
+// Ops date filter by the day a job actually started (in IST, matching fmtIST).
+function istDateOf(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const ist = new Date(d.getTime() + 5.5 * 3600000);
+  return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
+}
+// Google Maps link for a ticket — prefers precise Work Start lat/long, else the
+// text Work Start Address as a search query. Empty string when neither exists.
+function ticketMapsUrl(t) {
+  const lat = t.workStartLat, lng = t.workStartLng;
+  if (lat && lng && !isNaN(Number(lat)) && !isNaN(Number(lng))) return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  if (t.workStartAddress) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.workStartAddress)}`;
+  return "";
+}
+const tdsNum = (v) => { const n = Number(String(v ?? "").replace(/[^\d.\-]/g, "")); return isNaN(n) ? null : n; };
+
+// Detect the flat /formattedforwisdom shape (labels with spaces/caps).
+const isWisdomTicketShape = (r) => !!r && typeof r === "object" &&
+  ("Ticket ID" in r || "Issue Category" in r || "Society Name" in r || "Purifier ID" in r);
+
 // Small offline fallback (Zoho Desk shape) so dev renders without the API.
 const SEED_TICKETS = [
-  { id: 299, ticketNumber: 299, status: "Open", priority: "Urgent", subject: "No water output", category: "No water output", subCategory: "Low water flow", classification: "Service Request", cf: { cf_purifier_id: "TEST89789", cf_society_name766799: "MJR" }, contact: { firstName: "uondu" }, createdTime: "2026-06-13T07:34:55Z", modifiedTime: "2026-06-17T08:10:00Z", description: "Purifier not dispensing since morning." },
-  { id: 301, ticketNumber: 301, status: "On Hold", priority: "High", subject: "Wrong plan charged", category: "Billing dispute", classification: "Billing", cf: { cf_purifier_id: "PW-44120", cf_society_name766799: "Prestige Lakeside" }, contact: { firstName: "Divya", lastName: "Nair" }, createdTime: "2026-06-16T15:30:00Z", modifiedTime: "2026-06-17T09:00:00Z", description: "Billed for Plus but on Home plan." },
-  { id: 305, ticketNumber: 305, status: "In Progress", priority: "Medium", subject: "Reschedule installation", category: "Installation", classification: "Installation", cf: { cf_purifier_id: "PW-77810", cf_society_name766799: "Brigade Gateway" }, contact: { firstName: "Rohit", lastName: "Khanna" }, createdTime: "2026-06-16T11:00:00Z", modifiedTime: "2026-06-16T12:30:00Z", description: "Wants a weekend slot." },
-  { id: 308, ticketNumber: 308, status: "Closed", priority: "Low", subject: "Filter replacement reminder", category: "Filter replacement", subCategory: "Filter life expired", classification: "Maintenance", cf: { cf_purifier_id: "PW-90233", cf_society_name766799: "Sobha Dream Acres" }, contact: { firstName: "Sana", lastName: "Kapoor" }, createdTime: "2026-06-14T10:00:00Z", modifiedTime: "2026-06-15T14:20:00Z", description: "Filter dispatched." },
+  { id: 299, ticketNumber: 299, status: "Open", priority: "Urgent", subject: "No water output", email: "uondu@example.com", phone: "+91 98450 11111", contact: { firstName: "uondu" }, createdTime: "2026-06-13T07:34:55Z", modifiedTime: "2026-06-17T08:10:00Z", description: "Purifier not dispensing since morning.", customFields: { "Issue Category": "Complaint", "Society Name": "MJR Clique Hydra", "Purifier ID": "TEST89789", "Address": "https://maps.app.goo.gl/example299", "Zoho Customer ID": "3399543001", "Job Start Time": null, "Parts_Used": null } },
+  { id: 301, ticketNumber: 301, status: "On Hold", priority: "High", subject: "Wrong plan charged", email: "divya.nair@example.com", phone: "+91 98450 22222", contact: { firstName: "Divya", lastName: "Nair" }, createdTime: "2026-06-16T15:30:00Z", modifiedTime: "2026-06-17T09:00:00Z", description: "Billed for Plus but on Home plan.", customFields: { "Issue Category": "Billing", "Society Name": "Prestige Lakeside", "Purifier ID": "PW-44120", "Address": "https://maps.app.goo.gl/example301" } },
+  { id: 305, ticketNumber: 305, status: "In Progress", priority: "Medium", subject: "Auto GS Schedule", contact: { lastName: "Brigade Gateway" }, createdTime: "2026-06-16T11:00:00Z", modifiedTime: "2026-06-16T12:30:00Z", description: null, customFields: { "Issue Category": "GS Service", "Society Name": "Brigade Gateway", "Purifier ID": "PW-77810", "Address": "https://maps.app.goo.gl/example305", "reason for postpone": null, "rescheduled_Date": null } },
+  { id: 308, ticketNumber: 308, status: "Closed", priority: "Low", subject: "Filter replacement reminder", email: "sana.kapoor@example.com", contact: { firstName: "Sana", lastName: "Kapoor" }, createdTime: "2026-06-14T10:00:00Z", modifiedTime: "2026-06-15T14:20:00Z", description: "Filter dispatched.", customFields: { "Issue Category": "Maintenance", "Society Name": "Sobha Dream Acres", "Purifier ID": "PW-90233", "Address": "Whitefield, Bengaluru", "Parts_Used": "RO membrane" } },
+  { id: 312, ticketNumber: 312, status: "Open", priority: "Medium", subject: "Auto GS Schedule", contact: { lastName: "CBR Aakruti" }, createdTime: "2026-06-18T09:00:00Z", modifiedTime: "2026-06-18T09:00:00Z", description: null, customFields: { "Issue Category": "Installation", "Society Name": "CBR Aakruti", "Purifier ID": null, "Address": "https://maps.app.goo.gl/example312" } },
 ];
 let _tickets = SEED_TICKETS.map(mapZohoDeskTicket);
 let _tkCache = null, _tkCacheAt = 0;
@@ -484,23 +854,27 @@ const ticketApi = {
     const now = Date.now();
     if (!force && _tkCache && (now - _tkCacheAt) < 30000) return _tkCache;
     try {
-      const res = await fetch(`${API_ORIGIN}/tickets`, { headers: authHeaders() });
+      const res = await fetch(`${API_ORIGIN}/tickets/formattedforwisdom`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`Tickets API ${res.status}`);
       const json = await res.json();
       const rows = Array.isArray(json) ? json : (json.data || json.tickets || json.rows || []);
       if (!rows.length) throw new Error("empty");
-      // Accept already-mapped rows or raw Zoho Desk rows.
-      const mapped = rows.map(r => (r.ticketNo && typeof r.status === "string" && r.customer) ? r : mapZohoDeskTicket(r));
+      // Route each row to the right mapper: already-UI-shaped → as-is; the flat
+      // /formattedforwisdom feed → mapWisdomTicket; raw Zoho Desk → mapZohoDeskTicket.
+      const mapped = rows.map(r =>
+        (r.ticketNo && typeof r.status === "string" && r.society) ? r
+          : isWisdomTicketShape(r) ? mapWisdomTicket(r)
+          : mapZohoDeskTicket(r));
       _tkCache = mapped; _tkCacheAt = now; _tkUsedSample = false;
       return mapped;
     } catch (e) {
-      console.warn("Zoho Desk /tickets unavailable, using sample data:", e.message);
+      console.warn("Zoho Desk /tickets/formattedforwisdom unavailable, using sample data:", e.message);
       _tkUsedSample = true;
       return [..._tickets];
     }
   },
-  // Optimistic local status change. >>> WIRE: PATCH ${API_ORIGIN}/tickets/:id
-  // { status } once the backend exposes a Zoho Desk write endpoint.
+  // Optimistic local status change. >>> WIRE: a Zoho Desk write endpoint
+  // (status update) once the backend exposes one.
   updateStatus: async (actor, id, status) => {
     await wait(120);
     const s = String(status);
@@ -509,7 +883,7 @@ const ticketApi = {
     pushLog({ type: "ticket_status_changed", actor, module: "Ticketing", detail: `${id} → ${s}` });
   },
   // Local ticket creation used by Auto Scheduler (society GS + IoT alerts).
-  // >>> WIRE: POST ${API_ORIGIN}/tickets when the backend exposes create.
+  // >>> WIRE: a Zoho Desk create endpoint once the backend exposes one.
   createTicket: async (actor, info) => {
     await wait(150);
     const id = `LOCAL-${Date.now()}`;
@@ -527,6 +901,55 @@ const ticketApi = {
     if (_tkCache) _tkCache = [mapped, ..._tkCache];
     pushLog({ type: "ticket_created", actor, module: "Auto Scheduler", detail: `Created ticket ${id} — ${info.society || info.subject}` });
     return id;
+  },
+};
+
+/* ---- Credit notes (Zoho discounts / refunds) — GET /admin/get-all-creditnotes.
+   Joined to customers by Zoho customer id. Tolerant mapper + sample fallback. ---- */
+function mapCreditNote(r) {
+  const g = (...keys) => { for (const k of keys) { const v = r?.[k]; if (v != null && v !== "") return v; } return undefined; };
+  const num = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
+  return {
+    id: String(g("creditnote_id", "creditnoteId", "id", "creditnote_number", "number") ?? ""),
+    number: String(g("creditnote_number", "number", "creditnote_id", "id") ?? "—"),
+    zohoCustomerId: String(g("zoho_customer_id", "customer_id", "zohoCustomerId", "customerId", "customer_number", "customerNumber") ?? ""),
+    customerName: String(g("customer_name", "customerName", "customer") ?? ""),
+    amount: num(g("total", "creditnote_total", "creditnote_amount", "amount", "credit_amount", "price")),
+    // Remaining (unapplied) credit balance; if the feed omits it, assume the full amount is available.
+    balance: (() => { const b = g("balance", "credit_balance", "creditnote_balance", "amount_due"); return b != null && b !== "" ? num(b) : num(g("total", "creditnote_total", "creditnote_amount", "amount", "credit_amount", "price")); })(),
+    date: String(g("date", "created_time", "created_at", "createdTime", "creditnote_date", "created") ?? ""),
+    status: String(g("status", "creditnote_status") ?? ""),
+    reason: String(g("reason", "notes", "description", "remarks", "subject") ?? ""),
+  };
+}
+const SEED_CREDITNOTES = [
+  { creditnote_number: "CN-1001", zoho_customer_id: "ZB-45", customer_name: "Anis Emmanual", total: 500, balance: 200, date: "2026-06-10", status: "open", reason: "Service delay compensation" },
+  { creditnote_number: "CN-1002", zoho_customer_id: "ZB-45", customer_name: "Anis Emmanual", total: 300, balance: 300, date: "2026-07-05", status: "open", reason: "Referral reward" },
+  { creditnote_number: "CN-1003", zoho_customer_id: "ZB-92", customer_name: "Ravi Kumar", total: 250, balance: 0, date: "2026-06-20", status: "closed", reason: "Billing adjustment" },
+  { creditnote_number: "CN-1004", zoho_customer_id: "ZB-77", customer_name: "Deepa Nair", total: 750, balance: 500, date: "2026-05-18", status: "open", reason: "Goodwill credit" },
+  { creditnote_number: "CN-1005", zoho_customer_id: "ZB-45", customer_name: "Anis Emmanual", total: 200, balance: 200, date: "2026-07-12", status: "open", reason: "Late installation credit" },
+];
+let _creditNotes = SEED_CREDITNOTES.map(mapCreditNote);
+let _cnCache = null, _cnCacheAt = 0, _cnUsedSample = false;
+const creditNoteApi = {
+  get usedSample() { return _cnUsedSample; },
+  getCreditNotes: async (force = false) => {
+    const now = Date.now();
+    if (!force && _cnCache && (now - _cnCacheAt) < 60000) return _cnCache;
+    try {
+      const res = await fetch(`${API_ORIGIN}/admin/get-all-creditnotes`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Credit notes API ${res.status}`);
+      const json = await res.json();
+      const rows = Array.isArray(json) ? json : (json.data || json.creditnotes || json.credit_notes || json.creditNotes || json.rows || []);
+      if (!rows.length) throw new Error("empty");
+      const mapped = rows.map(mapCreditNote);
+      _cnCache = mapped; _cnCacheAt = now; _cnUsedSample = false;
+      return mapped;
+    } catch (e) {
+      console.warn("get-all-creditnotes unavailable, using sample data:", e.message);
+      _cnUsedSample = true;
+      return [..._creditNotes];
+    }
   },
 };
 
@@ -756,6 +1179,215 @@ function depositForPlan(plan, amount) {
     return 0;
   }
   return depositFor(a);
+}
+
+/* ---- Shared date-range filter (Analytics reports) -------------------------
+   One preset list + one resolver for every report, so "This Quarter" means the
+   same thing everywhere. resolveRange() returns inclusive day boundaries.
+   prevRange() is calendar-aware for month/quarter/year presets (This Month vs
+   the previous *calendar* month, not "the 31 days before the 1st") and falls
+   back to an equal-length shift for day/week/custom spans. ---- */
+const DATE_PRESETS = [
+  { key: "today",         label: "Today" },
+  { key: "this_week",     label: "This Week" },
+  { key: "this_month",    label: "This Month" },
+  { key: "this_quarter",  label: "This Quarter" },
+  { key: "this_year",     label: "This Year" },
+  { key: "yesterday",     label: "Yesterday" },
+  { key: "prev_week",     label: "Previous Week" },
+  { key: "prev_month",    label: "Previous Month" },
+  { key: "prev_quarter",  label: "Previous Quarter" },
+  { key: "prev_year",     label: "Previous Year" },
+  { key: "custom",        label: "Custom" },
+];
+const presetLabel = (k) => (DATE_PRESETS.find(p => p.key === k) || {}).label || "Custom";
+
+const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const endOfDay   = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+const addDays    = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const startOfWeek = (d) => addDays(startOfDay(d), -((startOfDay(d).getDay() + 6) % 7)); // week starts Monday
+const monthEnd   = (y, m) => endOfDay(new Date(y, m + 1, 0));
+const spanDays   = (r) => Math.round((startOfDay(r.to) - startOfDay(r.from)) / 86400000) + 1;
+
+// Calendar units each preset snaps to — drives prevRange()'s comparison.
+const PRESET_UNIT = {
+  this_month: "month", prev_month: "month",
+  this_quarter: "quarter", prev_quarter: "quarter",
+  this_year: "year", prev_year: "year",
+};
+
+function resolveRange(preset, custom, ref = new Date()) {
+  const today = startOfDay(ref);
+  const y = today.getFullYear(), m = today.getMonth();
+  const q = Math.floor(m / 3) * 3;
+  switch (preset) {
+    case "today":        return { from: today, to: endOfDay(today) };
+    case "yesterday":    { const d = addDays(today, -1); return { from: d, to: endOfDay(d) }; }
+    case "this_week":    { const s = startOfWeek(today); return { from: s, to: endOfDay(addDays(s, 6)) }; }
+    case "prev_week":    { const s = addDays(startOfWeek(today), -7); return { from: s, to: endOfDay(addDays(s, 6)) }; }
+    case "this_month":   return { from: new Date(y, m, 1), to: monthEnd(y, m) };
+    case "prev_month":   return { from: new Date(y, m - 1, 1), to: monthEnd(y, m - 1) };
+    case "this_quarter": return { from: new Date(y, q, 1), to: monthEnd(y, q + 2) };
+    case "prev_quarter": return { from: new Date(y, q - 3, 1), to: monthEnd(y, q - 1) };
+    case "this_year":    return { from: new Date(y, 0, 1), to: monthEnd(y, 11) };
+    case "prev_year":    return { from: new Date(y - 1, 0, 1), to: monthEnd(y - 1, 11) };
+    case "custom": {
+      const f = parseFlexDate(custom?.from), t = parseFlexDate(custom?.to);
+      // Incomplete/backwards custom input falls back to the current month.
+      if (!f || !t) return { from: new Date(y, m, 1), to: monthEnd(y, m) };
+      return f <= t ? { from: startOfDay(f), to: endOfDay(t) } : { from: startOfDay(t), to: endOfDay(f) };
+    }
+    default: return { from: new Date(y, m, 1), to: monthEnd(y, m) };
+  }
+}
+
+// The period immediately before `r` — the like-for-like comparison basis.
+function prevRange(preset, r) {
+  const unit = PRESET_UNIT[preset];
+  const fy = r.from.getFullYear(), fm = r.from.getMonth();
+  if (unit === "month")   return { from: new Date(fy, fm - 1, 1), to: monthEnd(fy, fm - 1) };
+  if (unit === "quarter") return { from: new Date(fy, fm - 3, 1), to: monthEnd(fy, fm - 1) };
+  if (unit === "year")    return { from: new Date(fy - 1, 0, 1), to: monthEnd(fy - 1, 11) };
+  const n = spanDays(r);
+  const to = addDays(startOfDay(r.from), -1);
+  return { from: addDays(to, -(n - 1)), to: endOfDay(to) };
+}
+
+// The same span, one year earlier.
+const yoyRange = (r) => ({
+  from: new Date(r.from.getFullYear() - 1, r.from.getMonth(), r.from.getDate()),
+  to:   endOfDay(new Date(r.to.getFullYear() - 1, r.to.getMonth(), r.to.getDate())),
+});
+
+const dateInRange = (d, r) => !!d && d >= r.from && d <= r.to;
+const dmy = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+const rangeLabel = (r) => `${dmy(r.from)} – ${dmy(r.to)}`;
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/* Buckets for a range: one per day for spans up to ~2 months, one per month
+   beyond that — so This Year charts 12 bars instead of 365. */
+const RANGE_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function bucketsFor(r) {
+  const n = spanDays(r);
+  if (n <= 62) {
+    const out = [];
+    for (let d = startOfDay(r.from); d <= r.to; d = addDays(d, 1)) {
+      out.push({ mode: "day", date: new Date(d), key: isoDay(d),
+        label: String(d.getDate()).padStart(2, "0"),
+        dateLabel: `${String(d.getDate()).padStart(2, "0")} ${RANGE_MONTHS[d.getMonth()]}`,
+        dow: d.getDay(), revenue: 0, deposit: 0, recharge: 0 });
+    }
+    return { mode: "day", buckets: out };
+  }
+  const out = [];
+  let d = new Date(r.from.getFullYear(), r.from.getMonth(), 1);
+  while (d <= r.to) {
+    out.push({ mode: "month", date: new Date(d), key: `${d.getFullYear()}-${d.getMonth()}`,
+      label: `${RANGE_MONTHS[d.getMonth()]}`,
+      dateLabel: `${RANGE_MONTHS[d.getMonth()]} ${d.getFullYear()}`,
+      dow: null, revenue: 0, deposit: 0, recharge: 0 });
+    d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  }
+  return { mode: "month", buckets: out };
+}
+const bucketKeyOf = (d, mode) => mode === "day" ? isoDay(d) : `${d.getFullYear()}-${d.getMonth()}`;
+
+/* State + resolved range for a report. `sel` is what the picker edits; `range`
+   is what the report should actually filter on. */
+function useDateRange(initial = "this_month") {
+  const [sel, setSel] = useState({ preset: initial, from: "", to: "" });
+  const range = resolveRange(sel.preset, sel);
+  return { sel, setSel, range };
+}
+
+/* Preset dropdown (Today / This Week / … / Custom). Note: distinct from the
+   older From/To `DateRangeFilter` bar that several reports still use. */
+function DateRangePicker({ value, onChange }) {
+  return (
+    <>
+      <select value={value.preset} onChange={e => onChange({ ...value, preset: e.target.value })} style={selectStyle}>
+        {DATE_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+      </select>
+      {value.preset === "custom" && (
+        <>
+          <input type="date" value={value.from || ""} max={value.to || undefined}
+            onChange={e => onChange({ ...value, from: e.target.value })} style={selectStyle} />
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>to</span>
+          <input type="date" value={value.to || ""} min={value.from || undefined}
+            onChange={e => onChange({ ...value, to: e.target.value })} style={selectStyle} />
+        </>
+      )}
+    </>
+  );
+}
+
+/* ---- Multi-select filter (Society, …) -------------------------------------
+   `value` is the array of selected options, or null for "everything" — so the
+   filter needs no knowledge of the option list until the user narrows it, and
+   unchecking a single box excludes just that one. ---- */
+// "Society" → "societies", "Plan" → "plans". Pass `plural` to override.
+const pluralise = (label) => {
+  const w = label.toLowerCase();
+  if (w.endsWith("s")) return w;
+  if (/[^aeiou]y$/.test(w)) return w.slice(0, -1) + "ies";
+  return w + "s";
+};
+
+function MultiSelectFilter({ label, options, value, onChange, plural: pluralProp, width = 240 }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+
+  const plural = pluralProp || pluralise(label);
+  const all = value === null;
+  const sel = all ? options : value;
+  const has = (o) => sel.includes(o);
+  const toggle = (o) => {
+    const next = has(o) ? sel.filter(x => x !== o) : [...sel, o];
+    onChange(next.length === options.length ? null : next); // back to "all" → null
+  };
+  const out = options.filter(o => !has(o));
+  const summary = all ? `All ${plural} (${options.length})`
+    : sel.length === 0 ? `No ${label.toLowerCase()} selected`
+    : out.length <= 2 ? `Excluding ${out.join(", ")}`
+    : `${sel.length} of ${options.length} ${plural}`;
+  const shown = options.filter(o => o.toLowerCase().includes(q.toLowerCase()));
+
+  return (
+    <div ref={box} style={{ position: "relative" }}>
+      <button onClick={() => setOpen(o => !o)} title={summary}
+        style={{ ...selectStyle, display: "inline-flex", alignItems: "center", gap: 7, maxWidth: width, textAlign: "left", fontWeight: 500 }}>
+        <Filter size={14} style={{ flexShrink: 0, color: all ? "var(--muted)" : "var(--teal)" }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, width, background: "#fff",
+          border: "1.5px solid var(--border)", borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,.12)", padding: 10 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={`Search ${plural}…`}
+            style={{ ...inp, padding: "7px 10px", fontSize: 13, marginBottom: 8 }} />
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button onClick={() => onChange(null)} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>Select all</button>
+            <button onClick={() => onChange([])} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>Clear</button>
+          </div>
+          <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            {shown.length === 0 && <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "6px 4px" }}>No matches</div>}
+            {shown.map(o => (
+              <label key={o} style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 4px", cursor: "pointer", fontSize: 13, color: "var(--f)" }}>
+                <input type="checkbox" checked={has(o)} onChange={() => toggle(o)} style={{ width: 15, height: 15, accentColor: "var(--teal)", flexShrink: 0 }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o}>{o}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ---- Plan-term helpers (shared by Billing Analytics, Earned Revenue, Apartment
@@ -1193,7 +1825,7 @@ function ApiUsageDashboard() {
   const rows = apiTracker.statusAll();
   const totalUsed = rows.reduce((s, r) => s + r.count, 0);
   const anyOver80 = rows.some(r => r.percent >= 80);
-  const barColor = (pct) => pct >= 95 ? "#b4232a" : pct >= 80 ? "#9a6a16" : "#1f7a3f";
+  const barColor = (pct) => pct >= 95 ? "#DC4141" : pct >= 80 ? "#986315" : "#08805A";
 
   return (
     <div className="fade-up">
@@ -1516,7 +2148,11 @@ login: async (username, password) => {
 
   _session = net; saveSession();
   sessionStorage.setItem("pw_idToken", firebaseRes.idToken);
-  sessionStorage.setItem("pw_tokenExpiry", Date.now() + 55 * 60 * 1000);
+  // Firebase ID tokens live ~1h; cap the session to the token's life. Idle (1h)
+  // and next-day auto-logout are enforced in the App shell (see SESSION_*).
+  sessionStorage.setItem("pw_tokenExpiry", Date.now() + 60 * 60 * 1000);
+  sessionStorage.setItem("pw_last_activity", String(Date.now()));
+  sessionStorage.setItem("pw_session_day", new Date().toDateString());
 
   if (emp) {
     pushLog({ type: "login_success", actor: emp.username, detail: `Signed in as ${emp.role} (${emp.username})` });
@@ -1643,6 +2279,24 @@ clearLogs: (actor) => {
     saveUsers();
     pushLog({ type: "user_deleted", actor, detail: `Removed ${t?.username}` });
   },
+  // Update a user's per-module access (and optional per-section overrides). The
+  // overall role tracks the strongest level granted anywhere (same rule as
+  // createUser). `sections` maps moduleId → { tabId: "hidden"|"view"|"edit" };
+  // pass undefined to leave a user's existing section overrides untouched.
+  updateAccess: async (actor, userId, access, sections) => {
+    await wait(300);
+    const vals = Object.values(access);
+    const role = vals.includes("devops") ? "devops"
+      : vals.includes("admin") ? "admin"
+      : vals.includes("supervisor") ? "supervisor" : "viewer";
+    _users = _users.map(u => u.id === userId
+      ? { ...u, access, role, ...(sections !== undefined ? { sections } : {}) }
+      : u);
+    saveUsers();
+    const t = _users.find(u => u.id === userId);
+    pushLog({ type: "user_access_updated", actor, module: "Employee", detail: `Updated module access for ${t?.username}` });
+    return t ? { ...t, password: undefined } : null;
+  },
 
   // Profile photo (stored as a data URL in browser storage).
   getPhoto: (username) => _photos[username] || null,
@@ -1693,26 +2347,64 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
 const Auth = createContext(null);
 const useAuth = () => useContext(Auth);
 
+// Auto-logout after 1h of inactivity; also log out when the calendar day rolls
+// over. Both are checked on load and on a periodic timer (see the effect below).
+const SESSION_IDLE_MS = 60 * 60 * 1000;
+const sessionDayStr = () => new Date().toDateString();
+// Clear every session key on logout / expiry so nothing is silently restored.
+const clearSessionStorage = () => {
+  ["pw_user", "pw_idToken", "pw_tokenExpiry", "pw_last_activity", "pw_session_day", "pw_active_module"].forEach(k => sessionStorage.removeItem(k));
+};
+
+// Theme — persisted, applied as data-theme on <html>, so it affects the whole
+// CRM (everything colour-driven by CSS variables). Themes: light · dark (black)
+// · aesthetic (violet accent on white). Chrome (sidebar/topbar/Home) is fully
+// themed; some deep module screens still carry hardcoded colours (follow-up).
+// Dark + Aesthetic disabled for now (dark broke module screens' hardcoded
+// colours; violet aesthetic was disliked). Light only until a proper themeable
+// refactor is agreed. The dormant theme CSS stays but never matches.
+const THEMES = ["light"];
+const getStoredTheme = () => { try { const t = localStorage.getItem("pw_theme"); return THEMES.includes(t) ? t : "light"; } catch { return "light"; } };
+const applyTheme = (t) => { try { const v = THEMES.includes(t) ? t : "light"; document.documentElement.setAttribute("data-theme", v); localStorage.setItem("pw_theme", v); } catch { /* ignore */ } };
+
 export default function App() {
   const [user, setUser] = useState(() => {
     try {
       const expiry = Number(sessionStorage.getItem("pw_tokenExpiry"));
       const saved = sessionStorage.getItem("pw_user");
-      if (saved && expiry && Date.now() < expiry) return JSON.parse(saved);
+      const lastAct = Number(sessionStorage.getItem("pw_last_activity")) || 0;
+      const day = sessionStorage.getItem("pw_session_day");
+      // Restore only if within the token life, under the idle limit, and still the same day.
+      if (saved && expiry && Date.now() < expiry
+        && (Date.now() - lastAct) < SESSION_IDLE_MS
+        && (!day || day === sessionDayStr())) return JSON.parse(saved);
+      clearSessionStorage();
     } catch { /* ignore */ }
     return null;
   });
-  const [activeModule, setActiveModule] = useState(null);
+  // Persist the open module so a hard refresh stays on the same page (not Home).
+  const [activeModule, setActiveModule] = useState(() => sessionStorage.getItem("pw_active_module") || null);
   const [sessionWarning, setSessionWarning] = useState(false);
+
+  // Apply the saved light/dark theme once on load.
+  useEffect(() => { applyTheme(getStoredTheme()); }, []);
+
+  const onSetActiveModule = (m) => {
+    setActiveModule(m);
+    if (m) sessionStorage.setItem("pw_active_module", m);
+    else sessionStorage.removeItem("pw_active_module");
+  };
 
   const onSetUser = (u) => {
     setUser(u);
     setActiveModule(null);
-    if (u) sessionStorage.setItem("pw_user", JSON.stringify(u));
-    else {
-      sessionStorage.removeItem("pw_user");
-      sessionStorage.removeItem("pw_idToken");
-      sessionStorage.removeItem("pw_tokenExpiry");
+    if (u) {
+      sessionStorage.setItem("pw_user", JSON.stringify(u));
+      sessionStorage.setItem("pw_last_activity", String(Date.now()));
+      if (!sessionStorage.getItem("pw_session_day")) sessionStorage.setItem("pw_session_day", sessionDayStr());
+      sessionStorage.removeItem("pw_active_module"); // fresh login lands on Home
+    } else {
+      clearSessionStorage();
     }
   };
 
@@ -1736,6 +2428,28 @@ export default function App() {
   }, [user]);
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Idle (1h) + next-day auto-logout ─────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const bump = () => sessionStorage.setItem("pw_last_activity", String(Date.now()));
+    let lastBump = 0;
+    const onActivity = () => { const now = Date.now(); if (now - lastBump > 15000) { lastBump = now; bump(); } };
+    const events = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"];
+    events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+    bump(); // count the reload/login itself as activity
+
+    const logout = () => { api.logout(user.username); onSetUser(null); };
+    const check = setInterval(() => {
+      const lastAct = Number(sessionStorage.getItem("pw_last_activity")) || 0;
+      const day = sessionStorage.getItem("pw_session_day");
+      if (Date.now() - lastAct >= SESSION_IDLE_MS) logout();        // idle for 1h
+      else if (day && day !== sessionDayStr()) logout();            // calendar day rolled over
+    }, 30000);
+
+    return () => { events.forEach(e => window.removeEventListener(e, onActivity)); clearInterval(check); };
+  }, [user]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   // On login (or token-restored reload): just repopulate the session IP.
   // NOTE: we deliberately do NOT eagerly prefetch customers/subs/invoices/leads
   // here — that fired 4 full Zoho pulls even for modules the user never opened,
@@ -1749,11 +2463,11 @@ export default function App() {
   return (
     <div className="pw-root">
       <style>{TOKENS}</style>
-      <Auth.Provider value={{ user, setUser: onSetUser, activeModule, setActiveModule }}>
+      <Auth.Provider value={{ user, setUser: onSetUser, activeModule, setActiveModule: onSetActiveModule }}>
         {sessionWarning && user && (
           <div style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
-            background: "#9a6a16", color: "#fff",
+            background: "#986315", color: "#fff",
             padding: "10px 20px", display: "flex", alignItems: "center",
             justifyContent: "center", gap: 12, fontSize: 13.5, fontWeight: 500
           }}>
@@ -1768,8 +2482,8 @@ export default function App() {
           </div>
         )}
         {!user ? <Login />
-          : activeModule ? <Shell module={activeModule} onHome={() => setActiveModule(null)} />
-          : <Home onPick={setActiveModule} />}
+          : activeModule ? <Shell module={activeModule} onHome={() => onSetActiveModule(null)} />
+          : <Home onPick={onSetActiveModule} />}
         {user && <ReleasePopup />}
       </Auth.Provider>
     </div>
@@ -1780,117 +2494,333 @@ export default function App() {
 const MODULE_ICONS = { Briefcase, Receipt, Boxes, Wrench, GitBranch, BarChart3, UserCog, ScrollText, Ticket, UserRound, Cpu, Landmark, CalendarClock, Repeat, Info, LayoutGrid };
 
 /* ---------- Home (module launcher) ---------- */
+// Segmented Light / Dark / Aesthetic theme control (used in the top-right of the
+// topbars). Applies data-theme on <html> so the choice affects the whole CRM.
+function ThemePicker() {
+  const [t, setT] = useState(getStoredTheme);
+  const pick = (v) => { setT(v); applyTheme(v); };
+  const opts = [
+    { v: "light", icon: Sun, label: "Light" },
+    { v: "dark", icon: Moon, label: "Dark" },
+    { v: "aesthetic", icon: Sparkles, label: "Aesthetic" },
+  ];
+  return (
+    <div className="premium-theme-picker" role="group" aria-label="Theme">
+      {opts.map(o => (
+        <button key={o.v} type="button" onClick={() => pick(o.v)} title={o.label} aria-pressed={t === o.v}
+          className={"premium-theme-btn" + (t === o.v ? " active" : "")}><o.icon size={14} /></button>
+      ))}
+    </div>
+  );
+}
+
 function Home({ onPick }) {
   const { user, setUser } = useAuth();
-  // Fallback: legacy users (created before module access existed) — admins see all, others see referral.
   const access = user.access || (user.role === "admin" ? allAccess("admin") : { referral: "view", analytics: "view" });
-  // Modules this user can see (access !== "none").
   const visible = MODULES.filter(m => (access[m.id] || "none") !== "none");
+  const [query, setQuery] = useState("");
+  const [mobileNav, setMobileNav] = useState(false);
+  const [now, setNow] = useState(new Date());
+  const [photo, setPhoto] = useState(() => api.getPhoto(user.username));
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [recentIds, setRecentIds] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("pw_recent_modules") || "[]"); }
+    catch { return []; }
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const openModule = (moduleItem) => {
+    const next = [moduleItem.id, ...recentIds.filter(id => id !== moduleItem.id)].slice(0, 4);
+    setRecentIds(next);
+    localStorage.setItem("pw_recent_modules", JSON.stringify(next));
+    onPick(moduleItem.id);
+  };
+
+  const filtered = visible.filter(m => `${m.label} ${m.desc}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const recentModules = recentIds.map(id => visible.find(m => m.id === id)).filter(Boolean);
+  const elevatedCount = visible.filter(m => ["admin", "devops"].includes(access[m.id])).length;
+  const readyCount = visible.filter(m => m.built && !m.soon).length;
+  const firstName = String(user.name || user.username || "there").split(" ")[0];
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const dateLabel = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const initials = String(user.name || user.username || "PW").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
+  const primaryModule = recentModules[0] || visible[0];
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--mint)", display: "grid", gridTemplateColumns: "248px 1fr" }} className="home-grid">
+    <div className="premium-home">
       <style>{`
-        .pw-modcard:hover{transform:translateY(-3px);box-shadow:0 14px 30px -16px rgba(13,40,24,.4)}
-        .home-side-link:hover{background:rgba(255,255,255,.07)}
-        @media(max-width:820px){.home-grid{grid-template-columns:1fr!important}.home-side{display:none!important}}
+        .premium-home{min-height:100vh;background:#f3f7f5;display:grid;grid-template-columns:272px minmax(0,1fr);color:var(--f)}
+        .premium-sidebar{position:sticky;top:0;height:100vh;padding:24px 16px 18px;background:
+          radial-gradient(circle at 18% 0%,rgba(10,157,110,.20),transparent 28%),
+          linear-gradient(180deg,#07150e 0%,#0a1a12 55%,#0d2418 100%);display:flex;flex-direction:column;overflow:hidden;z-index:40}
+        .premium-brand{display:flex;align-items:center;gap:12px;padding:0 8px 22px;border-bottom:1px solid rgba(255,255,255,.08)}
+        .premium-brand-mark{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#16b985,#087451);box-shadow:0 12px 28px -12px rgba(10,157,110,.9)}
+        .premium-side-label{padding:22px 12px 8px;color:#71857a;font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase}
+        .premium-modules-scroll{scrollbar-width:none;-ms-overflow-style:none}
+        .premium-modules-scroll::-webkit-scrollbar{display:none;width:0;height:0}
+        .premium-side-item{width:100%;display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:12px;color:#b8c9c0;font-size:13.5px;font-weight:550;text-align:left;transition:background .16s ease,color .16s ease,transform .16s ease}
+        .premium-side-item:hover{background:rgba(255,255,255,.07);color:#fff;transform:translateX(2px)}
+        .premium-side-item.active{background:linear-gradient(135deg,rgba(10,157,110,.24),rgba(10,157,110,.10));color:#fff;border:1px solid rgba(42,210,158,.18);box-shadow:inset 0 1px rgba(255,255,255,.04)}
+        .premium-side-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.055);flex:0 0 auto}
+        .premium-profile{margin-top:auto;padding:14px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);border-radius:16px}
+        .premium-avatar{width:40px;height:40px;border-radius:12px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,#1bb987,#087753);color:#fff;font-size:13px;font-weight:800;box-shadow:0 8px 18px -10px #000}
+        .premium-main{min-width:0;display:flex;flex-direction:column}
+        .premium-topbar{height:76px;padding:0 32px;display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.84);border-bottom:1px solid rgba(10,26,18,.07);backdrop-filter:blur(18px);position:sticky;top:0;z-index:30}
+        .premium-content{padding:28px 32px 38px;max-width:1600px;width:100%;margin:0 auto}
+        .premium-hero{position:relative;padding:11px 20px;border-radius:16px;margin-bottom:20px;max-width:calc(100% - 340px);overflow:hidden;background:
+          radial-gradient(circle at 85% 5%,rgba(72,227,174,.23),transparent 30%),
+          radial-gradient(circle at 62% 120%,rgba(42,134,214,.20),transparent 34%),
+          linear-gradient(135deg,#07160f 0%,#0d2b1e 55%,#0b4c37 100%);box-shadow:0 28px 60px -32px rgba(4,28,18,.65);color:#fff;display:block}
+        .premium-hero:after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(to left,#000,transparent 75%);pointer-events:none}
+        .premium-hero-copy,.premium-hero-panel{position:relative;z-index:1}
+        .premium-hero h1{font-family:'DM Sans',system-ui,sans-serif!important;color:#fff!important;font-size:clamp(17px,2vw,22px);letter-spacing:-.03em;line-height:1.1;margin:4px 0 4px;max-width:760px}
+        .premium-hero p{max-width:680px;color:#b9cbc2;font-size:11.8px;line-height:1.45}
+        .premium-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;background:rgba(30,206,147,.12);border:1px solid rgba(63,223,169,.18);color:#75e3bd;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+        .premium-hero-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
+        .premium-cta{display:inline-flex;align-items:center;gap:8px;padding:12px 17px;border-radius:12px;background:#fff;color:#0a1a12;font-size:13.5px;font-weight:750;box-shadow:0 10px 24px -14px #000}
+        .premium-cta.secondary{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#dceae3;box-shadow:none}
+        .premium-hero-panel{padding:20px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.065);backdrop-filter:blur(14px);border-radius:18px;box-shadow:inset 0 1px rgba(255,255,255,.06)}
+        .premium-progress{height:7px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin-top:11px}
+        .premium-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#13b880,#5cddb6);box-shadow:0 0 16px rgba(69,221,170,.45)}
+        .premium-stats{display:grid;grid-template-columns:1fr;gap:12px}
+        .premium-stat{background:#fff;border:1px solid rgba(10,26,18,.07);border-radius:17px;padding:17px 18px;box-shadow:0 10px 30px -24px rgba(8,37,24,.55);display:flex;align-items:center;gap:13px;transition:transform .16s ease,box-shadow .18s ease,border-color .16s ease}
+        .premium-stat:hover{transform:translateY(-3px) scale(1.02);border-color:var(--lime-d);box-shadow:0 20px 38px -22px rgba(5,48,30,.5)}
+        .premium-stat-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#edf7f3;color:#07815b;flex:0 0 auto}
+        .premium-stat-value{font-size:22px;font-weight:800;letter-spacing:-.035em;line-height:1;color:#0a1a12}
+        .premium-stat-label{font-size:11.5px;color:#7d8a83;margin-top:5px}
+        .premium-dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+        .premium-section{background:#fff;border:1px solid rgba(10,26,18,.07);border-radius:20px;padding:20px;box-shadow:0 18px 44px -34px rgba(8,37,24,.55)}
+        .premium-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:17px}
+        .premium-section-title{font-family:'DM Sans',system-ui,sans-serif!important;font-size:18px!important;font-weight:800!important;letter-spacing:-.025em!important}
+        .premium-search{position:relative;min-width:250px}
+        .premium-search input{width:100%;height:40px;padding:0 13px 0 38px;border:1px solid #e3e9e6;border-radius:11px;background:#f8faf9;color:#0a1a12;font-size:13px;outline:none}
+        .premium-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+        .premium-module{position:relative;min-height:138px;padding:13px;border:1px solid #e9eeeb;border-radius:14px;background:linear-gradient(180deg,#fff 0%,#fbfcfb 100%);text-align:left;display:flex;flex-direction:column;overflow:hidden;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+        .premium-module:before{content:"";position:absolute;width:78px;height:78px;border-radius:50%;right:-36px;top:-36px;background:var(--module-color);opacity:.075;transition:transform .2s ease,opacity .2s ease}
+        .premium-module:hover{transform:translateY(-4px) scale(1.02);border-color:var(--module-color);box-shadow:0 22px 40px -22px rgba(5,48,30,.6)}
+        .premium-module:hover:before{transform:scale(1.4);opacity:.18}
+        .premium-module-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,var(--module-color) 11%,white);color:var(--module-color);margin-bottom:10px}
+        .premium-module-name{font-size:13.5px;font-weight:800;letter-spacing:-.015em;color:#0a1a12;line-height:1.25;padding-right:22px}
+        .premium-module-desc{font-size:11.3px;color:#7d8a83;line-height:1.4;margin-top:5px}
+        .premium-module-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:11px}
+        .premium-access{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#78877f}
+        .premium-module-chev{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:#f1f5f3;color:#577166}
+        .premium-greeting{font-family:'DM Sans',system-ui,sans-serif!important;font-size:23px!important;font-weight:800!important;letter-spacing:-.025em;color:var(--f);margin:0 0 18px}
+        .premium-group{margin-bottom:20px}
+        .premium-group:last-child{margin-bottom:0}
+        .premium-group-title{font-size:13px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--brand);margin:0 0 13px;padding:9px 15px;border-radius:10px;background:linear-gradient(90deg,color-mix(in srgb,var(--brand) 22%,transparent) 0%,color-mix(in srgb,var(--brand) 6%,transparent) 45%,transparent 82%)}
+        .premium-side-stack{display:flex;flex-direction:column;gap:14px}
+        /* theme picker (top-right of the topbar) */
+        .premium-theme-picker{display:inline-flex;gap:2px;padding:3px;border-radius:11px;background:var(--mint-2);border:1px solid var(--border)}
+        .premium-theme-btn{width:30px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+        .premium-theme-btn:hover{color:var(--f)}
+        .premium-theme-btn.active{background:var(--white);color:var(--brand);box-shadow:0 2px 6px -3px rgba(0,0,0,.35)}
+
+        /* ---- Dark theme chrome (variables come from :root[data-theme=dark]) ---- */
+        :root[data-theme="dark"] .premium-home{background:var(--mint);color:var(--f)}
+        :root[data-theme="dark"] .premium-sidebar{background:linear-gradient(180deg,#0a0b0d 0%,#0e0f12 55%,#121317 100%)}
+        :root[data-theme="dark"] .premium-topbar{background:rgba(16,18,21,.86);border-bottom-color:rgba(255,255,255,.06)}
+        :root[data-theme="dark"] .premium-section{background:var(--white);border-color:var(--border)}
+        :root[data-theme="dark"] .premium-module{background:linear-gradient(180deg,#191c20 0%,#141619 100%);border-color:var(--border)}
+        :root[data-theme="dark"] .premium-module-name{color:var(--f)}
+        :root[data-theme="dark"] .premium-module-desc,:root[data-theme="dark"] .premium-access{color:var(--muted)}
+        :root[data-theme="dark"] .premium-module-icon{background:color-mix(in srgb,var(--module-color) 22%,#101114)}
+        :root[data-theme="dark"] .premium-module-chev{background:#1c1f24;color:#9aa6ad}
+        :root[data-theme="dark"] .premium-quick-item:hover{background:rgba(255,255,255,.05)}
+
+        /* ---- Aesthetic theme chrome (violet accent, white surfaces) ---- */
+        :root[data-theme="aesthetic"] .premium-home{background:var(--mint);color:var(--f)}
+        :root[data-theme="aesthetic"] .premium-sidebar{background:radial-gradient(circle at 18% 0%,rgba(109,94,240,.30),transparent 30%),linear-gradient(180deg,#1a1540 0%,#241f52 55%,#2d2668 100%)}
+        :root[data-theme="aesthetic"] .premium-brand-mark{background:linear-gradient(145deg,#8878ff,#5a49e0)}
+        :root[data-theme="aesthetic"] .premium-side-item.active{background:linear-gradient(135deg,rgba(109,94,240,.30),rgba(109,94,240,.12));border-color:rgba(140,124,255,.28)}
+        :root[data-theme="aesthetic"] .premium-module-icon{background:color-mix(in srgb,var(--module-color) 13%,white)}
+        .premium-quick-item{width:100%;display:flex;align-items:center;gap:11px;padding:10px;border-radius:12px;text-align:left;transition:background .14s ease}
+        .premium-quick-item:hover{background:#f4f8f6}
+        .premium-quick-icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto}
+        .premium-access-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #edf0ee;font-size:12.5px}
+        .premium-access-row:last-child{border-bottom:none}
+        .premium-mobile-menu{display:none;width:38px;height:38px;border-radius:10px;background:#f0f5f2;color:#0a1a12;place-items:center}
+        .premium-overlay{display:none}
+        @media(max-width:1180px){.premium-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.premium-dashboard-grid{grid-template-columns:minmax(0,1fr) 290px}}
+        @media(max-width:980px){.premium-home{grid-template-columns:1fr}.premium-sidebar{position:fixed;left:0;top:0;bottom:0;width:272px;transform:translateX(-105%);transition:transform .22s ease}.premium-sidebar.open{transform:none}.premium-mobile-menu{display:grid}.premium-overlay.open{display:block;position:fixed;inset:0;background:rgba(3,16,10,.45);backdrop-filter:blur(3px);z-index:35}.premium-topbar{padding:0 20px}.premium-content{padding:22px 20px 32px}}
+        @media(max-width:820px){.premium-hero{max-width:none}.premium-dashboard-grid{grid-template-columns:1fr}.premium-side-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+        @media(max-width:620px){.premium-topbar{height:68px}.premium-content{padding:16px 14px 28px}.premium-hero{padding:20px;border-radius:18px}.premium-hero h1{font-size:29px}.premium-stats{gap:10px}.premium-stat{padding:14px;align-items:flex-start;flex-direction:column}.premium-section{padding:15px;border-radius:17px}.premium-section-head{flex-direction:column}.premium-search{width:100%;min-width:0}.premium-module-grid{grid-template-columns:1fr}.premium-module{min-height:128px}.premium-side-stack{grid-template-columns:1fr}.premium-topbar-date{display:none}}
       `}</style>
 
-      {/* Left sidebar menu */}
-      <aside className="home-side" style={{ background: "var(--forest)", padding: "22px 16px", display: "flex", flexDirection: "column", gap: 4, position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "4px 8px 18px" }}>
-          <Drop />
-          <div style={{ lineHeight: 1.1 }}>
-            <div style={{ fontWeight: 700, color: "#fff", fontSize: 14 }}>ProWater</div>
-            <div style={{ fontSize: 9.5, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--lime)" }}>Internal Systems</div>
+      <div className={`premium-overlay ${mobileNav ? "open" : ""}`} onClick={() => setMobileNav(false)} />
+
+      <aside className={`premium-sidebar ${mobileNav ? "open" : ""}`}>
+        <div className="premium-brand">
+          <div className="premium-brand-mark"><Droplets size={22} color="#fff" /></div>
+          <div>
+            <div style={{ color: "#fff", fontSize: 15.5, fontWeight: 800, letterSpacing: "-.02em" }}>ProWater</div>
+            <div style={{ color: "#6f8a7c", fontSize: 9.5, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase", marginTop: 2 }}>Wisdom 2.0</div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 11, color: "var(--forest)", fontWeight: 600, background: "var(--lime)", fontSize: 13.5, marginBottom: 4 }}>
-          <HomeIcon size={17} /> Home
-        </div>
-
-        <div style={{ fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "#7e9a87", fontWeight: 700, padding: "10px 12px 6px" }}>Modules</div>
-        {visible.map(m => {
-          const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
-          return (
-            <button key={m.id} onClick={() => onPick(m.id)} className="home-side-link" style={{
-              display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", borderRadius: 10,
-              color: "#cfe0d5", fontWeight: 500, background: "transparent", textAlign: "left", fontSize: 13.5, transition: ".15s", cursor: "pointer"
-            }}>
-              <Icon size={16} /> <span style={{ flex: 1 }}>{m.label}</span>
-              {(!m.built || m.soon) && <span style={{ fontSize: 8.5, fontWeight: 700, color: "var(--lime)" }}>SOON</span>}
-            </button>
-          );
-        })}
-
-        <button onClick={() => setUser(null)} className="home-side-link" style={{
-          display: "flex", alignItems: "center", gap: 11, padding: "9px 12px", borderRadius: 10,
-          color: "#cfe0d5", fontWeight: 500, background: "transparent", textAlign: "left", fontSize: 13.5, marginTop: "auto", cursor: "pointer"
-        }}>
-          <LogOut size={16} /> Sign out
+        <div className="premium-side-label">Workspace</div>
+        <button className="premium-side-item active" onClick={() => setMobileNav(false)}>
+          <span className="premium-side-icon"><LayoutDashboard size={16} /></span>
+          <span style={{ flex: 1 }}>Overview</span>
+          <span style={{ width: 6, height: 6, borderRadius: 999, background: "#3ed3a1", boxShadow: "0 0 0 4px rgba(62,211,161,.10)" }} />
         </button>
-      </aside>
 
-      {/* Main area */}
-      <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        {/* Top bar */}
-        <header style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 32px", borderBottom: "1px solid var(--border)", background: "#fff", position: "sticky", top: 0, zIndex: 10 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 800, fontSize: 15, color: "var(--f)" }}>Unified Operations Platform</div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ textAlign: "right", lineHeight: 1.2 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--f)" }}>{user.name}</div>
-              <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "capitalize" }}>{user.role}</div>
-            </div>
-            <button onClick={() => setUser(null)} style={{ ...btnGhost, padding: "8px 14px" }}><LogOut size={15} /> Sign out</button>
-          </div>
-        </header>
-
-        {/* Welcome */}
-        <div style={{ width: "100%", padding: "40px 32px 12px" }}>
-          <p className="eyebrow" style={{ color: "var(--teal)" }}>Welcome back, {user.name}</p>
-          <h1 style={{ fontSize: "clamp(26px,3.5vw,38px)", margin: "6px 0 6px", color: "var(--f)" }}>Choose a module</h1>
-          <p style={{ color: "var(--slate)", fontSize: 14.5 }}>Pick where you want to work today. You'll only see the modules you have access to.</p>
-        </div>
-
-        {/* Module grid — fixed columns so cards align and gaps fill evenly */}
-        <div style={{ width: "100%", padding: "16px 32px 48px", display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(248px, 1fr))", gap: 18, alignContent: "start" }}>
+        <div className="premium-side-label">Your modules</div>
+        <div className="premium-modules-scroll" style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
           {visible.map(m => {
             const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
-            const lvl = access[m.id];
             return (
-              <button key={m.id} onClick={() => onPick(m.id)} className="pw-modcard" style={{
-                textAlign: "left", background: "#fff", border: "1px solid var(--border)", borderRadius: 18, padding: 22,
-                cursor: "pointer", display: "flex", flexDirection: "column", gap: 13, position: "relative", overflow: "hidden",
-                minHeight: 188, transition: "transform .15s ease, box-shadow .15s ease"
-              }}>
-                <div style={{ width: 50, height: 50, borderRadius: 14, background: m.color + "1a", color: m.color, display: "grid", placeItems: "center" }}>
-                  <Icon size={25} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 16.5, color: "var(--f)", display: "flex", alignItems: "center", gap: 8 }}>
-                    {m.label}
-                    {(!m.built || m.soon) && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", color: "#9a6a16", background: "#fdf3e0", padding: "2px 7px", borderRadius: 999 }}>SOON</span>}
-                  </div>
-                  <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 3 }}>{m.desc}</div>
-                </div>
-                <div style={{ marginTop: "auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em", color: (lvl === "admin" || lvl === "devops") ? "var(--teal)" : "var(--muted)" }}>{lvl} access</span>
-                  <ChevronRight size={18} color="var(--muted)" />
-                </div>
+              <button key={m.id} className="premium-side-item" onClick={() => openModule(m)}>
+                <span className="premium-side-icon"><Icon size={16} /></span>
+                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
+                {m.soon && <span style={{ color: "#d3a760", fontSize: 8.5, fontWeight: 800, letterSpacing: ".08em" }}>BETA</span>}
               </button>
             );
           })}
-          {visible.length === 0 && (
-            <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: "var(--muted)" }}>
-              You don't have access to any modules yet. Ask an admin to grant access.
-            </div>
-          )}
         </div>
 
-        <p style={{ textAlign: "center", color: "var(--muted)", fontSize: 12, padding: "0 0 24px", marginTop: "auto" }}>© {new Date().getFullYear()} ProWater Internal Systems · v{APP_VERSION}</p>
-      </div>
+        <div className="premium-profile">
+          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+            <button className="premium-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo" style={{ position: "relative", flex: "0 0 auto" }}>
+              {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
+              <span style={{ position: "absolute", right: -3, bottom: -3, width: 16, height: 16, borderRadius: 999, background: "var(--brand)", border: "2px solid #0a1a12", display: "grid", placeItems: "center", color: "#fff" }}><Camera size={8} /></span>
+            </button>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ color: "#fff", fontSize: 13, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#7ee0bd", fontSize: 10.5, textTransform: "capitalize", marginTop: 3 }}>
+                <ShieldCheck size={11} /> {user.role} workspace
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setUser(null)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 13, padding: "9px 10px", borderRadius: 10, background: "rgba(255,255,255,.06)", color: "#bdcbc4", fontSize: 12.5, fontWeight: 650 }}>
+            <LogOut size={14} /> Sign out
+          </button>
+        </div>
+      </aside>
+
+      <main className="premium-main">
+        <header className="premium-topbar">
+          <button className="premium-mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={19} /></button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="premium-topbar-title" style={{ fontSize: 14, fontWeight: 800, color: "var(--f)", letterSpacing: "-.01em" }}>Operations Command Center</div>
+            <div className="premium-topbar-date" style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{dateLabel}</div>
+          </div>
+          <div className="premium-ready" style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 10, background: "var(--mint-2)", border: "1px solid var(--border)" }}>
+            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--brand)", boxShadow: "0 0 0 4px rgba(10,157,110,.10)" }} />
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand)" }}>Workspace ready</span>
+          </div>
+          <button onClick={() => setPhotoOpen(true)} className="premium-avatar" style={{ width: 38, height: 38, borderRadius: 11, background: "var(--grad-btn)" }}>
+            {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
+          </button>
+        </header>
+
+        <div className="premium-content">
+          <h1 className="premium-greeting fade-up">{greeting}, {firstName}.</h1>
+
+          <div className="premium-dashboard-grid">
+            <section className="premium-section" id="module-directory">
+              <div className="premium-section-head">
+                <div>
+                  <p className="eyebrow" style={{ color: "var(--brand)", marginBottom: 5 }}>Workspace directory</p>
+                  <h2 className="premium-section-title">Choose where to work</h2>
+                  <p style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 5 }}>Only modules assigned to your account are shown.</p>
+                </div>
+              </div>
+
+              {MODULE_GROUPS.map(group => {
+                const mods = visible.filter(m => group.ids.includes(m.id));
+                if (!mods.length) return null;
+                return (
+                  <div key={group.title} className="premium-group">
+                    <div className="premium-group-title">{group.title}</div>
+                    <div className="premium-module-grid">
+                      {mods.map(m => {
+                        const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
+                        const lvl = access[m.id];
+                        return (
+                          <button key={m.id} className="premium-module" onClick={() => openModule(m)} style={{ "--module-color": m.color }}>
+                            <div className="premium-module-icon"><Icon size={17} /></div>
+                            <div className="premium-module-name">{m.label}</div>
+                            <div className="premium-module-desc">{m.desc}</div>
+                            <div className="premium-module-foot">
+                              <span className="premium-access">{lvl} access</span>
+                              <span className="premium-module-chev"><ChevronRight size={15} /></span>
+                            </div>
+                            {m.soon && <span style={{ position: "absolute", right: 13, top: 13, padding: "3px 7px", borderRadius: 999, background: "#fbf0e0", color: "#986315", fontSize: 8.5, fontWeight: 850, letterSpacing: ".07em" }}>BETA</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {visible.length === 0 && (
+                <div style={{ padding: "52px 20px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 15, color: "var(--muted)" }}>
+                  No modules are assigned to your account yet.
+                </div>
+              )}
+            </section>
+
+            <aside className="premium-side-stack">
+              <section className="premium-section">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
+                  <div>
+                    <p className="eyebrow" style={{ color: "var(--brand)", marginBottom: 4 }}>Quick access</p>
+                    <h3 className="premium-section-title" style={{ fontSize: "16px!important" }}>Recent modules</h3>
+                  </div>
+                  <Clock size={17} color="#8a9991" />
+                </div>
+                {(recentModules.length ? recentModules : visible.slice(0, 3)).map(m => {
+                  const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
+                  return (
+                    <button className="premium-quick-item" key={m.id} onClick={() => openModule(m)}>
+                      <span className="premium-quick-icon" style={{ background: `${m.color}14`, color: m.color }}><Icon size={17} /></span>
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{ display: "block", color: "var(--f)", fontSize: 12.5, fontWeight: 750, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.label}</span>
+                        <span style={{ display: "block", color: "var(--muted)", fontSize: 10.5, marginTop: 2 }}>{access[m.id]} access</span>
+                      </span>
+                      <ChevronRight size={15} color="#9aa69f" />
+                    </button>
+                  );
+                })}
+              </section>
+
+              <section className="premium-section">
+                <p className="eyebrow" style={{ color: "var(--brand)", marginBottom: 5 }}>Account controls</p>
+                <h3 className="premium-section-title" style={{ fontSize: "16px!important", marginBottom: 8 }}>Access summary</h3>
+                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Role</span><strong style={{ textTransform: "capitalize", color: "var(--f)" }}>{user.role}</strong></div>
+                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Admin modules</span><strong style={{ color: "var(--f)" }}>{elevatedCount}</strong></div>
+                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Standard modules</span><strong style={{ color: "var(--f)" }}>{Math.max(visible.length - elevatedCount, 0)}</strong></div>
+                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Session</span><span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--brand)", fontWeight: 750 }}><span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--brand)" }} /> Secure</span></div>
+              </section>
+
+              <section className="premium-section" style={{ background: "linear-gradient(145deg,#e9f7f1,#f7fbf9)", borderColor: "#d8eee5" }}>
+                <div style={{ width: 38, height: 38, borderRadius: 12, display: "grid", placeItems: "center", background: "#fff", color: "var(--brand)", boxShadow: "0 9px 20px -15px rgba(5,67,42,.8)", marginBottom: 13 }}><Info size={18} /></div>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: "#163729" }}>Wisdom 2.0 workspace</div>
+                <p style={{ fontSize: 11.5, lineHeight: 1.55, color: "#668074", marginTop: 6 }}>A unified internal platform for managing the full ProWater operating lifecycle.</p>
+                <button onClick={() => visible.find(m => m.id === "about") && openModule(visible.find(m => m.id === "about"))} disabled={!visible.some(m => m.id === "about")} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12, color: "#087955", fontSize: 11.5, fontWeight: 800, opacity: visible.some(m => m.id === "about") ? 1 : .5 }}>
+                  View release notes <ArrowUpRight size={13} />
+                </button>
+              </section>
+            </aside>
+          </div>
+
+          <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "24px 4px 0", color: "#8a9790", fontSize: 10.5 }}>
+            <span>© {new Date().getFullYear()} ProWater Internal Systems</span>
+            <span>Wisdom 2.0 · Build {APP_VERSION}</span>
+          </footer>
+        </div>
+      </main>
+
+      {photoOpen && <PhotoUploader username={user.username} current={photo}
+        onClose={() => setPhotoOpen(false)}
+        onSaved={(url) => { setPhoto(url); setPhotoOpen(false); }} />}
     </div>
   );
 }
@@ -1949,9 +2879,9 @@ function Login() {
       <style>{`@media(max-width:880px){.login-grid{grid-template-columns:1fr!important}.login-aside{display:none!important}}`}</style>
       {/* brand side */}
       <aside className="login-aside" style={{
-background: "linear-gradient(135deg, #1a3320, #0f2318 55%, #061209)",
+background: "linear-gradient(135deg, var(--shell-2), var(--shell) 55%, var(--shell-0))",
         backgroundSize: "200% 200%", animation: "pw-drift 14s ease-in-out infinite",
-        color: "#dfeee4", padding: "56px 56px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden", minHeight: "100vh"
+        color: "#B5E2D4", padding: "56px 56px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden", minHeight: "100vh"
       }}>
         {/* Always-running ambient layers */}
         <div style={{ position: "absolute", inset: 0, background: "radial-gradient(60% 40% at 90% 90%, rgba(168,217,64,.25), transparent)", animation: "pw-glow 5s ease-in-out infinite" }} />
@@ -1977,13 +2907,13 @@ background: "linear-gradient(135deg, #1a3320, #0f2318 55%, #061209)",
         <div className="pw-stagger" style={{ position: "relative", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1 }}>
           <p className="eyebrow" style={{ color: "var(--lime)", textAlign: "center" }}>Unified Operations Platform</p>
           <h1 style={{ color: "#fff", fontSize: "clamp(40px,5vw,64px)", lineHeight: 1.04, margin: "12px 0 18px", fontWeight: 900, textAlign: "center" }}>
-            One platform.<br />Every <span style={{ background: "linear-gradient(90deg, var(--lime-d), #d4f06a, var(--lime-d))", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", animation: "pw-shimmer 3s linear infinite" }}>operation.</span>
+            One platform.<br />Every <span style={{ background: "linear-gradient(90deg, var(--lime-d), #B5E2D4, var(--lime-d))", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", animation: "pw-shimmer 3s linear infinite" }}>operation.</span>
           </h1>
-          <p style={{ maxWidth: 440, lineHeight: 1.7, color: "#b9d2c4", textAlign: "center" }}>
+          <p style={{ maxWidth: 440, lineHeight: 1.7, color: "#B5E2D4", textAlign: "center" }}>
             Sales, billing, inventory, field service and referrals — managed together in ProWater Internal Systems, connected live to your business data.
           </p>
         </div>
-        <p style={{ fontSize: 12, color: "#7fa08e", position: "absolute", bottom: 56, left: 56, zIndex: 1 }}>© {new Date().getFullYear()} ProWater Internal Systems · v{APP_VERSION}</p>
+        <p style={{ fontSize: 12, color: "#7D8A83", position: "absolute", bottom: 56, left: 56, zIndex: 1 }}>© {new Date().getFullYear()} ProWater Internal Systems · v{APP_VERSION}</p>
       </aside>
 
       {/* form side */}
@@ -2032,7 +2962,7 @@ background: "linear-gradient(135deg, #1a3320, #0f2318 55%, #061209)",
             Need an account? Ask an admin to create one.
           </p>
         </form>
-        {err && <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", color: "#b4232a", fontSize: 13, marginTop: 14, animation: "pw-fade .3s ease" }}>
+        {err && <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", color: "#DC4141", fontSize: 13, marginTop: 14, animation: "pw-fade .3s ease" }}>
           <AlertCircle size={16} />{err}</div>}
       </main>
       {forgot && <ForgotPassword usernames={usernames} onClose={() => setForgot(false)} />}
@@ -2084,7 +3014,7 @@ function ForgotPassword({ usernames, onClose }) {
               <span style={{ display: "flex", alignItems: "center", padding: "0 12px", background: "var(--mint-2)", border: "1px solid var(--border)", borderLeft: "none", borderTopRightRadius: 11, borderBottomRightRadius: 11, color: "var(--slate)", fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap" }}>{EMAIL_DOMAIN}</span>
             </div>
           </Field>
-          {err && <div style={{ color: "#b4232a", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
+          {err && <div style={{ color: "#DC4141", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
           <button onClick={sendCode} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Sending…" : "Send code"}</button>
         </>}
 
@@ -2100,13 +3030,13 @@ function ForgotPassword({ usernames, onClose }) {
           <Field label="New password">
             <input type="text" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters" style={inp} />
           </Field>
-          {err && <div style={{ color: "#b4232a", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
+          {err && <div style={{ color: "#DC4141", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
           <button onClick={doReset} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Resetting…" : "Reset password"}</button>
           <button onClick={() => { setStep(1); setOtp(""); setErr(""); }} style={{ width: "100%", marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>Use a different email</button>
         </>}
 
         {step === 3 && <div style={{ textAlign: "center", padding: "10px 0" }}>
-          <div style={{ display: "inline-flex", width: 52, height: 52, borderRadius: 999, background: "#e6f4ea", color: "#1f7a3f", alignItems: "center", justifyContent: "center", marginBottom: 12 }}><CheckCircle2 size={26} /></div>
+          <div style={{ display: "inline-flex", width: 52, height: 52, borderRadius: 999, background: "#E2F3EE", color: "#08805A", alignItems: "center", justifyContent: "center", marginBottom: 12 }}><CheckCircle2 size={26} /></div>
           <h4 style={{ fontSize: 18, marginBottom: 6 }}>Password updated</h4>
           <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>You can now sign in with your new password.</p>
           <button onClick={onClose} style={{ ...btnPrimary, width: "100%" }}>Back to sign in</button>
@@ -2122,7 +3052,7 @@ function SampleDataBanner() {
   const sources = useSampleData();
   if (!sources.length) return null;
   return (
-    <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#9a6a16", background: "#fdf3e0", border: "1px solid #f0dcae", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
+    <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#986315", background: "#FBF0E0", border: "1px solid #F6DEBC", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
       <AlertCircle size={16} />
       <span>
         <b>Showing sample data</b> — the live {sources.join(", ")} {sources.length > 1 ? "endpoints are" : "endpoint is"} unreachable, so these numbers are placeholders, not real. Try <b>Refresh</b>, or check your connection / API access.
@@ -2136,10 +3066,10 @@ function Shell({ module = "referral", onHome }) {
   const moduleMeta = MODULES.find(m => m.id === module) || MODULES.find(m => m.id === "referral");
   const moduleAccess = (user.access && user.access[module]) || (user.role === "admin" ? "admin" : "view");
   const isModuleAdmin = moduleAccess === "admin" || moduleAccess === "devops";
-  const [tab, setTab] = useState(
+  const defaultTab =
     module === "sales" ? "sales_leads"
     : module === "planner" ? "plan_weekly"
-    : module === "analytics" ? "analytics"
+    : module === "analytics" ? "an_overview"
     : module === "employee" ? "emp_users"
     : module === "devicereplace" ? "dr_list"
     : module === "about" ? "about_docs"
@@ -2151,8 +3081,11 @@ function Shell({ module = "referral", onHome }) {
     : module === "erp" ? "erp_assets"
     : module === "autoscheduler" ? "as_society"
     : module === "iot" ? "iot_devices"
-    : "overview"
-  );
+    : "overview";
+  // Restore the last-open sub-tab so a hard refresh stays on the same page. An
+  // invalid/stale tab is corrected to the first visible section by the effect below.
+  const [tab, setTab] = useState(() => sessionStorage.getItem("pw_tab_" + module) || defaultTab);
+  useEffect(() => { sessionStorage.setItem("pw_tab_" + module, tab); }, [module, tab]);
   const [mobileNav, setMobileNav] = useState(false);
   const [now, setNow] = useState(new Date());          // system clock (top-right)
   const [loginAt] = useState(() => Date.now());        // session start for the timer
@@ -2227,10 +3160,11 @@ const doRefresh = async () => {
       ...(isModuleAdmin ? [{ id: "plan_admin", label: "Modify Tasks", icon: PencilLine }] : []),
     ],
     analytics: [
-      { id: "an_live", label: "Live Dashboard", icon: LayoutDashboard },
+      { id: "an_overview", label: "Overview", icon: LayoutGrid },
       { id: "analytics", label: "Referral", icon: BarChart3 },
       { id: "an_sales", label: "Sales", icon: Briefcase },
       { id: "an_earned", label: "Earned Revenue", icon: Scale },
+      ...(isModuleAdmin ? [{ id: "an_aop", label: "AOP", icon: Target }] : []),
       { id: "an_apartment", label: "Apartment Performance", icon: Boxes },
       { id: "an_billing", label: "Billing", icon: Receipt },
       { id: "an_revenue", label: "Revenue", icon: TrendingUp },
@@ -2244,9 +3178,11 @@ const doRefresh = async () => {
     ticketing: [
       { id: "tk_overview", label: "Overview", icon: LayoutDashboard },
       { id: "tk_tickets", label: "Tickets", icon: Ticket },
+      { id: "tk_ops", label: "Ops Tickets", icon: Wrench },
     ],
     customer: [
       { id: "cust_list", label: "Customers", icon: UserRound },
+      { id: "cust_all", label: "All Customers", icon: Users },
       { id: "cust_societies", label: "Societies", icon: Boxes },
     ],
     billing: [
@@ -2286,13 +3222,28 @@ const doRefresh = async () => {
   };
 
   const sharesAdminTabs = false; // User Management → Employee module; logs → Logs Tracker module
-  const nav = !moduleMeta.built ? [] : [
+  const nav = (!moduleMeta.built ? [] : [
     ...(moduleTabs[module] || []),
     ...(isModuleAdmin && sharesAdminTabs ? [
       { id: "logs", label: "Activity Logs", icon: ScrollText },
       { id: "users", label: "User Management", icon: UserCog },
     ] : []),
-  ];
+  ]).filter(n => sectionOverride(user, module, n.id) !== "hidden"); // per-user section visibility
+
+  // Effective View/Edit for the CURRENT section: a "view" override forces
+  // read-only even on an admin module; an "edit" override grants editing even on
+  // a view-only module; no override inherits the module level.
+  const secOv = sectionOverride(user, module, tab);
+  const tabIsAdmin = secOv === "edit" ? true : secOv === "view" ? false : isModuleAdmin;
+  const tabAccess = secOv === "edit" ? (isModuleAdmin ? moduleAccess : "admin")
+    : secOv === "view" ? "view"
+    : moduleAccess;
+
+  // If the landing/last tab was hidden for this user, fall back to the first
+  // section they can see (keeps the content area from rendering blank).
+  useEffect(() => {
+    if (nav.length && !nav.some(n => n.id === tab)) setTab(nav[0].id);
+  }, [module, nav.length, tab]);
 
   const signOut = async () => { await api.logout(user.username); setUser(null); };
 
@@ -2303,19 +3254,19 @@ const doRefresh = async () => {
       {/* sidebar */}
       <aside className={`pw-side ${mobileNav ? "open" : ""}`} style={{
         background: "linear-gradient(180deg,var(--forest) 0%, var(--forest-2) 100%)",
-        color: "#cfe3d6", padding: "22px 16px", display: "flex", flexDirection: "column", gap: 6
+        color: "#B5E2D4", padding: "22px 16px", display: "flex", flexDirection: "column", gap: 6
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "4px 8px 14px" }}>
           <Drop />
           <div style={{ lineHeight: 1.1 }}>
             <div style={{ fontWeight: 700, color: "#fff", fontSize: 15 }}>ProWater</div>
-            <div style={{ fontSize: 10.5, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--lime)" }}>{moduleMeta.label}</div>
+            <div style={{ fontSize: 10.5, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--brand)" }}>{moduleMeta.label}</div>
           </div>
         </div>
 
         <button onClick={onHome} style={{
           display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 11,
-          color: "#bcd4c4", fontWeight: 500, background: "rgba(255,255,255,.05)", textAlign: "left", fontSize: 14, marginBottom: 6
+          color: "#B5E2D4", fontWeight: 500, background: "rgba(255,255,255,.05)", textAlign: "left", fontSize: 14, marginBottom: 6
         }}>
           <HomeIcon size={18} /> All modules
         </button>
@@ -2324,8 +3275,8 @@ const doRefresh = async () => {
           <button key={n.id} onClick={() => { setTab(n.id); setMobileNav(false); }}
             style={{
               display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 11,
-              color: tab === n.id ? "var(--forest)" : "#bcd4c4", fontWeight: tab === n.id ? 600 : 500,
-              background: tab === n.id ? "var(--lime)" : "transparent", textAlign: "left", fontSize: 14, transition: ".15s"
+              color: tab === n.id ? "var(--shell)" : "var(--green-b)", fontWeight: tab === n.id ? 600 : 500,
+              background: tab === n.id ? "var(--brand)" : "transparent", textAlign: "left", fontSize: 14, transition: ".15s"
             }}>
             <n.icon size={18} /> {n.label}
           </button>
@@ -2347,13 +3298,13 @@ const doRefresh = async () => {
               </div>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 8px 8px", color: "#9fc0a9", fontSize: 11.5, fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 8px 8px", color: "#B5E2D4", fontSize: 11.5, fontVariantNumeric: "tabular-nums" }}>
             <Clock size={13} /> Session {fmtElapsed(elapsed)}
           </div>
-          <button onClick={signOut} style={{ display: "flex", alignItems: "center", gap: 9, color: "#bcd4c4", fontSize: 13, padding: "8px 8px" }}>
+          <button onClick={signOut} style={{ display: "flex", alignItems: "center", gap: 9, color: "#B5E2D4", fontSize: 13, padding: "8px 8px" }}>
             <LogOut size={16} /> Sign out
           </button>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,.08)", marginTop: 8, paddingTop: 10, padding: "10px 8px 2px", color: "#7f9d89", fontSize: 10.5, lineHeight: 1.4 }}>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,.08)", marginTop: 8, paddingTop: 10, padding: "10px 8px 2px", color: "#7D8A83", fontSize: 10.5, lineHeight: 1.4 }}>
             © 2026 ProWater Internal Systems · v{APP_VERSION}
           </div>
         </div>
@@ -2364,7 +3315,7 @@ const doRefresh = async () => {
         <div className="pw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px", borderBottom: "1px solid var(--border)", background: "rgba(243,248,236,.92)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
           <button className="pw-topbar-burger" onClick={() => setMobileNav(s => !s)} style={{ display: "none", color: "var(--f)" }}><Menu /></button>
           <div style={{ flex: 1 }}>
-            <p className="eyebrow">{moduleMeta.label} · {isModuleAdmin ? "Admin access" : "View access"}</p>
+            <p className="eyebrow">{moduleMeta.label} · {tabIsAdmin ? "Admin access" : "View access"}</p>
             <h2 style={{ fontSize: 22, lineHeight: 1 }}>{moduleMeta.built ? (nav.find(n => n.id === tab)?.label || moduleMeta.label) : moduleMeta.label}</h2>
           </div>
           {moduleMeta.built && <button onClick={doRefresh} disabled={refreshing} title="Refresh data"
@@ -2377,16 +3328,23 @@ const doRefresh = async () => {
         </div>
         <div style={{ padding: "28px 40px", maxWidth: "100%", margin: "0 auto" }}>
           {moduleMeta.built && <SampleDataBanner />}
-          {!moduleMeta.built ? <ComingSoon module={moduleMeta} onHome={onHome} /> : <>
+          {!moduleMeta.built ? <ComingSoon module={moduleMeta} onHome={onHome} /> : nav.length === 0 ? (
+            <div style={{ padding: "60px 24px", textAlign: "center", color: "var(--muted)" }}>
+              <Lock size={26} style={{ opacity: .5 }} />
+              <p style={{ marginTop: 12, fontSize: 14, fontWeight: 600, color: "var(--f)" }}>No sections enabled</p>
+              <p style={{ marginTop: 4, fontSize: 12.5 }}>Your access to this module doesn't include any visible sections. Ask an admin to adjust it.</p>
+            </div>
+          ) : <>
             {tab === "overview" && <Overview key={refreshKey} />}
             {tab === "referrers" && <Referrers key={refreshKey} />}
             {tab === "referees" && <Referees key={refreshKey} />}
             {tab === "credits" && <Credits key={refreshKey} />}
             {tab === "tracker" && <Tracker key={refreshKey} />}
-            {tab === "an_live" && <LiveDashboard key={refreshKey} />}
+            {tab === "an_overview" && <AnalyticsOverview key={refreshKey} isAdmin={tabIsAdmin} />}
             {tab === "analytics" && <Analytics key={refreshKey} />}
             {tab === "an_sales" && <SalesInsights key={refreshKey} />}
             {tab === "an_earned" && <EarnedRevenue key={refreshKey} />}
+            {tab === "an_aop" && isModuleAdmin && <AOP key={refreshKey} accessLevel={tabAccess} />}
             {tab === "an_apartment" && <ApartmentPerformance key={refreshKey} />}
             {tab === "an_billing" && <BillingAnalytics key={refreshKey} />}
             {tab === "an_revenue" && <NetRevenue key={refreshKey} />}
@@ -2397,21 +3355,38 @@ const doRefresh = async () => {
             {tab === "plan_weekly" && <TaskPlanner key={`weekly-${refreshKey}`} initialView="weekly" />}
             {tab === "plan_admin" && isModuleAdmin && <TaskAdmin key={refreshKey} />}
             {tab === "sales_overview" && <SalesPipeline key={refreshKey} />}
-            {tab === "sales_leads" && <SalesLeads key={refreshKey} isAdmin={isModuleAdmin} />}
+            {tab === "sales_leads" && <SalesLeads key={refreshKey} isAdmin={tabIsAdmin} />}
             {tab === "sales_apartments" && <ApartmentLeads key={refreshKey} />}
             {tab === "sales_analytics" && <SalesAnalytics key={refreshKey} />}
-            {tab === "sales_errors" && <SalesErrorCorrection key={refreshKey} isAdmin={isModuleAdmin} />}
-            {tab === "emp_users" && <UsersAdmin key={refreshKey} />}
+            {tab === "sales_errors" && <SalesErrorCorrection key={refreshKey} isAdmin={tabIsAdmin} />}
+            {tab === "emp_users" && <UsersAdmin key={refreshKey} accessLevel={tabAccess} />}
             {tab === "dr_list" && <DeviceReplacement key={refreshKey} />}
             {tab === "about_docs" && <AboutModule key={refreshKey} />}
-            {tab === "about_app_rel" && <ReleaseManager key={refreshKey} kind="app" isAdmin={isModuleAdmin} />}
-            {tab === "about_tech_rel" && <ReleaseManager key={refreshKey} kind="technician" isAdmin={isModuleAdmin} />}
+            {tab === "about_app_rel" && <ReleaseManager key={refreshKey} kind="app" isAdmin={tabIsAdmin} />}
+            {tab === "about_tech_rel" && <ReleaseManager key={refreshKey} kind="technician" isAdmin={tabIsAdmin} />}
             {tab === "log_all" && <Logs key={refreshKey} />}
             {tab === "log_failures" && <Failures key={refreshKey} />}
             {tab === "log_api" && <ApiUsageDashboard key={refreshKey} />}
             {tab === "tk_overview" && <TicketOverview key={refreshKey} />}
-            {tab === "tk_tickets" && <TicketList key={refreshKey} isAdmin={isModuleAdmin} />}
-            {tab === "cust_list" && <Customers key={refreshKey} accessLevel={moduleAccess} />}
+            {tab === "tk_tickets" && <TicketList key={refreshKey} isAdmin={tabIsAdmin}
+              hidePriorityFilter
+              dateFilterField={t => t.created} />}
+            {tab === "tk_ops" && <TicketList key={`ops-${refreshKey}`} isAdmin={tabIsAdmin}
+              preFilter={t => String(t.issueCategory || "").trim().toLowerCase() !== "complaint"}
+              hideColumns={["customer", "society", "priority", "status"]}
+              hidePriorityFilter
+              dateFilterField={t => t.created}
+              extraColumns={[
+                { label: "Technician Visit Date", get: t => t.technicianVisitDate },
+                { label: "Technician Visit Slot", get: t => t.technicianVisitSlot },
+                { label: "Job Start Time", get: t => fmtIST(t.jobStartTime) },
+                { label: "Job End Time", get: t => fmtIST(t.jobEndTime) },
+              ]}
+              topContent={filtered => <OpsKpis tickets={filtered} />}
+              bottomContent={filtered => <><OpsSparesTable tickets={filtered} /><OpsTdsTable tickets={filtered} /></>}
+            />}
+            {tab === "cust_list" && <Customers key={refreshKey} accessLevel={tabAccess} />}
+            {tab === "cust_all" && <AllCustomers key={refreshKey} />}
             {tab === "cust_societies" && <CustomerSocieties key={refreshKey} />}
             {tab === "bill_overview" && <BillingOverview key={refreshKey} />}
             {tab === "bill_subs" && <Subscriptions key={refreshKey} />}
@@ -2421,7 +3396,7 @@ const doRefresh = async () => {
             {tab === "fsm_amc" && <MaintenanceSchedule key={refreshKey} />}
             {tab === "fsm_quality" && <WaterQuality key={refreshKey} />}
             {tab === "erp_assets" && <AssetLifecycle key={refreshKey} />}
-            {tab === "as_society" && <AutoGSSociety key={refreshKey} />}
+            {tab === "as_society" && <AutoGSSociety key={refreshKey} accessLevel={tabAccess} />}
             {tab === "as_iot" && <IoTAlerts key={refreshKey} />}
             {tab === "iot_devices" && <IoTDevices key={refreshKey} />}
             {tab === "backtrack" && isModuleAdmin && <Backtrack key={refreshKey} />}
@@ -2480,18 +3455,18 @@ function Overview() {
             <AreaChart data={data.tr} margin={{ left: -18, right: 6, top: 8 }}>
               <defs>
                 <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#5a7863" stopOpacity={.35} /><stop offset="100%" stopColor="#5a7863" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#0A9D6E" stopOpacity={.35} /><stop offset="100%" stopColor="#0A9D6E" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#90ab8b" stopOpacity={.5} /><stop offset="100%" stopColor="#90ab8b" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#0A9D6E" stopOpacity={.5} /><stop offset="100%" stopColor="#0A9D6E" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="month" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} />
               <Tooltip content={<TT />} />
-              <Area type="monotone" dataKey="referrals" stroke="#5a7863" strokeWidth={2.5} fill="url(#g1)" />
-              <Area type="monotone" dataKey="conversions" stroke="#90ab8b" strokeWidth={2.5} fill="url(#g2)" />
+              <Area type="monotone" dataKey="referrals" stroke="#0A9D6E" strokeWidth={2.5} fill="url(#g1)" isAnimationActive={false} />
+              <Area type="monotone" dataKey="conversions" stroke="#0A9D6E" strokeWidth={2.5} fill="url(#g2)" isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
@@ -2783,7 +3758,7 @@ function Credits() {
                       <Check size={14} /> Approve
                     </button>
                     <button onClick={() => act(c.id, "reject")} disabled={busyId === c.id}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 9, border: "1.5px solid var(--border)", background: "#fff", color: "#b4232a", fontWeight: 600, fontSize: 12.5, opacity: busyId === c.id ? .6 : 1 }}>
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "7px 12px", borderRadius: 9, border: "1.5px solid var(--border)", background: "#fff", color: "#DC4141", fontWeight: 600, fontSize: 12.5, opacity: busyId === c.id ? .6 : 1 }}>
                       <Ban size={14} /> Reject
                     </button>
                   </span>
@@ -2840,9 +3815,646 @@ function AddManualCredit({ refs, actor, onClose, onDone }) {
         </div>
       </Field>
       <Field label="Free months"><input type="number" min="0" style={inp} value={form.credits} onChange={e => set("credits", e.target.value)} /></Field>
-      {err && <div style={{ color: "#b4232a", fontSize: 13, display: "flex", gap: 6, alignItems: "center", margin: "2px 0 10px" }}><AlertCircle size={15} />{err}</div>}
+      {err && <div style={{ color: "#DC4141", fontSize: 13, display: "flex", gap: 6, alignItems: "center", margin: "2px 0 10px" }}><AlertCircle size={15} />{err}</div>}
       <button onClick={submit} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Adding…" : "Add free months"}</button>
     </Modal>
+  );
+}
+
+/* ---- Analytics Overview · local mini-visuals ------------------------------ */
+
+// Tiny sparkline for the KPI tiles (area only — no axes, grid or dots).
+function OvSpark({ data, color, gid }) {
+  const d = (data && data.length ? data : [0, 0]).map((v, i) => ({ i, v }));
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={d} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${gid})`} isAnimationActive={false} dot={false} />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Semicircle gauge for Collection Efficiency.
+function OvGauge({ pct, color = "var(--brand)" }) {
+  const v = Math.max(0, Math.min(100, pct || 0));
+  const C = Math.PI * 80; // length of the r=80 semicircle
+  const off = C * (1 - v / 100);
+  return (
+    <svg viewBox="0 0 200 118" style={{ width: "100%", maxWidth: 230 }}>
+      <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="var(--mint-2)" strokeWidth="15" strokeLinecap="round" />
+      <path d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke={color} strokeWidth="15" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={off} />
+      <text x="100" y="86" textAnchor="middle" style={{ fontSize: 34, fontWeight: 800, fill: "var(--f)", fontFamily: "'DM Sans',system-ui,sans-serif" }}>{v.toFixed(1)}%</text>
+      <text x="20" y="114" textAnchor="middle" style={{ fontSize: 10, fill: "var(--faint)" }}>0%</text>
+      <text x="180" y="114" textAnchor="middle" style={{ fontSize: 10, fill: "var(--faint)" }}>100%</text>
+    </svg>
+  );
+}
+
+// Up/down delta chip in the app's ▲▼ house style. invert → down is good (red↔green swap).
+function OvDelta({ delta, suffix, invert }) {
+  if (delta == null || !Number.isFinite(delta)) return null;
+  const up = delta > 0, down = delta < 0;
+  const good = invert ? down : up;
+  const color = up === down ? "var(--muted)" : good ? "var(--green)" : "var(--danger)";
+  return (
+    <span style={{ fontSize: 12, fontWeight: 700, color, whiteSpace: "nowrap" }}>
+      {up ? "▲" : down ? "▼" : "—"} {up ? "+" : ""}{delta}%{suffix ? <span style={{ color: "var(--muted)", fontWeight: 500 }}> {suffix}</span> : null}
+    </span>
+  );
+}
+
+/* ===========================================================================
+   ANALYTICS — Overview (premium cross-module command dashboard) · landing tab
+   ---------------------------------------------------------------------------
+   A dense business dashboard aggregating the live customer, billing
+   (subscriptions + invoices), sales-lead, referral and ticket feeds.
+   Two working controls scope the whole page: a date-range picker (This Month /
+   Quarter / Year / Custom … — compared against the previous equal period) and a
+   Society multi-select. Sections: six KPI tiles with sparklines; a Revenue
+   Overview (this period vs the previous, bucketed by day or month); Revenue by
+   Category (donut, by plan), Customer Growth (bars) and a Collection Efficiency
+   gauge; a Forecast-vs-Actual projection, a Top Performing Societies table,
+   Report Shortcuts and a bottom KPI strip.
+   Reads endpoints already wired elsewhere:
+   // >>> WIRE: /admin/get-all-customers · /admin/get-all-subscriptions ·
+   //   /admin/get-all-invoices · /admin/zoho/get-all-leads · referrals · tickets
+   =========================================================================== */
+// Admin/DevOps-editable Total-Flats overrides for the Overview's society table,
+// keyed by a normalised society name and persisted to localStorage. Everyone else
+// sees the value read-only. Overrides win over the apartments-feed flat count.
+let _flatsOverrides = LS.get("pw_flats_overrides", {}) || {};
+const flatsKey = (s) => String(s || "").toLowerCase().replace(/\bapartments?\b/g, "").replace(/[^a-z0-9]/g, "");
+const getFlatsOverride = (society) => { const k = flatsKey(society); return k in _flatsOverrides ? _flatsOverrides[k] : null; };
+const setFlatsOverride = (society, val) => {
+  const k = flatsKey(society);
+  if (val === "" || val == null) delete _flatsOverrides[k]; else _flatsOverrides[k] = Number(val) || 0;
+  LS.set("pw_flats_overrides", _flatsOverrides);
+};
+
+function AnalyticsOverview({ isAdmin = false }) {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState("");
+  const [, setFlatsTick] = useState(0);   // re-render after a Total-Flats edit
+  const { sel, setSel, range } = useDateRange("this_month");   // working date filter
+  const [selSoc, setSelSoc] = useState(null);                  // society filter (null = all)
+  useEffect(() => {
+    api.logView(user.username, "Viewed Analytics overview");
+    // Each source fails soft (→ []) so one dead endpoint doesn't blank the page.
+    Promise.all([
+      customerApi.getCustomers().catch(() => []),
+      billingApi.getSubscriptions().catch(() => []),
+      billingApi.getInvoices().catch(() => []),
+      salesApi.getDeals().catch(() => []),
+      api.getReferrers().catch(() => []),
+      ticketApi.getTickets().catch(() => []),
+      apartmentApi.getAll().catch(() => []),
+    ])
+      .then(([customers, subs, invs, leads, referrers, tickets, apartments]) =>
+        setData({ customers, subs, invs, leads, referrers, tickets, apartments }))
+      .catch(e => setErr(e.message || "Could not load analytics overview."));
+  }, []);
+  if (err) return <ApiError msg={err} />;
+  if (!data) return <Loading />;
+
+  const { customers, subs, invs, leads, referrers, tickets, apartments } = data;
+  const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
+  const now = new Date();
+  const prev = prevRange(sel.preset, range);                   // like-for-like comparison window
+  const inR = (s, r) => { if (!s) return false; const d = new Date(s); return !isNaN(d) && d >= r.from && d <= r.to; };
+  const monthShort = (y, m) => new Date(y, m, 1).toLocaleDateString("en-IN", { month: "short" });
+  const monthYr = (y, m) => new Date(y, m, 1).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
+  const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+  const pct = (c, p) => p > 0 ? Math.round(((c - p) / p) * 1000) / 10 : null;
+
+  // ---- society join (Zoho customer id / customer number → society) ----------
+  const custByKey = {};
+  customers.forEach(c => {
+    const entry = { society: c.society || "Unknown" };
+    [c.zohoId, c.id].forEach(k => { if (k) custByKey[k] = entry; });
+  });
+  const societyOf = (rec) => {
+    for (const k of [rec.zohoCustomerId, rec.zohoId, rec.customerNumber]) if (k && custByKey[k]) return custByKey[k].society;
+    return rec.society || "Unknown";
+  };
+  const allSocieties = [...new Set(customers.map(c => c.society).filter(Boolean))].sort();
+  const socOk = (name) => selSoc === null || selSoc.includes(name);
+
+  // ---- society-filtered base sets -------------------------------------------
+  const fInvs = selSoc === null ? invs : invs.filter(i => socOk(societyOf(i)));
+  const fCustomers = selSoc === null ? customers : customers.filter(c => socOk(c.society || "Unknown"));
+  const fPaid = fInvs.filter(i => i.status === "paid");
+
+  // ---- range slices (current period vs previous equal period) ---------------
+  const paidCur = fPaid.filter(i => inR(i.date, range));
+  const paidPrev = fPaid.filter(i => inR(i.date, prev));
+  const invCur = fInvs.filter(i => inR(i.date, range));
+  const invPrev = fInvs.filter(i => inR(i.date, prev));
+
+  // ---- headline figures ------------------------------------------------------
+  const totalRevenue = sum(invCur, i => i.total);                          // billed in period
+  const totalRevenuePrev = sum(invPrev, i => i.total);
+  const collections = sum(paidCur, i => i.total);                          // cash collected
+  const collectionsPrev = sum(paidPrev, i => i.total);
+  const netRevenue = collections - sum(paidCur, i => depositForPlan(i.plan, i.total));   // recharge = total − deposit
+  const netPrev = collectionsPrev - sum(paidPrev, i => depositForPlan(i.plan, i.total));
+  const depositCollected = collections - netRevenue;   // Σ deposit of paid-in-period invoices
+  const depositPrev = collectionsPrev - netPrev;
+
+  // Earned (recognised) revenue: each recharge is earned across its paid month,
+  // day-weighted from the recharge date — recharge × (daysLeftInMonth) ÷ daysInMonth.
+  const earnedOf = (i) => {
+    const d = new Date(i.date); if (isNaN(d)) return 0;
+    const recharge = Math.max(0, i.total - depositForPlan(i.plan, i.total));
+    const dm = daysInMonth(d.getFullYear(), d.getMonth());
+    return recharge * (dm - d.getDate() + 1) / dm;
+  };
+  const earnedRevenue = Math.round(sum(paidCur, earnedOf));
+  const earnedPrev = Math.round(sum(paidPrev, earnedOf));
+
+  const activeCustomers = fCustomers.filter(c => c.status === "active").length;
+  const newThisMonth = fCustomers.filter(c => inR(c.since, range)).length;
+  const newPrev = fCustomers.filter(c => inR(c.since, prev)).length;
+  const custBase = Math.max(0, activeCustomers - newThisMonth);
+  const custGrowth = custBase > 0 ? Math.round((newThisMonth / custBase) * 1000) / 10 : (newThisMonth > 0 ? 100 : null);
+  const pendingReceivables = sum(fInvs.filter(i => (i.balance || 0) > 0), i => i.balance);
+  const recvCur = sum(invCur.filter(i => (i.balance || 0) > 0), i => i.balance);
+  const recvPrev = sum(invPrev.filter(i => (i.balance || 0) > 0), i => i.balance);
+  const growthRate = pct(collections, collectionsPrev);
+
+  // Active referrers = referrers live from the referral API (same count the Referral
+  // module shows). Scoped by the society filter so it matches when "All societies" is
+  // selected; the delta & sparkline follow the date range (by the referrer join date).
+  const fReferrers = selSoc === null ? referrers : referrers.filter(r => socOk(r.society || "Unknown"));
+  const activeReferrers = fReferrers.length;
+  const refInR = (r, rg) => { const d = new Date(r.joined); return !isNaN(d) && d >= rg.from && d <= rg.to; };
+  const refCur = fReferrers.filter(r => refInR(r, range)).length;
+  const refPrev = fReferrers.filter(r => refInR(r, prev)).length;
+
+  // ---- trailing 7-month buckets — anchored to the END of the selected period (capped
+  //      at today so a future-ending range like "This Year" doesn't chart empty future
+  //      months), so the sparklines, Customer Growth bars and Forecast follow the filter.
+  const anchor = range.to.getTime() < now.getTime() ? range.to : now;
+  const curY = anchor.getFullYear(), curM = anchor.getMonth();
+  const m7 = [];
+  for (let k = 6; k >= 0; k--) { const d = new Date(curY, curM - k, 1); m7.push({ y: d.getFullYear(), m: d.getMonth(), collected: 0, billed: 0, deposits: 0, earned: 0, newC: 0, recv: 0 }); }
+  const find7 = (y, m) => m7.find(x => x.y === y && x.m === m);
+  fInvs.forEach(i => {
+    if (!i.date) return; const d = new Date(i.date); if (isNaN(d)) return;
+    const s = find7(d.getFullYear(), d.getMonth()); if (!s) return;
+    s.billed += i.total;
+    if (i.status === "paid") { s.collected += i.total; s.deposits += depositForPlan(i.plan, i.total); s.earned += earnedOf(i); }
+    if ((i.balance || 0) > 0) s.recv += i.balance;
+  });
+  fCustomers.forEach(c => { if (!c.since) return; const d = new Date(c.since); if (isNaN(d)) return; const s = find7(d.getFullYear(), d.getMonth()); if (s) s.newC += 1; });
+  const refSpark = m7.map(x => fReferrers.filter(r => { const d = new Date(r.joined); return !isNaN(d) && d.getFullYear() === x.y && d.getMonth() === x.m; }).length);
+  const spark = {
+    revenue: m7.map(x => x.collected), net: m7.map(x => x.collected - x.deposits),
+    earned: m7.map(x => x.earned), customers: m7.map(x => x.newC), deposits: m7.map(x => x.deposits),
+    collections: m7.map(x => x.collected), billed: m7.map(x => x.billed),
+  };
+
+  // Penetration-based active customers: cumulative sign-ups (subscriptions joined to a
+  // society by created date, exactly like the Penetration Tracker) as of the period end
+  // vs the previous month — so the Active Customers card reflects real onboarding growth
+  // and its delta shows the increase.
+  const penCusts = subs
+    .map(s => ({ society: societyOf(s), since: parseFlexDate(s.createdAt || s.activatedAt) }))
+    .filter(x => x.society && x.society !== "Unknown" && x.since && (selSoc === null || socOk(x.society)));
+  const monthEndTs = (y, m) => new Date(y, m + 1, 0, 23, 59, 59).getTime();
+  const penCumAt = (ts) => penCusts.filter(c => c.since.getTime() <= ts).length;
+  const [pcPrevY, pcPrevM] = curM === 0 ? [curY - 1, 11] : [curY, curM - 1];
+  const pcNow = penCumAt(monthEndTs(curY, curM));
+  const pcPrev = penCumAt(monthEndTs(pcPrevY, pcPrevM));
+  const penSpark = m7.map(x => penCumAt(monthEndTs(x.y, x.m)));
+
+  // ---- KPI tiles -------------------------------------------------------------
+  const vsPrev = "vs " + (PRESET_UNIT[sel.preset] === "month" ? monthYr(prev.from.getFullYear(), prev.from.getMonth()) : "prev period");
+  const kpis = [
+    { label: "Total Collection", value: inr(collections), delta: pct(collections, collectionsPrev), icon: Coins, color: "#0A9D6E", spark: spark.collections },
+    { label: "Earned Revenue", value: inr(earnedRevenue), delta: pct(earnedRevenue, earnedPrev), icon: Scale, color: "#0A9D6E", spark: spark.earned },
+    { label: "Recharge collected", value: inr(netRevenue), delta: pct(netRevenue, netPrev), icon: Wallet, color: "#0A9D6E", spark: spark.net },
+    { label: "Deposit collected", value: inr(depositCollected), delta: pct(depositCollected, depositPrev), icon: Landmark, color: "#2A86D6", spark: spark.deposits },
+    { label: "Active Customers", value: pcNow.toLocaleString("en-IN"), delta: pct(pcNow, pcPrev), icon: Users, color: "#2A86D6", spark: penSpark },
+    { label: "Active Referrers", value: activeReferrers.toLocaleString("en-IN"), delta: pct(refCur, refPrev), icon: GitBranch, color: "#0A9D6E", spark: refSpark },
+  ];
+
+  // ---- Revenue Overview: this period vs previous, bucketed by day/month ------
+  const fillPaid = (bk, rows) => {
+    const idx = Object.fromEntries(bk.buckets.map((b, i) => [b.key, i]));
+    const vals = bk.buckets.map(() => 0);
+    rows.forEach(i => { if (!i.date) return; const d = new Date(i.date); if (isNaN(d)) return; const k = bucketKeyOf(d, bk.mode); if (k in idx) vals[idx[k]] += i.total; });
+    return vals;
+  };
+  const curBk = bucketsFor(range), prevBk = bucketsFor(prev);
+  const curVals = fillPaid(curBk, paidCur), prevVals = fillPaid(prevBk, paidPrev);
+  const revData = curBk.buckets.map((b, i) => ({ label: b.dateLabel, cur: curVals[i], prev: prevVals[i] || 0 }));
+  const revTick = Math.max(0, Math.ceil(revData.length / 8) - 1);
+
+  // ---- Revenue by plan — MRR (monthly recurring value of active subscriptions),
+  //      the same computation as the Billing analytics "MRR by plan" chart. Scoped
+  //      by the society filter for consistency with the rest of the page.
+  const fSubs = subs.filter(s =>
+    s.status === "active" &&
+    (selSoc === null || socOk(societyOf(s))) &&
+    (!s.activatedAt || new Date(s.activatedAt) <= range.to));   // active as of the period end
+  const revByPlan = Object.values(fSubs.reduce((acc, s) => {
+    const k = s.plan || "—";
+    acc[k] = acc[k] || { plan: k, value: 0 };
+    acc[k].value += Math.round(monthlyOf(s));
+    return acc;
+  }, {})).sort((a, b) => b.value - a.value);
+  const mrrTotal = revByPlan.reduce((s, p) => s + p.value, 0);
+
+  // ---- Collection efficiency (kept for the CSV export) -----------------------
+  const efficiency = totalRevenue > 0 ? (collections / totalRevenue) * 100 : (sum(fInvs, i => i.total) > 0 ? (sum(fPaid, i => i.total) / sum(fInvs, i => i.total)) * 100 : 0);
+
+  // ---- Ops appointments — technician visits for the next 4 days from TODAY.
+  //      Fixed to the real current date; deliberately NOT affected by the page's
+  //      date-range or society filters (uses the full ticket list).
+  const _dayKey = (d) => (d instanceof Date && !isNaN(d)) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
+  const _opsToday = new Date(); _opsToday.setHours(0, 0, 0, 0);
+  const _opsSubs = ["Today", "Tomorrow", "In 2 days", "In 3 days"];
+  const opsDays = [0, 1, 2, 3].map(off => {
+    const dd = new Date(_opsToday); dd.setDate(dd.getDate() + off);
+    const key = _dayKey(dd);
+    const count = tickets.filter(t => { const vd = parseFlexDate(t.technicianVisitDate); return vd && _dayKey(vd) === key; }).length;
+    return { label: `D${off}`, dateLabel: dd.toLocaleDateString("en-IN", { day: "numeric", month: "short" }), sub: _opsSubs[off], count };
+  });
+
+  // ---- Forecast vs actual (linear fit over last 5 months) --------------------
+  const fa = m7.slice(2);
+  const ys = fa.map(x => x.collected), xs = fa.map((_, i) => i), n = xs.length;
+  const sx = xs.reduce((a, b) => a + b, 0), sy = ys.reduce((a, b) => a + b, 0);
+  const sxy = xs.reduce((a, x, i) => a + x * ys[i], 0), sxx = xs.reduce((a, x) => a + x * x, 0);
+  const slope = (n * sxx - sx * sx) ? (n * sxy - sx * sy) / (n * sxx - sx * sx) : 0;
+  const intercept = (sy - slope * sx) / (n || 1);
+  const faData = fa.map((x, i) => ({ label: monthShort(x.y, x.m), actual: Math.round(x.collected), forecast: Math.max(0, Math.round(intercept + slope * i)) }));
+  const nd = new Date(curY, curM + 1, 1);
+  faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)) });
+
+  // ---- Week-over-Week (collected, last 8 weeks ending in the selected period) ----
+  //      Uses society-filtered paid invoices and anchors the 8-week window to the
+  //      selected period's end, so both filters scope it (mirrors Billing's WoW).
+  const weekStart = (d) => { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); x.setHours(0, 0, 0, 0); return x; }; // Monday
+  const anchorWeek = weekStart(anchor);
+  const weeks = [];
+  for (let k = 7; k >= 0; k--) { const ws = new Date(anchorWeek); ws.setDate(ws.getDate() - k * 7); weeks.push({ start: ws, label: `${ws.getDate()} ${ws.toLocaleDateString("en-IN", { month: "short" })}`, collected: 0 }); }
+  fPaid.forEach(i => { if (!i.date) return; const d = new Date(i.date); if (isNaN(d)) return; const ws = weekStart(d).getTime(); const w = weeks.find(x => x.start.getTime() === ws); if (w) w.collected += i.total; });
+  const wow = weeks.map((w, idx) => { const p = idx > 0 ? weeks[idx - 1].collected : 0; return { label: w.label, collected: w.collected, pct: p > 0 ? Math.round(((w.collected - p) / p) * 1000) / 10 : null }; });
+
+  // ---- Top performing societies — flats · penetration · active · months · recharge ----
+  // Total Flats joins the apartments feed by a normalised society name; Onboarded
+  // Flats = customers in the society; Penetration % = onboarded ÷ total flats;
+  // Active Customers = active-status customers; Total Months = calendar months from
+  // the society's launch month to the current month (see below); the two revenue
+  // columns are the recharge collected in the previous & current CALENDAR month.
+  const normSoc = (s) => String(s || "").toLowerCase().replace(/\bapartments?\b/g, "").replace(/[^a-z0-9]/g, "");
+  const flatsBySoc = {};
+  (apartments || []).forEach(a => { const n = normSoc(a.name); if (n) flatsBySoc[n] = (flatsBySoc[n] || 0) + (a.flats || 0); });
+
+  const curMo = now.getMonth(), curYr = now.getFullYear();
+  const [prvYr, prvMo] = [curMo === 0 ? curYr - 1 : curYr, curMo === 0 ? 11 : curMo - 1];
+  const currMonLabel = monthShort(curYr, curMo), prevMonLabel = monthShort(prvYr, prvMo);
+
+  const socKeyOf = (s) => (s && String(s).trim() && s !== "—" && s !== "Unknown") ? String(s).trim() : null;
+  const socAgg = {};
+  fCustomers.forEach(c => {
+    const soc = socKeyOf(c.society); if (!soc) return;
+    const g = socAgg[soc] || (socAgg[soc] = { society: soc, onboarded: 0, active: 0, revPrev: 0, revCurr: 0 });
+    g.onboarded++;
+    if (String(c.status || "").toLowerCase() === "active") g.active++;
+  });
+  fPaid.forEach(i => {
+    const soc = socKeyOf(societyOf(i)); if (!soc) return;
+    const g = socAgg[soc]; if (!g) return;
+    const d = new Date(i.date); if (isNaN(d)) return;
+    const recharge = Math.max(0, i.total - depositForPlan(i.plan, i.total));
+    if (d.getFullYear() === curYr && d.getMonth() === curMo) g.revCurr += recharge;
+    else if (d.getFullYear() === prvYr && d.getMonth() === prvMo) g.revPrev += recharge;
+  });
+  // Total Months = number of calendar months from the society's LAUNCH month to the
+  // current month (inclusive). "Launch" is the same launch the Penetration Tracker uses
+  // — the earliest subscription sign-up, or the admin's launch override for that society.
+  const curIdx = curYr * 12 + curMo;
+  const launchIdxBySoc = {};
+  subs.forEach(s => {
+    const soc = socKeyOf(societyOf(s)); if (!soc) return;
+    const d = parseFlexDate(s.createdAt || s.activatedAt); if (!d) return;
+    const idx = d.getFullYear() * 12 + d.getMonth();
+    if (!(soc in launchIdxBySoc) || idx < launchIdxBySoc[soc]) launchIdxBySoc[soc] = idx;
+  });
+  const monthsFromLaunch = (soc) => {
+    const ovIdx = ymToIdx(getLaunchOverride(soc));
+    const li = (ovIdx != null) ? ovIdx : (soc in launchIdxBySoc ? launchIdxBySoc[soc] : null);
+    return li == null ? null : Math.max(1, curIdx - li + 1);
+  };
+  const societies = Object.values(socAgg).map(g => {
+    const ov = getFlatsOverride(g.society);
+    const totalFlats = ov != null ? ov : (flatsBySoc[normSoc(g.society)] || 0);
+    return { ...g, totalFlats, penetration: totalFlats > 0 ? Math.round((g.onboarded / totalFlats) * 100) : null, months: monthsFromLaunch(g.society) };
+  }).sort((a, b) => b.revCurr - a.revCurr || b.onboarded - a.onboarded);
+  const socTot = societies.reduce((a, s) => ({ totalFlats: a.totalFlats + s.totalFlats, onboarded: a.onboarded + s.onboarded, active: a.active + s.active, months: a.months + (s.months || 0), revPrev: a.revPrev + s.revPrev, revCurr: a.revCurr + s.revCurr }), { totalFlats: 0, onboarded: 0, active: 0, months: 0, revPrev: 0, revCurr: 0 });
+  const socTotPen = socTot.totalFlats > 0 ? Math.round((socTot.onboarded / socTot.totalFlats) * 100) : null;
+
+  // ---- bottom KPI strip ------------------------------------------------------
+  const totalSocieties = new Set(fCustomers.map(c => c.society).filter(Boolean)).size;
+  const waterConnections = fCustomers.filter(c => c.purifier_id).length || fCustomers.length;
+  const collDays = [];
+  fPaid.forEach(i => { if (i.date && i.lastModified) { const a = new Date(i.date), b = new Date(i.lastModified); if (!isNaN(a) && !isNaN(b)) { const dd = Math.round((b - a) / 86400000); if (dd >= 0 && dd < 400) collDays.push(dd); } } });
+  const avgDays = collDays.length ? Math.round(collDays.reduce((s, x) => s + x, 0) / collDays.length) : null;
+  const ticketsOpen = tickets.filter(t => !zdIsClosed(t.status)).length;
+  const bottom = [
+    { label: "Total Societies", value: totalSocieties.toLocaleString("en-IN"), sub: "Active", icon: Boxes },
+    { label: "Total Users", value: fCustomers.length.toLocaleString("en-IN"), delta: custGrowth, icon: Users },
+    { label: "Water Connections", value: waterConnections.toLocaleString("en-IN"), icon: Droplets },
+    { label: "Avg. Collection Days", value: avgDays == null ? "—" : `${avgDays}`, sub: avgDays == null ? "" : "days", icon: CalendarClock },
+    { label: "Outstanding Amount", value: inr(pendingReceivables), delta: pct(recvCur, recvPrev), invert: true, icon: Wallet },
+    { label: "Tickets Open", value: ticketsOpen.toLocaleString("en-IN"), icon: Ticket },
+  ];
+
+  // ---- controls --------------------------------------------------------------
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+  const exportOverviewCsv = () => exportToCsv("prowater-overview.csv",
+    [{ label: "Metric", get: r => r.k }, { label: "Value", get: r => r.v }],
+    [
+      { k: "Period", v: rangeLabel(range) }, { k: "Societies", v: selSoc === null ? "All" : selSoc.join("; ") },
+      { k: "Total Revenue", v: totalRevenue }, { k: "Net Revenue", v: netRevenue }, { k: "Earned Revenue", v: earnedRevenue },
+      { k: "Active Customers", v: activeCustomers }, { k: "Collections", v: collections },
+      { k: "Outstanding", v: pendingReceivables }, { k: "Growth Rate %", v: growthRate == null ? 0 : growthRate },
+      { k: "Collection Efficiency %", v: Math.round(efficiency * 10) / 10 },
+    ]);
+
+  const softShadow = { background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
+  const iconBox = (c) => ({ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "var(--mint)", color: c });
+  const socTd = { padding: "12px 16px", fontSize: 13.5, color: "var(--slate)", textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" };
+  const socFt = { padding: "12px 16px", fontSize: 13.5, fontWeight: 800, color: "var(--f)", textAlign: "center", background: "var(--mint)", borderTop: "2px solid var(--border)", whiteSpace: "nowrap" };
+
+  // ---- AI summary — a computed narrative of everything on this overview.
+  //      Deterministic (reads the same figures shown below), not an LLM call.
+  const fmtDelta = (d) => d == null ? null : d > 0 ? `up ${d}%` : d < 0 ? `down ${Math.abs(d)}%` : "flat";
+  const scopeLabel = selSoc === null ? "across all societies" : (selSoc.length === 1 ? `for ${selSoc[0]}` : `for ${selSoc.length} societies`);
+  const topPlan = revByPlan[0];
+  const topSoc = societies[0];
+  const nextForecast = faData.length ? faData[faData.length - 1].forecast : null;
+  const effRounded = Math.round(efficiency);
+  const collDelta = fmtDelta(growthRate);
+  const custDelta = fmtDelta(pct(pcNow, pcPrev));
+  const aiSummary = [
+    <>Over <strong>{rangeLabel(range)}</strong> {scopeLabel}, total collection is <strong>{inr(collections)}</strong>{collDelta ? <> ({collDelta} {vsPrev})</> : null} — split into <strong>{inr(netRevenue)}</strong> recharge and <strong>{inr(depositCollected)}</strong> deposits, with <strong>{inr(earnedRevenue)}</strong> recognised as earned revenue.</>,
+    <>The active customer base stands at <strong>{pcNow.toLocaleString("en-IN")}</strong>{custDelta ? <> ({custDelta})</> : null}, with <strong>{newThisMonth}</strong> onboarded this period across <strong>{totalSocieties}</strong> societies.</>,
+    mrrTotal > 0 ? <>Monthly recurring revenue is <strong>{inr(mrrTotal)}</strong> across {revByPlan.length} plan{revByPlan.length > 1 ? "s" : ""}{topPlan ? <>, led by <strong>{topPlan.plan}</strong> at {inr(topPlan.value)}/mo</> : null}.</> : null,
+    <><strong>{inr(pendingReceivables)}</strong> is outstanding at a <strong>{effRounded}%</strong> collection efficiency{avgDays != null ? <>, averaging {avgDays} days to collect</> : null}.</>,
+    topSoc ? <>Top-performing society is <strong>{topSoc.society}</strong> — {inr(topSoc.revCurr)} recharge this month{topSoc.penetration != null ? <> at {topSoc.penetration}% penetration</> : null}.</> : null,
+    <>There {activeReferrers === 1 ? "is" : "are"} <strong>{activeReferrers}</strong> active referrer{activeReferrers === 1 ? "" : "s"} and <strong>{ticketsOpen}</strong> open ticket{ticketsOpen === 1 ? "" : "s"}{nextForecast ? <>; next month's collection is forecast at ~<strong>{inr(nextForecast)}</strong></> : null}.</>,
+  ].filter(Boolean);
+
+  return (
+    <div className="fade-up ov-sans">
+      {/* Overview uses the app's sans (DM Sans) for headings + big numbers instead
+          of the global Playfair serif, to match this dashboard's clean look. */}
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:-.02em}`}</style>
+
+      {/* ── header ─────────────────────────────────────────────────────────── */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14, marginBottom: 18 }}>
+        <div>
+          <h1 style={{ fontSize: 27, margin: 0 }}>{greeting}, {user.name || "Admin"} <span>👋</span></h1>
+          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 3 }}>Here's what's happening with your business today.</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+          <DateRangePicker value={sel} onChange={setSel} />
+          <MultiSelectFilter label="Society" options={allSocieties} value={selSoc} onChange={setSelSoc} width={220} />
+          <button onClick={exportOverviewCsv} style={btnPrimary}><Download size={16} /> Export</button>
+        </div>
+      </div>
+
+      {/* ── AI summary ─────────────────────────────────────────────────────── */}
+      <div style={{ ...softShadow, padding: 18, marginBottom: 16, background: "linear-gradient(135deg, color-mix(in srgb, var(--brand) 7%, #fff) 0%, #fff 55%)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}>
+          <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 10, background: "var(--mint-2)", color: "var(--brand)" }}><Sparkles size={17} /></span>
+          <div>
+            <h3 style={{ fontSize: 16, margin: 0 }}>AI Summary</h3>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>Auto-generated from this dashboard · {rangeLabel(range)}{selSoc === null ? "" : ` · ${scopeLabel}`}</div>
+          </div>
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+          {aiSummary.map((s, i) => <li key={i} style={{ fontSize: 13, color: "var(--slate)", lineHeight: 1.55 }}>{s}</li>)}
+        </ul>
+      </div>
+
+      {/* ── KPI row ────────────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(165px,1fr))", gap: 13, marginBottom: 16 }}>
+        {kpis.map((k, i) => (
+          <div key={k.label} style={{ ...softShadow, padding: 15, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>{k.label}</span>
+              <span style={iconBox(k.color)}><k.icon size={17} /></span>
+            </div>
+            <div className="serif" style={{ fontSize: 25, color: "var(--f)", lineHeight: 1.1 }}>{k.value}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <OvDelta delta={k.delta} suffix={k.delta != null ? vsPrev : ""} invert={k.invert} />
+              {k.delta == null && <span style={{ fontSize: 12, color: "var(--muted)" }}>{vsPrev}</span>}
+            </div>
+            <div style={{ height: 40, margin: "2px -4px -2px" }}><OvSpark data={k.spark} color={k.color} gid={`ovspark-${i}`} /></div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Revenue Overview (full width) ──────────────────────────────────── */}
+      <div style={{ ...softShadow, padding: 18, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+          <div>
+            <h3 style={{ fontSize: 17 }}>Revenue Overview</h3>
+            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--brand)" }} /> Current Period</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--faint)" }} /> Previous Period</span>
+            </div>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{rangeLabel(range)}</span>
+        </div>
+        <div style={{ height: 300 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={revData} margin={{ top: 10, right: 8, left: -6, bottom: 0 }}>
+              <defs><linearGradient id="ovRevArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--brand)" stopOpacity={0.28} /><stop offset="100%" stopColor="var(--brand)" stopOpacity={0.01} /></linearGradient></defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={revTick} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+              <Tooltip formatter={(v, n) => [inr(v), n === "cur" ? "Current" : "Previous"]} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 13 }} />
+              <Area type="monotone" dataKey="cur" name="cur" stroke="var(--brand)" strokeWidth={2.5} fill="url(#ovRevArea)" isAnimationActive={false} dot={revData.length <= 31 ? { r: 3, fill: "var(--brand)" } : false}>
+                <LabelList dataKey="cur" position="top" offset={10} formatter={v => v ? kLabel(v) : ""} style={{ fontSize: revData.length > 14 ? 8.5 : 10, fontWeight: 700, fill: "var(--slate)" }} />
+              </Area>
+              <Line type="monotone" dataKey="prev" name="prev" stroke="var(--faint)" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Revenue by Plan — MRR by plan (same chart as Billing analytics) ──── */}
+      <div style={{ ...softShadow, padding: 18, marginBottom: 16, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+          <div>
+            <h3 style={{ fontSize: 16 }}>Revenue by Plan</h3>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>MRR by plan · monthly recurring value</div>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>{revByPlan.length} plan{revByPlan.length !== 1 ? "s" : ""} · {inr(mrrTotal)} MRR</span>
+        </div>
+        {revByPlan.length ? (
+          <div style={{ height: Math.max(160, revByPlan.length * 34 + 16) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={revByPlan} layout="vertical" margin={{ left: 30, right: 56, top: 4, bottom: 4 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
+                <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={140} />
+                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
+                <Bar dataKey="value" name="MRR" radius={[0, 6, 6, 0]} fill="#2A86D6" maxBarSize={34} isAnimationActive={false}>
+                  <LabelList dataKey="value" position="right" formatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `₹${v}`} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : <Empty msg="No active subscriptions in scope." />}
+      </div>
+
+      {/* ── Penetration Tracker (replaces Customer Growth; follows the filters) ─ */}
+      <div style={{ marginBottom: 16 }}>
+        <PenetrationTracker subsData={subs} custsData={customers} societyFilter={selSoc} asOf={anchor} embedded />
+      </div>
+
+      {/* ── Ops Appointments · Forecast (with data labels) ─────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16, marginBottom: 16 }}>
+        <div style={{ ...softShadow, padding: 18, minWidth: 0, display: "flex", flexDirection: "column" }}>
+          <h3 style={{ fontSize: 16, marginBottom: 2 }}>Ops Appointments</h3>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Technician visits · next 4 days (fixed to today — ignores the date filter)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flex: 1 }}>
+            {opsDays.map(d => (
+              <div key={d.label} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", background: "var(--mint)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 800, color: "var(--brand)" }}>{d.label}</span>
+                  <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{d.dateLabel}</span>
+                </div>
+                <div className="serif" style={{ fontSize: 27, color: "var(--f)", lineHeight: 1.1, marginTop: 4 }}>{d.count}</div>
+                <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{d.sub} · visits</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ ...softShadow, padding: 18, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><h3 style={{ fontSize: 16 }}>Forecast vs Actual</h3></div>
+          <div style={{ display: "flex", gap: 14, margin: "8px 0 4px" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--brand)" }} /> Actual</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--faint)" }} /> Forecast</span>
+          </div>
+          <div style={{ height: 210 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={faData} margin={{ top: 22, right: 14, left: -6, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
+                <YAxis tick={axisTick} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                <Tooltip formatter={(v, n) => [inr(v), n === "actual" ? "Actual" : "Forecast"]} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 13 }} />
+                <Line type="monotone" dataKey="actual" stroke="var(--brand)" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3, fill: "var(--brand)" }} connectNulls={false}>
+                  <LabelList dataKey="actual" position="top" offset={9} formatter={v => v ? kLabel(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "var(--brand)" }} />
+                </Line>
+                <Line type="monotone" dataKey="forecast" stroke="var(--faint)" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={false}>
+                  <LabelList dataKey="forecast" position="bottom" offset={9} formatter={v => v ? kLabel(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "var(--muted)" }} />
+                </Line>
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Week-over-Week collected (full width, like Billing analytics) ───── */}
+      <div style={{ ...softShadow, padding: 18, marginBottom: 16, minWidth: 0 }}>
+        <div style={{ marginBottom: 8 }}>
+          <h3 style={{ fontSize: 16 }}>Week-over-Week</h3>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Collected · last 8 weeks (Mon start)</div>
+        </div>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={wow} margin={{ left: 8, right: 12, top: 24, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
+              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+              <Tooltip formatter={(v) => [inr(v), "Collected"]} cursor={{ fill: "rgba(15,110,63,.06)" }} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 13 }} />
+              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#2A86D6" maxBarSize={30} isAnimationActive={false}>
+                <LabelList dataKey="collected" position="top" formatter={v => v ? kLabel(v) : ""} style={{ fontSize: 9.5, fill: "var(--muted)", fontWeight: 700 }} />
+              </Bar>
+              <Line type="monotone" dataKey="collected" stroke="#0B6F52" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Top Performing Societies (full width) ──────────────────────────── */}
+      <div style={{ ...softShadow, padding: 0, marginBottom: 16, minWidth: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "16px 18px 10px" }}>
+          <h3 style={{ fontSize: 16 }}>Top Performing Societies</h3>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>Flats · penetration · active customers · recharge collected (Total Months = months since launch){isAdmin ? " · Total Flats is editable" : ""}</span>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+            <thead><tr>{[
+              { h: "Apartment Name", a: "left" }, { h: "Total Flats", a: "center" }, { h: "Onboarded Flats", a: "center" },
+              { h: "Penetration %", a: "center" }, { h: "Active Customers", a: "center" }, { h: "Total Months", a: "center" },
+              { h: `Revenue (${prevMonLabel})`, a: "right" }, { h: `Revenue (${currMonLabel})`, a: "right" },
+            ].map((c, i) => <th key={i} style={{ padding: "9px 16px", fontSize: 11, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 700, textAlign: c.a, borderBottom: "1px solid var(--border)", background: "var(--mint)", whiteSpace: "nowrap" }}>{c.h}</th>)}</tr></thead>
+            <tbody>
+              {societies.map(s => (
+                <tr key={s.society}>
+                  <td style={{ padding: "12px 16px", fontSize: 13.5, fontWeight: 600, color: "var(--f)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{s.society}</td>
+                  <td style={socTd}>{isAdmin
+                    ? <GsTextCell value={s.totalFlats || ""} editable type="number" width={78} placeholder="0" onCommit={v => { setFlatsOverride(s.society, v); setFlatsTick(t => t + 1); }} />
+                    : (s.totalFlats || "—")}</td>
+                  <td style={socTd}>{s.onboarded}</td>
+                  <td style={socTd}>{s.penetration == null ? <span style={{ color: "var(--faint)" }}>—</span> : `${s.penetration}%`}</td>
+                  <td style={socTd}>{s.active}</td>
+                  <td style={socTd}>{s.months == null ? "—" : s.months}</td>
+                  <td style={{ ...socTd, textAlign: "right" }}>{inr(s.revPrev)}</td>
+                  <td style={{ ...socTd, textAlign: "right", fontWeight: 700, color: "var(--f)" }}>{inr(s.revCurr)}</td>
+                </tr>
+              ))}
+              {societies.length > 0 && (
+                <tr>
+                  <td style={{ ...socFt, textAlign: "left" }}>Total ({societies.length})</td>
+                  <td style={socFt}>{socTot.totalFlats || "—"}</td>
+                  <td style={socFt}>{socTot.onboarded}</td>
+                  <td style={socFt}>{socTotPen == null ? "—" : `${socTotPen}%`}</td>
+                  <td style={socFt}>{socTot.active}</td>
+                  <td style={socFt}>{socTot.months}</td>
+                  <td style={{ ...socFt, textAlign: "right" }}>{inr(socTot.revPrev)}</td>
+                  <td style={{ ...socFt, textAlign: "right" }}>{inr(socTot.revCurr)}</td>
+                </tr>
+              )}
+              {!societies.length && <tr><td colSpan={8}><Empty msg="No society data yet." /></td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── bottom KPI strip ───────────────────────────────────────────────── */}
+      <div style={{ ...softShadow, padding: "6px 6px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 0 }}>
+        {bottom.map((b, i) => (
+          <div key={b.label} style={{ padding: "14px 16px", borderLeft: i === 0 ? "none" : "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 3 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--muted)" }}><b.icon size={14} /><span style={{ fontSize: 11.5, fontWeight: 600 }}>{b.label}</span></div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
+              <span className="serif" style={{ fontSize: 20, color: "var(--f)" }}>{b.value}</span>
+              {b.sub && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{b.sub}</span>}
+              <OvDelta delta={b.delta} invert={b.invert} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -2887,7 +4499,7 @@ function Analytics() {
     { name: "Converted", value: scopedReferees.filter(r => r.status === "paid").length },
     { name: "Pending", value: scopedReferees.filter(r => r.status === "pending").length },
   ].filter(x => x.value > 0);
-  const PIE = ["#8fbf2e", "#16545c", "#c98a3a"];
+  const PIE = CHART_PALETTE.slice(0, 3);
 
   // Free months granted per referrer (top contributors).
   const bySociety = Object.values(scopedRefs.reduce((acc, r) => {
@@ -2914,7 +4526,7 @@ function Analytics() {
           <button onClick={searchPhone} style={btnPrimary}><Search size={16} /> Search</button>
           {scope && scope !== "none" && <button onClick={() => { setPhone(""); setScope(null); }} style={btnGhost}>Clear</button>}
         </div>
-        {scope === "none" && <div style={{ marginTop: 10, fontSize: 13, color: "#b4232a", display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} /> No referrer found with that phone number.</div>}
+        {scope === "none" && <div style={{ marginTop: 10, fontSize: 13, color: "#DC4141", display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} /> No referrer found with that phone number.</div>}
         {scope && scope !== "none" && <div style={{ marginTop: 10, fontSize: 13.5, color: "var(--forest)", fontWeight: 600 }}>Showing analytics for {scope.name} · {scope.phone}</div>}
       </Card>
 
@@ -2944,19 +4556,19 @@ function Analytics() {
           </div>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={trendInRange} margin={{ left: -8, right: 6, top: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={46} allowDecimals={false} />
               <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="rewards" name="free months" radius={[6, 6, 0, 0]} fill="#5a7863" maxBarSize={90} />
+              <Bar dataKey="rewards" name="free months" radius={[6, 6, 0, 0]} fill="#0A9D6E" maxBarSize={90} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card title="Referee status mix" sub="Converted vs pending">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={290}>
             <PieChart>
-              <Pie data={statusBreak} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3}>
+              <Pie data={statusBreak} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
                 {statusBreak.map((e, i) => <Cell key={i} fill={PIE[i]} />)}
               </Pie>
               <Tooltip content={<TT />} />
@@ -2968,11 +4580,11 @@ function Analytics() {
         <Card title="Free months by society" sub="Where referrers are earning">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={bySociety} layout="vertical" margin={{ left: 40, right: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
               <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={150} />
               <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="amount" name="free months" radius={[0, 6, 6, 0]} fill="#90ab8b" />
+              <Bar dataKey="amount" name="free months" radius={[0, 6, 6, 0]} fill="#0A9D6E" isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -3004,8 +4616,8 @@ function Backtrack() {
   };
 
   const kindChip = (kind) => {
-    const map = { approve: ["#1f7a3f", "#e6f4ea"], reject: ["#b4232a", "#fbe9e9"], add_manual: ["#16545c", "#e2eff0"] };
-    const [c, bg] = map[kind] || ["#6a7670", "#eceeed"];
+    const map = { approve: ["#08805A", "#E2F3EE"], reject: ["#DC4141", "#FBE8E8"], add_manual: ["#0B6F52", "#E2F3EE"] };
+    const [c, bg] = map[kind] || ["#7D8A83", "#ECEEED"];
     return <span style={{ fontSize: 11, fontWeight: 600, color: c, background: bg, padding: "3px 8px", borderRadius: 7, textTransform: "capitalize" }}>{kind.replace("_", " ")}</span>;
   };
 
@@ -3083,7 +4695,7 @@ function Logs() {
             {types.map(t => <option key={t} value={t}>{t === "all" ? "All events" : t.replace(/_/g, " ")}</option>)}
           </select>
           <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
-          <button onClick={clear} style={{ ...btnGhost, color: "#b4232a", borderColor: "#f2d0d0" }}><Trash2 size={15} /> Clear</button>
+          <button onClick={clear} style={{ ...btnGhost, color: "#DC4141", borderColor: "#F5BFBF" }}><Trash2 size={15} /> Clear</button>
         </>} />
       <Card pad={false}>
         <Table head={["Time", "Event", "Module", "Version", "Actor", "IP / Network / Location", "Detail"]} maxHeight="calc(100vh - 240px)">
@@ -3114,8 +4726,8 @@ function Logs() {
                   )}
                   {(r.city || r.country) && (
                     r.source === "gps"
-                      ? <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", color: "#1f7a3f", background: "#e6f4ea", padding: "1px 6px", borderRadius: 999 }}>GPS{r.accuracy != null ? ` · ±${r.accuracy}m` : ""}</span>
-                      : <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".04em", color: "#9a6a16", background: "#fdf3e0", padding: "1px 6px", borderRadius: 999 }}>APPROX · via ISP</span>
+                      ? <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".04em", color: "#08805A", background: "#E2F3EE", padding: "1px 6px", borderRadius: 999 }}>GPS{r.accuracy != null ? ` · ±${r.accuracy}m` : ""}</span>
+                      : <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: ".04em", color: "#986315", background: "#FBF0E0", padding: "1px 6px", borderRadius: 999 }}>APPROX · via ISP</span>
                   )}
                 </div>
               </td>
@@ -3163,11 +4775,11 @@ function Failures() {
                 <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, textAlign: "center" }}>{f.endpoint || "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5, color: "var(--muted)" }}>{fmtTime(f.startedAt)}</td>
                 <td style={{ ...td, fontSize: 12.5, maxWidth: 280, textAlign: "center" }}>{f.reason || "—"}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: live ? "#b4232a" : "var(--slate)" }}>{fmtDowntime(dt)}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: live ? "#DC4141" : "var(--slate)" }}>{fmtDowntime(dt)}</td>
                 <td style={td}>
                   {live
-                    ? <span style={{ fontSize: 11.5, fontWeight: 600, color: "#b4232a", background: "#fbe9e9", padding: "3px 9px", borderRadius: 999 }}>● Live</span>
-                    : <span style={{ fontSize: 11.5, fontWeight: 600, color: "#1f7a3f", background: "#e6f4ea", padding: "3px 9px", borderRadius: 999 }}>Resolved</span>}
+                    ? <span style={{ fontSize: 11.5, fontWeight: 600, color: "#DC4141", background: "#FBE8E8", padding: "3px 9px", borderRadius: 999 }}>● Live</span>
+                    : <span style={{ fontSize: 11.5, fontWeight: 600, color: "#08805A", background: "#E2F3EE", padding: "3px 9px", borderRadius: 999 }}>Resolved</span>}
                 </td>
               </tr>
             );
@@ -3187,14 +4799,14 @@ function ServerDownModal({ sources, onClose }) {
   return createPortal(
     <div style={{ ...overlay, alignItems: "center", justifyContent: "center", padding: "40px 20px", zIndex: 2000 }}>
       <div className="pw-pop" style={{ width: "min(460px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 26, boxShadow: "var(--shadow-lg)", textAlign: "center" }}>
-        <div style={{ width: 56, height: 56, borderRadius: 999, background: "#fbe9e9", color: "#b4232a", display: "grid", placeItems: "center", margin: "0 auto 14px" }}><AlertCircle size={28} /></div>
+        <div style={{ width: 56, height: 56, borderRadius: 999, background: "#FBE8E8", color: "#DC4141", display: "grid", placeItems: "center", margin: "0 auto 14px" }}><AlertCircle size={28} /></div>
         <h2 style={{ fontSize: 22, marginBottom: 6 }}>Server unavailable</h2>
         <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 16 }}>We can't reach the data service for this module right now. Live numbers are paused; any cached values may be stale.</p>
         <div style={{ display: "grid", gap: 8, marginBottom: 18, textAlign: "left" }}>
           {recs.map(r => (
             <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 12px", background: "var(--mint)", borderRadius: 10, fontSize: 12.5 }}>
               <span style={{ fontWeight: 600, color: "var(--f)" }}>{r.source}</span>
-              <span style={{ color: "#b4232a", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>down {fmtDowntime(Date.now() - new Date(r.startedAt).getTime())}</span>
+              <span style={{ color: "#DC4141", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>down {fmtDowntime(Date.now() - new Date(r.startedAt).getTime())}</span>
             </div>
           ))}
         </div>
@@ -3210,9 +4822,11 @@ function ServerDownModal({ sources, onClose }) {
    3-step wizard: old device → new device → irreversible confirm. No API.
    =========================================================================== */
 const DEVICE_TYPES = ["Own Device", "Normal", "Hot & Cold"];
-let _drStore = []; // in-memory replacement records (local-only, survives tab re-mounts)
+const DR_LS_KEY = "pw_device_replacements";      // local copy so saved swaps show + survive reloads
+let _drStore = LS.get(DR_LS_KEY, []) || [];      // the display list of replacement records
+const _drSave = () => LS.set(DR_LS_KEY, _drStore);
 
-// Shape the record for the backend DB (snake_case, flattened old/new devices).
+// Shape the record for Firebase (snake_case, flattened old/new devices).
 const drPayload = (full, actor) => ({
   actor,
   replaced_at: full.replacedAt,
@@ -3230,21 +4844,102 @@ const drPayload = (full, actor) => ({
   old_device_age_label: full.ageing?.label || "",
 });
 
+/* ---- Persistence ----------------------------------------------------------
+   Each confirmed swap is transferred to Firebase via the BACKEND API
+   (POST /device-replacement/add — see deviceReplaceApi.create); the backend
+   writes it to Firebase. The frontend also keeps a localStorage copy so saved
+   swaps show immediately and survive reloads. For the read-back list we make a
+   best-effort Firestore query on `device_replacements` (cross-device, if the
+   backend stores swaps in that collection) and fall back to the local copy.
+   These Firebase project/db constants are also reused by the Releases collection. */
+const DR_FS_PROJECT = "backend-prowater", DR_FS_DB = "prowaterdb", DR_COLLECTION = "device_replacements";
+const DR_FS_BASE = `https://firestore.googleapis.com/v1/projects/${DR_FS_PROJECT}/databases/${DR_FS_DB}/documents`;
+
+// Plain JS value/object → a Firestore REST typed field.
+function _drToFsValue(v) {
+  if (v === null || v === undefined) return { nullValue: null };
+  if (typeof v === "number") return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (typeof v === "boolean") return { booleanValue: v };
+  if (typeof v === "object") return { mapValue: { fields: _drToFsFields(v) } };
+  return { stringValue: String(v) };
+}
+function _drToFsFields(obj) {
+  const out = {};
+  for (const k of Object.keys(obj || {})) out[k] = _drToFsValue(obj[k]);
+  return out;
+}
+// A Firestore REST typed field → its plain scalar (mirrors _fsVal in App Logs).
+const _drScalar = (f) => {
+  if (!f || typeof f !== "object") return "";
+  if (f.stringValue != null) return f.stringValue;
+  if (f.timestampValue != null) return f.timestampValue;
+  if (f.integerValue != null) return f.integerValue;
+  if (f.doubleValue != null) return String(f.doubleValue);
+  if (f.booleanValue != null) return f.booleanValue;
+  return "";
+};
+// A Firestore document → the record shape the table / drawer expect.
+function mapDrDoc(doc) {
+  const f = doc.fields || {};
+  const od = f.old_device?.mapValue?.fields || {};
+  const nd = f.new_device?.mapValue?.fields || {};
+  return {
+    id: (doc.name || "").split("/").pop(),
+    replacedAt: _drScalar(f.replaced_at),
+    actor: _drScalar(f.actor),
+    old: {
+      name: _drScalar(od.name), phone: _drScalar(od.phone), email: _drScalar(od.email), plan: _drScalar(od.plan),
+      purifierId: _drScalar(od.purifier_id), deviceType: _drScalar(od.device_type),
+      installDate: _drScalar(od.installation_date), uninstallDate: _drScalar(od.uninstalled_date),
+    },
+    neu: {
+      name: _drScalar(nd.name), phone: _drScalar(nd.phone), email: _drScalar(nd.email), plan: _drScalar(nd.plan),
+      purifierId: _drScalar(nd.purifier_id), deviceType: _drScalar(nd.device_type),
+      installDate: _drScalar(nd.installation_date),
+    },
+    ageing: { days: Number(_drScalar(f.old_device_age_days)) || 0, label: _drScalar(f.old_device_age_label) },
+  };
+}
+
 const deviceReplaceApi = {
   list: () => [..._drStore],
-  // Records the swap locally AND persists it to the backend DB.
-  // >>> WIRE: POST ${API_ORIGIN}/device-replacement/add
+  // Read every saved replacement from Firestore (newest first). Falls back to
+  // the in-memory cache if Firestore is unreachable / refused.
+  fetch: async () => {
+    const token = sessionStorage.getItem("pw_idToken");
+    try {
+      const res = await fetch(`${DR_FS_BASE}:runQuery`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ structuredQuery: {
+          from: [{ collectionId: DR_COLLECTION }],
+          orderBy: [{ field: { fieldPath: "replaced_at" }, direction: "DESCENDING" }],
+          limit: 500,
+        } }),
+      });
+      if (!res.ok) throw new Error(`Firestore ${res.status}`);
+      const json = await res.json();
+      const rows = (json || []).filter(r => r.document).map(r => mapDrDoc(r.document));
+      if (rows.length) { _drStore = rows; _drSave(); }   // backend stores swaps here → cross-device list
+      return [..._drStore];
+    } catch (e) {
+      console.warn("device-replacement fetch failed:", e.message);
+      return [..._drStore];   // fall back to the local copy
+    }
+  },
+  // Transfer one swap to Firebase via the backend API (POST /device-replacement/add).
+  // The record is cached locally first so it shows immediately and survives reloads.
   create: async (actor, rec) => {
     const full = { id: crypto.randomUUID(), replacedAt: new Date().toISOString(), ...rec };
-    _drStore = [full, ..._drStore];
     pushLog({ type: "device_replaced", actor, module: "Device Replacement", detail: `Replaced ${rec.old?.purifierId || "device"} → ${rec.neu?.purifierId || "new device"} for ${rec.old?.name || "customer"}` });
+    _drStore = [full, ..._drStore]; _drSave();
     try {
       const res = await fetch(`${API_ORIGIN}/device-replacement/add`, {
         method: "POST", headers: authHeaders(), body: JSON.stringify(drPayload(full, actor)),
       });
       if (res.ok) return { saved: true, record: full };
       let message = `Server error ${res.status}`;
-      try { const j = await res.json(); if (j?.message) message = j.message; } catch { /* keep status */ }
+      try { const j = await res.json(); if (j?.message || j?.error) message = j.message || j.error; } catch { /* keep status */ }
       console.warn("device-replacement/add failed:", message);
       return { saved: false, record: full, message };
     } catch (e) {
@@ -3282,6 +4977,7 @@ function DeviceReplacement() {
   const { user } = useAuth();
   const today = new Date().toISOString().slice(0, 10);
   const [records, setRecords] = useState(deviceReplaceApi.list());
+  const [loading, setLoading] = useState(true);        // first Firestore read in flight
   const [step, setStep] = useState(0);                 // 0=list, 1=old, 2=new, 3=confirm
   const [old, setOld] = useState({ ..._drEmptyDevice, uninstallDate: today });
   const [neu, setNeu] = useState({ ..._drEmptyDevice });
@@ -3290,7 +4986,10 @@ function DeviceReplacement() {
   const [toast, setToast] = useState("");
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 3000); };
 
-  useEffect(() => { api.logView(user.username, "Viewed Device Replacement"); }, []);
+  useEffect(() => {
+    api.logView(user.username, "Viewed Device Replacement");
+    deviceReplaceApi.fetch().then(r => { setRecords(r); setLoading(false); });
+  }, []);
 
   const reset = () => { setOld({ ..._drEmptyDevice, uninstallDate: today }); setNeu({ ..._drEmptyDevice }); setStep(0); };
   const oldValid = old.name.trim() && old.phone.trim() && old.purifierId.trim() && old.deviceType && old.installDate;
@@ -3301,9 +5000,11 @@ function DeviceReplacement() {
     setSaving(true);
     try {
       const { saved, message } = await deviceReplaceApi.create(user.username, { old, neu, ageing });
-      setRecords(deviceReplaceApi.list());
+      // On success re-read Firestore (authoritative); on failure keep the cached
+      // copy so the just-entered record still shows for this session.
+      setRecords(saved ? await deviceReplaceApi.fetch() : deviceReplaceApi.list());
       reset();
-      flash(saved ? "Replacement saved to the database ✓" : `Saved locally — ${message}`);
+      flash(saved ? "Replacement saved to Firebase ✓" : `Saved locally — ${message}`);
     } finally { setSaving(false); }
   };
 
@@ -3338,12 +5039,12 @@ function DeviceReplacement() {
   return (
     <div className="fade-up">
       {/* Hero header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap", background: "linear-gradient(135deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#eaf5ee", borderRadius: "var(--radius)", padding: "18px 22px", boxShadow: "var(--shadow)", position: "relative", overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16, flexWrap: "wrap", background: "linear-gradient(135deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#E2F3EE", borderRadius: "var(--radius)", padding: "18px 22px", boxShadow: "var(--shadow)", position: "relative", overflow: "hidden" }}>
         <div style={{ position: "absolute", right: -30, top: -30, width: 130, height: 130, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.35),transparent 70%)" }} />
         <div style={{ width: 46, height: 46, borderRadius: 13, background: "rgba(255,255,255,.12)", display: "grid", placeItems: "center", flexShrink: 0 }}><Repeat size={24} color="#fff" /></div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: 18, color: "#fff" }}>Device Replacement</div>
-          <div style={{ fontSize: 12.5, color: "#bfe0cb" }}>Swap an old purifier for a new one · {swaps} recorded · records are final</div>
+          <div style={{ fontSize: 12.5, color: "#B5E2D4" }}>Swap an old purifier for a new one · {swaps} recorded · records are final</div>
         </div>
         <button onClick={() => setStep(1)} style={{ ...btnPrimary, padding: "10px 18px", marginLeft: "auto", background: "#fff", color: "var(--forest)", boxShadow: "0 8px 18px -8px rgba(0,0,0,.35)" }}><Plus size={16} /> New Entry</button>
       </div>
@@ -3361,7 +5062,7 @@ function DeviceReplacement() {
             </tr>
           ))}
         </Table>
-        {records.length === 0 && <Empty msg="No replacements recorded yet. Click “New Entry” to start." />}
+        {records.length === 0 && (loading ? <Loading /> : <Empty msg="No replacements recorded yet. Click “New Entry” to start." />)}
       </Card>
 
       {/* Wizard popup — 2 short steps */}
@@ -3399,7 +5100,7 @@ function DeviceReplacement() {
       {step === 3 && createPortal(
         <div onClick={() => !saving && setStep(2)} style={{ ...overlay, alignItems: "center", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1100 }}>
           <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(420px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 24, boxShadow: "var(--shadow-lg)", textAlign: "center" }}>
-            <div style={{ width: 52, height: 52, borderRadius: 999, background: "#fbe9e9", color: "#b4232a", display: "grid", placeItems: "center", margin: "0 auto 12px" }}><AlertCircle size={26} /></div>
+            <div style={{ width: 52, height: 52, borderRadius: 999, background: "#FBE8E8", color: "#DC4141", display: "grid", placeItems: "center", margin: "0 auto 12px" }}><AlertCircle size={26} /></div>
             <h2 style={{ fontSize: 20, marginBottom: 6 }}>Confirm replacement</h2>
             <p style={{ fontSize: 13, color: "var(--slate)", marginBottom: 14 }}>This is final — the record can't be edited or undone once saved.</p>
             <div style={{ background: "var(--mint)", borderRadius: 12, padding: "12px 14px", marginBottom: 18 }}>
@@ -3412,7 +5113,7 @@ function DeviceReplacement() {
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setStep(2)} disabled={saving} style={{ ...btnGhost, flex: 1, justifyContent: "center" }}><ChevronLeft size={16} /> Go back</button>
-              <button onClick={commit} disabled={saving} style={{ ...btnPrimary, flex: 1, background: "#b4232a", boxShadow: "0 8px 18px -8px rgba(180,35,42,.6)", opacity: saving ? .7 : 1 }}><CheckCircle2 size={16} /> {saving ? "Saving…" : "Confirm & save"}</button>
+              <button onClick={commit} disabled={saving} style={{ ...btnPrimary, flex: 1, background: "#DC4141", boxShadow: "0 8px 18px -8px rgba(180,35,42,.6)", opacity: saving ? .7 : 1 }}><CheckCircle2 size={16} /> {saving ? "Saving…" : "Confirm & save"}</button>
             </div>
           </div>
         </div>,
@@ -3432,7 +5133,7 @@ function DeviceReplacement() {
         <DrRow k="Installed" v={view.neu?.installDate ? fmtDate(view.neu.installDate) : "—"} />
       </Drawer>}
 
-      {toast && <div style={{ ...toastStyle, background: /couldn't|local/i.test(toast) ? "#9a6a16" : toastStyle.background }}>{/couldn't|local/i.test(toast) ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />} {toast}</div>}
+      {toast && <div style={{ ...toastStyle, background: /couldn't|local/i.test(toast) ? "#986315" : toastStyle.background }}>{/couldn't|local/i.test(toast) ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />} {toast}</div>}
     </div>
   );
 }
@@ -3448,13 +5149,13 @@ const MODULE_DOCS = [
   { id: "fsm", label: "FSM System", summary: "Field service: technician tracking, AMC, water quality.", points: ["Track technician location", "AMC / maintenance schedule"], source: "local" },
   { id: "iot", label: "IoT Core", summary: "Live device telemetry — pressure, flow, valve state.", points: ["Device monitor with status polling", "Valve + channel telemetry"], source: "AWS IoT API" },
   { id: "referral", label: "Referral", summary: "Referrers, referees, credits and the rewards tracker.", points: ["Referral momentum charts", "Credit approvals + backtrack"], source: "/api/admin/all-referrals" },
-  { id: "ticketing", label: "Ticketing", summary: "Zoho Desk support tickets & resolution.", points: ["Live tickets via Zoho Desk (GET /tickets)", "List with status/priority filters + detail drawer"], source: "Zoho Desk · /tickets" },
+  { id: "ticketing", label: "Ticketing", summary: "Zoho Desk support tickets & resolution.", points: ["Live tickets via Zoho Desk (GET /tickets/formattedforwisdom)", "List with status/priority filters + detail drawer"], source: "Zoho Desk · /tickets/formattedforwisdom" },
   { id: "autoscheduler", label: "Auto Scheduler", summary: "15-day general-service scheduling with auto-raised tickets. Local-first.", points: ["CRO type, backwash & dozing tracking", "Auto ticket on day 14", "Does NOT flag Server Down (local-first)"], source: "local seed / optional /api/gs-schedules" },
   { id: "analytics", label: "Analytics", summary: "Cross-module reporting: referral, sales, billing, earned revenue, apartment performance.", points: ["Referral + Sales insights", "Earned Revenue (day-based accrual)", "Apartment Performance by society / purifier"], source: "aggregates" },
   { id: "planner", label: "Task Planner", summary: "ClickUp-style Kanban board for internal tasks across Scoping → Live.", points: ["7 status columns with drag-and-drop", "Cards carry assignee, email, notes, attachments, start/end dates & priority", "Board + List views, assignee filter & search"], source: "localStorage pw_tasks" },
   { id: "employee", label: "Employee", summary: "Add & manage dashboard users; login matches email → user for role/access.", points: ["Create / disable users", "Role & module access control"], source: "localStorage pw_users" },
   { id: "logtracker", label: "Logs Tracker", summary: "Audit trail with IP/geo, version stamp, and an API Failures monitor.", points: ["Every log stamped with app version", "Clear log + CSV export", "Failures tab + Server Down popup + email alerts"], source: "localStorage pw_logs / pw_failures" },
-  { id: "devicereplace", label: "Device Replacement", summary: "Record an old→new purifier swap via a 3-step irreversible wizard.", points: ["Captures old + new device details", "Computes old-device ageing", "Records are final (no edit/undo)"], source: "local (in-memory)" },
+  { id: "devicereplace", label: "Device Replacement", summary: "Record an old→new purifier swap via a 3-step irreversible wizard.", points: ["Captures old + new device details", "Computes old-device ageing", "Saved to Firebase via backend POST /device-replacement/add; cached locally so it shows + survives reloads", "Records are final (no edit/undo)"], source: "POST /device-replacement/add · localStorage pw_device_replacements" },
   { id: "about", label: "About", summary: "This page — version history and per-module documentation.", points: ["Full changelog", "Searchable module docs"], source: "in-app" },
 ];
 
@@ -3467,16 +5168,18 @@ const API_USAGE = [
     { m: "GET", path: "/admin/zoho/get-all-leads", use: "Zoho CRM leads — Sales, Analytics" },
     { m: "GET", path: "/admin/zoho/get-all-apartments/data", use: "Apartment leads — Sales" },
     { m: "GET", path: "/admin/get-app-logs", use: "Server app logs — Analytics · App Logs" },
-    { m: "POST", path: "/device-replacement/add", use: "Save a device-replacement record" },
+    { m: "POST", path: "/documents/add?email=", use: "Task Planner attachments — upload files for the signed-in user" },
+    { m: "POST", path: "/device-replacement/add", use: "Save a device-replacement swap → Firebase" },
     { m: "POST", path: "/admin/notify-failure", use: "Email alert on API failure (needs backend route)" },
     { m: "GET", path: "/api/admin/all-referrals", use: "Referrers + referees + credits — Referral" },
-    { m: "GET", path: "/tickets", use: "Zoho Desk tickets (list) — Ticketing" },
+    { m: "GET", path: "/tickets/formattedforwisdom", use: "Zoho Desk tickets (list, Wisdom-formatted) — Ticketing" },
     { m: "GET/POST", path: "/api/gs-schedules", use: "Auto GS schedules (optional; local-first)" },
   ] },
   { group: "Google / Firebase", items: [
     { m: "POST", path: "identitytoolkit.googleapis.com/…:signInWithPassword", use: "Login — email/password auth" },
-    { m: "POST", path: "firestore.googleapis.com/…:runQuery", use: "App Logs source (Firestore)" },
-    { m: "POST/GET/DELETE", path: "firebasestorage.googleapis.com/v0/b/…/o", use: "Task Planner attachments (Firebase Storage, when VITE_FIREBASE_STORAGE_BUCKET is set)" },
+    { m: "POST", path: "firestore.googleapis.com/…:runQuery", use: "App Logs (logs) + Device Replacement read-back (device_replacements)" },
+    { m: "POST/GET/DELETE", path: "firestore.googleapis.com/…/documents/wisdom2.0_releases", use: "App & Technician releases — shared so every login sees the popup (Firestore)" },
+    { m: "GET", path: "firebasestorage.googleapis.com/v0/b/…/o/…?alt=media", use: "Download Task Planner attachments (backend-prowater.firebasestorage.app)" },
     { m: "GET", path: "fonts.googleapis.com", use: "Web fonts (Playfair Display + DM Sans)" },
   ] },
   { group: "External utility APIs", items: [
@@ -3486,15 +5189,126 @@ const API_USAGE = [
     { m: "GET/POST", path: "…execute-api.ap-southeast-2.amazonaws.com/prod", use: "IoT device status + history (IoT Core)" },
   ] },
 ];
-const apiMethodBadge = (m) => { const c = m.includes("POST") ? ["#3a6ea5", "#e7eef7"] : ["#1f7a3f", "#e6f4ea"]; return { fontSize: 11, fontWeight: 700, color: c[0], background: c[1], padding: "2px 8px", borderRadius: 7, fontFamily: "ui-monospace,monospace", whiteSpace: "nowrap" }; };
+const apiMethodBadge = (m) => { const c = m.includes("POST") ? ["#2A86D6", "#E5F0FA"] : ["#08805A", "#E2F3EE"]; return { fontSize: 11, fontWeight: 700, color: c[0], background: c[1], padding: "2px 8px", borderRadius: 7, fontFamily: "ui-monospace,monospace", whiteSpace: "nowrap" }; };
 
 /* ===========================================================================
    RELEASES — App & Technician release notes (free text). Admins publish; the
    publish stamps date+time. On login every user gets a "what's new" popup for
-   releases they haven't seen. Stored in localStorage (pw_releases).
+   releases they haven't seen. Stored in a SHARED Cloud Firestore collection
+   (backend-prowater · prowaterdb · wisdom2.0_releases) so a published release
+   reaches EVERY login; a localStorage copy (pw_releases) is the offline cache.
+   The collection is created automatically the first time a release is written.
    =========================================================================== */
-const getReleases = () => { const r = LS.get("pw_releases", null); return (r && typeof r === "object") ? { app: r.app || [], technician: r.technician || [] } : { app: [], technician: [] }; };
+const RELEASES_COLLECTION = "wisdom2.0_releases";
+const RELEASES_FS_BASE = `https://firestore.googleapis.com/v1/projects/${DR_FS_PROJECT}/databases/${DR_FS_DB}/documents`;
+const _relHeaders = () => { const t = sessionStorage.getItem("pw_idToken"); return { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) }; };
 const saveReleases = (obj) => LS.set("pw_releases", obj);
+// In-memory cache (also the offline fallback), seeded from the last localStorage copy.
+let _releasesCache = (() => { const r = LS.get("pw_releases", null); return (r && typeof r === "object") ? { app: r.app || [], technician: r.technician || [] } : { app: [], technician: [] }; })();
+const getReleases = () => _releasesCache;   // synchronous read from cache (callers stay sync)
+
+function mapReleaseDoc(doc) {
+  const f = doc.fields || {};
+  return {
+    _docId: (doc.name || "").split("/").pop(),
+    id: _drScalar(f.id) || (doc.name || "").split("/").pop(),
+    kind: _drScalar(f.kind) === "technician" ? "technician" : "app",
+    sprint: _drScalar(f.sprint), version: _drScalar(f.version), notes: _drScalar(f.notes),
+    publishedAt: _drScalar(f.publishedAt), scheduledAt: _drScalar(f.scheduledAt), by: _drScalar(f.by),
+  };
+}
+const _relByPubDesc = (a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0);
+async function _relPush(rel) {
+  const { _docId, ...body } = rel;   // never write our local-only _docId field
+  const res = await fetch(`${RELEASES_FS_BASE}/${RELEASES_COLLECTION}`, {
+    method: "POST", headers: _relHeaders(), body: JSON.stringify({ fields: _drToFsFields(body) }),
+  });
+  if (!res.ok) { let m = `Firestore ${res.status}`; try { const j = await res.json(); if (j?.error?.message) m = j.error.message; } catch { /* keep status */ } throw new Error(m); }
+  return mapReleaseDoc(await res.json());
+}
+
+const releasesApi = {
+  local: () => _releasesCache,
+  // Read all releases from Firestore, MERGE with any local-only ones (uploading them
+  // best-effort so nothing is lost when this collection first goes live), refresh cache.
+  fetch: async () => {
+    try {
+      const res = await fetch(`${RELEASES_FS_BASE}:runQuery`, {
+        method: "POST", headers: _relHeaders(),
+        body: JSON.stringify({ structuredQuery: { from: [{ collectionId: RELEASES_COLLECTION }], limit: 500 } }),
+      });
+      if (!res.ok) throw new Error(`Firestore ${res.status}`);
+      const json = await res.json();
+      const rows = (json || []).filter(r => r.document).map(r => mapReleaseDoc(r.document));
+      const cloudIds = new Set(rows.map(r => r.id));
+      const merged = { app: [], technician: [] };
+      rows.forEach(r => merged[r.kind].push(r));
+      ["app", "technician"].forEach(k => (_releasesCache[k] || []).forEach(r => {
+        if (r.id && !cloudIds.has(r.id)) { merged[k].push(r); if (!r._docId) _relPush(r).catch(() => { }); }
+      }));
+      merged.app.sort(_relByPubDesc); merged.technician.sort(_relByPubDesc);
+      _releasesCache = merged; saveReleases(merged);
+      return merged;
+    } catch (e) { console.warn("releases fetch failed:", e.message); return _releasesCache; }
+  },
+  // Publish one release: optimistic cache update, then persist to Firestore for everyone.
+  add: async (rel) => {
+    const k = rel.kind === "technician" ? "technician" : "app";
+    _releasesCache = { ..._releasesCache, [k]: [rel, ...(_releasesCache[k] || [])] };
+    saveReleases(_releasesCache);
+    try {
+      const doc = await _relPush(rel);
+      _releasesCache = { ..._releasesCache, [k]: _releasesCache[k].map(r => r.id === rel.id ? { ...r, _docId: doc._docId } : r) };
+      saveReleases(_releasesCache);
+      return { saved: true };
+    } catch (e) { return { saved: false, message: e.message }; }
+  },
+  // Delete a release everywhere.
+  remove: async (rel) => {
+    const k = rel.kind === "technician" ? "technician" : "app";
+    _releasesCache = { ..._releasesCache, [k]: (_releasesCache[k] || []).filter(r => r.id !== rel.id) };
+    saveReleases(_releasesCache);
+    if (rel._docId) { try { await fetch(`${RELEASES_FS_BASE}/${RELEASES_COLLECTION}/${rel._docId}`, { method: "DELETE", headers: _relHeaders() }); } catch (e) { console.warn("release delete failed:", e.message); } }
+  },
+};
+
+/* A release becomes "due" at its scheduled moment — `scheduledAt` is what drives
+   the popup, while `publishedAt` only records when it was written. Releases from
+   before scheduling existed have no scheduledAt and fall back to publishedAt,
+   i.e. they were due the instant they were published. */
+const releaseDueAt = (r) => r.scheduledAt || r.publishedAt || null;
+const isReleaseDue = (r, now = Date.now()) => {
+  const at = releaseDueAt(r);
+  return !at || new Date(at).getTime() <= now;
+};
+
+/* Seen state is per USER and tracked by release id — deliberately not a
+   "seen everything up to T" timestamp. A release scheduled for next week is
+   written *before* a user dismisses today's popup, so a timestamp would mark
+   the future release as already seen and it would never show. Keying by user
+   (not browser) also means a shared machine shows it to each person once.
+   Shape: { [username]: [releaseId, …] }. */
+const RELEASES_SEEN_KEY = "pw_releases_seen_by";
+function getSeenReleaseIds(username) {
+  const all = LS.get(RELEASES_SEEN_KEY, {}) || {};
+  if (all[username]) return new Set(all[username]);
+  // First run for this user: honour the old per-browser "seen up to" stamp so
+  // existing users aren't re-shown releases they already dismissed.
+  const legacy = LS.get("pw_releases_seen", 0);
+  if (!legacy) return new Set();
+  const rel = getReleases();
+  return new Set([...(rel.app || []), ...(rel.technician || [])]
+    .filter(r => r.publishedAt && new Date(r.publishedAt).getTime() <= legacy)
+    .map(r => r.id));
+}
+function markReleasesSeen(username, ids) {
+  const all = LS.get(RELEASES_SEEN_KEY, {}) || {};
+  all[username] = [...new Set([...(all[username] || []), ...ids])];
+  LS.set(RELEASES_SEEN_KEY, all);
+}
+// datetime-local wants "YYYY-MM-DDTHH:mm" in LOCAL time — toISOString() would
+// shift it by the UTC offset and schedule the popup at the wrong hour.
+const toLocalInput = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
 function ReleaseManager({ kind, isAdmin }) {
   const { user } = useAuth();
@@ -3502,31 +5316,55 @@ function ReleaseManager({ kind, isAdmin }) {
   const [sprint, setSprint] = useState("");
   const [version, setVersion] = useState("");
   const [notes, setNotes] = useState("");
+  const [scheduleAt, setScheduleAt] = useState("");
   const [flash, setFlash] = useState("");
   const title = kind === "app" ? "App" : "Technician";
-  useEffect(() => { api.logView(user.username, `Viewed ${title} Releases`); }, []);
+  useEffect(() => { api.logView(user.username, `Viewed ${title} Releases`); releasesApi.fetch().then(setData); }, []);
   const list = data[kind] || [];
-  const toast = (m) => { setFlash(m); setTimeout(() => setFlash(""), 1800); };
-  const persist = (next) => { const all = { ...getReleases(), [kind]: next }; setData(all); saveReleases(all); };
-  const publish = () => {
+  const toast = (m) => { setFlash(m); setTimeout(() => setFlash(""), 2400); };
+  const publish = async () => {
     if (!sprint.trim() && !version.trim() && !notes.trim()) return toast("Fill at least one field");
-    persist([{ id: crypto.randomUUID(), kind, sprint: sprint.trim(), version: version.trim(), notes: notes.trim(), publishedAt: new Date().toISOString(), by: user.name }, ...list]);
-    setSprint(""); setVersion(""); setNotes(""); toast("Release published");
+    // Empty schedule = announce now. A past date is allowed and means the same.
+    const when = scheduleAt ? new Date(scheduleAt) : new Date();
+    if (isNaN(when.getTime())) return toast("Pick a valid schedule date & time");
+    const rel = {
+      id: crypto.randomUUID(), kind, sprint: sprint.trim(), version: version.trim(), notes: notes.trim(),
+      publishedAt: new Date().toISOString(), scheduledAt: when.toISOString(), by: user.name,
+    };
+    setSprint(""); setVersion(""); setNotes(""); setScheduleAt("");
+    const { saved, message } = await releasesApi.add(rel);
+    setData(releasesApi.local());
+    toast(!saved ? `Saved locally — ${message}` : when.getTime() > Date.now() ? `Scheduled for ${fmtTime(when.toISOString())} · everyone will see it` : "Release published — everyone will see it");
   };
-  const remove = (id) => persist(list.filter(r => r.id !== id));
+  const remove = async (rel) => { await releasesApi.remove(rel); setData(releasesApi.local()); };
   const lbl = { fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6, display: "block" };
 
   return (
     <div className="fade-up">
       {isAdmin && (
-        <Card title={`Publish a ${title} release`} sub="All fields are free text. Publishing stamps the current date & time.">
+        <Card title={`Publish a ${title} release`} sub="All fields are free text. Choose when the announcement popup goes live.">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div><label style={lbl}>Sprint</label><input value={sprint} onChange={e => setSprint(e.target.value)} placeholder="e.g. Sprint 5" style={inp} /></div>
             <div><label style={lbl}>{title} release version</label><input value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. v3.2.0" style={inp} /></div>
+            <div>
+              <label style={lbl}>Announce from</label>
+              <input type="datetime-local" value={scheduleAt} min={toLocalInput(new Date())}
+                onChange={e => setScheduleAt(e.target.value)} style={inp} />
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.5 }}>
+                Leave empty to announce immediately. From this moment, everyone sees the popup once on their next login — including anyone who doesn’t log in that day.
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-start" }}>
+              {scheduleAt && (
+                <button onClick={() => setScheduleAt("")} style={{ ...btnGhost, marginTop: 26 }}>Clear schedule</button>
+              )}
+            </div>
             <div style={{ gridColumn: "1 / -1" }}><label style={lbl}>Notes — what was released</label><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="What went out in this release…" style={{ ...inp, resize: "vertical", lineHeight: 1.5 }} /></div>
           </div>
           <div style={{ display: "flex", marginTop: 14 }}>
-            <button onClick={publish} style={{ ...btnPrimary, marginLeft: "auto" }}><Check size={16} /> Publish release</button>
+            <button onClick={publish} style={{ ...btnPrimary, marginLeft: "auto" }}>
+              {scheduleAt ? <><CalendarClock size={16} /> Schedule release</> : <><Check size={16} /> Publish release</>}
+            </button>
           </div>
         </Card>
       )}
@@ -3541,11 +5379,16 @@ function ReleaseManager({ kind, isAdmin }) {
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                       {r.version && <span style={{ fontWeight: 700, fontSize: 14.5, color: "var(--f)" }}>{r.version}</span>}
                       {r.sprint && <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--forest)", background: "var(--mint-2)", padding: "2px 9px", borderRadius: 999 }}>{r.sprint}</span>}
+                      {!isReleaseDue(r) && (
+                        <span title="The popup hasn’t started showing yet" style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".04em", color: "var(--amber)", background: "var(--amber-t)", border: "1px solid var(--amber-b)", padding: "2px 8px", borderRadius: 999 }}>
+                          SCHEDULED · {fmtTime(r.scheduledAt)}
+                        </span>
+                      )}
                       <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{fmtTime(r.publishedAt)}{r.by ? ` · ${r.by}` : ""}</span>
                     </div>
                     {r.notes && <div style={{ fontSize: 13, color: "var(--slate)", marginTop: 5, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{r.notes}</div>}
                   </div>
-                  {isAdmin && <button onClick={() => remove(r.id)} title="Delete" style={{ ...iconBtn, padding: 6, background: "var(--mint)", flexShrink: 0 }}><Trash2 size={15} /></button>}
+                  {isAdmin && <button onClick={() => remove(r)} title="Delete" style={{ ...iconBtn, padding: 6, background: "var(--mint)", flexShrink: 0 }}><Trash2 size={15} /></button>}
                 </div>
               ))}
             </div>
@@ -3557,17 +5400,33 @@ function ReleaseManager({ kind, isAdmin }) {
   );
 }
 
-// Login "what's new" popup — shows releases published since the user last saw it.
+// "What's new" popup — every due release this user hasn't dismissed yet. Shows
+// on login, and (via the tick below) the moment a scheduled release falls due
+// for someone already signed in. A user who misses the scheduled day still gets
+// it on their next login, because "due" is a floor, not a window.
 function ReleasePopup() {
-  const [rels, setRels] = useState(() => {
-    const all = getReleases();
-    const seen = LS.get("pw_releases_seen", 0);
-    return [...(all.app || []), ...(all.technician || [])]
-      .filter(r => r.publishedAt && new Date(r.publishedAt).getTime() > seen)
-      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-  });
+  const { user } = useAuth();
+  const [rels, setRels] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    const compute = () => {
+      const all = getReleases();
+      const seen = getSeenReleaseIds(user.username);
+      const due = [...(all.app || []), ...(all.technician || [])]
+        .filter(r => isReleaseDue(r) && !seen.has(r.id))
+        .sort((a, b) => new Date(releaseDueAt(b)) - new Date(releaseDueAt(a)));
+      // Only swap state when the set actually changes, so the tick can't spam re-renders.
+      if (alive) setRels(prev => (prev.length === due.length && prev.every((p, i) => p.id === due[i].id)) ? prev : due);
+    };
+    // Pull the shared releases from Firestore, then show what's new for this user.
+    const refresh = () => releasesApi.fetch().then(() => alive && compute());
+    refresh();
+    const tick = setInterval(compute, 30000);    // a scheduled release can fall due mid-session
+    const pull = setInterval(refresh, 180000);   // pull newly-published releases every 3 min
+    return () => { alive = false; clearInterval(tick); clearInterval(pull); };
+  }, [user.username]);
   if (!rels.length) return null;
-  const dismiss = () => { LS.set("pw_releases_seen", Date.now()); setRels([]); };
+  const dismiss = () => { markReleasesSeen(user.username, rels.map(r => r.id)); setRels([]); };
   return createPortal(
     <div onClick={dismiss} style={{ ...overlay, alignItems: "center", justifyContent: "center", padding: 20, zIndex: 1200 }}>
       <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(460px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 24, boxShadow: "var(--shadow-lg)", maxHeight: "calc(100vh - 60px)", overflowY: "auto", fontFamily: "'DM Sans',system-ui,-apple-system,sans-serif" }}>
@@ -3580,12 +5439,12 @@ function ReleasePopup() {
           {rels.slice(0, 6).map(r => (
             <div key={r.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "11px 13px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: r.kind === "app" ? "#3a6ea5" : "#9a3b6e", background: r.kind === "app" ? "#eef4ff" : "#fbeaf3", padding: "2px 8px", borderRadius: 999 }}>{r.kind === "app" ? "APP" : "TECHNICIAN"}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: r.kind === "app" ? "#2A86D6" : "#DC4141", background: r.kind === "app" ? "#E5F0FA" : "#FBE8E8", padding: "2px 8px", borderRadius: 999 }}>{r.kind === "app" ? "APP" : "TECHNICIAN"}</span>
                 {r.version && <span style={{ fontWeight: 700, fontSize: 14, color: "var(--f)" }}>{r.version}</span>}
                 {r.sprint && <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--forest)" }}>{r.sprint}</span>}
               </div>
               {r.notes && <div style={{ fontSize: 12.5, color: "var(--slate)", marginTop: 5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{r.notes}</div>}
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>{fmtTime(r.publishedAt)}</div>
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>{fmtTime(releaseDueAt(r))}</div>
             </div>
           ))}
         </div>
@@ -3622,19 +5481,27 @@ function AboutModule() {
           {VERSION_HISTORY.map((h, i) => {
             const latest = i === 0;
             return (
+              // Fixed-height card: the version row is pinned and only the note
+              // scrolls, so one long changelog entry can't stretch the whole strip.
               <div key={h.v} className="cl-card" style={{
-                flex: "0 0 240px", scrollSnapAlign: "start", borderRadius: 14, padding: 16, position: "relative", overflow: "hidden",
+                flex: "0 0 232px", height: 196, display: "flex", flexDirection: "column",
+                scrollSnapAlign: "start", borderRadius: 14, padding: 14, position: "relative", overflow: "hidden",
                 background: latest ? "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)" : "#fff",
-                color: latest ? "#eaf5ee" : "inherit", border: latest ? "none" : "1px solid var(--border)", boxShadow: "var(--shadow)"
+                color: latest ? "#E2F3EE" : "inherit", border: latest ? "none" : "1px solid var(--border)", boxShadow: "var(--shadow)"
               }}>
                 {latest && <div style={{ position: "absolute", right: -18, top: -18, width: 80, height: 80, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.4),transparent 70%)" }} />}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 22, color: latest ? "#fff" : "var(--f)", lineHeight: 1 }}>v{h.v}</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 7, flexShrink: 0, position: "relative" }}>
+                  <span style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 19, color: latest ? "#fff" : "var(--f)", lineHeight: 1 }}>v{h.v}</span>
                   {latest
                     ? <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--forest)", background: "var(--lime)", padding: "2px 8px", borderRadius: 999 }}>Current</span>
                     : <span style={{ fontSize: 10.5, color: "var(--muted)", fontWeight: 600 }}>#{VERSION_HISTORY.length - i}</span>}
                 </div>
-                <div style={{ fontSize: 12, lineHeight: 1.5, color: latest ? "#c9e4d3" : "var(--slate)" }}>{h.note}</div>
+                {/* minHeight:0 is load-bearing — without it this flex child refuses
+                    to shrink below its content and the card grows instead of scrolling. */}
+                <div className="scroll-thin" style={{
+                  flex: 1, minHeight: 0, overflowY: "auto", position: "relative",
+                  fontSize: 11.5, lineHeight: 1.5, color: latest ? "#B5E2D4" : "var(--slate)", paddingRight: 4,
+                }}>{h.note}</div>
               </div>
             );
           })}
@@ -3654,7 +5521,7 @@ function AboutModule() {
           {docs.map(d => {
             const m = MODULES.find(x => x.id === d.id);
             const Icon = (m && MODULE_ICONS[m.icon]) || Info;
-            const color = m?.color || "#5a7863";
+            const color = m?.color || "#0A9D6E";
             return (
               <div key={d.id} className="about-doc" style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 14, boxShadow: "var(--shadow)", overflow: "hidden" }}>
                 <div style={{ height: 4, background: color }} />
@@ -3703,11 +5570,13 @@ function AboutModule() {
 /* ===========================================================================
    User management (admin only)
    =========================================================================== */
-function UsersAdmin() {
+function UsersAdmin({ accessLevel = "view" }) {
   const { user } = useAuth();
+  const canEditAccess = accessLevel === "admin" || accessLevel === "devops"; // only Admin/DevOps may change module access
   const [rows, setRows] = useState(null);
   const [creating, setCreating] = useState(false);
   const [resetFor, setResetFor] = useState(null);
+  const [editFor, setEditFor] = useState(null);
   const [toast, setToast] = useState("");
 
   const refresh = () => api.getUsers().then(setRows);
@@ -3734,7 +5603,7 @@ function UsersAdmin() {
               <td style={td}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", maxWidth: 260 }}>
                   {MODULES.filter(m => (u.access?.[m.id] || "none") !== "none").map(m => (
-                    <span key={m.id} style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 999, background: u.access[m.id] === "admin" ? "var(--mint-2)" : "#eef1f4", color: u.access[m.id] === "admin" ? "var(--teal)" : "var(--slate)" }}>
+                    <span key={m.id} style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 999, background: u.access[m.id] === "admin" ? "var(--mint-2)" : "#ECEEED", color: u.access[m.id] === "admin" ? "var(--teal)" : "var(--slate)" }}>
                       {m.label.split(" ")[0]}{u.access[m.id] === "admin" ? " ✦" : ""}
                     </span>
                   ))}
@@ -3744,11 +5613,12 @@ function UsersAdmin() {
               <td style={td}><Status s={u.active ? "active" : "disabled"} /></td>
               <td style={td}>{fmtDate(u.created)}</td>
               <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
+                {canEditAccess && <button onClick={() => setEditFor(u)} style={iconBtn} title="Edit module access"><ShieldCheck size={15} /></button>}
                 <button onClick={() => setResetFor(u)} style={iconBtn} title="Reset password"><KeyRound size={15} /></button>
                 <button onClick={async () => { await api.toggleUser(user.username, u.id); refresh(); flash("User updated"); }} style={iconBtn} title="Enable / disable">
                   {u.active ? <Lock size={15} /> : <CheckCircle2 size={15} />}
                 </button>
-                {u.username !== user.username && <button onClick={async () => { if (confirm(`Remove ${u.username}?`)) { await api.deleteUser(user.username, u.id); refresh(); flash("User removed"); } }} style={{ ...iconBtn, color: "#b4232a" }} title="Delete"><Trash2 size={15} /></button>}
+                {u.username !== user.username && <button onClick={async () => { if (confirm(`Remove ${u.username}?`)) { await api.deleteUser(user.username, u.id); refresh(); flash("User removed"); } }} style={{ ...iconBtn, color: "#DC4141" }} title="Delete"><Trash2 size={15} /></button>}
               </td>
             </tr>
           ))}
@@ -3757,7 +5627,102 @@ function UsersAdmin() {
 
       {creating && <CreateUser onClose={() => setCreating(false)} onDone={() => { refresh(); flash("User created"); }} actor={user.username} />}
       {resetFor && <ResetPw target={resetFor} onClose={() => setResetFor(null)} onDone={() => flash("Password reset")} actor={user.username} />}
+      {editFor && canEditAccess && <EditAccess target={editFor} onClose={() => setEditFor(null)} onDone={() => { refresh(); flash("Access updated"); }} actor={user.username} />}
       {toast && <div style={toastStyle}><CheckCircle2 size={16} /> {toast}</div>}
+    </div>
+  );
+}
+
+const ACCESS_LEVELS = [
+  { v: "none", label: "None" },
+  { v: "view", label: "View" },
+  { v: "supervisor", label: "Supervisor" },
+  { v: "admin", label: "Admin" },
+  { v: "devops", label: "DevOps" },
+];
+// The per-section override choices shown under each module.
+const SECTION_LEVELS = [
+  { v: "default", label: "Default" },
+  { v: "hidden", label: "Hidden" },
+  { v: "view", label: "View" },
+  { v: "edit", label: "Edit" },
+];
+
+// Shared per-module access grid (create + edit). `access` maps module id → level.
+// `sections` maps module id → { tabId: "hidden"|"view"|"edit" } (an absent tab
+// inherits the module level). `setSection(moduleId, tabId, level)` receives one
+// of SECTION_LEVELS; "default" clears the override. Both are optional — when
+// omitted the editor shows module access only (backwards-compatible).
+function AccessEditor({ access, setAccess, sections = {}, setSection }) {
+  const [openSections, setOpenSections] = useState(null); // module id whose sections are expanded
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <span style={{ display: "block", fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 600, marginBottom: 8 }}>Module &amp; section access</span>
+      <div style={{ display: "grid", gap: 8 }}>
+        {MODULES.map(m => {
+          const granted = (access[m.id] || "none") !== "none";
+          const isAdminLvl = ["admin", "devops"].includes(access[m.id]);
+          // Sections a user with this module level would actually see. Admin-only
+          // sections are shown once the module is admin/devops OR while it's still
+          // ungranted (so they're discoverable up front); a non-admin grant hides them.
+          const secs = (MODULE_SECTIONS[m.id] || []).filter(s => !s.adminOnly || isAdminLvl || !granted);
+          // Always offer the Sections control for multi-section modules so it's
+          // discoverable even before the module is granted; overrides simply stay
+          // inert until the module is set above None.
+          const canSection = setSection && secs.length > 1;
+          const open = openSections === m.id;
+          const overridden = Object.keys(sections[m.id] || {}).length; // # of sections customised
+          return (
+            <div key={m.id} style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--f)", marginBottom: 8 }}>{m.label}{(!m.built || m.soon) && <span style={{ fontSize: 9, color: "#986315", marginLeft: 6 }}>SOON</span>}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {ACCESS_LEVELS.map(l => (
+                  <button key={l.v} onClick={() => setAccess(m.id, l.v)} style={{
+                    padding: "5px 11px", borderRadius: 8, fontSize: 11.5, fontWeight: 600,
+                    border: `1.5px solid ${(access[m.id] || "none") === l.v ? "var(--teal)" : "var(--border)"}`,
+                    background: (access[m.id] || "none") === l.v ? "var(--mint-2)" : "#fff",
+                    color: (access[m.id] || "none") === l.v ? "var(--teal)" : "var(--muted)",
+                  }}>{l.label}</button>
+                ))}
+                {canSection && (
+                  <button type="button" onClick={() => setOpenSections(open ? null : m.id)} style={{
+                    marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px",
+                    borderRadius: 8, fontSize: 11.5, fontWeight: 600, border: "1.5px solid var(--border)",
+                    background: open ? "var(--mint-2)" : "#fff", color: open ? "var(--teal)" : "var(--muted)",
+                  }}>
+                    <SlidersHorizontal size={12} /> Sections{overridden ? ` · ${overridden}` : ""} {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  </button>
+                )}
+              </div>
+              {canSection && open && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--border)", display: "grid", gap: 7 }}>
+                  {secs.map(s => {
+                    const cur = (sections[m.id] || {})[s.id] || "default";
+                    return (
+                      <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 12, color: "var(--f)" }}>{s.label}{s.adminOnly && <span style={{ fontSize: 8.5, color: "#986315", marginLeft: 5, letterSpacing: ".04em" }}>ADMIN</span>}</span>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {SECTION_LEVELS.map(l => (
+                            <button key={l.v} type="button" onClick={() => setSection(m.id, s.id, l.v)} style={{
+                              padding: "3px 8px", borderRadius: 7, fontSize: 10.5, fontWeight: 600,
+                              border: `1.5px solid ${cur === l.v ? "var(--teal)" : "var(--border)"}`,
+                              background: cur === l.v ? "var(--mint-2)" : "#fff",
+                              color: cur === l.v ? "var(--teal)" : "var(--muted)",
+                            }}>{l.label}</button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!granted && <p style={{ fontSize: 10.5, color: "#986315", margin: "2px 0 0" }}>This module is set to <strong>None</strong> — grant it (View/Supervisor/Admin/DevOps) above for these section rules to take effect.</p>}
+                  <p style={{ fontSize: 10.5, color: "var(--muted)", margin: "2px 0 0" }}>Default = follow the module level above. Hidden removes the section from this user's sidebar.</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 8 }}>Modules set above None appear on the user's home screen. View = read-only · Supervisor = edit allowed fields · Admin/DevOps = full control. Use <strong>Sections</strong> to show/hide or override View/Edit per section (default: all sections shown).</p>
     </div>
   );
 }
@@ -3766,10 +5731,12 @@ function CreateUser({ onClose, onDone, actor }) {
   const [form, setForm] = useState({
     name: "", username: "", email: "", password: "", role: "viewer",
     access: Object.fromEntries(MODULES.map(m => [m.id, "none"])),
+    sections: {}, // per-section overrides; empty = every section shown at the module level
   });
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setAccess = (id, lvl) => setForm(f => ({ ...f, access: { ...f.access, [id]: lvl } }));
+  const setSection = (mid, tid, level) => setForm(f => ({ ...f, sections: setSectionOverride(f.sections, mid, tid, level) }));
 
   const submit = async () => {
     if (!form.name || !form.username || form.password.length < 6) { setErr("Fill name, username and a password of at least 6 characters."); return; }
@@ -3788,14 +5755,6 @@ function CreateUser({ onClose, onDone, actor }) {
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   };
 
-  const LEVELS = [
-    { v: "none", label: "None" },
-    { v: "view", label: "View" },
-    { v: "supervisor", label: "Supervisor" },
-    { v: "admin", label: "Admin" },
-    { v: "devops", label: "DevOps" },
-  ];
-
   return (
     <Modal onClose={onClose} title="Create new user">
       <Field label="Full name"><input style={inp} value={form.name} onChange={e => set("name", e.target.value)} placeholder="Jane Doe" /></Field>
@@ -3803,30 +5762,36 @@ function CreateUser({ onClose, onDone, actor }) {
       <Field label="Email address"><input style={inp} type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="jane@prowater.in" autoCapitalize="none" autoCorrect="off" /></Field>
       <Field label="Temporary password"><input style={inp} value={form.password} onChange={e => set("password", e.target.value)} placeholder="min 6 characters" /></Field>
 
-      <div style={{ marginBottom: 14 }}>
-        <span style={{ display: "block", fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 600, marginBottom: 8 }}>Module access</span>
-        <div style={{ display: "grid", gap: 8 }}>
-          {MODULES.map(m => (
-            <div key={m.id} style={{ padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--f)", marginBottom: 8 }}>{m.label}{(!m.built || m.soon) && <span style={{ fontSize: 9, color: "#9a6a16", marginLeft: 6 }}>SOON</span>}</div>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {LEVELS.map(l => (
-                  <button key={l.v} onClick={() => setAccess(m.id, l.v)} style={{
-                    padding: "5px 11px", borderRadius: 8, fontSize: 11.5, fontWeight: 600,
-                    border: `1.5px solid ${form.access[m.id] === l.v ? "var(--teal)" : "var(--border)"}`,
-                    background: form.access[m.id] === l.v ? "var(--mint-2)" : "#fff",
-                    color: form.access[m.id] === l.v ? "var(--teal)" : "var(--muted)",
-                  }}>{l.label}</button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        <p style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 8 }}>Modules set above None appear on the user's home screen. View = read-only · Supervisor = edit allowed fields · Admin/DevOps = full control.</p>
-      </div>
+      <AccessEditor access={form.access} setAccess={setAccess} sections={form.sections} setSection={setSection} />
 
-      {err && <div style={{ color: "#b4232a", fontSize: 13, display: "flex", gap: 6, alignItems: "center", margin: "2px 0 10px" }}><AlertCircle size={15} />{err}</div>}
+      {err && <div style={{ color: "#DC4141", fontSize: 13, display: "flex", gap: 6, alignItems: "center", margin: "2px 0 10px" }}><AlertCircle size={15} />{err}</div>}
       <button onClick={submit} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Creating…" : "Create user"}</button>
+    </Modal>
+  );
+}
+
+// Edit an existing user's module access (Admin/DevOps only).
+function EditAccess({ target, onClose, onDone, actor }) {
+  const [access, setAccessState] = useState(() => Object.fromEntries(MODULES.map(m => [m.id, target.access?.[m.id] || "none"])));
+  // Deep-copy the target's existing section overrides so edits stay local until saved.
+  const [sections, setSectionsState] = useState(() => JSON.parse(JSON.stringify(target.sections || {})));
+  const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  const setAccess = (id, lvl) => setAccessState(a => ({ ...a, [id]: lvl }));
+  const setSection = (mid, tid, level) => setSectionsState(s => setSectionOverride(s, mid, tid, level));
+
+  const submit = async () => {
+    if (!Object.values(access).some(v => v !== "none")) { setErr("Give the user access to at least one module."); return; }
+    setErr(""); setBusy(true);
+    try { await api.updateAccess(actor, target.id, access, sections); onDone(); onClose(); }
+    catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal onClose={onClose} title={`Edit access · ${target.name}`}>
+      <p style={{ fontSize: 12.5, color: "var(--muted)", margin: "0 0 12px" }}>@{target.username} · the overall role updates to the highest level granted below.</p>
+      <AccessEditor access={access} setAccess={setAccess} sections={sections} setSection={setSection} />
+      {err && <div style={{ color: "#DC4141", fontSize: 13, display: "flex", gap: 6, alignItems: "center", margin: "2px 0 10px" }}><AlertCircle size={15} />{err}</div>}
+      <button onClick={submit} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Saving…" : "Save access"}</button>
     </Modal>
   );
 }
@@ -3862,12 +5827,12 @@ function Stat({ label, value, icon: Icon, sub, hero, delta }) {
   const hasDelta = delta != null && Number.isFinite(delta);
   const up = hasDelta && delta > 0, down = hasDelta && delta < 0;
   const deltaColor = hero
-    ? (up ? "#a8d940" : down ? "#ff9a9a" : "#c3f0cf")
-    : (up ? "#1f7a3f" : down ? "#b4232a" : "#6a7670");
+    ? (up ? "#0A9D6E" : down ? "#F5BFBF" : "#B5E2D4")
+    : (up ? "#08805A" : down ? "#DC4141" : "#7D8A83");
   return (
     <div style={{
       background: hero ? "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)" : "#fff",
-      color: hero ? "#eaf5ee" : "inherit", border: hero ? "none" : "1px solid var(--border)",
+      color: hero ? "#E2F3EE" : "inherit", border: hero ? "none" : "1px solid var(--border)",
       borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden"
     }}>
       {hero && <div style={{ position: "absolute", right: -20, top: -20, width: 90, height: 90, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.4),transparent 70%)" }} />}
@@ -3877,7 +5842,7 @@ function Stat({ label, value, icon: Icon, sub, hero, delta }) {
       </div>
       <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: hero ? "#fff" : "var(--f)", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 12, color: hero ? "#a9c9b6" : "var(--muted)" }}>{sub}</div>
+        <div style={{ fontSize: 12, color: hero ? "#B5E2D4" : "var(--muted)" }}>{sub}</div>
         {hasDelta && <span style={{ fontSize: 11.5, fontWeight: 700, color: deltaColor, whiteSpace: "nowrap" }}>
           {up ? "▲" : down ? "▼" : "—"} {up ? "+" : ""}{delta}%
         </span>}
@@ -3888,7 +5853,7 @@ function Stat({ label, value, icon: Icon, sub, hero, delta }) {
 
 function Card({ title, sub, children, pad = true, style }) {
   return (
-    <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden", ...style }}>
+    <div className="pw-card" style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden", ...style }}>
       {title && <div style={{ padding: "16px 18px 8px" }}>
         <h3 style={{ fontSize: 17 }}>{title}</h3>
         {sub && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{sub}</div>}
@@ -3977,7 +5942,7 @@ function PhotoUploader({ username, current, onClose, onSaved }) {
 
         {mode === "camera" ? (
           <div>
-            <video ref={videoRef} style={{ width: "100%", borderRadius: 12, background: "#000", aspectRatio: "1", objectFit: "cover" }} muted playsInline />
+            <video ref={videoRef} style={{ width: "100%", borderRadius: 12, background: "#0A1A12", aspectRatio: "1", objectFit: "cover" }} muted playsInline />
             <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
               <button onClick={capture} style={{ ...btnPrimary, flex: 1 }}><Camera size={16} /> Capture</button>
               <button onClick={() => { stopCamera(); setMode("choose"); }} style={{ ...btnGhost, flex: 1 }}>Cancel</button>
@@ -3996,7 +5961,7 @@ function PhotoUploader({ username, current, onClose, onSaved }) {
               <button onClick={() => fileRef.current?.click()} style={{ ...btnGhost, flex: 1 }}><ImageIcon size={16} /> Choose file</button>
             </div>
             <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display: "none" }} />
-            {err && <div style={{ color: "#b4232a", fontSize: 13, margin: "6px 0", display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
+            {err && <div style={{ color: "#DC4141", fontSize: 13, margin: "6px 0", display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
             <button onClick={save} disabled={busy || !preview} style={{ ...btnPrimary, width: "100%", marginTop: 8, opacity: (busy || !preview) ? .6 : 1 }}>{busy ? "Saving…" : "Save photo"}</button>
           </div>
         )}
@@ -4010,10 +5975,10 @@ function PhotoUploader({ username, current, onClose, onSaved }) {
    Tiers are based on CONVERTED referrals.
    =========================================================================== */
 const TIERS = [
-  { key: "none", label: "No tier yet", min: 0, color: "#869089", bg: "#eceeed" },
-  { key: "bronze", label: "Bronze Tier", min: 1, color: "#a9712e", bg: "#f6ecdf" },
-  { key: "silver", label: "Silver Tier", min: 2, color: "#6c7a86", bg: "#eef1f4" },
-  { key: "gold", label: "Gold Tier", min: 6, color: "#b8860b", bg: "#fbf3d6" },
+  { key: "none", label: "No tier yet", min: 0, color: "#A9B3AC", bg: "#ECEEED" },
+  { key: "bronze", label: "Bronze Tier", min: 1, color: "#986315", bg: "#FBF0E0" },
+  { key: "silver", label: "Silver Tier", min: 2, color: "#7D8A83", bg: "#ECEEED" },
+  { key: "gold", label: "Gold Tier", min: 6, color: "#986315", bg: "#FBF0E0" },
 ];
 function tierFor(converted) {
   let t = TIERS[0];
@@ -4105,7 +6070,7 @@ function SalesPipeline() {
 }
 
 // Palette for the lead-status cards / badges, keyed by mapped pipeline stage.
-const LEAD_STATUS_COLOR = { new: "#5a7863", contacted: "#9a6a16", demo: "#3a6ea5", proposal: "#16545c", won: "#1f7a3f", lost: "#b4232a" };
+const LEAD_STATUS_COLOR = { new: "#0A9D6E", contacted: "#986315", demo: "#2A86D6", proposal: "#0B6F52", won: "#08805A", lost: "#DC4141" };
 
 function SalesLeads({ isAdmin }) {
   const { user } = useAuth();
@@ -4126,7 +6091,7 @@ function SalesLeads({ isAdmin }) {
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2200); };
   const move = async (id, newStage) => { await salesApi.updateStage(user.username, id, newStage); await refresh(); flash("Stage updated"); };
-  const colorOf = (d) => LEAD_STATUS_COLOR[d.stage] || "#869089";
+  const colorOf = (d) => LEAD_STATUS_COLOR[d.stage] || "#A9B3AC";
 
   // Date filter first — cards & dropdown counts reflect the selected window.
   const inR = rangeFilter(range);
@@ -4169,13 +6134,13 @@ function SalesLeads({ isAdmin }) {
       {/* Lead-status cards — click to filter */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(148px,1fr))", gap: 12, marginBottom: 16 }}>
         <button onClick={() => setStatusFilter("all")} title="All leads"
-          style={{ textAlign: "left", cursor: "pointer", color: "#eaf5ee", border: "none", borderRadius: 12, padding: "11px 13px", background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", outline: statusFilter === "all" ? "2px solid var(--lime)" : "2px solid transparent", position: "relative", overflow: "hidden" }}>
+          style={{ textAlign: "left", cursor: "pointer", color: "#E2F3EE", border: "none", borderRadius: 12, padding: "11px 13px", background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", outline: statusFilter === "all" ? "2px solid var(--lime)" : "2px solid transparent", position: "relative", overflow: "hidden" }}>
           <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".03em", color: "var(--lime)" }}>Total Leads</div>
           <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 23, color: "#fff", lineHeight: 1.1 }}>{totalLeads}</div>
-          <div style={{ fontSize: 11, color: "#c3f0cf", fontWeight: 600 }}>in view</div>
+          <div style={{ fontSize: 11, color: "#B5E2D4", fontWeight: 600 }}>in view</div>
         </button>
         {statuses.map(s => {
-          const c = LEAD_STATUS_COLOR[stageForStatus(s)] || "#869089";
+          const c = LEAD_STATUS_COLOR[stageForStatus(s)] || "#A9B3AC";
           const active = statusFilter === s;
           return (
             <button key={s} onClick={() => setStatusFilter(active ? "all" : s)} title="Filter by this status"
@@ -4342,13 +6307,13 @@ function SalesAnalytics() {
                       <td colSpan={statuses.length + 2} style={{ padding: "0 12px 12px" }}>
                         <div className="scroll-thin" style={{ maxHeight: 320, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 10 }}>
                           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
-                            <thead><tr>{["Customer", "Phone", "Lead Status", "Flat", "Plan Value", "Created"].map(h => <th key={h} style={{ position: "sticky", top: 0, background: "#ebf4dd", zIndex: 1, textAlign: "center", padding: "9px 12px", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#28323a", fontWeight: 700 }}>{h}</th>)}</tr></thead>
+                            <thead><tr>{["Customer", "Phone", "Lead Status", "Flat", "Plan Value", "Created"].map(h => <th key={h} style={{ position: "sticky", top: 0, background: "#E2F0EA", zIndex: 1, textAlign: "center", padding: "9px 12px", fontSize: 10.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#0A1A12", fontWeight: 700 }}>{h}</th>)}</tr></thead>
                             <tbody>
                               {p.leads.map((d, i) => (
-                                <tr key={d.id} style={{ background: i % 2 ? "#f7fbf1" : "#fff" }}>
+                                <tr key={d.id} style={{ background: i % 2 ? "#EEF7F3" : "#fff" }}>
                                   <td style={{ padding: "8px 12px", fontSize: 12.5, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{d.customer}</td>
                                   <td style={{ padding: "8px 12px", fontSize: 12.5, whiteSpace: "nowrap", textAlign: "center" }}>{d.phone || "—"}</td>
-                                  <td style={{ padding: "8px 12px", textAlign: "center" }}><span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, color: "#fff", background: LEAD_STATUS_COLOR[d.stage] || "#869089", whiteSpace: "nowrap" }}>{d.rawStatus || "—"}</span></td>
+                                  <td style={{ padding: "8px 12px", textAlign: "center" }}><span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, color: "#fff", background: LEAD_STATUS_COLOR[d.stage] || "#A9B3AC", whiteSpace: "nowrap" }}>{d.rawStatus || "—"}</span></td>
                                   <td style={{ padding: "8px 12px", fontSize: 12.5, textAlign: "center" }}>{d.flatNo || "—"}</td>
                                   <td style={{ padding: "8px 12px", fontSize: 12.5, fontWeight: 600, textAlign: "center" }}>{d.value ? inr(d.value) : "—"}</td>
                                   <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "center" }}>{d.created ? fmtTime(d.created) : "—"}</td>
@@ -4406,25 +6371,25 @@ function TicketOverview() {
   const statusOrder = [...ZD_DEFAULT_STATUSES, ...tickets.map(t => t.status)].filter((v, i, a) => a.indexOf(v) === i);
   const byStatus = statusOrder.map(s => ({ name: s, value: tickets.filter(t => t.status === s).length })).filter(x => x.value > 0);
   const byCategory = Object.values(tickets.reduce((acc, t) => {
-    const k = t.issueType || "—";
+    const k = t.issueCategory || "—";
     acc[k] = acc[k] || { plan: k, amount: 0 };
     acc[k].amount += 1;
     return acc;
   }, {}));
-  const PIE = ["#b4232a", "#9a6a16", "#3a6ea5", "#1f7a3f", "#6a7670", "#7a4fb5", "#16545c"];
+  const PIE = CHART_PALETTE;
 
   return (
     <div className="fade-up">
-      {ticketApi.usedSample && <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#9a6a16", background: "#fdf3e0", border: "1px solid #f0dcae", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
+      {ticketApi.usedSample && <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#986315", background: "#FBF0E0", border: "1px solid #F6DEBC", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
         <AlertCircle size={15} /> Showing sample data — the Zoho Desk endpoint is unreachable. Once connected, this reflects real tickets.
       </div>}
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
         <style>{`@media(max-width:820px){.an-grid{grid-template-columns:1fr!important}}`}</style>
         <Card title="Tickets by status" sub="Where things stand">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={290}>
             <PieChart>
-              <Pie data={byStatus} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3}>
+              <Pie data={byStatus} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
                 {byStatus.map((e, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
               </Pie>
               <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
@@ -4434,11 +6399,11 @@ function TicketOverview() {
         <Card title="Tickets by issue type" sub="What customers contact about">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={byCategory} layout="vertical" margin={{ left: 30, right: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
               <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={100} />
               <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="amount" name="tickets" radius={[0, 6, 6, 0]} fill="#c2671e" maxBarSize={36} />
+              <Bar dataKey="amount" name="tickets" radius={[0, 6, 6, 0]} fill="#986315" maxBarSize={36} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -4447,16 +6412,160 @@ function TicketOverview() {
   );
 }
 
-function TicketList({ isAdmin }) {
+/* ---- Ops Tickets analytics — KPIs, spares↔issue correlation, TDS ----------
+   All computed client-side ("AI Insights" here = a deterministic analysis of the
+   in-view tickets, not an LLM call). Each panel is scoped to the filtered list
+   TicketList passes down, so the Ops date/status/search filters drive them. */
+
+// Styled "AI Insights" callout — computed bullet points in a highlighted card.
+function OpsInsights({ items }) {
+  const list = (items || []).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div style={{ marginTop: 14, padding: "13px 15px", borderRadius: 12, background: "linear-gradient(135deg, rgba(42,134,214,.07), rgba(168,217,64,.07))", border: "1px solid var(--border)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8, fontSize: 12.5, fontWeight: 800, letterSpacing: ".02em", color: "var(--teal)" }}>
+        <Sparkles size={14} /> AI Insights
+      </div>
+      <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 5 }}>
+        {list.map((it, i) => <li key={i} style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.5 }}>{it}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+// KPI row: job counts + total / average job duration (Job Start→End Time), plus
+// average TDS reduction when TDS data is present. Scoped to `tickets`.
+function OpsKpis({ tickets }) {
+  const durs = tickets.map(jobDurationMin).filter(v => v != null);
+  const totalMin = durs.reduce((a, b) => a + b, 0);
+  const avgMin = durs.length ? Math.round(totalMin / durs.length) : 0;
+  const reductions = tickets.map(t => {
+    const i = tdsNum(t.inputTds), o = tdsNum(t.outputTds);
+    return (i != null && o != null && i > 0) ? Math.round((i - o) / i * 100) : null;
+  }).filter(v => v != null);
+  const avgRed = reductions.length ? Math.round(reductions.reduce((a, b) => a + b, 0) / reductions.length) : null;
+  const stats = [
+    { label: "Jobs (with timing)", value: durs.length, icon: Wrench, sub: `${tickets.length} tickets in view`, hero: true },
+    { label: "Total job duration", value: fmtDuration(totalMin), icon: Clock, sub: "sum of start → end" },
+    { label: "Avg job duration", value: fmtDuration(avgMin), icon: Hourglass, sub: "per job" },
+    ...(avgRed != null ? [{ label: "Avg TDS reduction", value: avgRed + "%", icon: Droplets, sub: "input → output" }] : []),
+  ];
+  return <div style={{ ...grid4, marginBottom: 18 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>;
+}
+
+// Spares (Parts_Used) consumed per Issue Category, with computed correlations.
+function OpsSparesTable({ tickets }) {
+  const withParts = tickets.filter(t => parsePartsUsed(t.partsUsed).length);
+  const byIssue = {};      // issue -> { jobs, total, parts: {name:count} }
+  const overall = {};      // part -> count
+  for (const t of withParts) {
+    const issue = t.issueCategory || "—";
+    const parts = parsePartsUsed(t.partsUsed);
+    const b = byIssue[issue] || (byIssue[issue] = { jobs: 0, total: 0, parts: {} });
+    b.jobs++;
+    for (const p of parts) { b.parts[p] = (b.parts[p] || 0) + 1; b.total++; overall[p] = (overall[p] || 0) + 1; }
+  }
+  const rows = Object.entries(byIssue).map(([issue, b]) => ({ issue, ...b })).sort((a, b) => b.total - a.total);
+
+  const insights = [];
+  if (rows.length) {
+    const topPart = Object.entries(overall).sort((a, b) => b[1] - a[1])[0];
+    const topIssue = rows[0];
+    const totalParts = rows.reduce((s, r) => s + r.total, 0);
+    const totalJobs = rows.reduce((s, r) => s + r.jobs, 0);
+    if (topPart) insights.push(<><strong>{topPart[0]}</strong> is the most-consumed spare — {topPart[1]} unit{topPart[1] > 1 ? "s" : ""} across {totalJobs} serviced job{totalJobs > 1 ? "s" : ""}.</>);
+    if (topIssue) insights.push(<><strong>{topIssue.issue}</strong> drives the most spare usage — {topIssue.total} part{topIssue.total > 1 ? "s" : ""} over {topIssue.jobs} job{topIssue.jobs > 1 ? "s" : ""} ({(topIssue.total / topIssue.jobs).toFixed(1)} per job).</>);
+    let best = null;
+    for (const r of rows) for (const [p, c] of Object.entries(r.parts)) {
+      const pct = Math.round(c / r.jobs * 100);
+      if (!best || pct > best.pct) best = { issue: r.issue, part: p, pct, jobs: r.jobs };
+    }
+    if (best && best.jobs >= 2) insights.push(<>Strongest pattern: <strong>{best.part}</strong> appears in <strong>{best.pct}%</strong> of <strong>{best.issue}</strong> jobs — a likely root-cause spare.</>);
+    if (totalJobs) insights.push(<>Overall spare intensity: {(totalParts / totalJobs).toFixed(1)} parts per serviced job.</>);
+  }
+  const topSpares = (parts) => Object.entries(parts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `${n} ×${c}`).join(", ");
+
+  return (
+    <Card title="Spares used by issue type" sub="Parts_Used correlated with Issue Category" style={{ marginTop: 18 }}>
+      {rows.length === 0 ? <Empty msg="No spares (Parts_Used) recorded for the tickets in view." /> : <>
+        <Table head={["Issue Type", "Jobs w/ spares", "Total spares", "Avg / job", "Top spares"]}>
+          {rows.map(r => (
+            <tr key={r.issue} style={{ borderBottom: "1px solid var(--border)" }}>
+              <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{r.issue}</td>
+              <td style={td}>{r.jobs}</td>
+              <td style={td}>{r.total}</td>
+              <td style={td}>{(r.total / r.jobs).toFixed(1)}</td>
+              <td style={{ ...td, textAlign: "left" }}>{topSpares(r.parts)}</td>
+            </tr>
+          ))}
+        </Table>
+        <OpsInsights items={insights} />
+      </>}
+    </Card>
+  );
+}
+
+// Water Quality tickets: Input vs Output TDS with reduction % + computed insights.
+function OpsTdsTable({ tickets }) {
+  const wq = tickets.filter(t => /water\s*quality/i.test(String(t.issueCategory || "")) && (tdsNum(t.inputTds) != null || tdsNum(t.outputTds) != null));
+  const rows = wq.map(t => {
+    const i = tdsNum(t.inputTds), o = tdsNum(t.outputTds);
+    const red = (i != null && o != null && i > 0) ? Math.round((i - o) / i * 100) : null;
+    return { id: t.id, ticketNo: t.ticketNo, society: t.society, purifierId: t.purifierId, i, o, red };
+  });
+
+  const insights = [];
+  const valid = rows.filter(r => r.i != null && r.o != null);
+  if (valid.length) {
+    const avgIn = Math.round(valid.reduce((s, r) => s + r.i, 0) / valid.length);
+    const avgOut = Math.round(valid.reduce((s, r) => s + r.o, 0) / valid.length);
+    const avgRed = Math.round(valid.reduce((s, r) => s + (r.red || 0), 0) / valid.length);
+    insights.push(<>Average TDS: <strong>{avgIn} → {avgOut} ppm</strong> ({avgRed}% reduction) across {valid.length} Water-Quality job{valid.length > 1 ? "s" : ""}.</>);
+    const high = valid.filter(r => r.o > 150);
+    if (high.length) insights.push(<><strong>{high.length}</strong> job{high.length > 1 ? "s have" : " has"} output TDS above 150 ppm — worth a water-quality follow-up.</>);
+    const low = valid.filter(r => r.red != null && r.red < 40);
+    if (low.length) insights.push(<><strong>{low.length}</strong> job{low.length > 1 ? "s" : ""} show under 40% reduction — possible membrane / filter underperformance.</>);
+    const best = valid.slice().sort((a, b) => (b.red || 0) - (a.red || 0))[0];
+    if (best) insights.push(<>Best purification: {best.purifierId || best.ticketNo} at <strong>{best.red}%</strong> ({best.i} → {best.o} ppm).</>);
+  }
+
+  return (
+    <Card title="Water Quality — Input vs Output TDS" sub={'Issue Category "Water Quality"'} style={{ marginTop: 18 }}>
+      {rows.length === 0 ? <Empty msg="No Water Quality tickets with TDS readings in view." /> : <>
+        <Table head={["Ticket", "Society", "Purifier ID", "Input TDS", "Output TDS", "Reduction"]}>
+          {rows.map(r => (
+            <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
+              <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{r.ticketNo}</td>
+              <td style={td}>{r.society}</td>
+              <td style={td}>{r.purifierId}</td>
+              <td style={td}>{r.i ?? "—"}</td>
+              <td style={td}>{r.o ?? "—"}</td>
+              <td style={td}>{r.red != null ? <span style={{ fontWeight: 700, color: r.red >= 60 ? "var(--teal)" : r.red >= 40 ? "#986315" : "#DC4141" }}>{r.red}%</span> : "—"}</td>
+            </tr>
+          ))}
+        </Table>
+        <OpsInsights items={insights} />
+      </>}
+    </Card>
+  );
+}
+
+function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns = [], hidePriorityFilter = false, dateFilterField, topContent, bottomContent }) {
+  const showCustomer = !hideColumns.includes("customer");
+  const showSociety = !hideColumns.includes("society");
+  const showPriority = !hideColumns.includes("priority");
+  const showStatus = !hideColumns.includes("status");
   const { user } = useAuth();
   const [tickets, setTickets] = useState(null);
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [priority, setPriority] = useState("all");
+  const [dateVal, setDateVal] = useState("");   // Ops date filter (by Job Start Time date, IST)
   const [sel, setSel] = useState(null);
   const [toast, setToast] = useState("");
 
-  const refresh = () => ticketApi.getTickets().then(setTickets).catch(() => setTickets([]));
+  // preFilter scopes the whole view (e.g. Ops Tickets = Issue Category ≠ Complaint).
+  const refresh = () => ticketApi.getTickets().then(list => setTickets(preFilter ? list.filter(preFilter) : list)).catch(() => setTickets([]));
   useEffect(() => { api.logView(user.username, "Viewed Tickets"); refresh(); }, []);
   if (!tickets) return <Loading />;
 
@@ -4467,20 +6576,20 @@ function TicketList({ isAdmin }) {
   const statusOptions = [...ZD_DEFAULT_STATUSES, ...tickets.map(t => t.status)].filter((v, i, a) => v && a.indexOf(v) === i);
 
   const filtered = tickets
-    .filter(t => `${t.ticketNo} ${t.customer} ${t.subject} ${t.society} ${t.purifierId} ${t.issueType} ${t.fieldAppIssueType}`.toLowerCase().includes(q.toLowerCase())
+    .filter(t => `${t.ticketNo} ${t.customer} ${t.subject} ${t.society} ${t.purifierId} ${t.issueCategory || ""}`.toLowerCase().includes(q.toLowerCase())
       && (status === "all" || t.status === status)
-      && (priority === "all" || t.priority === priority))
+      && (priority === "all" || t.priority === priority)
+      && (!dateFilterField || !dateVal || istDateOf(dateFilterField(t)) === dateVal))
     .sort((a, b) => new Date(b.updated) - new Date(a.updated));
 
   const exportCsv = () => exportToCsv("prowater-tickets.csv", [
     { label: "Ticket", get: t => t.id },
-    { label: "Customer", get: t => t.customer },
-    { label: "Society", get: t => t.society },
+    ...(showCustomer ? [{ label: "Customer", get: t => t.customer }] : []),
+    ...(showSociety ? [{ label: "Society", get: t => t.society }] : []),
     { label: "Purifier ID", get: t => t.purifierId },
-    { label: "Type", get: t => t.type },
-    { label: "Issue Type", get: t => t.issueType },
-    { label: "Field App Issue Type", get: t => t.fieldAppIssueType },
-    { label: "Priority", get: t => tkPriority(t.priority).label },
+    { label: "Issue Category", get: t => t.issueCategory || "" },
+    ...extraColumns.map(c => ({ label: c.label, get: t => c.get(t) ?? "" })),
+    ...(showPriority ? [{ label: "Priority", get: t => tkPriority(t.priority).label }] : []),
     { label: "Status", get: t => tkStatus(t.status).label },
     { label: "Created", get: t => t.created },
   ], filtered);
@@ -4489,28 +6598,33 @@ function TicketList({ isAdmin }) {
     <div className="fade-up">
       <Toolbar q={q} setQ={setQ} placeholder="Search ticket #, customer, society, purifier…" count={filtered.length}
         right={<>
-          <select value={priority} onChange={e => setPriority(e.target.value)} style={selectStyle}>
-            <option value="all">All priorities</option>
-            {ZD_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
+          {dateFilterField && <input type="date" value={dateVal} onChange={e => setDateVal(e.target.value)} title="Filter by ticket created date" style={selectStyle} />}
+          {dateFilterField && dateVal && <button onClick={() => setDateVal("")} style={{ ...btnGhost, padding: "9px 12px" }} title="Clear date"><X size={14} /></button>}
+          {!hidePriorityFilter && (
+            <select value={priority} onChange={e => setPriority(e.target.value)} style={selectStyle}>
+              <option value="all">All priorities</option>
+              {ZD_PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
           <select value={status} onChange={e => setStatus(e.target.value)} style={selectStyle}>
             <option value="all">All statuses</option>
             {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
         </>} />
+      {topContent && topContent(filtered)}
       <Card pad={false}>
-        <Table head={["Ticket", "Customer", "Society", "Purifier ID", "Type", "Issue Type", "Priority", "Status", "Created", ""]} maxHeight="calc(100vh - 300px)">
+        <Table head={["Ticket", ...(showCustomer ? ["Customer"] : []), ...(showSociety ? ["Society"] : []), "Purifier ID", "Issue Category", ...extraColumns.map(c => c.label), ...(showPriority ? ["Priority"] : []), ...(showStatus ? ["Status"] : []), "Created", ""]} maxHeight="calc(100vh - 300px)">
           {filtered.map(t => (
             <tr key={t.id} style={trStyle} onClick={() => setSel(t)}>
               <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{t.ticketNo}</td>
-              <td style={td}>{t.customer}</td>
-              <td style={td}>{t.society}</td>
+              {showCustomer && <td style={td}>{t.customer}</td>}
+              {showSociety && <td style={td}>{t.society}</td>}
               <td style={td}>{t.purifierId}</td>
-              <td style={td}>{t.type}</td>
-              <td style={td}>{t.issueType}</td>
-              <td style={td}><TicketBadge value={t.priority} kind="priority" /></td>
-              <td style={td}><TicketBadge value={t.status} kind="status" /></td>
+              <td style={td}>{t.issueCategory || "—"}</td>
+              {extraColumns.map((c, i) => <td key={i} style={{ ...td, fontSize: 12.5, whiteSpace: "nowrap" }}>{c.render ? c.render(t) : (c.get(t) ?? "—")}</td>)}
+              {showPriority && <td style={td}><TicketBadge value={t.priority} kind="priority" /></td>}
+              {showStatus && <td style={td}><TicketBadge value={t.status} kind="status" /></td>}
               <td style={{ ...td, fontSize: 12, color: "var(--muted)" }}>{fmtTime(t.created)}</td>
               <td style={{ ...td, textAlign: "center" }}><ChevronRight size={16} color="var(--muted)" /></td>
             </tr>
@@ -4518,24 +6632,39 @@ function TicketList({ isAdmin }) {
         </Table>
         {filtered.length === 0 && <Empty msg="No tickets match your filters." />}
       </Card>
+      {bottomContent && bottomContent(filtered)}
 
       {sel && <Drawer onClose={() => setSel(null)} title={sel.subject} sub={sel.ticketNo}>
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           <TicketBadge value={sel.priority} kind="priority" />
           <TicketBadge value={sel.status} kind="status" />
         </div>
-        <DefRow k="Customer" v={sel.customer} />
-        <DefRow k="Society" v={sel.society} />
+        <DefRow k="Ticket ID" v={sel.zohoId || sel.id} />
+        <DefRow k="Ticket Owner" v={sel.ticketOwner} />
+        <DefRow k="Status" v={sel.status} />
+        <DefRow k="Subject" v={sel.subject} />
+        <DefRow k="Description" v={sel.description} />
+        <DefRow k="Zoho Customer ID" v={sel.zohoCustomerId} />
+        <DefRow k="Email ID" v={sel.emailId} />
+        <DefRow k="Phone" v={sel.phone} />
         <DefRow k="Purifier ID" v={sel.purifierId} />
-        <DefRow k="Type" v={sel.type} />
-        <DefRow k="Issue Type" v={sel.issueType} />
-        <DefRow k="Field App Issue Type" v={sel.fieldAppIssueType} />
-        <DefRow k="Created" v={fmtTime(sel.created)} />
-        <DefRow k="Last update" v={fmtTime(sel.updated)} />
-        <div style={{ marginTop: 14, padding: 14, background: "var(--mint)", borderRadius: 12 }}>
-          <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--muted)", fontWeight: 600, marginBottom: 6 }}>Notes</div>
-          <p style={{ fontSize: 13.5, color: "var(--slate)", lineHeight: 1.6 }}>{sel.note}</p>
-        </div>
+        <DefRow k="Issue Category" v={sel.issueCategory} />
+        <DefRow k="Society Name" v={sel.society} />
+        <DefRow k="Address" v={/^https?:\/\//.test(sel.address || "")
+          ? <a href={sel.address} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal)", wordBreak: "break-all" }}>{sel.address}</a>
+          : sel.address} />
+        <DefRow k="Job Start Time" v={fmtIST(sel.jobStartTime)} />
+        <DefRow k="Job End Time" v={fmtIST(sel.jobEndTime)} />
+        <DefRow k="Work Start Location" v={(sel.workStartLat != null && sel.workStartLat !== "" && sel.workStartLng != null && sel.workStartLng !== "")
+          ? <a href={`https://www.google.com/maps?q=${sel.workStartLat},${sel.workStartLng}`} target="_blank" rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9, border: "1.5px solid var(--teal)", background: "var(--mint-2)", color: "var(--teal-d)", fontWeight: 600, fontSize: 12.5, textDecoration: "none", whiteSpace: "nowrap" }}>
+              <MapPin size={14} /> Open in maps
+            </a>
+          : null} />
+        <DefRow k="Work Start Address" v={sel.workStartAddress} />
+        <DefRow k="reason for postpone" v={sel.reasonForPostpone} />
+        <DefRow k="rescheduled_Date" v={sel.rescheduledDate} />
+        <DefRow k="Parts_Used" v={sel.partsUsed} />
         {isAdmin && (
           <div style={{ marginTop: 18 }}>
             <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--muted)", fontWeight: 600, marginBottom: 8 }}>Update status</div>
@@ -4571,14 +6700,14 @@ const deviceType = (purifierId) => {
   return "Normal Device";
 };
 const DEVICE_TYPE_STYLE = {
-  "Hot & Cold":    ["#c2671e", "#fdf3e0"],
-  "Own Device":    ["#16545c", "#e2eff0"],
-  "Normal Device": ["#4c6654", "#e6f4ea"],
+  "Hot & Cold":    ["#986315", "#FBF0E0"],
+  "Own Device":    ["#0B6F52", "#E2F3EE"],
+  "Normal Device": ["#08805A", "#E2F3EE"],
 };
 function DeviceTypeBadge({ purifierId }) {
   const t = deviceType(purifierId);
   if (!t) return <span style={{ color: "var(--muted)" }}>—</span>;
-  const [c, bg] = DEVICE_TYPE_STYLE[t] || ["#6a7670", "#eceeed"];
+  const [c, bg] = DEVICE_TYPE_STYLE[t] || ["#7D8A83", "#ECEEED"];
   return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{t}</span>;
 }
 
@@ -4697,11 +6826,11 @@ function CustomerSocieties() {
                           <tbody>
                             {g.customers.map((c, ci) => {
                               const st = String(c.status || "").toLowerCase();
-                              const rowBg = st === "inactive" ? "#fdf2f2" : st === "dunning" ? "#fdf3e0" : undefined;
-                              const stColor = st === "inactive" ? "#b4232a" : st === "dunning" ? "#9a6a16" : st === "active" ? "#1f7a3f" : "var(--muted)";
+                              const rowBg = st === "inactive" ? "#FBE8E8" : st === "dunning" ? "#FBF0E0" : undefined;
+                              const stColor = st === "inactive" ? "#DC4141" : st === "dunning" ? "#986315" : st === "active" ? "#08805A" : "var(--muted)";
                               const cell = { fontSize: 12.5, padding: "8px 12px", whiteSpace: "nowrap", textAlign: "center" };
                               return (
-                              <tr key={ci} style={{ borderTop: ci ? "1px solid #eef2f0" : "none", background: rowBg }}>
+                              <tr key={ci} style={{ borderTop: ci ? "1px solid #ECEEED" : "none", background: rowBg }}>
                                 <td style={{ ...cell, color: "var(--slate)" }}>{c.id || "—"}</td>
                                 <td style={{ ...cell, fontSize: 13, fontWeight: 600, color: "var(--f)" }}>{c.name || "—"}</td>
                                 <td style={cell}>{c.purifier_id || "—"}</td>
@@ -4743,12 +6872,384 @@ function CustomerSocieties() {
   );
 }
 
+// All Customers — search a customer by Purifier ID, then open a FULL-PAGE
+// customer view with two sub-screens (tabs): Profile and Transactions. Joins
+// customers ↔ subscriptions ↔ invoices by any shared key (customer no. / zoho
+// customer id / email). Installed date = the subscription start (activated) date.
+// Group tickets into month buckets by created date, each carrying its tickets,
+// oldest to newest. Undated tickets fall into an "Unknown" bucket at the end.
+function ticketMonthBuckets(tks) {
+  const map = {};
+  (tks || []).forEach(t => {
+    const d = new Date(t.created);
+    const key = isNaN(d.getTime()) ? "__unknown" : `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
+    (map[key] = map[key] || []).push(t);
+  });
+  const rows = Object.keys(map).filter(k => k !== "__unknown").sort().map(k => {
+    const [y, m] = k.split("-").map(Number);
+    return { key: k, label: `${new Date(y, m, 1).toLocaleDateString("en-US", { month: "short" })}'${String(y).slice(-2)}`, tickets: map[k] };
+  });
+  if (map.__unknown) rows.push({ key: "__unknown", label: "Unknown", tickets: map.__unknown });
+  return rows;
+}
+
+// Break tickets down by the API "Issue Category" (issue type) field, most-common first.
+function ticketsByIssue(tks) {
+  const m = {};
+  (tks || []).forEach(t => { const k = String(t.issueCategory || "").trim() || "Uncategorised"; m[k] = (m[k] || 0) + 1; });
+  return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([label, count]) => ({ label, count }));
+}
+
+// Month-wise ticket count for a single customer; each month row expands to its
+// Issue-Category (issue type) breakdown. Used by the Tickets + Ops sub-screens.
+function CustTicketMonths({ tickets, ops }) {
+  const [open, setOpen] = useState({});
+  const buckets = ticketMonthBuckets(tickets);
+  const noun = ops ? "ops jobs" : "tickets";
+  const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
+  return (
+    <>
+      <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
+        <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total {noun}</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{tickets.length}</div></div>
+        <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Months with activity</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{buckets.length}</div></div>
+      </div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Click a month to expand its issue-type (Issue Category) breakdown.</div>
+      <Card pad={false}>
+        <Table head={["Month", ops ? "Ops jobs" : "Tickets"]} maxHeight="calc(100vh - 360px)">
+          {buckets.map(b => {
+            const isOpen = !!open[b.key];
+            return (
+              <React.Fragment key={b.key}>
+                <tr onClick={() => toggle(b.key)} style={{ borderBottom: "1px solid var(--border)", cursor: "pointer" }}>
+                  <td style={td}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                      <ChevronRight size={14} color="var(--muted)" style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+                      <span style={{ fontWeight: 600, color: "var(--f)" }}>{b.label}</span>
+                    </span>
+                  </td>
+                  <td style={{ ...td, fontWeight: 700, color: "var(--f)", fontVariantNumeric: "tabular-nums" }}>{b.tickets.length}</td>
+                </tr>
+                {isOpen && ticketsByIssue(b.tickets).map(iss => (
+                  <tr key={b.key + "|" + iss.label} style={{ borderBottom: "1px solid var(--border)", background: "var(--mint)" }}>
+                    <td style={{ ...td, paddingLeft: 40, color: "var(--slate)" }}>{iss.label}</td>
+                    <td style={{ ...td, color: "var(--slate)", fontVariantNumeric: "tabular-nums" }}>{iss.count}</td>
+                  </tr>
+                ))}
+              </React.Fragment>
+            );
+          })}
+          {buckets.length > 0 && (
+            <tr style={{ borderTop: "2px solid var(--border)", background: "var(--mint-2)" }}>
+              <td style={{ ...td, fontWeight: 700 }}>Total</td>
+              <td style={{ ...td, fontWeight: 800, color: "var(--forest)", fontVariantNumeric: "tabular-nums" }}>{tickets.length}</td>
+            </tr>
+          )}
+        </Table>
+        {tickets.length === 0 && <Empty msg={`No ${noun} found for this Purifier ID.`} />}
+      </Card>
+    </>
+  );
+}
+
+// Spares (Parts_Used) used on a purifier's ops jobs, with a deterministic AI analysis.
+function CustSparesAnalysis({ tickets }) {
+  const counts = {};
+  let jobsWithParts = 0;
+  (tickets || []).forEach(t => {
+    const parts = parsePartsUsed(t.partsUsed);
+    if (parts.length) jobsWithParts++;
+    parts.forEach(p => { const k = String(p).trim(); if (k) counts[k] = (counts[k] || 0) + 1; });
+  });
+  const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, count }));
+  const total = rows.reduce((s, r) => s + r.count, 0);
+  const top = rows[0];
+  return (
+    <Card pad={false} title="Spares used" sub={total ? `${total} part${total !== 1 ? "s" : ""} across ${jobsWithParts} ops job${jobsWithParts !== 1 ? "s" : ""}${top ? ` · most replaced: ${top.name} (${top.count}×)` : ""}` : "Parts replaced on this purifier's ops jobs"} style={{ marginTop: 16 }}>
+      {rows.length === 0 ? <Empty msg="No spares recorded on this Purifier ID's ops jobs." /> : (
+        <Table head={["Spare / part", "Times used"]}>
+          {rows.map((r, i) => (
+            <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+              <td style={{ ...td, textAlign: "left" }}>{r.name}</td>
+              <td style={{ ...td, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{r.count}</td>
+            </tr>
+          ))}
+          <tr style={{ borderTop: "2px solid var(--border)", background: "var(--mint-2)" }}>
+            <td style={{ ...td, fontWeight: 700, textAlign: "left" }}>Total</td>
+            <td style={{ ...td, fontWeight: 800, color: "var(--forest)", fontVariantNumeric: "tabular-nums" }}>{total}</td>
+          </tr>
+        </Table>
+      )}
+    </Card>
+  );
+}
+
+function AllCustomers() {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState(null);
+  const [subtab, setSubtab] = useState("profile");   // profile | transactions | tickets | ops
+  useEffect(() => {
+    api.logView(user.username, "Viewed All Customers");
+    Promise.all([
+      customerApi.getCustomers().catch(() => []),
+      billingApi.getSubscriptions().catch(() => []),
+      billingApi.getInvoices().catch(() => []),
+      ticketApi.getTickets().catch(() => []),
+      api.getReferrers().catch(() => []),
+      api.getReferees().catch(() => []),
+      creditNoteApi.getCreditNotes().catch(() => []),
+    ]).then(([customers, subs, invs, tickets, referrers, referees, creditNotes]) => setData({ customers, subs, invs, tickets, referrers, referees, creditNotes }))
+      .catch(() => setData({ customers: [], subs: [], invs: [], tickets: [], referrers: [], referees: [], creditNotes: [] }));
+  }, []);
+  if (!data) return <Loading />;
+  const { customers, subs, invs, tickets, referrers, referees, creditNotes } = data;
+
+  const keysOf = (c) => [c.id, c.zohoId, c.email].filter(Boolean).map(k => String(k).toLowerCase());
+  const belongs = (rec, keys) => [rec.zohoCustomerId, rec.customerNumber, rec.zohoId, rec.email]
+    .filter(Boolean).map(k => String(k).toLowerCase()).some(k => keys.includes(k));
+
+  const ql = q.trim().toLowerCase();
+  const withPur = customers.filter(c => c.purifier_id);
+  // Search across Purifier ID, phone, name and email.
+  const matchesQ = (c) => [c.purifier_id, c.phone, c.name, c.email].some(f => String(f || "").toLowerCase().includes(ql));
+  const results = (ql ? withPur.filter(matchesQ) : withPur)
+    .slice().sort((a, b) => String(a.purifier_id).localeCompare(String(b.purifier_id), undefined, { numeric: true }));
+
+  const openCustomer = (c) => { setSel(c); setSubtab("profile"); };
+
+  const stChip = (st) => {
+    const paid = st === "paid";
+    const bg = paid ? "var(--green-t)" : st === "failed" ? "var(--danger-t)" : "var(--amber-t)";
+    const fg = paid ? "var(--green)" : st === "failed" ? "var(--danger)" : "var(--amber)";
+    return <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: bg, color: fg, textTransform: "capitalize" }}>{st}</span>;
+  };
+
+  // ── Full-page customer view (Profile + Transactions sub-screens) ───────────
+  if (sel) {
+    const keys = keysOf(sel);
+    const custSubs = subs.filter(s => belongs(s, keys));
+    const installed = custSubs.map(s => s.activatedAt || s.createdAt).filter(Boolean)
+      .map(d => new Date(d)).filter(d => !isNaN(d.getTime())).sort((a, b) => a - b)[0] || null;
+    const txns = invs.filter(i => belongs(i, keys)).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    const totalPaid = txns.filter(t => t.status === "paid").reduce((s, t) => s + (t.total || 0), 0);
+    const planName = custSubs[0]?.plan || sel.plan;
+    // Ticket lookup by Purifier ID. Ops = the same filter the Ticketing > Ops tab uses (Issue Category ≠ Complaint).
+    const purl = String(sel.purifier_id || "").trim().toLowerCase();
+    const custTickets = purl ? tickets.filter(t => String(t.purifierId || "").trim().toLowerCase() === purl) : [];
+    const opsTickets = custTickets.filter(t => String(t.issueCategory || "").trim().toLowerCase() !== "complaint");
+    // Referral join: match this customer to a referrer record by any shared key.
+    const custKeys = [sel.purifier_id, sel.id, sel.zohoId, sel.email, sel.phone, sel.referral_code].filter(Boolean).map(k => String(k).toLowerCase());
+    const custRef = (referrers || []).find(r =>
+      [r.purifierId, r.customerNumber, r.zohoId, r.email, r.phone, r.code].filter(Boolean).map(k => String(k).toLowerCase()).some(k => custKeys.includes(k)));
+    const myReferees = custRef ? (referees || []).filter(e => e.referrerId === custRef.id) : [];
+    const referralsDone = custRef?.totalReferred ?? myReferees.length;
+    const refConverted = custRef?.converted ?? myReferees.filter(e => e.status === "paid").length;
+    const refPending = custRef?.pending ?? Math.max(0, referralsDone - refConverted);
+    const referralCode = sel.referral_code || custRef?.code || "—";
+    // Credit notes (discounts) for this customer — joined by Zoho customer id.
+    const custCreditNotes = (creditNotes || []).filter(cn => cn.zohoCustomerId && keys.includes(String(cn.zohoCustomerId).toLowerCase()))
+      .slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    const discountTotal = custCreditNotes.reduce((s, cn) => s + (cn.amount || 0), 0);
+    const discountBalance = custCreditNotes.reduce((s, cn) => s + (cn.balance || 0), 0);
+    const discountCount = custCreditNotes.length;
+    const discountPct = totalPaid > 0 ? Math.round((discountTotal / totalPaid) * 100) : 0;
+    // Refundable security deposit — the one-time tiered deposit on the largest paid invoice.
+    const securityDeposit = txns.reduce((mx, t) => t.status === "paid" ? Math.max(mx, depositForPlan(planName, t.total)) : mx, 0);
+    const paidCount = txns.filter(t => t.status === "paid").length;
+    const complaintCount = custTickets.filter(t => String(t.issueCategory || "").trim().toLowerCase() === "complaint").length;
+    // Spares used on this purifier's ops jobs (also drives the device score).
+    const custSpares = {};
+    let sparesJobs = 0;
+    opsTickets.forEach(t => { const parts = parsePartsUsed(t.partsUsed); if (parts.length) sparesJobs++; parts.forEach(p => { const k = String(p).trim(); if (k) custSpares[k] = (custSpares[k] || 0) + 1; }); });
+    const totalSpares = Object.values(custSpares).reduce((s, n) => s + n, 0);
+    // ── Scores (0-5) ──────────────────────────────────────────────────────────
+    const clamp5 = (v) => Math.max(0, Math.min(5, Math.round(v * 10) / 10));
+    const tenureMonths = installed ? (Date.now() - new Date(installed).getTime()) / (30 * 86400000) : 0;
+    // Customer: loyalty + value + engagement, dinged by complaints / heavy discounting.
+    const customerScore = clamp5(
+      (String(sel.status || "").toLowerCase() === "active" ? 1 : 0)
+      + (totalPaid >= 10000 ? 1.4 : totalPaid >= 3000 ? 1.0 : totalPaid > 0 ? 0.5 : 0)
+      + (referralsDone >= 3 ? 1.4 : referralsDone >= 1 ? 1.0 : 0)
+      + (complaintCount === 0 ? 1.0 : complaintCount <= 1 ? 0.6 : complaintCount <= 2 ? 0.3 : 0)
+      + (discountPct >= 30 ? 0 : 0.2)
+      + (tenureMonths >= 6 ? 0.5 : 0.2));
+    // Device health: complaints (real faults) are the primary driver. Spares + an
+    // above-routine service rate are capped "wear" (max 2 pts) so a fault-free device
+    // can't be pushed to 0 just by routine maintenance / high service volume.
+    const svcPerMonth = tenureMonths >= 1 ? custTickets.length / tenureMonths : Math.min(6, custTickets.length);
+    const deviceWear = Math.min(2, totalSpares * 0.12 + Math.max(0, svcPerMonth - 3) * 0.2);
+    const deviceScore = clamp5(5 - Math.min(5, complaintCount * 1.3) - deviceWear);
+    // Technician: quality of field service on this purifier (null when there are no ops jobs).
+    let techScore = null;
+    if (opsTickets.length > 0) {
+      const withTiming = opsTickets.filter(t => jobDurationMin(t) != null).length;
+      const tdsJobs = opsTickets.filter(t => Number(t.inputTds) > 0 && Number(t.outputTds) > 0);
+      const goodTds = tdsJobs.filter(t => Number(t.outputTds) < Number(t.inputTds)).length;
+      techScore = clamp5(3.2 + (withTiming / opsTickets.length) * 1.1 + (tdsJobs.length ? (goodTds / tdsJobs.length) * 0.7 : 0.4) - complaintCount * 0.25);
+    }
+    // Field severity for at-a-glance scanning — only amber (warning) / red (critical) stand out.
+    const statusActive = String(sel.status || "").toLowerCase() === "active";
+    const sevColor = (sev) => sev === "red" ? "#DC4141" : sev === "amber" ? "#a86e00" : "var(--f)";
+    // Render a field value, highlighted amber/red when concerning (plain otherwise).
+    const cell = (text, sev) => <span style={{ color: sevColor(sev), fontWeight: sev ? 800 : undefined }}>{text}</span>;
+    const tabBtn = (k, label) => (
+      <button key={k} onClick={() => setSubtab(k)} style={{
+        padding: "10px 16px", fontSize: 13.5, fontWeight: 700, background: "none",
+        color: subtab === k ? "var(--brand)" : "var(--muted)",
+        borderBottom: subtab === k ? "2px solid var(--brand)" : "2px solid transparent", marginBottom: -1,
+      }}>{label}</button>
+    );
+    // Score card with conditional colour formatting (green ≥4, amber ≥2.5, red < 2.5, grey = no data).
+    const scoreCard = (label, score, Icon, hint) => {
+      const na = score == null;
+      const col = na ? "#8b9a95" : score >= 4 ? "#08805A" : score >= 2.5 ? "#a86e00" : "#DC4141";
+      const bg = na ? "#eef1ef" : score >= 4 ? "#E4F4EE" : score >= 2.5 ? "#FBF0E0" : "#FBE4E4";
+      const word = na ? "No data" : score >= 4 ? "Good" : score >= 2.5 ? "Fair" : "Poor";
+      return (
+        <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "grid", placeItems: "center", width: 50, height: 50, borderRadius: 14, background: bg, color: col, flexShrink: 0 }}><Icon size={23} /></div>
+          <div style={{ minWidth: 0 }}>
+            <div className="eyebrow" style={{ color: "var(--muted)" }}>{label}</div>
+            <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 28, color: col, lineHeight: 1.05, margin: "1px 0" }}>{na ? "—" : score.toFixed(1)}<span style={{ fontSize: 15, color: "var(--muted)", fontWeight: 600 }}> / 5</span></div>
+            <div style={{ fontSize: 11.5, color: col, fontWeight: 700 }}>{word}{hint ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {hint}</span> : null}</div>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="fade-up">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          <button onClick={() => setSel(null)} style={{ ...btnGhost, padding: "8px 12px" }}><ChevronLeft size={16} /> All Customers</button>
+          <div>
+            <div className="eyebrow">Purifier {sel.purifier_id}</div>
+            <div style={{ fontSize: 21, fontWeight: 700, color: "var(--f)" }}>{sel.name || sel.purifier_id}</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
+          {tabBtn("profile", "Profile")}
+          {tabBtn("transactions", `Transactions${txns.length ? ` (${txns.length})` : ""}`)}
+          {tabBtn("tickets", `Tickets${custTickets.length ? ` (${custTickets.length})` : ""}`)}
+          {tabBtn("ops", `Ops${opsTickets.length ? ` (${opsTickets.length})` : ""}`)}
+          {tabBtn("referral", `Referral${referralsDone ? ` (${referralsDone})` : ""}`)}
+        </div>
+
+        {subtab === "profile" && (
+          <>
+            <Card>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: "0 40px" }}>
+                <div>
+                  <DefRow k="Purifier ID" v={sel.purifier_id} />
+                  <DefRow k="Customer ID" v={sel.id} />
+                  <DefRow k="Name" v={sel.name} />
+                  <DefRow k="Email" v={sel.email} />
+                  <DefRow k="Phone" v={sel.phone} />
+                  <DefRow k="Referral code" v={referralCode} />
+                  <DefRow k="Referrals made" v={referralsDone} />
+                  <DefRow k="Support tickets" v={cell(custTickets.length, custTickets.length >= 8 ? "red" : custTickets.length >= 5 ? "amber" : null)} />
+                </div>
+                <div>
+                  <DefRow k="Society" v={sel.society} />
+                  <DefRow k="Plan" v={planName} />
+                  <DefRow k="Status" v={cell(<span style={{ textTransform: "capitalize" }}>{sel.status || "—"}</span>, statusActive ? null : "red")} />
+                  <DefRow k="Installed date" v={installed ? fmtDate(installed) : "—"} />
+                  <DefRow k="LTV (lifetime value)" v={cell(inr(totalPaid), totalPaid === 0 ? "red" : null)} />
+                  <DefRow k="Security Deposit" v={inr(securityDeposit)} />
+                  <DefRow k="Discounts (credit notes)" v={<>{cell(inr(discountTotal), discountPct >= 30 ? "red" : discountPct >= 20 ? "amber" : null)}{discountCount ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {discountCount} note{discountCount !== 1 ? "s" : ""}{discountBalance > 0 ? ` · ${inr(discountBalance)} balance` : ""}</span> : null}</>} />
+                  <DefRow k="Complaints" v={cell(complaintCount, complaintCount >= 2 ? "red" : complaintCount >= 1 ? "amber" : null)} />
+                </div>
+              </div>
+            </Card>
+            {/* scores — 0-5 with conditional colour formatting */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 14, marginTop: 14 }}>
+              {scoreCard("Customer score", customerScore, Award)}
+              {scoreCard("Technician score", techScore, Wrench, opsTickets.length ? `${opsTickets.length} ops job${opsTickets.length !== 1 ? "s" : ""}` : "no jobs")}
+              {scoreCard("Device score", deviceScore, Cpu, `${complaintCount} complaint${complaintCount !== 1 ? "s" : ""} · ${totalSpares} spare${totalSpares !== 1 ? "s" : ""}`)}
+            </div>
+            <CustSparesAnalysis tickets={opsTickets} />
+          </>
+        )}
+        {subtab === "transactions" && (
+          <>
+            <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
+              <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total paid</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{inr(totalPaid)}</div></div>
+              <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Payments</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{txns.length}</div></div>
+            </div>
+            <Card pad={false}>
+              <Table head={["Date", "Invoice", "Amount", "Plan", "Status"]} maxHeight="calc(100vh - 340px)">
+                {txns.map(t => (
+                  <tr key={t.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={td}>{fmtDate(t.date)}</td>
+                    <td style={td}>{t.number || t.id}</td>
+                    <td style={{ ...td, fontWeight: 700, color: "var(--f)" }}>{inr(t.total)}</td>
+                    <td style={td}>{t.plan || "—"}</td>
+                    <td style={td}>{stChip(t.status)}</td>
+                  </tr>
+                ))}
+              </Table>
+              {txns.length === 0 && <Empty msg="No transactions found for this customer." />}
+            </Card>
+          </>
+        )}
+        {subtab === "tickets" && <CustTicketMonths tickets={custTickets} />}
+        {subtab === "ops" && <CustTicketMonths tickets={opsTickets} ops />}
+        {subtab === "referral" && (
+          <>
+            <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
+              {[["Referrals made", referralsDone], ["Converted", refConverted], ["Pending", refPending], ["Free months earned", custRef?.freeMonthsEarned ?? 0], ["Referral code", referralCode]].map(([label, value]) => (
+                <div key={label}><div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{value}</div></div>
+              ))}
+            </div>
+            <Card pad={false}>
+              <Table head={["Referred customer", "Society", "Status", "Referred on"]} maxHeight="calc(100vh - 340px)">
+                {myReferees.map(e => (
+                  <tr key={e.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{e.name || "—"}</td>
+                    <td style={td}>{e.society || "—"}</td>
+                    <td style={td}>{stChip(e.status)}</td>
+                    <td style={td}>{e.date ? fmtDate(e.date) : "—"}</td>
+                  </tr>
+                ))}
+              </Table>
+              {myReferees.length === 0 && <Empty msg={referralsDone ? "Referral count recorded, but no referee details are available." : "This customer has not referred anyone yet."} />}
+            </Card>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ── Search list ────────────────────────────────────────────────────────────
+  return (
+    <div className="fade-up">
+      <Toolbar q={q} setQ={setQ} placeholder="Search by Purifier ID, phone, name or email…" count={results.length} />
+      <Card pad={false}>
+        <Table head={["Purifier ID", "Customer", "Society", "Plan", "Status", ""]} maxHeight="calc(100vh - 260px)">
+          {results.map(c => (
+            <tr key={c.id} style={trStyle} onClick={() => openCustomer(c)}>
+              <td style={{ ...td, fontWeight: 700, color: "var(--brand)" }}>{c.purifier_id}</td>
+              <td style={td}>{c.name || "—"}</td>
+              <td style={td}>{c.society || "—"}</td>
+              <td style={td}>{c.plan || "—"}</td>
+              <td style={{ ...td, textTransform: "capitalize" }}>{c.status || "—"}</td>
+              <td style={{ ...td, textAlign: "center" }}><ChevronRight size={16} color="var(--muted)" /></td>
+            </tr>
+          ))}
+        </Table>
+        {results.length === 0 && <Empty msg={ql ? "No customer matches that search." : "No customers with a Purifier ID."} />}
+      </Card>
+    </div>
+  );
+}
+
 function Customers({ accessLevel = "view" }) {
   const { user } = useAuth();
   const [rows, setRows] = useState(null);
   const [subs, setSubs] = useState([]);
   const [q, setQ] = useState("");
-  const [societyFilter, setSocietyFilter] = useState("all");
+  const [societyFilter, setSocietyFilter] = useState(null); // null = all; else the selected societies
   const [sort, setSort] = useState({ key: null, dir: "asc" });
   const [sel, setSel] = useState(null);
   const [toast, setToast] = useState("");
@@ -4794,7 +7295,7 @@ function Customers({ accessLevel = "view" }) {
   const growthPct = newPrev === 0 ? (newThis > 0 ? 100 : 0) : Math.round((newThis - newPrev) / newPrev * 100);
 
   const filtered = rows.filter(c =>
-    (societyFilter === "all" || c.society === societyFilter) &&
+    (societyFilter === null || societyFilter.includes(c.society)) &&
     (c.name + c.email + c.phone + c.id + c.society + (c.purifier_id || "") + deviceType(c.purifier_id)).toLowerCase().includes(q.toLowerCase()));
 
   // Sortable by Customer ID (natural order) and Plan Amount (numeric).
@@ -4830,7 +7331,7 @@ function Customers({ accessLevel = "view" }) {
       </div>
       {/* Active-customers KPI card with month-on-month sign-up growth */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={{ background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#eaf5ee", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden" }}>
+        <div style={{ background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#E2F3EE", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", right: -20, top: -20, width: 90, height: 90, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.4),transparent 70%)" }} />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span className="eyebrow" style={{ color: "var(--lime)" }}>Active Customers</span>
@@ -4838,17 +7339,17 @@ function Customers({ accessLevel = "view" }) {
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "8px 0 2px" }}>
             <span style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "#fff", lineHeight: 1 }}>{activeCount.toLocaleString("en-IN")}</span>
-            <span style={{ fontSize: 12, color: "#a9c9b6" }}>of {rows.length.toLocaleString("en-IN")} total</span>
+            <span style={{ fontSize: 12, color: "#B5E2D4" }}>of {rows.length.toLocaleString("en-IN")} total</span>
           </div>
           {hasSignupDates ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, marginTop: 4 }}>
-              <span style={{ fontWeight: 700, color: growthPct >= 0 ? "#c3f0cf" : "#ffc9c9", display: "inline-flex", alignItems: "center", gap: 3 }}>
+              <span style={{ fontWeight: 700, color: growthPct >= 0 ? "#B5E2D4" : "#F5BFBF", display: "inline-flex", alignItems: "center", gap: 3 }}>
                 {growthPct >= 0 ? "▲" : "▼"} {growthPct >= 0 ? "+" : ""}{growthPct}%
               </span>
-              <span style={{ color: "#a9c9b6" }}>new sign-ups vs last month ({newThis} vs {newPrev})</span>
+              <span style={{ color: "#B5E2D4" }}>new sign-ups vs last month ({newThis} vs {newPrev})</span>
             </div>
           ) : (
-            <div style={{ fontSize: 11.5, color: "#a9c9b6", marginTop: 4 }}>No dated sign-ups to compare month-on-month.</div>
+            <div style={{ fontSize: 11.5, color: "#B5E2D4", marginTop: 4 }}>No dated sign-ups to compare month-on-month.</div>
           )}
         </div>
         <Stat label="Inactive Customers" value={inactiveCount.toLocaleString("en-IN")} icon={Ban} sub={`of ${rows.length.toLocaleString("en-IN")} total`} />
@@ -4860,10 +7361,7 @@ function Customers({ accessLevel = "view" }) {
       <Toolbar q={q} setQ={setQ} placeholder="Search customer, email, phone, ID…" count={filtered.length}
         right={
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <select value={societyFilter} onChange={e => setSocietyFilter(e.target.value)} style={selectStyle}>
-              <option value="all">All societies ({societies.length})</option>
-              {societies.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+            <MultiSelectFilter label="Society" options={societies} value={societyFilter} onChange={setSocietyFilter} />
             <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
           </div>
         } />
@@ -5027,7 +7525,7 @@ function BillingOverview() {
     if (s.status === "active") acc[k].amount += s.amount;
     return acc;
   }, {}));
-  const PIE = ["#1f7a3f", "#9a6a16", "#3a6ea5", "#b4232a", "#6a7670", "#16545c"];
+  const PIE = CHART_PALETTE.slice(0, 6);
 
   return (
     <div className="fade-up">
@@ -5035,9 +7533,9 @@ function BillingOverview() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
         <style>{`@media(max-width:820px){.an-grid{grid-template-columns:1fr!important}}`}</style>
         <Card title="Subscriptions by status" sub="Live, paused, cancelled & more">
-          <ResponsiveContainer width="100%" height={250}>
+          <ResponsiveContainer width="100%" height={290}>
             <PieChart>
-              <Pie data={subByStatus} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3}>
+              <Pie data={subByStatus} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
                 {subByStatus.map((e, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
               </Pie>
               <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
@@ -5047,11 +7545,11 @@ function BillingOverview() {
         <Card title="Active revenue by plan" sub="Recurring amount per plan">
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={revByPlan} layout="vertical" margin={{ left: 30, right: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
               <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={120} />
               <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="amount" name="recurring value" radius={[0, 6, 6, 0]} fill="#0f6e3f" maxBarSize={40} />
+              <Bar dataKey="amount" name="recurring value" radius={[0, 6, 6, 0]} fill="#0B6F52" maxBarSize={40} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -5137,20 +7635,20 @@ function ExportBar({ csv }) {
 // Report title that shows only on the printed page (hidden on screen).
 function PrintHead({ title, sub }) {
   return (
-    <div className="print-head" style={{ marginBottom: 14, borderBottom: "2px solid #1a2f1e", paddingBottom: 8 }}>
-      <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 22, color: "#1a2f1e" }}>ProWater — {title}</div>
-      {sub && <div style={{ fontSize: 12, color: "#46555d", marginTop: 2 }}>{sub}</div>}
+    <div className="print-head" style={{ marginBottom: 14, borderBottom: "2px solid #0A1A12", paddingBottom: 8 }}>
+      <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 22, color: "#0A1A12" }}>ProWater — {title}</div>
+      {sub && <div style={{ fontSize: 12, color: "#0A1A12", marginTop: 2 }}>{sub}</div>}
     </div>
   );
 }
 
 // Aging bucket for a number of days past due (null/negative = not yet due).
 const AGING_BUCKETS = [
-  { key: "current", label: "Current",   test: (d) => d == null || d < 0, color: "#1f7a3f" },
-  { key: "b1_30",   label: "1–30 days", test: (d) => d >= 0 && d <= 30,   color: "#5a7863" },
-  { key: "b31_60",  label: "31–60 days", test: (d) => d >= 31 && d <= 60,  color: "#9a6a16" },
-  { key: "b61_90",  label: "61–90 days", test: (d) => d >= 61 && d <= 90,  color: "#c2671e" },
-  { key: "b90",     label: "90+ days",  test: (d) => d > 90,              color: "#b4232a" },
+  { key: "current", label: "Current",   test: (d) => d == null || d < 0, color: "#08805A" },
+  { key: "b1_30",   label: "1–30 days", test: (d) => d >= 0 && d <= 30,   color: "#0A9D6E" },
+  { key: "b31_60",  label: "31–60 days", test: (d) => d >= 31 && d <= 60,  color: "#986315" },
+  { key: "b61_90",  label: "61–90 days", test: (d) => d >= 61 && d <= 90,  color: "#986315" },
+  { key: "b90",     label: "90+ days",  test: (d) => d > 90,              color: "#DC4141" },
 ];
 const bucketFor = (days) => AGING_BUCKETS.find(b => b.test(days)) || AGING_BUCKETS[0];
 
@@ -5162,12 +7660,12 @@ const monthLabel = (ym) => {
 
 function ReconBadge({ state }) {
   const map = {
-    matched:     ["Reconciled",      "#1f7a3f", "#e6f4ea"],
-    outstanding: ["Outstanding",     "#9a6a16", "#fdf3e0"],
-    overdue:     ["Overdue",         "#b4232a", "#fbe9e9"],
-    unmatched:   ["No subscription", "#b4232a", "#fbe9e9"],
+    matched:     ["Reconciled",      "#08805A", "#E2F3EE"],
+    outstanding: ["Outstanding",     "#986315", "#FBF0E0"],
+    overdue:     ["Overdue",         "#DC4141", "#FBE8E8"],
+    unmatched:   ["No subscription", "#DC4141", "#FBE8E8"],
   };
-  const [label, c, bg] = map[state] || ["—", "#6a7670", "#eceeed"];
+  const [label, c, bg] = map[state] || ["—", "#7D8A83", "#ECEEED"];
   return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{label}</span>;
 }
 
@@ -5307,7 +7805,7 @@ function Reconciliation() {
               const overdue = ["failed", "overdue"].includes(r.iv.status) || (r.iv.rawStatus || "").toLowerCase() === "overdue";
               const outstanding = (r.iv.balance || 0) > 0;
               // Overdue → red tint, other outstanding → amber tint.
-              const bg = overdue ? "#fdf2f2" : (outstanding ? "#fdfaf0" : "transparent");
+              const bg = overdue ? "#FBE8E8" : (outstanding ? "#FBF0E0" : "transparent");
               const dep = depositFor(r.iv.total);
               const rechargeTotal = (r.iv.total || 0) - dep;
               // Term (months) from the matched plan; show per-month recharge for multi-month plans.
@@ -5323,7 +7821,7 @@ function Reconciliation() {
                 </td>
                 <td style={{ ...td, textAlign: "center", fontWeight: 600, color: "var(--teal-d)" }}>{inr(dep)}</td>
                 <td style={{ ...td, textAlign: "center", color: "var(--teal-d)", fontWeight: 600 }}>{inr(r.collected)}</td>
-                <td style={{ ...td, textAlign: "center", color: outstanding ? (overdue ? "#b4232a" : "#9a6a16") : "var(--muted)", fontWeight: 600 }}>{inr(r.iv.balance)}</td>
+                <td style={{ ...td, textAlign: "center", color: outstanding ? (overdue ? "#DC4141" : "#986315") : "var(--muted)", fontWeight: 600 }}>{inr(r.iv.balance)}</td>
                 <td style={{ ...td, textAlign: "center" }}><Status s={r.iv.status} /></td>
                 <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: r.sub ? "var(--f)" : "var(--muted)" }}>{r.sub ? (r.sub.plan || r.sub.id) : "—"}</td>
                 <td style={{ ...td, textAlign: "center" }}><ReconBadge state={overdue ? "overdue" : r.state} /></td>
@@ -5462,7 +7960,7 @@ function ARAging() {
           {totalAR === 0 ? <Empty msg="No outstanding receivables." /> : (
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={summary} margin={{ left: 10, right: 16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
                 <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
                 <YAxis tick={axisTick} axisLine={false} tickLine={false} />
                 <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
@@ -5575,20 +8073,20 @@ function Collections() {
           {months.length === 0 ? <Empty msg="No invoices in this window." /> : (
             <ResponsiveContainer width="100%" height={340}>
               <ComposedChart data={months} margin={{ left: 10, right: 16, top: 28 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
                 <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
                 <YAxis yAxisId="l" tick={axisTick} axisLine={false} tickLine={false} />
                 <YAxis yAxisId="r" orientation="right" domain={[0, 120]} ticks={[0, 25, 50, 75, 100]} unit="%" tick={axisTick} axisLine={false} tickLine={false} />
                 <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                <Bar yAxisId="l" dataKey="billed" name="Billed" fill="#c9dcc0" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
-                  <LabelList dataKey="billed" position="top" formatter={labelFmt} style={{ fontSize: 9, fill: "#8a968f" }} />
+                <Bar yAxisId="l" dataKey="billed" name="Billed" fill="#B5E2D4" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                  <LabelList dataKey="billed" position="top" formatter={labelFmt} style={{ fontSize: 9, fill: "#7D8A83" }} />
                 </Bar>
-                <Bar yAxisId="l" dataKey="collected" name="Collected" fill="#1f7a3f" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
-                  <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 9, fill: "#0f6e3f", fontWeight: 600 }} />
+                <Bar yAxisId="l" dataKey="collected" name="Collected" fill="#08805A" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                  <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 9, fill: "#0B6F52", fontWeight: 600 }} />
                 </Bar>
-                <Line yAxisId="r" type="monotone" dataKey="efficiency" name="Efficiency %" stroke="#c2671e" strokeWidth={3} dot={{ r: 4, fill: "#c2671e", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false}>
-                  <LabelList dataKey="efficiency" position="top" formatter={(v) => `${v}%`} style={{ fontSize: 10, fill: "#c2671e", fontWeight: 700 }} />
+                <Line yAxisId="r" type="monotone" dataKey="efficiency" name="Efficiency %" stroke="#986315" strokeWidth={3} dot={{ r: 4, fill: "#986315", stroke: "#fff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false}>
+                  <LabelList dataKey="efficiency" position="top" formatter={(v) => `${v}%`} style={{ fontSize: 10, fill: "#986315", fontWeight: 700 }} />
                 </Line>
               </ComposedChart>
             </ResponsiveContainer>
@@ -5604,7 +8102,7 @@ function Collections() {
                 <td style={{ ...td, fontWeight: 600 }}>{m.label}</td>
                 <td style={td}>{inr(m.billed)}</td>
                 <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600 }}>{inr(m.collected)}</td>
-                <td style={{ ...td, color: m.outstanding > 0 ? "#b4232a" : "var(--muted)" }}>{inr(m.outstanding)}</td>
+                <td style={{ ...td, color: m.outstanding > 0 ? "#DC4141" : "var(--muted)" }}>{inr(m.outstanding)}</td>
                 <td style={{ ...td, fontWeight: 600 }}>{m.efficiency}%</td>
               </tr>
             ))}
@@ -5671,7 +8169,7 @@ function BalanceSheet() {
     { name: "Deposits", value: Math.round(deposits) },
     { name: "Receivable", value: Math.round(receivable) },
   ].filter(d => d.value > 0);
-  const PIE = ["#1f7a3f", "#9a6a16", "#16545c", "#3a6ea5"];
+  const PIE = CHART_PALETTE.slice(0, 4);
 
   const BRow = ({ k, v, strong }) => (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "11px 0", borderBottom: "1px solid var(--border)" }}>
@@ -5728,9 +8226,9 @@ function BalanceSheet() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
         <Card title="Recharge revenue split" sub="Recognized vs deferred vs deposits held">
           {chartData.length === 0 ? <Empty msg="No recharge activity yet." /> : (
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={290}>
               <PieChart>
-                <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3}>
+                <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
                   {chartData.map((e, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
                 </Pie>
                 <Tooltip content={<TT prefix="₹" />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
@@ -5886,7 +8384,7 @@ function Invoices() {
               <td style={td}><Person name={i.customerName || "—"} email={i.email} /></td>
               <td style={td}>{inr(i.total)}</td>
               <td style={td}>{depositFor(i.total) ? inr(depositFor(i.total)) : "—"}</td>
-              <td style={td}>{i.balance > 0 ? <strong style={{ color: "#b4232a" }}>{inr(i.balance)}</strong> : inr(0)}</td>
+              <td style={td}>{i.balance > 0 ? <strong style={{ color: "#DC4141" }}>{inr(i.balance)}</strong> : inr(0)}</td>
               <td style={td}><Status s={i.status} /></td>
               <td style={td}>{i.date ? fmtDate(i.date) : "—"}</td>
               <td style={td}>{i.dueDate ? fmtDate(i.dueDate) : "—"}</td>
@@ -6026,7 +8524,7 @@ function Defaulters() {
   };
   const openCompose = (d) => { setSel(d); setMsg(defaultMsg(d)); };
 
-  const overColor = (dv) => dv == null ? "var(--muted)" : dv < 0 ? "#1f7a3f" : dv <= 30 ? "#9a6a16" : "#b4232a";
+  const overColor = (dv) => dv == null ? "var(--muted)" : dv < 0 ? "#08805A" : dv <= 30 ? "#986315" : "#DC4141";
   const overLabel = (dv) => dv == null ? "—" : dv < 0 ? `${-dv}d to due` : dv === 0 ? "Due today" : `${dv}d overdue`;
 
   const exportCsv = () => exportToCsv("prowater-defaulters.csv", [
@@ -6068,7 +8566,7 @@ function Defaulters() {
               <tr key={d.id} style={trStyle}>
                 <td style={td}><Person name={d.customerName || "—"} email={d.email} /></td>
                 <td style={td}><Chip>{d.number || d.id}</Chip></td>
-                <td style={{ ...td, fontWeight: 700, color: "#b4232a" }}>{inr(d.balance)}</td>
+                <td style={{ ...td, fontWeight: 700, color: "#DC4141" }}>{inr(d.balance)}</td>
                 <td style={td}>
                   <div>{d.dueDate ? fmtDate(d.dueDate) : "—"}</div>
                   <div style={{ fontSize: 11.5, fontWeight: 600, color: overColor(d._daysOver) }}>{overLabel(d._daysOver)}</div>
@@ -6128,132 +8626,121 @@ function Defaulters() {
 function CreditsAnalytics() {
   const { user } = useAuth();
   const [customers, setCustomers] = useState(null);
+  const [creditNotes, setCreditNotes] = useState([]);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
-  const [planFilter, setPlanFilter] = useState("all");
+  const [societyFilter, setSocietyFilter] = useState(null); // null = all; else array of selected societies
+  const { sel, setSel, range } = useDateRange("this_year"); // date filter
 
   useEffect(() => {
     api.logView(user.username, "Viewed Credits analytics");
-    customerApi.getCustomers()
-      .then(setCustomers)
-      .catch(e => setErr(e.message || "Could not load customer credits."));
+    Promise.all([
+      customerApi.getCustomers(),
+      creditNoteApi.getCreditNotes().catch(() => []),
+    ]).then(([custs, cns]) => { setCustomers(custs); setCreditNotes(cns); })
+      .catch(e => setErr(e.message || "Could not load credit notes."));
   }, []);
   if (err) return <ApiError msg={err} />;
   if (!customers) return <Loading />;
 
-  const planList = Array.from(new Set(customers.map(c => c.plan).filter(Boolean))).sort();
+  // Join credit notes -> customer (by Zoho customer id) for name / society.
+  const custByKey = {};
+  customers.forEach(c => [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber, c.email].forEach(k => { if (k) custByKey[String(k).toLowerCase()] = c; }));
+  const noteCust = (cn) => custByKey[String(cn.zohoCustomerId).toLowerCase()];
 
-  const holders = customers
-    .filter(c => planFilter === "all" || c.plan === planFilter)
-    .map(c => ({ id: c.id, name: c.name, email: c.email, society: c.society || "Unknown", plan: c.plan || "—", credits: Number(c.unused_credits) || 0 }))
-    .filter(c => c.credits > 0)
-    .filter(c => (`${c.name} ${c.email} ${c.society} ${c.plan} ${c.id}`).toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => b.credits - a.credits);
+  const societies = Array.from(new Set(customers.map(c => c.society).filter(Boolean))).sort();
 
-  const totalCredits = holders.reduce((s, c) => s + c.credits, 0);
-  const creditCount = holders.length;
-  const avgCredit = creditCount ? Math.round(totalCredits / creditCount) : 0;
-  const maxCredit = holders.length ? holders[0].credits : 0;
+  // Date-range + society filters.
+  const fromTs = range.from ? range.from.getTime() : null;
+  const toTs = range.to ? range.to.getTime() : null;
+  const inRange = (dateStr) => {
+    if (fromTs == null && toTs == null) return true;
+    const t = new Date(dateStr).getTime();
+    if (isNaN(t)) return false;
+    return (fromTs == null || t >= fromTs) && (toTs == null || t <= toTs);
+  };
+  const filteredNotes = (creditNotes || []).filter(cn => {
+    if (!inRange(cn.date)) return false;
+    if (societyFilter !== null && !societyFilter.includes(noteCust(cn)?.society || "Unknown")) return false;
+    return true;
+  });
 
-  const bySociety = Object.values(holders.reduce((acc, c) => {
-    const k = c.society || "Unknown";
-    acc[k] = acc[k] || { society: k, credits: 0, count: 0 };
-    acc[k].credits += c.credits; acc[k].count += 1;
+  // Per-customer aggregation (discount given, remaining balance, latest date given).
+  const cnRows = Object.values(filteredNotes.reduce((acc, cn) => {
+    const c = noteCust(cn);
+    const key = cn.zohoCustomerId || cn.id;
+    acc[key] = acc[key] || { name: c?.name || cn.customerName || cn.zohoCustomerId || "—", email: c?.email, society: c?.society || "Unknown", count: 0, amount: 0, balance: 0, lastGiven: null };
+    acc[key].count += 1; acc[key].amount += cn.amount || 0; acc[key].balance += cn.balance || 0;
+    const t = new Date(cn.date).getTime();
+    if (!isNaN(t) && (acc[key].lastGiven == null || t > acc[key].lastGiven)) acc[key].lastGiven = t;
     return acc;
-  }, {})).sort((a, b) => b.credits - a.credits);
+  }, {})).sort((a, b) => b.amount - a.amount);
 
-  const byPlan = Object.values(holders.reduce((acc, c) => {
-    const k = c.plan || "—";
-    acc[k] = acc[k] || { plan: k, credits: 0, count: 0 };
-    acc[k].credits += c.credits; acc[k].count += 1;
-    return acc;
-  }, {})).sort((a, b) => b.credits - a.credits).slice(0, 10);
+  const totalDiscount = filteredNotes.reduce((s, cn) => s + (cn.amount || 0), 0);
+  const totalBalance = filteredNotes.reduce((s, cn) => s + (cn.balance || 0), 0);
+  const noteCount = filteredNotes.length;
+  const custCount = cnRows.length;
 
-  const labelFmt = (v) => v >= 1000 ? `₹${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `₹${v}`;
+  const ql = q.trim().toLowerCase();
+  const shownRows = ql ? cnRows.filter(r => `${r.name} ${r.email} ${r.society}`.toLowerCase().includes(ql)) : cnRows;
 
-  const exportCsv = () => exportToCsv("prowater-credits.csv", [
-    { label: "Customer", get: c => c.name },
-    { label: "Email", get: c => c.email },
-    { label: "Society", get: c => c.society },
-    { label: "Plan", get: c => c.plan },
-    { label: "Unused credits", get: c => c.credits },
-  ], holders);
+  const exportCsv = () => exportToCsv("prowater-credit-notes.csv", [
+    { label: "Customer", get: r => r.name },
+    { label: "Email", get: r => r.email },
+    { label: "Society", get: r => r.society },
+    { label: "Credit notes", get: r => r.count },
+    { label: "Discount total", get: r => r.amount },
+    { label: "Balance", get: r => r.balance },
+    { label: "Last given", get: r => r.lastGiven ? fmtDate(r.lastGiven) : "" },
+  ], cnRows);
 
   return (
     <div className="fade-up">
+      {creditNoteApi.usedSample && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#986315", background: "#FBF0E0", border: "1px solid #F6DEBC", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
+          <AlertCircle size={16} /> <b>Showing sample data</b> — the live <code>/admin/get-all-creditnotes</code> endpoint is unreachable, so these credit notes are placeholders.
+        </div>
+      )}
       {/* filter row */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Plan</span>
-        <select value={planFilter} onChange={e => setPlanFilter(e.target.value)} style={selectStyle}>
-          <option value="all">All plans ({planList.length})</option>
-          {planList.map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        {planFilter !== "all" && <button onClick={() => setPlanFilter("all")} style={{ ...btnGhost, padding: "4px 12px", fontSize: 12 }}>Reset</button>}
+        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Period</span>
+        <DateRangePicker value={sel} onChange={setSel} />
+        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600, marginLeft: 6 }}>Society</span>
+        <MultiSelectFilter label="Society" options={societies} value={societyFilter} onChange={setSocietyFilter} width={240} />
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
 
       <div style={grid4}>
-        <Stat label="Total credits outstanding" value={inr(totalCredits)} icon={Coins} sub="unused customer credits" hero />
-        <Stat label="Customers with credits" value={creditCount} icon={Users} sub="holding a balance" />
-        <Stat label="Avg credit / customer" value={inr(avgCredit)} icon={Wallet} sub="among those with credits" />
-        <Stat label="Largest balance" value={inr(maxCredit)} icon={TrendingUp} sub="single customer" />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="ba-grid">
-        <style>{`@media(max-width:900px){.ba-grid{grid-template-columns:1fr!important}}`}</style>
-        <Card title="Credits by society" sub="Where unused credits sit">
-          {bySociety.length === 0 ? <Empty msg="No customer credits found." /> : (
-            <ResponsiveContainer width="100%" height={Math.max(240, bySociety.slice(0, 10).length * 32 + 40)}>
-              <BarChart data={bySociety.slice(0, 10)} layout="vertical" margin={{ left: 30, right: 56 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
-                <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="society" tick={axisTick} axisLine={false} tickLine={false} width={130} />
-                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(154,106,22,.08)" }} />
-                <Bar dataKey="credits" name="Credits" radius={[0, 6, 6, 0]} fill="#9a6a16" maxBarSize={28} isAnimationActive={false}>
-                  <LabelList dataKey="credits" position="right" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
-
-        <Card title="Credits by plan" sub="Top plans by credit balance">
-          {byPlan.length === 0 ? <Empty msg="No customer credits found." /> : (
-            <ResponsiveContainer width="100%" height={Math.max(240, byPlan.length * 32 + 40)}>
-              <BarChart data={byPlan} layout="vertical" margin={{ left: 30, right: 56 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
-                <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={130} />
-                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(58,110,165,.08)" }} />
-                <Bar dataKey="credits" name="Credits" radius={[0, 6, 6, 0]} fill="#3a6ea5" maxBarSize={28} isAnimationActive={false}>
-                  <LabelList dataKey="credits" position="right" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </Card>
+        <Stat label="Total discount given" value={inr(totalDiscount)} icon={Coins} sub={`across ${noteCount} credit notes`} hero />
+        <Stat label="Credit balance available" value={inr(totalBalance)} icon={Wallet} sub="unused / unapplied" />
+        <Stat label="Credit notes" value={noteCount} icon={Receipt} sub="issued in period" />
+        <Stat label="Customers discounted" value={custCount} icon={Users} sub="received a credit note" />
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <Toolbar q={q} setQ={setQ} placeholder="Search customer, society, plan…" count={holders.length} />
-        <Card pad={false} title="Customers holding credits" sub={`${creditCount} customers · ${inr(totalCredits)} total`}>
-          <Table head={["Customer", "Society", "Plan", "Unused credits"]} maxHeight="calc(100vh - 420px)">
-            {holders.map(c => (
-              <tr key={c.id} style={trStyle}>
-                <td style={td}><Person name={c.name || "—"} email={c.email} /></td>
-                <td style={td}>{c.society}</td>
-                <td style={td}>{c.plan}</td>
-                <td style={{ ...td, fontWeight: 700, color: "#9a6a16" }}>{inr(c.credits)}</td>
+        <Toolbar q={q} setQ={setQ} placeholder="Search customer or society…" count={shownRows.length} />
+        <Card pad={false} title="Discounts by customer" sub={`${custCount} customers · ${inr(totalDiscount)} given · ${inr(totalBalance)} balance · ${noteCount} credit notes`}>
+          <Table head={["Customer", "Society", "Notes", "Discount given", "Balance", "Last given"]} maxHeight="calc(100vh - 380px)">
+            {shownRows.map((r, i) => (
+              <tr key={i} style={trStyle}>
+                <td style={td}><Person name={r.name || "—"} email={r.email} /></td>
+                <td style={td}>{r.society}</td>
+                <td style={{ ...td, fontVariantNumeric: "tabular-nums" }}>{r.count}</td>
+                <td style={{ ...td, fontWeight: 700, color: "#986315" }}>{inr(r.amount)}</td>
+                <td style={{ ...td, fontWeight: 700, color: r.balance > 0 ? "#08805A" : "var(--muted)", fontVariantNumeric: "tabular-nums" }}>{inr(r.balance)}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", color: "var(--muted)" }}>{r.lastGiven ? fmtDate(r.lastGiven) : "—"}</td>
               </tr>
             ))}
-            {holders.length > 0 && (
+            {shownRows.length > 0 && (
               <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={3}>Total ({holders.length})</td>
-                <td style={ftd}>{inr(totalCredits)}</td>
+                <td style={{ ...ftd, textAlign: "center" }} colSpan={3}>Total ({noteCount} notes)</td>
+                <td style={ftd}>{inr(totalDiscount)}</td>
+                <td style={ftd}>{inr(totalBalance)}</td>
+                <td style={ftd}></td>
               </tr>
             )}
           </Table>
-          {holders.length === 0 && <Empty msg="No customers are holding unused credits." />}
+          {shownRows.length === 0 && <Empty msg="No credit notes match the current filters." />}
         </Card>
       </div>
     </div>
@@ -6284,7 +8771,7 @@ function TrackTechnician() {
   const [techs] = useState(SAMPLE_TECHNICIANS);
   const [sel, setSel] = useState(null);
 
-  const statusColor = (s) => s === "on_job" ? "#b4232a" : s === "en_route" ? "#9a6a16" : "#1f7a3f";
+  const statusColor = (s) => s === "on_job" ? "#DC4141" : s === "en_route" ? "#986315" : "#08805A";
   const statusLabel = (s) => s === "on_job" ? "On job" : s === "en_route" ? "En route" : "Available";
 
   useEffect(() => { api.logView(user.username, "Viewed Track Technician"); }, []);
@@ -6346,7 +8833,7 @@ function TrackTechnician() {
         });
       }
       const m = L.marker([t.lat, t.lng], { icon }).addTo(map);
-      m.bindPopup(`<strong>${t.name}</strong><br/>${statusLabel(t.status)} · ${t.area}<br/><span style="color:#666">${t.job}</span>`);
+      m.bindPopup(`<strong>${t.name}</strong><br/>${statusLabel(t.status)} · ${t.area}<br/><span style="color:#7D8A83">${t.job}</span>`);
       m.on("click", () => setSel(t));
       markersRef.current.push(m);
     });
@@ -6370,7 +8857,7 @@ function TrackTechnician() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 18, marginTop: 18 }} className="fsm-grid">
         <style>{`@media(max-width:900px){.fsm-grid{grid-template-columns:1fr!important}}`}</style>
         <Card pad={false} title="Live map · Bengaluru" sub="Technician positions">
-          <div ref={mapRef} style={{ width: "100%", height: 520, borderRadius: 12, overflow: "hidden", background: "#e8efe9" }} />
+          <div ref={mapRef} style={{ width: "100%", height: 520, borderRadius: 12, overflow: "hidden", background: "#EEF7F3" }} />
         </Card>
 
         <Card pad={false} title="Technicians" sub={`${techs.length} active`}>
@@ -6406,8 +8893,7 @@ function NetRevenue() {
   const [custs, setCusts] = useState(null);
   const [err, setErr] = useState("");
   const [apt, setApt] = useState("all"); // apartment (society) filter
-  const now = new Date();
-  const [ym, setYm] = useState({ y: now.getFullYear(), m: now.getMonth() }); // selected month
+  const { sel, setSel, range } = useDateRange("this_month"); // date-range preset
 
  useEffect(() => {
   api.logView(user.username, "Viewed Net Revenue");
@@ -6430,68 +8916,57 @@ function NetRevenue() {
   const paidAll = invs.filter(i => i.status === "paid" && i.date);
   const aptOptions = Array.from(new Set(paidAll.map(societyOf).filter(s => s && s !== "Unknown"))).sort();
   const paid = apt === "all" ? paidAll : paidAll.filter(i => societyOf(i) === apt);
-  const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
-  const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  // Sum collected cash for a given year/month.
-const collectedIn = (y, m) => paid.reduce((s, i) => {
-    const dateStr = (i.lastModified || i.date || "").slice(0, 10);
-    const [dy, dm] = dateStr.split("-").map(Number);
-    if (!dy || !dm) return s;
-    return (dy === y && dm - 1 === m) ? s + i.total : s;
-}, 0);
+  // Collection date of an invoice (payment date wins over issue date).
+  const paidOn = (i) => {
+    const [dy, dm, dd] = (i.lastModified || i.date || "").slice(0, 10).split("-").map(Number);
+    return (dy && dm && dd) ? new Date(dy, dm - 1, dd) : null;
+  };
+  const sumIn = (r) => paid.reduce((s, i) => dateInRange(paidOn(i), r) ? s + i.total : s, 0);
 
-  const thisMonth = collectedIn(ym.y, ym.m);
-  const prevM = ym.m === 0 ? { y: ym.y - 1, m: 11 } : { y: ym.y, m: ym.m - 1 };
-  const prevMonth = collectedIn(prevM.y, prevM.m);
-  const lastYear = collectedIn(ym.y - 1, ym.m);
+  // Selected period vs the period before it vs the same span a year ago.
+  const cmpPrev = prevRange(sel.preset, range);
+  const cmpYoy = yoyRange(range);
+  const periodTotal = sumIn(range);
+  const prevTotal = sumIn(cmpPrev);
+  const yoyTotal = sumIn(cmpYoy);
 
   const pct = (cur, prev) => prev > 0 ? Math.round(((cur - prev) / prev) * 1000) / 10 : null;
-  const momPct = pct(thisMonth, prevMonth);
-  const yoyPct = pct(thisMonth, lastYear);
+  const momPct = pct(periodTotal, prevTotal);
+  const yoyPct = pct(periodTotal, yoyTotal);
 
-  // Daily series for the selected month.
-  const dim = daysInMonth(ym.y, ym.m);
-  const daily = [];
-  for (let day = 1; day <= dim; day++) {
-    const label = String(day).padStart(2, "0");
-    daily.push({ day, label, dateLabel: `${label} ${MONTHS[ym.m]}`, revenue: 0, deposit: 0, recharge: 0 });
-  }
-paid.forEach(i => {
-    const dateStr = (i.lastModified || i.date || "").slice(0, 10);
-    const [dy, dm, dd] = dateStr.split("-").map(Number);
-    if (!dy || !dm || !dd) return;
-    if (dy === ym.y && dm - 1 === ym.m) {
-      const cell = daily[dd - 1];
-      const dep = depositForPlan(i.plan, i.total);
-      cell.revenue += i.total;
-      cell.deposit += dep;
-      cell.recharge += Math.max(0, i.total - dep);
-    }
-});
+  // Series for the selected range — per day, or per month once the span is long.
+  const { mode, buckets: daily } = bucketsFor(range);
+  const byKey = {};
+  daily.forEach(b => { byKey[b.key] = b; });
+  paid.forEach(i => {
+    const d = paidOn(i);
+    if (!dateInRange(d, range)) return;
+    const cell = byKey[bucketKeyOf(d, mode)];
+    if (!cell) return;
+    const dep = depositForPlan(i.plan, i.total);
+    cell.revenue += i.total;
+    cell.deposit += dep;
+    cell.recharge += Math.max(0, i.total - dep);
+  });
+  const unitWord = mode === "day" ? "day" : "month";
   const activeDays = daily.filter(x => x.revenue > 0).length;
-  const avgPerActiveDay = activeDays ? Math.round(thisMonth / activeDays) : 0;
+  const avgPerActiveDay = activeDays ? Math.round(periodTotal / activeDays) : 0;
   const bestDay = daily.reduce((b, x) => x.revenue > (b?.revenue || 0) ? x : b, null);
 
   const labelFmt = (v) => v >= 1000 ? `₹${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : (v > 0 ? `₹${v}` : "");
-  const fromLabel = `01/${String(ym.m + 1).padStart(2, "0")}/${ym.y}`;
-  const toLabel = `${dim}/${String(ym.m + 1).padStart(2, "0")}/${ym.y}`;
-
-  // Month options: last 12 months.
-  const monthOpts = [];
-  for (let k = 0; k < 12; k++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
-    monthOpts.push({ y: d.getFullYear(), m: d.getMonth(), label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}` });
-  }
+  const fromLabel = dmy(range.from);
+  const toLabel = dmy(range.to);
+  const periodName = presetLabel(sel.preset);
 
   const Delta = ({ p }) => {
     if (p == null) return <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>— 0%</span>;
     const up = p >= 0;
-    return <span style={{ fontSize: 12.5, fontWeight: 700, color: up ? "#1f7a3f" : "#b4232a" }}>{up ? "▲" : "▼"} {up ? "+" : ""}{p}%</span>;
+    return <span style={{ fontSize: 12.5, fontWeight: 700, color: up ? "#08805A" : "#DC4141" }}>{up ? "▲" : "▼"} {up ? "+" : ""}{p}%</span>;
   };
 
-  const exportCsv = () => exportToCsv(`prowater-net-revenue-${ym.y}-${String(ym.m + 1).padStart(2, "0")}.csv`, [
-    { label: "Date", get: r => r.dateLabel },
+  const exportCsv = () => exportToCsv(`prowater-net-revenue-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
+    { label: mode === "day" ? "Date" : "Month", get: r => r.dateLabel },
     { label: "Revenue", get: r => r.revenue },
   ], daily);
 
@@ -6508,9 +8983,7 @@ paid.forEach(i => {
             <option value="all">All apartments</option>
             {aptOptions.map(a => <option key={a} value={a}>{a}</option>)}
           </select>
-          <select value={`${ym.y}-${ym.m}`} onChange={e => { const [y, m] = e.target.value.split("-").map(Number); setYm({ y, m }); }} style={selectStyle}>
-            {monthOpts.map(o => <option key={`${o.y}-${o.m}`} value={`${o.y}-${o.m}`}>{o.label}</option>)}
-          </select>
+          <DateRangePicker value={sel} onChange={setSel} />
           <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
         </div>
       </div>
@@ -6519,52 +8992,55 @@ paid.forEach(i => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }} className="nr-cards">
         <style>{`@media(max-width:760px){.nr-cards{grid-template-columns:1fr!important}}`}</style>
         <Card>
-          <div style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>This Month</div>
-          <div style={{ fontSize: 30, fontWeight: 700, color: "var(--f)", marginTop: 6 }}>{inr(thisMonth)}</div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{activeDays} active days · avg {inr(avgPerActiveDay)}/day</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>{periodName}</div>
+          <div style={{ fontSize: 30, fontWeight: 700, color: "var(--f)", marginTop: 6 }}>{inr(periodTotal)}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{activeDays} active {unitWord}{activeDays === 1 ? "" : "s"} · avg {inr(avgPerActiveDay)}/{unitWord}</div>
         </Card>
         <Card>
-          <div style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Month on Month</div>
+          <div style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Previous period</div>
           <div style={{ fontSize: 30, fontWeight: 700, color: "var(--f)", marginTop: 6, display: "flex", alignItems: "center", gap: 10 }}>
-            {inr(prevMonth)} <Delta p={momPct} />
+            {inr(prevTotal)} <Delta p={momPct} />
           </div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>vs {MONTHS[prevM.m]} {prevM.y}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>vs {rangeLabel(cmpPrev)}</div>
         </Card>
         <Card>
           <div style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Year on Year</div>
           <div style={{ fontSize: 30, fontWeight: 700, color: "var(--f)", marginTop: 6, display: "flex", alignItems: "center", gap: 10 }}>
-            {inr(lastYear)} <Delta p={yoyPct} />
+            {inr(yoyTotal)} <Delta p={yoyPct} />
           </div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>vs {MONTHS[ym.m]} {ym.y - 1}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>vs {rangeLabel(cmpYoy)}</div>
         </Card>
       </div>
 
       {/* daily bars */}
-      <Card style={{ marginTop: 18 }} title="Daily net revenue" sub={bestDay && bestDay.revenue > 0 ? `Best day: ${bestDay.dateLabel} · ${inr(bestDay.revenue)}` : "Collected cash by day"}>
+      <Card style={{ marginTop: 18 }} title={mode === "day" ? "Daily net revenue" : "Monthly net revenue"} sub={bestDay && bestDay.revenue > 0 ? `Best ${unitWord}: ${bestDay.dateLabel} · ${inr(bestDay.revenue)}` : `Collected cash by ${unitWord}`}>
         <ResponsiveContainer width="100%" height={340}>
           <BarChart data={daily} margin={{ left: 8, right: 12, top: 22 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted)" }} axisLine={false} tickLine={false} interval={0} />
             <YAxis tick={axisTick} axisLine={false} tickLine={false} width={48} tickFormatter={v => v >= 1000 ? `${v/1000}K` : v} />
-            <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(15,110,63,.08)" }} />
-            <Bar dataKey="revenue" name="Net Revenue" radius={[4, 4, 0, 0]} fill="#1f7a3f" maxBarSize={26} isAnimationActive={false}>
+            <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
+            <Bar dataKey="revenue" name="Net Revenue" radius={[4, 4, 0, 0]} fill="#08805A" maxBarSize={26} isAnimationActive={false}>
               <LabelList dataKey="revenue" position="top" formatter={labelFmt} style={{ fontSize: 8.5, fill: "var(--muted)" }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </Card>
 
-      {/* daily breakdown — vertical, split into three day-columns, each with a
+      {/* breakdown — vertical, split into three balanced columns, each with a
           column total; grand total shown at the very bottom */}
-      <Card pad={false} style={{ marginTop: 18 }} title="Daily breakdown" sub={`${MONTHS[ym.m]} ${ym.y} · ${inr(thisMonth)} total`}>
+      <Card pad={false} style={{ marginTop: 18 }} title={mode === "day" ? "Daily breakdown" : "Monthly breakdown"} sub={`${rangeLabel(range)} · ${inr(periodTotal)} total`}>
         <div style={{ padding: 18 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }} className="nr-breakdown">
             <style>{`@media(max-width:760px){.nr-breakdown{grid-template-columns:1fr!important}}`}</style>
-            {[
-              { title: "Days 1–10", days: daily.slice(0, 10) },
-              { title: "Days 11–20", days: daily.slice(10, 20) },
-              { title: "Days 21–31", days: daily.slice(20) },
-            ].map((seg, si) => {
+            {(() => {
+              // Split whatever the range produced into three balanced columns.
+              const per = Math.ceil(daily.length / 3) || 1;
+              return [0, 1, 2]
+                .map(k => daily.slice(k * per, (k + 1) * per))
+                .filter(days => days.length)
+                .map(days => ({ title: days.length === 1 ? days[0].dateLabel : `${days[0].dateLabel} – ${days[days.length - 1].dateLabel}`, days }));
+            })().map((seg, si) => {
               const segTotal = seg.days.reduce((s, d) => s + d.revenue, 0);
               const cellDate = { padding: "9px 16px", textAlign: "left", fontSize: 12.5, color: "var(--slate)", whiteSpace: "nowrap" };
               const cellNum = { padding: "9px 16px", textAlign: "right", fontSize: 13, whiteSpace: "nowrap" };
@@ -6579,12 +9055,12 @@ paid.forEach(i => {
                     </thead>
                     <tbody>
                       {seg.days.map(d => {
-                        const dow = new Date(ym.y, ym.m, d.day).getDay();
-                        const wknd = dow === 0 || dow === 6; // Sun / Sat → amber
+                        const dow = d.dow;
+                        const wknd = dow === 0 || dow === 6; // Sun / Sat → amber (day mode only)
                         return (
-                        <tr key={d.day} style={{ borderBottom: "1px solid #eef2f0", background: wknd ? "#fdf3e0" : undefined }}>
-                          <td style={{ ...cellDate, color: wknd ? "#9a6a16" : "var(--slate)", fontWeight: wknd ? 600 : 400 }}>{d.dateLabel}{wknd ? ` · ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dow]}` : ""}</td>
-                          <td style={{ ...cellNum, color: d.revenue > 0 ? (wknd ? "#9a6a16" : "var(--f)") : "var(--muted)", fontWeight: d.revenue > 0 ? 600 : 400 }}>{inr(d.revenue)}</td>
+                        <tr key={d.key} style={{ borderBottom: "1px solid #ECEEED", background: wknd ? "#FBF0E0" : undefined }}>
+                          <td style={{ ...cellDate, color: wknd ? "#986315" : "var(--slate)", fontWeight: wknd ? 600 : 400 }}>{d.dateLabel}{wknd ? ` · ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dow]}` : ""}</td>
+                          <td style={{ ...cellNum, color: d.revenue > 0 ? (wknd ? "#986315" : "var(--f)") : "var(--muted)", fontWeight: d.revenue > 0 ? 600 : 400 }}>{inr(d.revenue)}</td>
                         </tr>
                         );
                       })}
@@ -6599,8 +9075,8 @@ paid.forEach(i => {
             })}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16, padding: "14px 18px", background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#fff", borderRadius: 12 }}>
-            <span style={{ fontWeight: 700, fontSize: 14 }}>Grand total · {MONTHS[ym.m]} {ym.y}</span>
-            <span style={{ fontWeight: 800, fontSize: 20 }}>{inr(thisMonth)}</span>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>Grand total · {periodName} ({rangeLabel(range)})</span>
+            <span style={{ fontWeight: 800, fontSize: 20 }}>{inr(periodTotal)}</span>
           </div>
         </div>
       </Card>
@@ -6631,21 +9107,40 @@ function parseFlexDate(v) {
 
 /* ===========================================================================
    PENETRATION TRACKER — month-on-month customer count per society (cumulative
-   sign-ups by calendar month, from the customer API). Launch-date-relative
-   (M1..Mn) alignment can be layered on later once launch dates are wired in.
+   sign-ups by calendar month, from the customer API). Each row aligns to its own
+   M1 = launch month; admins can override that launch month per society.
    =========================================================================== */
-function PenetrationTracker() {
+// Admin-only launch-month overrides (per society, stored "YYYY-MM"); everyone else
+// sees the derived launch (month of the first sign-up) read-only.
+let _launchOverrides = LS.get("pw_launch_overrides", {}) || {};
+const launchKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const getLaunchOverride = (society) => _launchOverrides[launchKey(society)] || null;
+const setLaunchOverride = (society, ym) => {
+  const k = launchKey(society);
+  if (!ym) delete _launchOverrides[k]; else _launchOverrides[k] = ym;
+  LS.set("pw_launch_overrides", _launchOverrides);
+};
+const ymToIdx = (ym) => { const [y, m] = String(ym).split("-").map(Number); return (y && m) ? y * 12 + (m - 1) : null; };
+const idxToYm = (idx) => `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
+
+function PenetrationTracker({ subsData, custsData, societyFilter = null, asOf, embedded = false } = {}) {
   const { user } = useAuth();
-  const [data, setData] = useState(null);
+  const [, forceRerender] = useState(0);                       // re-render after a launch edit
+  const canEditLaunch = user.role === "admin" && !embedded;    // only admins, only in the standalone view
+  // When embedded in the Overview, the parent passes already-loaded subs/customers
+  // (plus the society filter and an as-of date) so this view follows the page filters.
+  const provided = Array.isArray(subsData) && Array.isArray(custsData);
+  const [data, setData] = useState(provided ? { subs: subsData, custs: custsData } : null);
   const [err, setErr] = useState("");
   useEffect(() => {
+    if (provided) { setData({ subs: subsData, custs: custsData }); return; }
     api.logView(user.username, "Viewed Penetration Tracker");
     // Subscriptions give the created_at (sign-up) date; customers give the
     // society. Join on subscription.customer_id ↔ customer.zoho_customer_id.
     Promise.all([billingApi.getSubscriptions(), customerApi.getCustomers()])
       .then(([subs, custs]) => setData({ subs: subs || [], custs: custs || [] }))
       .catch(e => setErr(e.message || "Could not load subscriptions."));
-  }, []);
+  }, [provided, subsData, custsData]);
   if (err) return <ApiError msg={err} />;
   if (!data) return <Loading />;
 
@@ -6665,9 +9160,10 @@ function PenetrationTracker() {
     socByCust[keyLc(s.customerNumber)] || socByCust[keyLc(s.email)] || "";
 
   // One subscription = one sign-up: society (from the customer join) + created_at.
+  const socFilterSet = societyFilter && societyFilter.length ? new Set(societyFilter) : null;
   const custs = data.subs
     .map(s => ({ society: societyOfSub(s), since: parseFlexDate(s.createdAt || s.activatedAt) }))
-    .filter(x => x.society && x.since);
+    .filter(x => x.society && x.since && (!socFilterSet || socFilterSet.has(x.society)));
 
   if (!custs.length) {
     const total = data.subs.length;
@@ -6683,7 +9179,7 @@ function PenetrationTracker() {
 
   // Absolute month number (year*12 + month) so we can do month arithmetic.
   const idxOf = (d) => d.getFullYear() * 12 + d.getMonth();
-  const now = new Date();
+  const now = (asOf instanceof Date && !isNaN(asOf)) ? asOf : new Date();   // as-of end of the selected period
   const nowIdx = idxOf(now);
   const labelOf = (idx) => `${MONTHS[((idx % 12) + 12) % 12]} '${String(Math.floor(idx / 12)).slice(2)}`;
   const monthEndTs = (idx) => new Date(Math.floor(idx / 12), (idx % 12) + 1, 0, 23, 59, 59).getTime();
@@ -6694,11 +9190,12 @@ function PenetrationTracker() {
   custs.forEach(c => { (bySoc[c.society] = bySoc[c.society] || []).push(c.since.getTime()); });
   const societies = Object.keys(bySoc).map(s => {
     const times = bySoc[s].sort((a, b) => a - b);
-    const launchIdx = idxOf(new Date(times[0]));
+    const ovIdx = ymToIdx(getLaunchOverride(s));                       // admin override wins
+    const launchIdx = (ovIdx != null) ? ovIdx : idxOf(new Date(times[0]));
     return { society: s, times, launchIdx, span: nowIdx - launchIdx + 1 };
   }).sort((a, b) => a.launchIdx - b.launchIdx || a.society.localeCompare(b.society));
 
-  const maxM = Math.min(24, Math.max(...societies.map(s => s.span))); // cap M-columns
+  const maxM = Math.min(24, Math.max(1, ...societies.map(s => s.span))); // cap M-columns (≥1)
   const mCols = Array.from({ length: maxM }, (_, k) => k); // 0-based → M(k+1)
 
   // Cumulative customers in a society by the end of its k-th month since launch.
@@ -6706,6 +9203,8 @@ function PenetrationTracker() {
   const matrix = societies.map(s => ({
     society: s.society,
     launch: labelOf(s.launchIdx),
+    launchIdx: s.launchIdx,
+    overridden: getLaunchOverride(s.society) != null,
     total: s.times.length,
     cells: mCols.map(k => {
       const mIdx = s.launchIdx + k;
@@ -6730,10 +9229,10 @@ function PenetrationTracker() {
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <div>
-          <div className="eyebrow">Analytics</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
+          {!embedded && <div className="eyebrow">Analytics</div>}
+          <div style={{ fontSize: embedded ? 16 : 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
         </div>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{matrix.length} societ{matrix.length === 1 ? "y" : "ies"} · {grand} sign-ups to date · months since each society’s first subscription (M1 = launch month)</span>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{matrix.length} societ{matrix.length === 1 ? "y" : "ies"} · {grand} sign-ups to date · months since each society’s first subscription (M1 = launch month){canEditLaunch ? " · edit a Launch month to realign that society" : ""}</span>
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
 
@@ -6755,14 +9254,23 @@ function PenetrationTracker() {
             </thead>
             <tbody>
               {matrix.map((r, ri) => (
-                <tr key={ri} style={{ borderBottom: "1px solid #eef2f0" }}>
+                <tr key={ri} style={{ borderBottom: "1px solid #ECEEED" }}>
                   <td style={{ ...stickyL("#fff", 0, 2), fontWeight: 600, color: "var(--f)", padding: "10px 14px", fontSize: 13, whiteSpace: "nowrap" }}>{r.society}</td>
-                  <td style={{ ...stickyL("#fff", 210, 2), padding: "10px 14px", fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", borderRight: "1px solid var(--border)" }}>{r.launch}</td>
+                  <td style={{ ...stickyL("#fff", 210, 2), padding: canEditLaunch ? "6px 14px" : "10px 14px", fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", borderRight: "1px solid var(--border)" }}>
+                    {canEditLaunch
+                      ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <input type="month" value={idxToYm(r.launchIdx)} title="Set the launch month (admin only)"
+                            onChange={e => { setLaunchOverride(r.society, e.target.value); forceRerender(n => n + 1); }}
+                            style={{ ...inp, width: 132, padding: "5px 7px", fontSize: 12, marginBottom: 0, cursor: "pointer" }} />
+                          {r.overridden && <button title="Reset to first sign-up" onClick={() => { setLaunchOverride(r.society, ""); forceRerender(n => n + 1); }} style={{ ...iconBtn, padding: 4 }}><RotateCcw size={13} /></button>}
+                        </span>
+                      : r.launch}
+                  </td>
                   {r.cells.map((v, ci) => {
-                    if (v == null) return <td key={ci} style={{ ...tdNum, color: "#c9d2cc" }} />;
+                    if (v == null) return <td key={ci} style={{ ...tdNum, color: "#A9B3AC" }} />;
                     const prev = ci > 0 ? r.cells[ci - 1] : 0;
                     const grew = v > (prev ?? 0);
-                    return <td key={ci} style={{ ...tdNum, color: v > 0 ? "var(--f)" : "var(--muted)", fontWeight: grew ? 700 : v > 0 ? 500 : 400, background: grew ? "#e9f7ee" : undefined }}>{v}</td>;
+                    return <td key={ci} style={{ ...tdNum, color: v > 0 ? "var(--f)" : "var(--muted)", fontWeight: grew ? 700 : v > 0 ? 500 : 400, background: grew ? "#E2F3EE" : undefined }}>{v}</td>;
                   })}
                 </tr>
               ))}
@@ -7042,7 +9550,7 @@ useEffect(() => {
           <td style={td}><Person name={i.customerName || "—"} email={i.email} /></td>
           <td style={td}><Chip>{i.number || i.id}</Chip></td>
           <td style={td}>{inr(i.total)}</td>
-          <td style={{ ...td, fontWeight: 700, color: "#b4232a" }}>{inr(i.balance)}</td>
+          <td style={{ ...td, fontWeight: 700, color: "#DC4141" }}>{inr(i.balance)}</td>
           <td style={td}><Status s={i.status} /></td>
           <td style={td}>{i.date ? fmtDate(i.date) : "—"}</td>
         </tr>
@@ -7080,7 +9588,7 @@ useEffect(() => {
           <td style={td}>{x.term >= 1 ? `${x.term} mo` : "—"}</td>
           <td style={td}>{inr(x.total)}</td>
           <td style={td}>{inr(x.perMonth)}</td>
-          <td style={{ ...td, fontWeight: 700, color: "#0f6e3f" }}>{inr(x.recogThis)}</td>
+          <td style={{ ...td, fontWeight: 700, color: "#0B6F52" }}>{inr(x.recogThis)}</td>
         </tr>
       )),
       empty: "No revenue recognized this month.",
@@ -7145,7 +9653,7 @@ useEffect(() => {
     return acc;
   }, {})).sort((a, b) => b.credits - a.credits).slice(0, 10);
 
-  const dueChipColor = (d) => d <= 3 ? "#b4232a" : d <= 7 ? "#9a6a16" : "#1f7a3f";
+  const dueChipColor = (d) => d <= 3 ? "#DC4141" : d <= 7 ? "#986315" : "#08805A";
   const labelFmt = (v) => v >= 1000 ? `₹${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `₹${v}`;
 
   return (
@@ -7184,7 +9692,7 @@ useEffect(() => {
       <div style={grid4}>
         {stats.map((s) => (
           <div key={s.key} onClick={() => setDrill(drill === s.key ? null : s.key)}
-            style={{ cursor: "pointer", borderRadius: 16, outline: drill === s.key ? "2px solid var(--brand, #0f6e3f)" : "2px solid transparent", transition: "outline-color .15s" }}>
+            style={{ cursor: "pointer", borderRadius: 16, outline: drill === s.key ? "2px solid var(--brand, #0B6F52)" : "2px solid transparent", transition: "outline-color .15s" }}>
             <Stat {...s} />
           </div>
         ))}
@@ -7209,20 +9717,20 @@ useEffect(() => {
         <Card title="Revenue trend" sub={`Billed vs collected · last 6 months · avg ${inr(avgCollected)}`}>
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={months6} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={64} />
               <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(58,110,165,.08)" }} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-              <ReferenceLine y={avgCollected} stroke="#9a6a16" strokeDasharray="5 4"
-                label={{ value: `avg ${labelFmt(avgCollected)}`, position: "right", fill: "#9a6a16", fontSize: 10 }} />
-              <Bar dataKey="billed" name="Billed" radius={[5, 5, 0, 0]} fill="#cfe0d6" maxBarSize={34} isAnimationActive={false}>
+              <ReferenceLine y={avgCollected} stroke="#986315" strokeDasharray="5 4"
+                label={{ value: `avg ${labelFmt(avgCollected)}`, position: "right", fill: "#986315", fontSize: 10 }} />
+              <Bar dataKey="billed" name="Billed" radius={[5, 5, 0, 0]} fill="#B5E2D4" maxBarSize={34} isAnimationActive={false}>
                 <LabelList dataKey="billed" position="top" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--muted)" }} />
               </Bar>
-              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#0f6e3f" maxBarSize={34} isAnimationActive={false}>
-                <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 10, fill: "#0f6e3f", fontWeight: 600 }} />
+              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#0B6F52" maxBarSize={34} isAnimationActive={false}>
+                <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 10, fill: "#0B6F52", fontWeight: 600 }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" name="Trend" stroke="#b4232a" strokeWidth={2} dot={{ r: 3, fill: "#b4232a" }} isAnimationActive={false} legendType="none" />
+              <Line type="monotone" dataKey="collected" name="Trend" stroke="#DC4141" strokeWidth={2} dot={{ r: 3, fill: "#DC4141" }} isAnimationActive={false} legendType="none" />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
@@ -7230,11 +9738,11 @@ useEffect(() => {
         <Card title="MRR by plan" sub="Monthly recurring value">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={revByPlan} layout="vertical" margin={{ left: 30, right: 48 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
               <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={110} />
-              <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(15,110,63,.08)" }} />
-              <Bar dataKey="value" name="MRR" radius={[0, 6, 6, 0]} fill="#3a6ea5" maxBarSize={34} isAnimationActive={false}>
+              <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
+              <Bar dataKey="value" name="MRR" radius={[0, 6, 6, 0]} fill="#2A86D6" maxBarSize={34} isAnimationActive={false}>
                 <LabelList dataKey="value" position="right" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
               </Bar>
             </BarChart>
@@ -7247,14 +9755,14 @@ useEffect(() => {
         <Card title="Week-over-Week" sub="Collected · last 8 weeks (Mon start)">
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={wow} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={56} />
               <Tooltip content={<WowMomTT />} cursor={{ fill: "rgba(15,110,63,.06)" }} />
-              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#3a6ea5" maxBarSize={28} isAnimationActive={false}>
+              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#2A86D6" maxBarSize={28} isAnimationActive={false}>
                 <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 9.5, fill: "var(--muted)" }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" stroke="#0f6e3f" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="collected" stroke="#0B6F52" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
@@ -7262,14 +9770,14 @@ useEffect(() => {
         <Card title="Month-over-Month" sub="Collected · last 6 months with % change">
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={mom} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={56} />
               <Tooltip content={<WowMomTT />} cursor={{ fill: "rgba(15,110,63,.06)" }} />
-              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#0f6e3f" maxBarSize={28} isAnimationActive={false}>
+              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#0B6F52" maxBarSize={28} isAnimationActive={false}>
                 <LabelList dataKey="pct" position="top" formatter={(v) => v == null ? "" : `${v > 0 ? "+" : ""}${v}%`} style={{ fontSize: 9.5, fontWeight: 700 }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" stroke="#9a6a16" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="collected" stroke="#986315" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
@@ -7281,11 +9789,11 @@ useEffect(() => {
           {revBySocietyTop.length === 0 ? <Empty msg="No collected revenue to group by society yet." /> : (
             <ResponsiveContainer width="100%" height={Math.max(260, revBySocietyTop.length * 34 + 40)}>
               <BarChart data={revBySocietyTop} layout="vertical" margin={{ left: 30, right: 56 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
                 <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="society" tick={axisTick} axisLine={false} tickLine={false} width={140} />
-                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(15,110,63,.08)" }} />
-                <Bar dataKey="collected" name="Collected" radius={[0, 6, 6, 0]} fill="#0f6e3f" maxBarSize={30} isAnimationActive={false}>
+                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
+                <Bar dataKey="collected" name="Collected" radius={[0, 6, 6, 0]} fill="#0B6F52" maxBarSize={30} isAnimationActive={false}>
                   <LabelList dataKey="collected" position="right" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
                 </Bar>
               </BarChart>
@@ -7320,7 +9828,7 @@ useEffect(() => {
                 <td style={td}><Chip>{x.term} mo</Chip></td>
                 <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{inr(x.total)}</td>
                 <td style={td}>{inr(x.perMonth)}</td>
-                <td style={{ ...td, fontWeight: 700, color: "#0f6e3f" }}>{x.recogThis > 0 ? inr(x.recogThis) : "—"}</td>
+                <td style={{ ...td, fontWeight: 700, color: "#0B6F52" }}>{x.recogThis > 0 ? inr(x.recogThis) : "—"}</td>
                 <td style={td}>{x.deferred > 0 ? inr(x.deferred) : "—"}</td>
               </tr>
             ))}
@@ -7459,7 +9967,7 @@ function Tracker() {
               {TIERS.filter(t => t.key !== "none").map(t => {
                 const reached = converted >= t.min;
                 return (
-                  <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, background: reached ? t.bg : "#fafcfb", border: `1px solid ${reached ? t.color + "44" : "var(--border)"}`, opacity: reached ? 1 : .7 }}>
+                  <div key={t.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 12, background: reached ? t.bg : "#EEF7F3", border: `1px solid ${reached ? t.color + "44" : "var(--border)"}`, opacity: reached ? 1 : .7 }}>
                     <div style={{ width: 38, height: 38, borderRadius: 999, background: reached ? t.color : "var(--border)", color: "#fff", display: "grid", placeItems: "center", flexShrink: 0 }}>
                       {reached ? <Check size={18} /> : <Medal size={18} />}
                     </div>
@@ -7608,7 +10116,7 @@ function MaintenanceSchedule() {
 
   const badge = (d) => {
     const s = statusOf(d);
-    const map = { overdue: ["#b4232a", "#fbe9e9", `${-d}d overdue`], soon: ["#9a6a16", "#fdf3e0", `in ${d}d`], upcoming: ["#1f7a3f", "#e6f4ea", `in ${d}d`], unknown: ["#6a7670", "#eceeed", "no date"] };
+    const map = { overdue: ["#DC4141", "#FBE8E8", `${-d}d overdue`], soon: ["#986315", "#FBF0E0", `in ${d}d`], upcoming: ["#08805A", "#E2F3EE", `in ${d}d`], unknown: ["#7D8A83", "#ECEEED", "no date"] };
     const [c, bg, lbl] = map[s];
     return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
   };
@@ -7646,7 +10154,7 @@ function MaintenanceSchedule() {
           <Table head={["Customer", "Purifier", "Device", "Society", "Last service", "Next due", "Status"]} maxHeight={520}>
             {shown.map((i, idx) => {
               const s = statusOf(i.days);
-              const bg = s === "overdue" ? "#fdf2f2" : s === "soon" ? "#fdfaf0" : "transparent";
+              const bg = s === "overdue" ? "#FBE8E8" : s === "soon" ? "#FBF0E0" : "transparent";
               return (
                 <tr key={idx} style={{ borderBottom: "1px solid var(--border)", background: bg }}>
                   <td style={td}><Person name={i.c.name || "—"} email={i.c.email} /></td>
@@ -7710,7 +10218,7 @@ function WaterQuality() {
   ];
 
   const statusChip = (s) => {
-    const map = { compliant: ["#1f7a3f", "#e6f4ea", "Compliant"], watch: ["#9a6a16", "#fdf3e0", "Watch"], fail: ["#b4232a", "#fbe9e9", "Non-compliant"] };
+    const map = { compliant: ["#08805A", "#E2F3EE", "Compliant"], watch: ["#986315", "#FBF0E0", "Watch"], fail: ["#DC4141", "#FBE8E8", "Non-compliant"] };
     const [c, bg, lbl] = map[s];
     return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
   };
@@ -7750,13 +10258,13 @@ function WaterQuality() {
             } />
           <Table head={["Customer", "Purifier", "Society", "Input TDS", "Output TDS", "Last test", "Compliance"]} maxHeight={520}>
             {shown.map((i, idx) => (
-              <tr key={idx} style={{ borderBottom: "1px solid var(--border)", background: i.status === "fail" ? "#fdf2f2" : "transparent" }}>
+              <tr key={idx} style={{ borderBottom: "1px solid var(--border)", background: i.status === "fail" ? "#FBE8E8" : "transparent" }}>
                 <td style={td}><Person name={i.c.name || "—"} email={i.c.email} /></td>
                 <td style={{ ...td, textAlign: "center" }}>{i.c.purifier_id ? <Chip>{i.c.purifier_id}</Chip> : "—"}</td>
                 <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>{i.c.society || "—"}</td>
                 <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{i.inTds} ppm</td>
-                <td style={{ ...td, textAlign: "center", fontWeight: 600, color: i.status === "fail" ? "#b4232a" : i.status === "watch" ? "#9a6a16" : "var(--teal-d)" }}>{i.outTds} ppm</td>
-                <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: i.testDue ? "#9a6a16" : "var(--muted)" }}>{fmtDate(i.lastTest)}</td>
+                <td style={{ ...td, textAlign: "center", fontWeight: 600, color: i.status === "fail" ? "#DC4141" : i.status === "watch" ? "#986315" : "var(--teal-d)" }}>{i.outTds} ppm</td>
+                <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: i.testDue ? "#986315" : "var(--muted)" }}>{fmtDate(i.lastTest)}</td>
                 <td style={{ ...td, textAlign: "center" }}>{statusChip(i.status)}</td>
               </tr>
             ))}
@@ -7770,10 +10278,10 @@ function WaterQuality() {
 
 /* ---- ERP: Asset lifecycle (deployed → repair → refurbished → retired) + depreciation ---- */
 const ASSET_STATES = {
-  deployed:    ["Deployed",    "#1f7a3f", "#e6f4ea"],
-  in_repair:   ["In Repair",   "#9a6a16", "#fdf3e0"],
-  refurbished: ["Refurbished", "#3a6ea5", "#e7eef7"],
-  retired:     ["Retired",     "#6a7670", "#eceeed"],
+  deployed:    ["Deployed",    "#08805A", "#E2F3EE"],
+  in_repair:   ["In Repair",   "#986315", "#FBF0E0"],
+  refurbished: ["Refurbished", "#2A86D6", "#E5F0FA"],
+  retired:     ["Retired",     "#7D8A83", "#ECEEED"],
 };
 const DEPRECIATION_MONTHS = 60; // straight-line over 5 years
 
@@ -7821,7 +10329,7 @@ function AssetLifecycle() {
   ];
 
   const stChip = (s) => {
-    const [lbl, c, bg] = ASSET_STATES[s] || ["—", "#6a7670", "#eceeed"];
+    const [lbl, c, bg] = ASSET_STATES[s] || ["—", "#7D8A83", "#ECEEED"];
     return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
   };
 
@@ -7861,7 +10369,7 @@ function AssetLifecycle() {
             } />
           <Table head={["Purifier", "Device", "Location", "Deployed", "State", "Cost", "Depreciation", "Book value"]} maxHeight={520}>
             {shown.map((x, idx) => (
-              <tr key={idx} style={{ borderBottom: "1px solid var(--border)", background: x.state === "in_repair" ? "#fdfaf0" : "transparent" }}>
+              <tr key={idx} style={{ borderBottom: "1px solid var(--border)", background: x.state === "in_repair" ? "#FBF0E0" : "transparent" }}>
                 <td style={{ ...td, textAlign: "center" }}>{x.c.purifier_id ? <Chip>{x.c.purifier_id}</Chip> : "—"}</td>
                 <td style={{ ...td, textAlign: "center" }}><DeviceTypeBadge purifierId={x.c.purifier_id} /></td>
                 <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>{x.c.society || "—"}</td>
@@ -7933,8 +10441,8 @@ function DepositRefunds() {
   };
 
   const stChip = (state) => {
-    const map = { held: ["#16545c", "#e2eff0", "Held"], eligible: ["#9a6a16", "#fdf3e0", "Refund eligible"], requested: ["#9a6a16", "#fdf3e0", "Requested"], approved: ["#3a6ea5", "#e7eef7", "Approved"], refunded: ["#1f7a3f", "#e6f4ea", "Refunded"] };
-    const [c, bg, lbl] = map[state] || ["#6a7670", "#eceeed", state];
+    const map = { held: ["#0B6F52", "#E2F3EE", "Held"], eligible: ["#986315", "#FBF0E0", "Refund eligible"], requested: ["#986315", "#FBF0E0", "Requested"], approved: ["#2A86D6", "#E5F0FA", "Approved"], refunded: ["#08805A", "#E2F3EE", "Refunded"] };
+    const [c, bg, lbl] = map[state] || ["#7D8A83", "#ECEEED", state];
     return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
   };
 
@@ -8007,6 +10515,16 @@ const _gsTickets = {};   // society -> ticket id
 const _iotTickets = {};  // purifier id -> ticket id
 const _gsAdded = [];     // societies added locally when the endpoint is offline
 
+// Admin/DevOps date edits (Backwash / Dozing), persisted locally so they survive
+// reloads until the backend PATCH exists. Keyed by society name → { lastBackwash,
+// lastDozing }. Applied over whatever getSchedules returns (seed or endpoint).
+const _gsDateOverrides = LS.get("pw_gs_date_overrides", {}) || {};
+const saveGsOverrides = () => LS.set("pw_gs_date_overrides", _gsDateOverrides);
+const applyGsOverrides = (row) => {
+  const o = _gsDateOverrides[row.name || row.society];
+  return o ? { ...row, ...o } : row;
+};
+
 // GS schedule store — the SAME data the cron job reads/writes. Falls back to the
 // local seed until DevOps exposes the endpoint (see cron/README.md §4).
 const GS_ENDPOINT = () => `${API_BASE}/api/gs-schedules`;
@@ -8029,17 +10547,41 @@ const schedulerApi = {
         lastBackwash:  r.lastBackwash || r.last_backwash || r.lastService || "",
         lastDozing:    r.lastDozing || r.last_dozing || "",
         lastService:   r.lastService || r.last_service || "",
+        address:       r.address || r.apartment_address || r.location || "",
         ticketId:      r.cycleTicketId || r.ticketId || r.ticket_id || null,
-      }));
+      })).map(applyGsOverrides);
     } catch (e) {
       console.warn("GS schedules endpoint unavailable, using local data:", e.message);
-      return [...AUTO_GS_SEED, ..._gsAdded];
+      return [...AUTO_GS_SEED, ..._gsAdded].map(applyGsOverrides);
+    }
+  },
+  // >>> WIRE: PATCH /api/gs-schedules/:society updates the backwash/dozing dates
+  //     the cron reads. Until it exists we persist the edit locally (localStorage)
+  //     so it survives reloads. Admin/DevOps only — gated in the UI.
+  updateSocietyDates: async (actor, society, fields) => {
+    _gsDateOverrides[society] = { ...(_gsDateOverrides[society] || {}), ...fields };
+    saveGsOverrides();
+    const nm = { lastBackwash: "Backwash date", lastDozing: "Dozing date", address: "Address", totalFlats: "No of Flats", numTowers: "No of Towers", installedDate: "CRO Installed Date", croType: "CRO type", nextManual: "Next service" };
+    const detail = `Updated ${society} — ${Object.entries(fields).map(([k, v]) => `${nm[k] || k}: ${v || "cleared"}`).join(", ")}`;
+    try {
+      const res = await fetch(`${GS_ENDPOINT()}/${encodeURIComponent(society)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...fields, last_backwash: fields.lastBackwash, last_dozing: fields.lastDozing,
+          total_flats: fields.totalFlats, num_towers: fields.numTowers, installed_date: fields.installedDate,
+          cro_type: fields.croType, next_service: fields.nextManual }),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      pushLog({ type: "society_updated", actor, module: "Auto Scheduler", detail });
+      return { saved: true };
+    } catch {
+      pushLog({ type: "society_updated", actor, module: "Auto Scheduler", detail: `${detail} (saved locally — endpoint offline)` });
+      return { saved: false };
     }
   },
   // >>> WIRE: POST /api/gs-schedules persists a society to the store the cron
   //     reads, which auto-puts it on the 15-day ticket cycle.
   addSociety: async (actor, meta) => {
-    const payload = { society: meta.name, installedDate: meta.installedDate, totalFlats: meta.totalFlats, numTowers: meta.numTowers, cro_type: meta.croType, last_backwash: meta.lastBackwash, last_dozing: meta.lastDozing, lastService: meta.lastBackwash || meta.installedDate };
+    const payload = { society: meta.name, installedDate: meta.installedDate, totalFlats: meta.totalFlats, numTowers: meta.numTowers, cro_type: meta.croType, last_backwash: meta.lastBackwash, last_dozing: meta.lastDozing, address: meta.address, lastService: meta.lastBackwash || meta.installedDate };
     try {
       const res = await fetch(GS_ENDPOINT(), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error(`${res.status}`);
@@ -8065,28 +10607,56 @@ const buildGsRow = (s) => {
   const last = validGsDate(s.lastBackwash) || (s.lastService ? new Date(s.lastService) : null)
     || (s.offset != null ? new Date(now - s.offset * DAY_MS) : null)
     || new Date(s.installedDate);
-  const next = new Date(last.getTime() + GS_INTERVAL_DAYS * DAY_MS);
+  // Next service is normally last backwash + 15 days, but a manual override wins
+  // (lets Admin reschedule a visit).
+  const next = validGsDate(s.nextManual) || new Date(last.getTime() + GS_INTERVAL_DAYS * DAY_MS);
   return {
     society: s.name, installedDate: s.installedDate, totalFlats: s.totalFlats, numTowers: s.numTowers,
-    croType: s.croType || "", lastBackwash: s.lastBackwash || "", lastDozing: s.lastDozing || "",
+    croType: s.croType || "", lastBackwash: s.lastBackwash || "", lastDozing: s.lastDozing || "", address: s.address || "",
+    nextManual: s.nextManual || "",
     last, next, daysLeft: Math.ceil((next.getTime() - now) / DAY_MS), ticketId: _gsTickets[s.name] || s.ticketId || null,
   };
 };
+// Reverse of buildGsRow (row → meta), so an inline edit can rebuild one row.
+// Carries the resolved `last` forward as lastService, so a dozing-only edit on a
+// society with no valid backwash date keeps its existing cycle anchor.
+const toGsMeta = (r) => ({
+  name: r.society, installedDate: r.installedDate, totalFlats: r.totalFlats, numTowers: r.numTowers,
+  croType: r.croType, lastBackwash: r.lastBackwash, lastDozing: r.lastDozing, address: r.address,
+  nextManual: r.nextManual, ticketId: r.ticketId,
+  lastService: r.last instanceof Date ? r.last.toISOString() : r.lastService,
+});
 
-function AutoGSSociety() {
+// Text/number cell — commits on blur (Admin only), else read-only. Used for
+// Address, No of Flats, No of Towers.
+function GsTextCell({ value, editable, onCommit, type = "text", width = 120, placeholder = "" }) {
+  const [v, setV] = useState(value ?? "");
+  useEffect(() => { setV(value ?? ""); }, [value]);
+  if (!editable) return (value === "" || value == null) ? "—" : String(value);
+  return (
+    <input type={type} value={v} placeholder={placeholder} min={type === "number" ? "0" : undefined}
+      onChange={e => setV(e.target.value)}
+      onBlur={() => { if (String(v) !== String(value ?? "")) onCommit(v); }}
+      style={{ ...inp, width, padding: "6px 8px", fontSize: 12.5, marginBottom: 0, textAlign: "center" }} />
+  );
+}
+
+function AutoGSSociety({ accessLevel = "view" }) {
   const { user } = useAuth();
+  // Only Admin-level access (admin / devops) may edit the schedule inline; others view only.
+  const canEdit = accessLevel === "admin" || accessLevel === "devops";
   const [societyFilter, setSocietyFilter] = useState("all");
   const [busy, setBusy] = useState(null);
   const [toast, setToast] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: "", installedDate: "", totalFlats: "", numTowers: "", croType: "Eco crystal", lastBackwash: "", lastDozing: "" });
+  const [form, setForm] = useState({ name: "", installedDate: "", totalFlats: "", numTowers: "", croType: "Eco crystal", lastBackwash: "", lastDozing: "", address: "" });
   const [rows, setRows] = useState(null);
 
   // Render a service date cell: "NA" / "Yet to install" pass through; else format.
   const fmtServiceVal = (v) => { if (v == null || v === "") return "—"; if (String(v).toUpperCase() === "NA") return "NA"; if (/yet to install/i.test(v)) return "Yet to install"; return fmtDate(v); };
   // Dozing text colour: amber for "yet to install", muted for NA, normal otherwise.
-  const dozingColor = (v) => /yet to install/i.test(v) ? "#9a6a16" : (String(v).toUpperCase() === "NA" ? "var(--muted)" : "var(--slate)");
+  const dozingColor = (v) => /yet to install/i.test(v) ? "#986315" : (String(v).toUpperCase() === "NA" ? "var(--muted)" : "var(--slate)");
 
   useEffect(() => {
     api.logView(user.username, "Viewed Auto GS - Society");
@@ -8106,15 +10676,46 @@ function AutoGSSociety() {
       croType: form.croType,
       lastBackwash: form.lastBackwash,
       lastDozing: form.lastDozing,
+      address: form.address.trim(),
     };
     setSaving(true);
     try {
       const { saved } = await schedulerApi.addSociety(user.username, meta);
       setRows(rs => [...(rs || []), buildGsRow(meta)]);
       setAddOpen(false);
-      setForm({ name: "", installedDate: "", totalFlats: "", numTowers: "", croType: "Eco crystal", lastBackwash: "", lastDozing: "" });
+      setForm({ name: "", installedDate: "", totalFlats: "", numTowers: "", croType: "Eco crystal", lastBackwash: "", lastDozing: "", address: "" });
       flash(saved ? `Society "${meta.name}" saved to schedule` : `Society "${meta.name}" added (saved locally — backend offline)`);
     } finally { setSaving(false); }
+  };
+
+  // Inline edit of a society field (Backwash / Dozing dates, or Address). Rebuilds
+  // the row so Next service & Days left — both driven by the backwash date — update
+  // immediately; address just passes through.
+  const updateField = async (society, field, value) => {
+    if (!canEdit) return; // defence in depth; the input isn't rendered otherwise
+    setRows(rs => rs.map(r => r.society === society ? buildGsRow({ ...toGsMeta(r), [field]: value }) : r));
+    const { saved } = await schedulerApi.updateSocietyDates(user.username, society, { [field]: value });
+    const label = field === "lastBackwash" ? "Backwash date" : field === "lastDozing" ? "Dozing date" : "Address";
+    flash(saved ? `${society}: ${label} updated` : `${society}: ${label} saved locally (endpoint offline)`);
+  };
+
+  // A Backwash/Dozing date cell: an inline date picker for Admin/DevOps, plain
+  // read-only text (the original rendering) for everyone else.
+  const dateCell = (r, field) => {
+    const raw = r[field];
+    const d = validGsDate(raw);
+    if (!canEdit) {
+      if (field === "lastBackwash") return fmtServiceVal(raw) === "—" ? fmtDate(r.last) : fmtServiceVal(raw);
+      return <span style={{ color: dozingColor(raw) }}>{fmtServiceVal(raw)}</span>;
+    }
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+        <input type="date" value={d ? isoDay(d) : ""}
+          onChange={e => updateField(r.society, field, e.target.value)}
+          style={{ ...inp, width: 148, padding: "6px 8px", fontSize: 12.5, marginBottom: 0, cursor: "pointer" }} />
+        {!d && raw ? <span style={{ fontSize: 10.5, color: dozingColor(raw) }}>currently: {fmtServiceVal(raw)}</span> : null}
+      </div>
+    );
   };
 
   if (!rows) return <Loading />;
@@ -8123,15 +10724,19 @@ function AutoGSSociety() {
     setBusy(society);
     const r = rows.find(x => x.society === society);
     try {
-      const id = await ticketApi.createTicket(user.username, {
-        subject: `[Auto GS] ${GS_INTERVAL_DAYS}-day service — ${society}`,
-        email: user.email,
-        society, type: "Maintenance", issueType: "General Service", priority: 2,
-        description: `Scheduled ${GS_INTERVAL_DAYS}-day general service for ${society}. Technician visit due ${fmtDate(r.next)}.`,
+      const id = await apartmentApi.createTicket(user.username, {
+        apName: society,                         // apartment name → ticket Society Name field
+        address: r.address?.trim() || "Testing", // society's address (falls back so the endpoint's non-blank check passes)
+        technicianPhoneNumber: "9876543210",     // hardcoded
+        subject: "Auto GS Schedule",             // ticket subject (backend now reads this field)
       });
-      _gsTickets[society] = id;
-      setRows(rs => rs.map(x => x.society === society ? { ...x, ticketId: id } : x));
-      flash(`Ticket ${id} created for ${society}`);
+      if (id) {
+        _gsTickets[society] = id;
+        setRows(rs => rs.map(x => x.society === society ? { ...x, ticketId: id } : x));
+        flash(`Ticket ${id} created for ${society}`);
+      } else {
+        flash(`Ticket created for ${society}, but no ID was returned.`);
+      }
     } catch (e) {
       flash(`Couldn't create ticket: ${e.message}`);
     } finally { setBusy(null); }
@@ -8149,9 +10754,9 @@ function AutoGSSociety() {
   ];
 
   const daysBadge = (d) => {
-    const [c, bg, lbl] = d < 0 ? ["#b4232a", "#fbe9e9", `${-d}d overdue`]
-      : d <= 1 ? ["#9a6a16", "#fdf3e0", d <= 0 ? "due today" : "due tomorrow"]
-      : ["#1f7a3f", "#e6f4ea", `${d} days`];
+    const [c, bg, lbl] = d < 0 ? ["#DC4141", "#FBE8E8", `${-d}d overdue`]
+      : d <= 1 ? ["#986315", "#FBF0E0", d <= 0 ? "due today" : "due tomorrow"]
+      : ["#08805A", "#E2F3EE", `${d} days`];
     return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
   };
 
@@ -8171,28 +10776,49 @@ function AutoGSSociety() {
               <option value="all">All societies ({rows.length})</option>
               {rows.map(r => <option key={r.society} value={r.society}>{r.society}</option>)}
             </select>
-            {dueCount > 0 && <span style={{ fontSize: 12.5, color: "#9a6a16", fontWeight: 600 }}>{dueCount} due — raise ticket</span>}
-            <button onClick={() => setAddOpen(true)} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, marginLeft: "auto" }}><Plus size={15} /> Add new society</button>
+            {dueCount > 0 && <span style={{ fontSize: 12.5, color: "#986315", fontWeight: 600 }}>{dueCount} due — raise ticket</span>}
+            {canEdit
+              ? <button onClick={() => setAddOpen(true)} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, marginLeft: "auto" }}><Plus size={15} /> Add new society</button>
+              : <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}><Eye size={14} /> View only</span>}
           </div>
-          <Table head={["Apartments", "No of Flats", "No of Towers", "CRO Installed Date", "CRO - 250 LPH Type", "Last service Date For Backwash", "Last service Date For Dozing", "Next service", "Days left", "Ticket ID"]}>
+          <Table head={["Apartments", "Address", "No of Flats", "No of Towers", "CRO Installed Date", "CRO - 250 LPH Type", "Last service Date For Backwash", "Last service Date For Dozing", "Next service", "Days left", "Ticket ID"]}>
             {shown.map((r, idx) => {
               const due = r.daysLeft <= 1;
               return (
                 <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
                   <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{r.society}</td>
-                  <td style={{ ...td, textAlign: "center" }}>{r.totalFlats || "—"}</td>
-                  <td style={{ ...td, textAlign: "center" }}>{r.numTowers || "—"}</td>
-                  <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>{r.installedDate ? fmtDate(r.installedDate) : "—"}</td>
-                  <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>{r.croType || "—"}</td>
-                  <td style={{ ...td, textAlign: "center", fontSize: 13 }}>{fmtServiceVal(r.lastBackwash) === "—" ? fmtDate(r.last) : fmtServiceVal(r.lastBackwash)}</td>
-                  <td style={{ ...td, textAlign: "center", fontSize: 13, color: dozingColor(r.lastDozing) }}>{fmtServiceVal(r.lastDozing)}</td>
-                  <td style={{ ...td, textAlign: "center", fontSize: 13, fontWeight: 600 }}>{fmtDate(r.next)}</td>
+                  <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}><GsTextCell value={r.address} editable={canEdit} onCommit={v => updateField(r.society, "address", v)} width={180} placeholder="Add address" /></td>
+                  <td style={{ ...td, textAlign: "center" }}><GsTextCell value={r.totalFlats || ""} editable={canEdit} type="number" width={80} placeholder="0" onCommit={v => updateField(r.society, "totalFlats", Number(v) || 0)} /></td>
+                  <td style={{ ...td, textAlign: "center" }}><GsTextCell value={r.numTowers || ""} editable={canEdit} type="number" width={80} placeholder="0" onCommit={v => updateField(r.society, "numTowers", Number(v) || 0)} /></td>
+                  <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>
+                    {canEdit
+                      ? <input type="date" value={validGsDate(r.installedDate) ? isoDay(new Date(r.installedDate)) : ""} onChange={e => updateField(r.society, "installedDate", e.target.value)} style={{ ...inp, width: 148, padding: "6px 8px", fontSize: 12.5, marginBottom: 0, cursor: "pointer" }} />
+                      : (r.installedDate ? fmtDate(r.installedDate) : "—")}
+                  </td>
+                  <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>
+                    {canEdit
+                      ? <select value={r.croType || ""} onChange={e => updateField(r.society, "croType", e.target.value)} style={{ ...inp, width: 140, padding: "6px 8px", fontSize: 12.5, marginBottom: 0, cursor: "pointer" }}>
+                          {Array.from(new Set(["Eco crystal", "Alfa Enviro", r.croType].filter(Boolean))).map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      : (r.croType || "—")}
+                  </td>
+                  <td style={{ ...td, textAlign: "center", fontSize: 13 }}>{dateCell(r, "lastBackwash")}</td>
+                  <td style={{ ...td, textAlign: "center", fontSize: 13 }}>{dateCell(r, "lastDozing")}</td>
+                  <td style={{ ...td, textAlign: "center", fontSize: 13, fontWeight: 600 }}>
+                    {canEdit
+                      ? <input type="date" value={r.next instanceof Date && !isNaN(r.next) ? isoDay(r.next) : ""} onChange={e => updateField(r.society, "nextManual", e.target.value)} style={{ ...inp, width: 148, padding: "6px 8px", fontSize: 12.5, marginBottom: 0, cursor: "pointer" }} />
+                      : fmtDate(r.next)}
+                  </td>
                   <td style={{ ...td, textAlign: "center" }}>{daysBadge(r.daysLeft)}</td>
                   <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
                     {r.ticketId
                       ? <Chip>#{r.ticketId}</Chip>
                       : due
-                        ? <button onClick={() => createTicketFor(r.society)} disabled={busy === r.society} style={{ ...btnPrimary, padding: "6px 12px", fontSize: 12.5, whiteSpace: "nowrap", opacity: busy === r.society ? .6 : 1 }}><Ticket size={14} /> {busy === r.society ? "Creating…" : "Create ticket"}</button>
+                        ? <button onClick={() => createTicketFor(r.society)} disabled={busy === r.society} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5, whiteSpace: "nowrap", opacity: busy === r.society ? .75 : 1 }}>
+                            {busy === r.society
+                              ? <><RefreshCw size={14} style={{ animation: "pw-spin 0.7s linear infinite" }} /> Creating…</>
+                              : <><Ticket size={14} /> Create ticket</>}
+                          </button>
                         : <span style={{ fontSize: 12, color: "var(--muted)" }}>—</span>}
                   </td>
                 </tr>
@@ -8206,6 +10832,9 @@ function AutoGSSociety() {
         <Modal title="Add new society" sub="Register a society for the 15-day auto GS schedule" onClose={() => setAddOpen(false)}>
           <Field label="Society Name">
             <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} style={inp} placeholder="e.g. Prestige Lakeside" />
+          </Field>
+          <Field label="Address">
+            <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} style={inp} placeholder="e.g. Whitefield, Bengaluru" />
           </Field>
           <Field label="CRO Installed Date">
             <input type="date" value={form.installedDate} onChange={e => setForm(f => ({ ...f, installedDate: e.target.value }))} style={inp} />
@@ -8239,7 +10868,7 @@ function AutoGSSociety() {
         </Modal>
       )}
 
-      {toast && <div style={{ ...toastStyle, background: /couldn't|failed|error|returned/i.test(toast) ? "#b4232a" : toastStyle.background }}>{/couldn't|failed|error|returned/i.test(toast) ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />} {toast}</div>}
+      {toast && <div style={{ ...toastStyle, background: /couldn't|failed|error|returned/i.test(toast) ? "#DC4141" : toastStyle.background }}>{/couldn't|failed|error|returned/i.test(toast) ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />} {toast}</div>}
     </div>
   );
 }
@@ -8292,8 +10921,8 @@ function IoTAlerts() {
   ];
 
   const sevChip = (s) => {
-    const map = { critical: ["#b4232a", "#fbe9e9", "Critical"], warning: ["#9a6a16", "#fdf3e0", "Warning"] };
-    const [c, bg, lbl] = map[s] || ["#6a7670", "#eceeed", s];
+    const map = { critical: ["#DC4141", "#FBE8E8", "Critical"], warning: ["#986315", "#FBF0E0", "Warning"] };
+    const [c, bg, lbl] = map[s] || ["#7D8A83", "#ECEEED", s];
     return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999 }}>{lbl}</span>;
   };
 
@@ -8335,7 +10964,7 @@ function IoTAlerts() {
             {shown.map((x, idx) => {
               const key = x.c.purifier_id;
               return (
-                <tr key={idx} style={{ borderBottom: "1px solid var(--border)", background: x.alert.severity === "critical" ? "#fdf2f2" : "transparent" }}>
+                <tr key={idx} style={{ borderBottom: "1px solid var(--border)", background: x.alert.severity === "critical" ? "#FBE8E8" : "transparent" }}>
                   <td style={{ ...td, textAlign: "center" }}>{x.c.purifier_id ? <Chip>{x.c.purifier_id}</Chip> : "—"}</td>
                   <td style={td}><Person name={x.c.name || "—"} email={x.c.email} /></td>
                   <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>{x.c.society || "—"}</td>
@@ -8353,7 +10982,7 @@ function IoTAlerts() {
           </Table>
         </Card>
       </div>
-      {toast && <div style={{ ...toastStyle, background: /couldn't|failed|error|returned/i.test(toast) ? "#b4232a" : toastStyle.background }}>{/couldn't|failed|error|returned/i.test(toast) ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />} {toast}</div>}
+      {toast && <div style={{ ...toastStyle, background: /couldn't|failed|error|returned/i.test(toast) ? "#DC4141" : toastStyle.background }}>{/couldn't|failed|error|returned/i.test(toast) ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />} {toast}</div>}
     </div>
   );
 }
@@ -8485,7 +11114,7 @@ function AppLogs() {
   ];
 
   const stChip = (s) => {
-    const map = { success: ["#1f7a3f", "#e6f4ea", "Success"], failed: ["#b4232a", "#fbe9e9", "Failed"], info: ["#16545c", "#e2eff0", "Info"] };
+    const map = { success: ["#08805A", "#E2F3EE", "Success"], failed: ["#DC4141", "#FBE8E8", "Failed"], info: ["#0B6F52", "#E2F3EE", "Info"] };
     const [c, bg, lbl] = map[statusOf(s)];
     return <span title={s} style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap", cursor: "help" }}>{lbl}</span>;
   };
@@ -8572,25 +11201,188 @@ function AppLogs() {
    =========================================================================== */
 const IOT_API_BASE = "https://xb2sxpw2k0.execute-api.ap-southeast-2.amazonaws.com/prod";
 const iotTimeAgo = (ts) => { if (!ts) return "Unknown"; const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s / 60)}m ago`; return `${Math.floor(s / 3600)}h ago`; };
-const iotOnline = (ts) => !!ts && (Date.now() - new Date(ts).getTime()) / 1000 < 120;
+// Liveness window in seconds. junctionBox units heartbeat fast (120s); RO-tank
+// units report roughly every 20 minutes, so they get a much wider window.
+const IOT_TANK_ONLINE_SECS = 25 * 60; // 25 min (tolerates a missed ~20-min report)
+const iotOnline = (ts, win = 120) => !!ts && (Date.now() - new Date(ts).getTime()) / 1000 < win;
 const iotClock = (ts) => ts ? new Date(ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 const iotStamp = (ts) => ts ? new Date(ts).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 const iotVol = (v) => (v == null || v === "") ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 });
+// Rounded litres with unit for tables — 152.48 → "152 L".
+const iotVolL = (v) => (v == null || v === "") ? "—" : `${Math.round(Number(v)).toLocaleString("en-IN")} L`;
+
+/* ---- 12-hour consumption buckets (IST) from a /devices/history?days=2 payload.
+   Litres consumed = SUM of positive increases in the cumulative totalVolumeLitres
+   meter (survives the occasional meter reset/dip, which last−first would mis-count).
+   Blocks are IST calendar half-days: 00:00–12:00 and 12:00–24:00. ---- */
+const IST_OFFSET_MS = 5.5 * 3600000;
+const IOT_MON3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const istBlockOf = (ms) => {
+  const d = new Date(ms + IST_OFFSET_MS); // shift into IST, then read UTC fields
+  const half = d.getUTCHours() < 12 ? 0 : 1;
+  return { key: `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}-${half}`,
+    y: d.getUTCFullYear(), mo: d.getUTCMonth(), day: d.getUTCDate(), half,
+    label: `${String(d.getUTCDate()).padStart(2, "0")} ${IOT_MON3[d.getUTCMonth()]} · ${half ? "12:00–24:00" : "00:00–12:00"}` };
+};
+function iotBuckets12h(payload) {
+  const items = Array.isArray(payload) ? payload : (payload?.items || []);
+  const recs = items
+    .map(it => ({ t: new Date(it.timestamp).getTime(), chs: it.payload?.units?.[0]?.channels || [] }))
+    .filter(r => !isNaN(r.t))
+    .sort((a, b) => a.t - b.t);
+  if (recs.length < 2) return null;
+  const chanIds = Array.from(new Set(recs.flatMap(r => r.chs.map(c => c.channelId)))).sort();
+  const volOf = (r, id) => { const c = r.chs.find(x => x.channelId === id); return c == null ? null : Number(c.totalVolumeLitres); };
+  const blocks = {};
+  for (let i = 1; i < recs.length; i++) {
+    const b = istBlockOf(recs[i].t);
+    const bk = blocks[b.key] || (blocks[b.key] = { b, byChan: Object.fromEntries(chanIds.map(id => [id, 0])) });
+    chanIds.forEach(id => {
+      const prev = volOf(recs[i - 1], id), cur = volOf(recs[i], id);
+      if (prev != null && cur != null) bk.byChan[id] += Math.max(0, cur - prev); // clamp resets
+    });
+  }
+  const rows = Object.values(blocks).sort((a, b) =>
+    (a.b.y - b.b.y) || (a.b.mo - b.b.mo) || (a.b.day - b.b.day) || (a.b.half - b.b.half));
+  const totals = Object.fromEntries(chanIds.map(id => [id, rows.reduce((s, r) => s + r.byChan[id], 0)]));
+  const grand = chanIds.reduce((s, id) => s + totals[id], 0);
+  const spanH = (recs[recs.length - 1].t - recs[0].t) / 3600000;
+  const days = spanH / 24;
+  const dailyAvg = Object.fromEntries(chanIds.map(id => [id, days > 0 ? totals[id] / days : 0]));
+  return { chanIds, rows, totals, grand, spanH, days, dailyAvg, from: recs[0].t, to: recs[recs.length - 1].t };
+}
 // Newest heartbeat wins: /devices/status serves a cached (often day-old) snapshot,
 // so liveness + last-seen are driven off the freshest /devices/history record.
 const iotMergeLatest = (statusDev, historyList) => {
   const latest = Array.isArray(historyList) ? historyList[0] : null; // history is newest-first
   return latest ? { ...statusDev, ...latest } : statusDev;
 };
+
+/* ---- Tank level + water quality (RO-tank heartbeat schema) -----------------
+   Tank devices report four discrete float switches (level25/50/75/100 = probe
+   wet?) plus a waterQuality block { ph, tds, temp }. junctionBox devices don't
+   carry these (they report payload.units[].channels instead), so the detail
+   view branches on iotIsTank(). Data source: /devices/history?deviceId=…&days=1
+   which returns { items:[ { tankLevel, waterQuality, timestamp, … } ] }. */
+const iotIsTank = (d) => !!(d && (d.tankLevel || d.waterQuality || d.deviceType === "RO Tank" || IOT_KNOWN_TANK_DEVICES.includes(d.deviceId)));
+// Device-aware liveness: RO-tank units report ~every 20 min, so they use the wider window.
+const iotOnlineFor = (d) => iotOnline(d?.timestamp, iotIsTank(d) ? IOT_TANK_ONLINE_SECS : 120);
+// Known RO-tank devices to always keep in the roster + poll history for, even
+// if the current /devices/status snapshot happens not to list them.
+const IOT_KNOWN_TANK_DEVICES = ["E05A1B9C2DD4"];
+const IOT_TANK_STEPS = [
+  { key: "level100", pct: 100, label: "Full",     tag: "100%" },
+  { key: "level75",  pct: 75,  label: "3/4 full", tag: "75%"  },
+  { key: "level50",  pct: 50,  label: "1/2 full", tag: "50%"  },
+  { key: "level25",  pct: 25,  label: "1/4 full", tag: "25%"  },
+];
+const iotSwitchOn = (v) => Number(v) > 0;
+// Fill % = the highest float switch currently wet. Sensors returned low→high.
+function iotTank(tankLevel) {
+  const t = tankLevel || {};
+  const step = IOT_TANK_STEPS.find((s) => iotSwitchOn(t[s.key]));
+  const sensors = [...IOT_TANK_STEPS].reverse().map((s) => ({ tag: s.tag, on: iotSwitchOn(t[s.key]) }));
+  return { pct: step ? step.pct : 0, label: step ? step.label : "Empty", sensors, has: !!tankLevel };
+}
+// Ideal operating bands — not in the feed; standard potable-water ranges.
+const IOT_WQ_IDEAL = { ph: [6.5, 8.5], tds: [50, 300], temp: [15, 25] };
+const IOT_WQ_META = {
+  ph:   { label: "pH Level",    unit: "",     icon: FlaskConical, dp: 1 },
+  tds:  { label: "TDS",         unit: "mg/L", icon: Droplets,     dp: 0 },
+  temp: { label: "Temperature", unit: "°C",   icon: Thermometer,  dp: 1 },
+};
+// waterQuality values arrive as { value, unit } (value is sometimes a string).
+const iotWqNum = (m) => { if (m == null) return null; const n = Number(typeof m === "object" ? m.value : m); return isNaN(n) ? null : n; };
+// min / max / latest for ph, tds, temp across a window of heartbeats (newest-first).
+// Non-positive readings are dropped as sensor dropouts (pH/TDS/temp are never ~0
+// for real water), so a single 0 glitch doesn't skew the displayed range.
+function iotWqRange(items) {
+  const out = {};
+  ["ph", "tds", "temp"].forEach((k) => {
+    const vals = (items || []).map((it) => iotWqNum(it?.waterQuality?.[k])).filter((v) => v != null && v > 0);
+    out[k] = vals.length ? { min: Math.min(...vals), max: Math.max(...vals), latest: vals[0], n: vals.length } : null;
+  });
+  return out;
+}
+// Precise 3-tier water-quality classification (ProWater thresholds).
+//   pH   green 6.5–8.5 · amber 6.0–6.4 / 8.6–9.0 · red <6.0 / >9.0
+//   TDS  green 50–300  · amber 301–500          · red <50 / >500  (mg/L)
+//   Temp green 15–25   · amber 10–14.9 / 25.1–32 · red <10 / >32   (°C)
+function iotWqClass(k, v) {
+  if (v == null) return "na";
+  if (k === "ph")   return (v < 6.0 || v > 9.0) ? "red" : (v < 6.5 || v > 8.5) ? "amber" : "green";
+  if (k === "tds")  return (v < 50 || v > 500)  ? "red" : (v > 300)            ? "amber" : "green";
+  if (k === "temp") return (v < 10 || v > 32)   ? "red" : (v < 15 || v > 25)   ? "amber" : "green";
+  return "na";
+}
+// Worst band touched by a min–max range (endpoints suffice for contiguous bands).
+function iotWqBand(range, k) {
+  if (!range) return "na";
+  const a = iotWqClass(k, range.min), b = iotWqClass(k, range.max);
+  return (a === "red" || b === "red") ? "red" : (a === "amber" || b === "amber") ? "amber" : "green";
+}
+// Plain-English note per metric per band — drives the in-card AI summary.
+const IOT_WQ_NOTE = {
+  ph:   { green: "balanced and safe", amber: "mildly off-neutral — minor scaling or taste change", red: "corrosive / unsafe — action required" },
+  tds:  { green: "excellent mineral balance for drinking", amber: "moderately mineralised — may affect taste or leave deposits", red: "outside the safe range — possible contamination or over-purification" },
+  temp: { green: "optimal storage temperature", amber: "elevated — raises microbial-growth risk over time", red: "extreme — rapid microbial growth or a sensor / freeze fault" },
+};
+const IOT_CARD = { background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
+// RAG badge palette for water-quality status.
+const IOT_RAG = {
+  green: { color: "#11883e", bg: "#dff5d8", label: "GOOD" },
+  amber: { color: "#a86e00", bg: "#ffedbd", label: "WARNING" },
+  red:   { color: "#b91c1c", bg: "#fee2e2", label: "CRITICAL" },
+  na:    { color: "#8b9a95", bg: "#eef1ee", label: "—" },
+};
+// Transparent Sintex-style water storage tank (needs pseudo-elements + keyframes,
+// so it lives in a stylesheet rather than inline styles). Classes are pw- prefixed to
+// avoid collisions. Structure: a dark screw lid + moulded neck sit above a see-through
+// shell; the blue water block fills the shell from the bottom to --level with two moving
+// wave layers on the surface. The scale and the shell are the same height and top-aligned,
+// so 0-100% line up. Also holds the live/dead ECG styles for the Online/Offline KPIs.
+const IOT_TANK_CSS = `
+.pw-tank-visual{position:relative;display:flex;align-items:flex-start;justify-content:center;gap:10px;padding:2px}
+.pw-tank-scale{margin-top:50px;height:214px;display:flex;flex-direction:column;justify-content:space-between;color:#6d7d79;font-size:11.5px;font-weight:600;padding-right:8px}
+.pw-tank-scale span{position:relative;line-height:1}
+.pw-tank-scale span::after{content:"";position:absolute;right:-10px;top:50%;width:9px;height:2px;background:#b3c0bc}
+.pw-tank{--level:75%;position:relative;width:200px;height:286px;flex:none}
+.pw-tank-lid{position:absolute;z-index:6;top:10px;left:50%;transform:translateX(-50%);width:70px;height:28px;border-radius:50%;background:linear-gradient(180deg,#4c5557,#1c2223);box-shadow:inset 0 5px 8px rgba(255,255,255,.25),0 8px 15px rgba(0,0,0,.25)}
+.pw-tank-neck{position:absolute;z-index:4;top:24px;left:50%;transform:translateX(-50%);width:90px;height:36px;border-radius:50%;background:linear-gradient(180deg,#eef4f4,#ccd7d8)}
+.pw-tank-shell{position:absolute;top:50px;left:50%;transform:translateX(-50%);width:172px;height:214px;overflow:hidden;border-radius:54px 54px 44px 44px;border:4px solid rgba(190,205,208,.7);background:linear-gradient(90deg,rgba(255,255,255,.32) 0%,rgba(226,240,240,.1) 42%,rgba(255,255,255,.24) 100%);box-shadow:inset 18px 0 30px rgba(255,255,255,.5),inset -20px 0 30px rgba(90,110,115,.14),0 22px 36px rgba(20,40,50,.13)}
+.pw-water{position:absolute;bottom:0;left:0;width:100%;z-index:1;height:var(--level);background:linear-gradient(180deg,rgba(84,206,240,.8),rgba(0,140,205,.92));box-shadow:inset 0 12px 18px rgba(255,255,255,.16);transition:height 700ms cubic-bezier(.2,.75,.2,1)}
+.pw-wave{position:absolute;top:-16px;left:-20%;width:140%;height:32px;border-radius:47% 53% 46% 54%/64% 58% 42% 36%}
+.pw-wave.wave-a{background:rgba(205,244,255,.9);animation:pwWaterMove 4s ease-in-out infinite alternate}
+.pw-wave.wave-b{top:-9px;opacity:.6;background:rgba(38,166,216,.55);animation:pwWaterMove2 6s ease-in-out infinite alternate-reverse}
+@keyframes pwWaterMove{from{transform:translateX(-8%) scaleY(.85)}to{transform:translateX(8%) scaleY(1.14)}}
+@keyframes pwWaterMove2{from{transform:translateX(9%)}to{transform:translateX(-9%)}}
+.pw-bubble{position:absolute;bottom:8px;border-radius:50%;background:radial-gradient(circle at 32% 30%,rgba(255,255,255,.95),rgba(255,255,255,.3) 55%,rgba(255,255,255,0) 72%);box-shadow:inset 0 0 2px rgba(255,255,255,.6);opacity:0;pointer-events:none;animation:pwRise linear infinite}
+@keyframes pwRise{0%{transform:translateY(0) scale(.5);opacity:0}15%{opacity:.9}70%{opacity:.55}100%{transform:translateY(-96px) scale(1);opacity:0}}
+.pw-tank-shine{position:absolute;z-index:3;left:16px;top:20px;width:24px;height:148px;border-radius:50%;background:linear-gradient(90deg,rgba(255,255,255,.85),transparent);pointer-events:none}
+.pw-band{position:absolute;z-index:2;left:0;width:100%;height:2px;background:rgba(120,150,150,.18);box-shadow:0 1px rgba(255,255,255,.5)}
+.pw-band.band-1{top:25%}.pw-band.band-2{top:50%}.pw-band.band-3{top:75%}
+.pw-tank-brand{position:absolute;z-index:5;top:60px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:5px;color:#7f9a92;font-size:13px;font-weight:700;pointer-events:none;text-shadow:0 1px 2px rgba(255,255,255,.55)}
+.pw-tank-base{position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:140px;height:15px;border-radius:50%;background:rgba(0,0,0,.14);filter:blur(8px)}
+.iot-ecg{position:absolute;inset:0;overflow:hidden;pointer-events:none;display:flex;align-items:center;-webkit-mask-image:linear-gradient(90deg,transparent 0,transparent 46%,#000 60%,#000 84%,transparent 100%);mask-image:linear-gradient(90deg,transparent 0,transparent 46%,#000 60%,#000 84%,transparent 100%)}
+.iot-ecg-track{display:flex;width:200%;height:52px;animation:iotEcgScroll 3s linear infinite}
+.iot-ecg.dead .iot-ecg-track{animation-duration:6.5s}
+.iot-ecg-seg{width:50%;height:100%;flex:none}
+.iot-ecg.alive .iot-ecg-seg{filter:drop-shadow(0 0 5px rgba(10,157,110,.5))}
+.iot-ecg.dead .iot-ecg-seg{filter:drop-shadow(0 0 4px rgba(220,65,65,.38));opacity:.8}
+@keyframes iotEcgScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media(max-width:1400px){.pw-tank-layout{grid-template-columns:1fr!important;justify-items:center}}
+@media(max-width:1150px){.iot-monitor-grid{grid-template-columns:1fr!important}}
+@media(prefers-reduced-motion:reduce){.pw-wave{animation:none!important}.pw-water{transition:none}.iot-ecg-track{animation:none!important}.pw-bubble{animation:none!important;opacity:0}}
+`;
 const ValveBadge = ({ state }) => (
-  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: state === "OPEN" ? "#1f7a3f" : "#b4232a" }}>{state ?? "—"}</span>
+  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: state === "OPEN" ? "#08805A" : "#DC4141" }}>{state ?? "—"}</span>
 );
 
 // Offline KPI card: a "water ripple" of deep red that sweeps in from the right and
 // fades to amber as it dissipates (dedicated to this card, not the generic Stat).
 function IoTOfflineStat({ label, value, icon: Icon, sub }) {
   return (
-    <div style={{ position: "relative", overflow: "hidden", background: "#fff6f4", border: "1px solid #f0cfc6", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)" }}>
+    <div style={{ position: "relative", overflow: "hidden", background: "#FBE8E8", border: "1px solid #F5BFBF", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)" }}>
       <div aria-hidden style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none" }}>
         <span className="iot-ripple-ring" style={{ animationDelay: "0s" }} />
         <span className="iot-ripple-ring" style={{ animationDelay: "1.2s" }} />
@@ -8598,11 +11390,11 @@ function IoTOfflineStat({ label, value, icon: Icon, sub }) {
       </div>
       <div style={{ position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <span className="eyebrow" style={{ color: "#a83b41" }}>{label}</span>
-          <Icon size={18} color="#a83b41" />
+          <span className="eyebrow" style={{ color: "#DC4141" }}>{label}</span>
+          <Icon size={18} color="#DC4141" />
         </div>
-        <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "#8f1b21", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: 12, color: "#a83b41" }}>{sub}</div>
+        <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "#DC4141", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 12, color: "#DC4141" }}>{sub}</div>
       </div>
     </div>
   );
@@ -8633,7 +11425,236 @@ function IoTOnlineStat({ label, value, icon: Icon, sub }) {
   );
 }
 
-const IOT_FLOW_COLORS = ["#0f6e3f", "#90ab8b", "#0d7a8c", "#c99a2e", "#7a5bd6", "#b4232a"];
+const IOT_FLOW_COLORS = ["#0B6F52", "#0A9D6E", "#2A86D6", "#986315", "#2A86D6", "#DC4141"];
+
+/* Decorative card waveforms for the Device Monitor cards, matching the mockup:
+   "ecg" = heart-monitor pulse line (dark cards), "bars" = equalizer bars (Online),
+   "ripple" = smooth sine wave (Offline / With faults). Purely visual. */
+function IoTWave({ kind, color, opacity = 0.5 }) {
+  if (kind === "bars") {
+    const hs = [5, 7, 6, 9, 7, 11, 8, 13, 7, 10, 6, 12, 9, 15, 8, 11, 7, 14, 10, 17, 11, 13];
+    return (
+      <div aria-hidden style={{ position: "absolute", right: 14, bottom: 14, display: "flex", alignItems: "flex-end", gap: 2, opacity, pointerEvents: "none", height: 44 }}>
+        {hs.map((v, i) => <span key={i} style={{ width: 3, height: v * 2.2, borderRadius: 2, background: color }} />)}
+      </div>
+    );
+  }
+  const d = kind === "ecg"
+    ? "M0 70 H66 l6 0 l6 -9 l6 9 l10 0 l5 10 l6 -48 l6 62 l5 -25 l8 0 l8 -13 l8 13 H240"
+    : "M0 64 Q24 64 40 46 Q58 26 82 50 Q106 74 130 58 Q152 42 176 58 Q206 82 240 62";
+  return (
+    <svg aria-hidden viewBox="0 0 240 120" preserveAspectRatio="none" style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: "72%", opacity, pointerEvents: "none" }}>
+      <path d={d} fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// Transparent Sintex-style water storage tank: a see-through shell with a dark
+// screw lid + moulded neck, whose blue water block fills to the level % with two
+// moving wave layers riding the surface. Scale aligns 0-100% to the shell.
+function IoTTank({ pct = 0 }) {
+  const p = Math.max(0, Math.min(100, pct));
+  return (
+    <div className="pw-tank-visual" aria-hidden>
+      <div className="pw-tank-scale"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
+      <div className="pw-tank" style={{ "--level": `${p}%` }}>
+        <div className="pw-tank-lid" />
+        <div className="pw-tank-neck" />
+        <div className="pw-tank-shell">
+          <div className="pw-water">
+            <div className="pw-wave wave-a" />
+            <div className="pw-wave wave-b" />
+            {[
+              { l: "22%", s: 6, d: "3.4s", delay: "0s" }, { l: "40%", s: 4, d: "2.8s", delay: "1.1s" },
+              { l: "55%", s: 7, d: "4.2s", delay: "0.6s" }, { l: "68%", s: 5, d: "3.1s", delay: "1.8s" },
+              { l: "33%", s: 3, d: "2.4s", delay: "2.2s" }, { l: "62%", s: 4, d: "3.7s", delay: "0.3s" },
+            ].map((b, i) => <span key={i} className="pw-bubble" style={{ left: b.l, width: b.s, height: b.s, animationDuration: b.d, animationDelay: b.delay }} />)}
+          </div>
+          <div className="pw-tank-shine" />
+          <div className="pw-band band-1" />
+          <div className="pw-band band-2" />
+          <div className="pw-band band-3" />
+        </div>
+        <div className="pw-tank-brand"><Droplets size={14} color="#12b981" style={{ opacity: 0.8 }} /> ProWater</div>
+        <div className="pw-tank-base" />
+      </div>
+    </div>
+  );
+}
+
+// Tank Level panel — device header + realistic tank (with scale) + % readout and
+// the four float-switch states, laid out [tank | readout] per the design spec.
+function IoTTankPanel({ device, tank }) {
+  const meta = [device.roUnitId, device.deviceType].filter(Boolean).join(" · ") || "RO Tank sensor";
+  const fw = device.firmwareVersion || device.FIRMWARE_VERSION || "—";
+  return (
+    <div style={{ ...IOT_CARD, position: "relative", overflow: "hidden", padding: "18px 20px", minHeight: 300,
+      background: "radial-gradient(circle at 52% 58%, rgba(185,233,219,.27), transparent 43%), linear-gradient(180deg,#fff,#f8fcfa)" }}>
+      <h2 className="serif" style={{ fontSize: 20, fontWeight: 750, color: "var(--f)", lineHeight: 1.1 }}>{device.deviceId}</h2>
+      <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 3 }}>{meta} · Firmware {fw}</div>
+      <div className="pw-tank-layout" style={{ display: "grid", gridTemplateColumns: "minmax(180px,1fr) 140px", alignItems: "center", minHeight: 250, gap: 6, marginTop: 2 }}>
+        <IoTTank pct={tank.pct} />
+        <div style={{ alignSelf: "center" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--f)" }}>Tank Level</div>
+          <div className="serif" style={{ marginTop: 5, fontSize: 48, fontWeight: 780, letterSpacing: "-.05em", color: "var(--f)", lineHeight: 1 }}>{tank.pct}%</div>
+          <div style={{ color: "var(--muted)", fontSize: 12 }}>({tank.label})</div>
+          <div style={{ display: "grid", gap: 9, marginTop: 22 }}>
+            {tank.sensors.map((s) => (
+              <div key={s.tag} style={{ display: "grid", gridTemplateColumns: "9px 42px auto", gap: 8, alignItems: "center", fontSize: 12, fontWeight: 650 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: s.on ? "#05a97a" : "#b9c3bf" }} />
+                <span style={{ color: "var(--f)", fontWeight: 700 }}>{s.tag}</span>
+                <span style={{ color: s.on ? "#007d59" : "var(--muted)", fontWeight: 700 }}>{s.on ? "ON" : "OFF"}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {tank.pct <= 25 && (
+        <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "11px 14px", borderRadius: 12, background: "#FBE4E4", border: "1px solid #F1B7B7", color: "#DC4141", fontWeight: 800, fontSize: 13.5, letterSpacing: ".01em" }}>
+          <AlertCircle size={17} /> SWITCH ON the pump to refill.
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Water Quality panel — pH / TDS / temperature as a live min–max range vs the ideal
+// band, each with a Green/Amber/Red badge, plus an in-card AI summary of the readings.
+function IoTWaterQualityCard({ range }) {
+  const fmt = (v, dp) => (v == null ? "—" : Number(v).toFixed(dp));
+  const rows = ["ph", "tds", "temp"].map((k) => {
+    const band = iotWqBand(range[k], k);
+    return { k, meta: IOT_WQ_META[k], r: range[k], ideal: IOT_WQ_IDEAL[k], band, rag: IOT_RAG[band] || IOT_RAG.na };
+  });
+  const rated = rows.filter((r) => r.r);
+  const worst = rated.some((r) => r.band === "red") ? "red" : rated.some((r) => r.band === "amber") ? "amber" : rated.length ? "green" : "na";
+  const verdict = worst === "green" ? "Water quality is excellent — every reading is in the ideal band."
+    : worst === "amber" ? "Water quality is acceptable, but one or more readings are drifting from ideal."
+    : worst === "red" ? "Water quality needs attention — a reading is outside the safe range."
+    : "Awaiting sensor readings for this device.";
+  const co = worst === "red" ? { icon: "#ef4444", strong: "#b91c1c", bg: "linear-gradient(90deg,#fdeaea,#fdf3f3)", bd: "#f6cdcd" }
+    : worst === "amber" ? { icon: "#d99114", strong: "#a86e00", bg: "linear-gradient(90deg,#fff5df,#fffaf0)", bd: "#f2e0b4" }
+    : worst === "green" ? { icon: "#05a97a", strong: "#007d59", bg: "linear-gradient(90deg,#e8f7f1,#f1faf7)", bd: "#c3e8d8" }
+    : { icon: "#8b9a95", strong: "#64746e", bg: "linear-gradient(90deg,#eef4f2,#f5faf8)", bd: "#dde6e2" };
+  return (
+    <div style={{ ...IOT_CARD, padding: "18px 20px", display: "flex", flexDirection: "column" }}>
+      <div>
+        <h3 style={{ fontSize: 16, fontWeight: 720 }}>Water Quality</h3>
+        <div style={{ fontSize: 12, color: "#8b9a95", marginTop: 3 }}>Live sensor readings</div>
+      </div>
+      <div style={{ marginTop: 6 }}>
+        {rows.map(({ k, meta, r, ideal, rag }, i) => (
+          <div key={k} style={{ display: "grid", gridTemplateColumns: "8px 30px minmax(70px,1fr) auto auto", gap: 11, alignItems: "center", minHeight: 60, borderTop: i ? "1px solid #edf1ef" : "none" }}>
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: rag.color }} />
+            <span style={{ display: "grid", placeItems: "center", width: 28, height: 28, color: "#007d59" }}><meta.icon size={19} /></span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--f)" }}>{meta.label}</div>
+              <div style={{ fontSize: 10.5, color: "#8b9a95", marginTop: 3 }}>Ideal: {ideal[0]} – {ideal[1]}{meta.unit ? ` ${meta.unit}` : ""}</div>
+            </div>
+            <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 750, color: "var(--f)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+              {r ? `${fmt(r.min, meta.dp)} – ${fmt(r.max, meta.dp)}` : "—"}{r && meta.unit ? ` ${meta.unit}` : ""}
+            </div>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 999, fontSize: 10, fontWeight: 750, textTransform: "uppercase", color: rag.color, background: rag.bg }}>● {rag.label}</span>
+          </div>
+        ))}
+      </div>
+      {/* in-card AI summary of the water quality */}
+      <div style={{ marginTop: "auto", paddingTop: 13 }}>
+        <div style={{ borderRadius: 12, border: `1px solid ${co.bd}`, background: co.bg, padding: "12px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ display: "grid", placeItems: "center", width: 24, height: 24, borderRadius: 7, background: co.icon, color: "#fff", flexShrink: 0 }}><Sparkles size={13} /></span>
+            <span className="eyebrow" style={{ color: co.strong }}>AI summary</span>
+          </div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: co.strong, marginTop: 8 }}>{verdict}</div>
+          {rated.length > 0 && (
+            <ul style={{ margin: "7px 0 0", paddingLeft: 16, fontSize: 11.5, color: "var(--slate)", lineHeight: 1.55 }}>
+              {rated.map((r) => (
+                <li key={r.k}><b style={{ color: "var(--f)" }}>{r.meta.label} {fmt(r.r.min, r.meta.dp)}–{fmt(r.r.max, r.meta.dp)}{r.meta.unit ? ` ${r.meta.unit}` : ""}</b> — {IOT_WQ_NOTE[r.k][r.band]}.</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Recent RO-tank readings — timestamp × (tank % · pH · TDS · temp), newest first.
+// Cell styling for an out-of-range reading — green = normal, amber/red highlighted.
+const iotBandCell = (band) => band === "red" ? { color: "#DC4141", background: "#FBE8E8", fontWeight: 800 }
+  : band === "amber" ? { color: "#a86e00", background: "#FBF0E0", fontWeight: 700 }
+  : { color: "var(--f)" };
+// Tank level band: low tanks (≤25%) are critical (needs refill), ≤50% borderline.
+const iotTankBand = (pct) => pct <= 25 ? "red" : pct <= 50 ? "amber" : "green";
+function IoTTankReadings({ items }) {
+  const all = items || [];
+  const PER = 10;
+  const [page, setPage] = useState(1);
+  const [sortDir, setSortDir] = useState("desc"); // newest → oldest by default
+  const sorted = [...all].sort((a, b) => { const d = new Date(b.timestamp) - new Date(a.timestamp); return sortDir === "desc" ? d : -d; });
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PER));
+  const cur = Math.min(page, totalPages);
+  const rows = sorted.slice((cur - 1) * PER, cur * PER);
+  const btn = (disabled) => ({ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 9, border: "1px solid " + (disabled ? "var(--border)" : "var(--brand)"), background: disabled ? "#fff" : "var(--brand)", color: disabled ? "var(--faint)" : "#fff", cursor: disabled ? "not-allowed" : "pointer" });
+  const syncHead = (
+    <span onClick={() => { setSortDir(d => d === "desc" ? "asc" : "desc"); setPage(1); }}
+      style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, userSelect: "none" }} title="Sort by time">
+      Sync History {sortDir === "desc" ? <ArrowDown size={13} /> : <ArrowUp size={13} />}
+    </span>
+  );
+  return (
+    <div style={{ ...IOT_CARD, marginTop: 16, overflow: "hidden" }}>
+      <div style={{ padding: "16px 18px 12px" }}>
+        <h3 style={{ fontSize: 16 }}>Recent readings</h3>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Tank level and water-quality per heartbeat · 10 per page · sortable · out-of-range values highlighted · from /devices/history?days=1.</div>
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <Table head={[syncHead, "Tank", "pH", "TDS (mg/L)", "Temp (°C)"]}>
+          {rows.map((it, i) => {
+            const t = iotTank(it.tankLevel);
+            const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp);
+            const num = { ...td, fontVariantNumeric: "tabular-nums" };
+            return (
+              <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{iotStamp(it.timestamp)}</td>
+                <td style={{ ...num, fontWeight: 700, ...iotBandCell(iotTankBand(t.pct)) }}>{t.pct}%</td>
+                <td style={{ ...num, ...iotBandCell(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
+                <td style={{ ...num, ...iotBandCell(iotWqClass("tds", tds)) }}>{tds == null ? "—" : Math.round(tds)}</td>
+                <td style={{ ...num, ...iotBandCell(iotWqClass("temp", tp)) }}>{tp == null ? "—" : tp.toFixed(1)}</td>
+              </tr>
+            );
+          })}
+          {all.length === 0 && <tr><td colSpan={5} style={{ padding: 0 }}><Empty msg="No readings yet." /></td></tr>}
+        </Table>
+      </div>
+      {all.length > PER && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Showing {(cur - 1) * PER + 1}–{Math.min(cur * PER, all.length)} of {all.length} · {sortDir === "desc" ? "newest first" : "oldest first"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => setPage(() => Math.max(1, cur - 1))} disabled={cur <= 1} style={btn(cur <= 1)}>Prev</button>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--slate)", fontVariantNumeric: "tabular-nums" }}>{cur} / {totalPages}</span>
+            <button onClick={() => setPage(() => Math.min(totalPages, cur + 1))} disabled={cur >= totalPages} style={btn(cur >= totalPages)}>Next</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Live / dead ECG trace for the Online / Offline KPI cards. Two identical segments
+// scroll left seamlessly (see IOT_TANK_CSS). alive → green heartbeat, dead → red flatline.
+const IOT_ECG_ALIVE = "M0 30 H20 l3 0 l3 -2 l3 4 l4 -22 l4 34 l4 -15 l3 2 l3 0 H66 l3 0 l3 -2 l3 4 l4 -22 l4 34 l4 -15 l3 2 l3 0 H120";
+const IOT_ECG_DEAD = "M0 30 H120";
+function IoTEcg({ alive }) {
+  const color = alive ? "#0A9D6E" : "#DC4141";
+  const d = alive ? IOT_ECG_ALIVE : IOT_ECG_DEAD;
+  const seg = (
+    <svg className="iot-ecg-seg" viewBox="0 0 120 46" preserveAspectRatio="none" aria-hidden>
+      <path d={d} fill="none" stroke={color} strokeWidth={alive ? 2.2 : 2.4} strokeLinecap="round" strokeLinejoin="round" opacity={alive ? 0.9 : 0.72} />
+    </svg>
+  );
+  return <div aria-hidden className={`iot-ecg ${alive ? "alive" : "dead"}`}><div className="iot-ecg-track">{seg}{seg}</div></div>;
+}
 
 function IoTDevices() {
   const { user } = useAuth();
@@ -8643,9 +11664,48 @@ function IoTDevices() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [hbPage, setHbPage] = useState(1); // Recent heartbeats pagination (20 rows/page)
+  const [hist2dByDevice, setHist2dByDevice] = useState({}); // deviceId -> last-2-days items (for the 12h consumption table)
+  const [hist1dByDevice, setHist1dByDevice] = useState({}); // deviceId -> last-1-day items (RO-tank level + water-quality window)
 
   // Reset to the first page whenever a different device is selected.
   useEffect(() => { setHbPage(1); }, [selected]);
+
+  // Last-2-days history for the SELECTED device only (days=2 = today back 2 days).
+  // Powers the 12-hour consumption table. Changes slowly, so poll every 5 min.
+  useEffect(() => {
+    if (!selected) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}&days=2`);
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data.items || []); // days=2 returns { items }
+        if (alive) setHist2dByDevice(prev => ({ ...prev, [selected]: items }));
+      } catch { /* leave prior data; table shows its empty state */ }
+    };
+    load();
+    const t = setInterval(load, 5 * 60 * 1000);
+    return () => { alive = false; clearInterval(t); };
+  }, [selected]);
+
+  // Last-1-day history for the SELECTED device — the RO-tank level + water-quality
+  // window this view is built on. /devices/history?deviceId=…&days=1 → { items:[…] }.
+  // Powers the Tank Level %, the Water-Quality min–max ranges and Recent readings.
+  useEffect(() => {
+    if (!selected) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}&days=1`);
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data?.items ?? []);
+        if (alive) setHist1dByDevice((prev) => ({ ...prev, [selected]: items }));
+      } catch { /* keep prior data; cards fall back to the live poll / empty state */ }
+    };
+    load();
+    const t = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, [selected]);
 
   // Poll device roster every 10s (which devices exist + fallback metadata).
   useEffect(() => {
@@ -8657,7 +11717,9 @@ function IoTDevices() {
         if (!alive) return;
         const list = Array.isArray(data) ? data : [];
         setRoster(list); setErr("");
-        setSelected(prev => prev || (list[0]?.deviceId ?? null));
+        // Prefer a known RO-tank device on first load so the tank + water-quality view shows.
+        const known = IOT_KNOWN_TANK_DEVICES[0];
+        setSelected(prev => prev || known || (list[0]?.deviceId ?? null));
       } catch { if (alive) setErr("Could not reach the IoT device API."); }
       finally { if (alive) setLoading(false); }
     };
@@ -8669,8 +11731,12 @@ function IoTDevices() {
 
   // Poll /history for EVERY device in the roster every 8s. This is the source of
   // truth for liveness — /status ships a stale (often day-old) timestamp, so live
-  // devices were showing Offline. History is capped at 50 records (~37KB) each.
-  const deviceIdsKey = roster.map(d => d.deviceId).join(",");
+  // devices were showing Offline. The endpoint now returns { items:[…] } (newest-
+  // first, downsampled) rather than a bare array — unwrap it, else history is empty
+  // and the heartbeat table / live consumption / charts all go blank.
+  // Poll history for the roster PLUS any always-on known tank devices (which the
+  // /status snapshot may omit), so their tank + water-quality readings load.
+  const deviceIdsKey = Array.from(new Set([...roster.map(d => d.deviceId), ...IOT_KNOWN_TANK_DEVICES])).join(",");
   useEffect(() => {
     if (!deviceIdsKey) return;
     const ids = deviceIdsKey.split(",");
@@ -8680,7 +11746,8 @@ function IoTDevices() {
         try {
           const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${id}`);
           const data = await res.json();
-          return [id, Array.isArray(data) ? data : null];
+          const items = Array.isArray(data) ? data : (data?.items ?? null);
+          return [id, items];
         } catch { return [id, null]; }
       }));
       if (!alive) return;
@@ -8695,10 +11762,23 @@ function IoTDevices() {
     return () => { alive = false; clearInterval(t); };
   }, [deviceIdsKey]);
 
+  // Seed known RO-tank devices the /status snapshot may not list, so they're
+  // always selectable; the history poll above fills in their live readings.
+  const rosterIds = new Set(roster.map(d => d.deviceId));
+  const fullRoster = [
+    ...roster,
+    ...IOT_KNOWN_TANK_DEVICES.filter(id => !rosterIds.has(id)).map(id => ({ deviceId: id, deviceType: "RO Tank" })),
+  ];
   // Merge the freshest heartbeat over each roster device → live timestamp/pressure/channels.
-  const devices = roster.map(d => iotMergeLatest(d, historyByDevice[d.deviceId]));
+  const devices = fullRoster.map(d => iotMergeLatest(d, historyByDevice[d.deviceId]));
   const device = devices.find(d => d.deviceId === selected);
   const channels = device?.payload?.units?.[0]?.channels ?? [];
+
+  // ---- RO-tank level + water quality (from the days=1 window, falling back to the live poll).
+  const isTank = iotIsTank(device);
+  const wqItems = hist1dByDevice[selected] ?? historyByDevice[selected] ?? [];
+  const tank = iotTank(device?.tankLevel ?? wqItems[0]?.tankLevel);
+  const wqRange = useMemo(() => iotWqRange(wqItems), [wqItems]);
 
   const history = historyByDevice[selected] ?? []; // newest-first
   const chrono = [...history].reverse();           // oldest-first, for time-series charts
@@ -8718,13 +11798,13 @@ function IoTDevices() {
     return row;
   });
 
-  const online = devices.filter(d => iotOnline(d.timestamp)).length;
+  const online = devices.filter(d => iotOnlineFor(d)).length;
   const faulty = devices.filter(d => (d.payload?.units?.[0]?.channels ?? []).some(c => c.fault)).length;
 
   // ---- Fault & alert center: aggregate offline devices + channel faults across the fleet.
   const alerts = [];
   devices.forEach(d => {
-    if (!iotOnline(d.timestamp)) {
+    if (!iotOnlineFor(d)) {
       alerts.push({ key: `off:${d.deviceId}`, sev: "critical", device: d.deviceId, title: "Device offline", detail: `No heartbeat · last seen ${iotTimeAgo(d.timestamp)}` });
     }
     (d.payload?.units?.[0]?.channels ?? []).forEach(c => {
@@ -8750,7 +11830,7 @@ function IoTDevices() {
   // ---- Live consumption: diff cumulative totalVolumeLitres across the history window.
   const winFirst = chrono[0], winLast = chrono[chrono.length - 1];
   const winSecs = (winFirst && winLast) ? Math.max(0, (new Date(winLast.timestamp) - new Date(winFirst.timestamp)) / 1000) : 0;
-  const winLabel = winSecs >= 60 ? `${Math.round(winSecs / 60)} min` : `${Math.round(winSecs)} s`;
+  const winLabel = winSecs >= 5400 ? `${(winSecs / 3600).toFixed(1)} h` : winSecs >= 60 ? `${Math.round(winSecs / 60)} min` : `${Math.round(winSecs)} s`;
   const volOf = (rec, id) => { const c = (rec?.payload?.units?.[0]?.channels ?? []).find(x => x.channelId === id); return c == null ? null : Number(c.totalVolumeLitres); };
   const consumption = chanIds.map(id => {
     const first = volOf(winFirst, id), last = volOf(winLast, id);
@@ -8761,247 +11841,364 @@ function IoTDevices() {
   const totalConsumed = consumption.reduce((s, c) => s + c.consumed, 0);
   const canMeasure = chrono.length > 1;
 
-  const stats = [
-    { label: "Devices", value: devices.length, icon: Cpu, sub: "monitored", hero: true },
-    { label: "Online", value: online, icon: CheckCircle2, sub: "seen in last 120s", rain: online > 0 },
-    { label: "Offline", value: devices.length - online, icon: AlertCircle, sub: "no recent ping", ripple: (devices.length - online) > 0 },
-    { label: "With faults", value: faulty, icon: AlertCircle, sub: "channel fault active" },
+  // 12-hour consumption breakdown over the last 2 days (IST) for the selected device.
+  const buckets2d = useMemo(() => iotBuckets12h(hist2dByDevice[selected]), [hist2dByDevice, selected]);
+
+  // ---- KPI status cards with mockup-matched decorative waveforms
+  const kpiCards = [
+    { label: "Total devices", value: devices.length, sub: "monitored", icon: Cpu, hero: true, wave: "ecg", wc: "#7FE3BE", wo: 0.5 },
+    { label: "Online", value: online, sub: "recently reporting", icon: CheckCircle2, wave: "bars", wc: "#0A9D6E", wo: 0.6 },
+    { label: "Offline", value: devices.length - online, sub: "no recent ping", icon: AlertCircle, offline: true, wave: "ripple", wc: "#DC4141", wo: 0.3 },
+    { label: "With faults", value: faulty, sub: "channel fault active", icon: ShieldCheck, wave: "ripple", wc: "#986315", wo: 0.42 },
   ];
 
   if (loading) return <Loading />;
 
-  return (
-    <div className="fade-up">
-      {err && <ApiError msg={err} />}
-      {toast && <div style={{ ...toastStyle, background: "#9a2620" }}><AlertCircle size={16} /> {toast}</div>}
-      <div style={grid4}>{stats.map((s, i) => s.ripple ? <IoTOfflineStat key={i} {...s} /> : s.rain ? <IoTOnlineStat key={i} {...s} /> : <Stat key={i} {...s} />)}</div>
+  const softShadow = { background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
-      {/* Fault & alert center */}
-      <div style={{ marginTop: 18 }}>
-        {alerts.length === 0 ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 16px", borderRadius: 12, border: "1px solid #cfe6d5", background: "#f1f9f2", color: "#1f7a3f", fontSize: 13, fontWeight: 600 }}>
-            <CheckCircle2 size={16} /> All systems nominal — no active faults or offline devices.
-          </div>
-        ) : (
-          <Card title={`Active alerts (${alerts.length})`} sub="Offline devices and channel faults across the fleet · click to inspect." pad={false}>
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {alerts.map((a, i) => {
-                const crit = a.sev === "critical";
-                return (
-                  <button key={a.key} onClick={() => setSelected(a.device)} style={{
-                    display: "flex", alignItems: "center", gap: 12, textAlign: "left", width: "100%", cursor: "pointer",
-                    padding: "12px 16px", background: "transparent", borderBottom: i < alerts.length - 1 ? "1px solid var(--border)" : "none"
-                  }}>
-                    <span style={{ width: 9, height: 9, borderRadius: 999, flexShrink: 0, background: crit ? "#c0392b" : "#d99a1e" }} />
-                    <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: crit ? "#c0392b" : "#9a6a16", width: 66, flexShrink: 0 }}>{crit ? "Critical" : "Warning"}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)", width: 130, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.device}</span>
-                    <span style={{ fontSize: 13, color: "var(--f)", fontWeight: 600, flexShrink: 0 }}>{a.title}</span>
-                    <span style={{ fontSize: 12.5, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {a.detail}</span>
-                  </button>
-                );
-              })}
+  // Recent-heartbeats page list (1 2 … 50 style).
+  const pager = (() => {
+    const total = hbTotalPages, cur = hbPageClamped, out = [];
+    if (total <= 7) { for (let p = 1; p <= total; p++) out.push(p); return out; }
+    out.push(1);
+    if (cur > 3) out.push("…l");
+    for (let p = Math.max(2, cur - 1); p <= Math.min(total - 1, cur + 1); p++) out.push(p);
+    if (cur < total - 2) out.push("…r");
+    out.push(total);
+    return out;
+  })();
+
+  return (
+    <div className="fade-up ov-sans">
+      <style>{`
+        .ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:-.02em}
+        @media(max-width:900px){.iot-grid{grid-template-columns:1fr!important}.iot-tankwq{grid-template-columns:1fr!important}}
+        @keyframes iotFlowPulse{0%,100%{opacity:.35}50%{opacity:1}}
+        .iot-flow-dot{animation:iotFlowPulse 1.1s ease-in-out infinite}
+        @media(prefers-reduced-motion:reduce){.iot-flow-dot{animation:none}}
+        ${IOT_TANK_CSS}
+      `}</style>
+      <div style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Real-time water quality &amp; tank monitoring</div>
+      {err && <ApiError msg={err} />}
+      {toast && <div style={{ ...toastStyle, background: "#DC4141" }}><AlertCircle size={16} /> {toast}</div>}
+
+      {/* ── status KPI cards ───────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14, marginBottom: 16 }}>
+        {kpiCards.map((k, i) => {
+          const hero = k.hero, off = k.offline;
+          const bg = hero ? "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)" : off ? "#FBE8E8" : "#fff";
+          const bd = hero ? "none" : off ? "1px solid #F5BFBF" : "1px solid var(--border)";
+          const labelC = hero ? "var(--lime)" : off ? "#DC4141" : "var(--muted)";
+          const valueC = hero ? "#fff" : off ? "#DC4141" : "var(--f)";
+          const subC = hero ? "#B5E2D4" : off ? "#DC4141" : "var(--muted)";
+          const iconC = hero ? "var(--lime)" : off ? "#DC4141" : "var(--teal)";
+          const iconBg = hero ? "rgba(255,255,255,.12)" : off ? "#FBD5D5" : "var(--mint)";
+          return (
+            <div key={k.label} style={{ position: "relative", overflow: "hidden", background: bg, border: bd, borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, minHeight: 120, display: "flex", flexDirection: "column" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 1 }}>
+                <span className="eyebrow" style={{ color: labelC }}>{k.label}</span>
+                <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 9, background: iconBg, color: iconC }}><k.icon size={16} /></span>
+              </div>
+              <div className="serif" style={{ fontSize: 30, color: valueC, margin: "9px 0 2px", lineHeight: 1, position: "relative", zIndex: 1 }}>{k.value}</div>
+              <div style={{ fontSize: 12, color: subC, position: "relative", zIndex: 1 }}>{k.sub}</div>
+              {k.label === "Online" ? <IoTEcg alive={online > 0} /> : k.label === "Offline" ? <IoTEcg alive={false} /> : <IoTWave kind={k.wave} color={k.wc} opacity={k.wo} />}
             </div>
-          </Card>
-        )}
+          );
+        })}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 18, marginTop: 18 }} className="iot-grid">
-        <style>{`
-          @media(max-width:900px){.iot-grid{grid-template-columns:1fr!important}}
-          .iot-ripple-ring{
-            position:absolute; top:50%; right:-48px;
-            width:130px; height:130px; border-radius:50%;
-            transform:translateY(-50%) scale(.18);
-            background:radial-gradient(circle, transparent 46%, rgba(138,15,20,.62) 55%, rgba(176,35,42,.5) 62%, transparent 72%);
-            opacity:0; will-change:transform,opacity,filter;
-            animation:iotRipple 3.6s ease-out infinite;
-          }
-          @keyframes iotRipple{
-            0%{transform:translateY(-50%) scale(.18); opacity:0; filter:hue-rotate(0deg) saturate(1.5)}
-            12%{opacity:.95}
-            60%{filter:hue-rotate(20deg) saturate(1.4) brightness(1.06)}
-            100%{transform:translateY(-50%) scale(3.6); opacity:0; filter:hue-rotate(42deg) saturate(1.35) brightness(1.2)}
-          }
-          @media(prefers-reduced-motion:reduce){.iot-ripple-ring{animation:none}}
-          @keyframes iotFlowPulse{0%,100%{opacity:.35}50%{opacity:1}}
-          .iot-flow-dot{animation:iotFlowPulse 1.1s ease-in-out infinite}
-          @media(prefers-reduced-motion:reduce){.iot-flow-dot{animation:none}}
-          .iot-rain-drop{
-            position:absolute; top:-14px; width:2px; height:13px; border-radius:2px;
-            background:linear-gradient(to bottom, rgba(45,140,160,0), rgba(45,140,160,.5));
-            opacity:0; animation-name:iotRain; animation-timing-function:linear; animation-iteration-count:infinite;
-          }
-          @keyframes iotRain{0%{transform:translateY(0);opacity:0}12%{opacity:.6}88%{opacity:.6}100%{transform:translateY(130px);opacity:0}}
-          @media(prefers-reduced-motion:reduce){.iot-rain-drop{animation:none;opacity:0}}
-        `}</style>
-
-        {/* Device list */}
-        <Card title={`Devices (${devices.length})`} pad={false}>
-          <div style={{ maxHeight: "68vh", overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
-            {devices.map(d => {
-              const on = iotOnline(d.timestamp);
-              const sel = selected === d.deviceId;
+      {/* ── active alerts ──────────────────────────────────────────────────── */}
+      {alerts.length === 0 ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "14px 16px", borderRadius: "var(--radius)", border: "1px solid #B5E2D4", background: "#EEF7F3", color: "#08805A", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+          <CheckCircle2 size={16} /> All systems nominal — no active faults or offline devices.
+        </div>
+      ) : (
+        <div style={{ ...softShadow, marginBottom: 16, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 18px 12px" }}>
+            <div>
+              <h3 style={{ fontSize: 16 }}>Active alerts ({alerts.length})</h3>
+              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>Offline devices and channel faults across the fleet · click to inspect.</div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", cursor: "pointer", whiteSpace: "nowrap" }}>View all alerts →</span>
+          </div>
+          <div>
+            {alerts.map((a) => {
+              const crit = a.sev === "critical";
+              const dev = devices.find(x => x.deviceId === a.device);
               return (
-                <button key={d.deviceId} onClick={() => setSelected(d.deviceId)} style={{
-                  textAlign: "left", padding: "11px 12px", borderRadius: 12, cursor: "pointer",
-                  border: `${sel ? 2 : 1.5}px solid ${on ? "#1f7a3f" : "#c0392b"}`,
-                  background: sel ? (on ? "var(--mint-2)" : "#fdf3f3") : "#fff",
-                  transition: ".15s"
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{d.deviceId}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, color: on ? "#1f7a3f" : "#b4232a" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 999, background: on ? "#1f7a3f" : "#b4232a" }} />{on ? "Online" : "Offline"}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{d.roUnitId} · {d.deviceType}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Last seen: {iotTimeAgo(d.timestamp)}</div>
-                  <div style={{ fontSize: 11.5, color: "var(--teal-d)", fontWeight: 600, marginTop: 2 }}>{d.payload?.inputPressure} bar pressure</div>
+                <button key={a.key} onClick={() => setSelected(a.device)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", padding: "12px 18px", background: "transparent", borderTop: "1px solid var(--border)" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 999, flexShrink: 0, background: crit ? "#DC4141" : "#986315" }} />
+                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: crit ? "#DC4141" : "#986315", width: 62, flexShrink: 0 }}>{crit ? "Critical" : "Warning"}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)", background: crit ? "#FBE8E8" : "transparent", padding: crit ? "3px 9px" : 0, borderRadius: 7, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{a.device}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--f)", flexShrink: 0 }}>{a.title}</span>
+                  <span style={{ fontSize: 12.5, color: "var(--muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {a.detail}</span>
+                  <span style={{ fontSize: 12, color: "var(--muted)", flexShrink: 0 }}>{iotTimeAgo(dev?.timestamp)}</span>
+                  <ChevronRight size={16} color="var(--faint)" style={{ flexShrink: 0 }} />
                 </button>
               );
             })}
-            {devices.length === 0 && <Empty msg="No devices found." />}
           </div>
-        </Card>
+        </div>
+      )}
 
-        {/* Detail */}
-        <div style={{ minWidth: 0 }}>
-          {!device ? <Card><Empty msg="Select a device from the list." /></Card> : <>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ fontSize: 22, lineHeight: 1.1, fontFamily: "'DM Sans',system-ui,-apple-system,sans-serif", fontWeight: 800, letterSpacing: "-.01em", color: "var(--f)" }}>{device.deviceId}</h2>
-              <div style={{ fontSize: 13, color: "var(--muted)", fontFamily: "'DM Sans',system-ui,-apple-system,sans-serif" }}>{device.roUnitId} · Firmware {device.firmwareVersion || "—"}</div>
-            </div>
-
-            <div style={grid4}>
-              <Stat label="Water pressure" value={`${device.payload?.inputPressure ?? "—"} bar`} icon={Droplets} sub="input pressure" hero />
-              <Stat label="Unit health" value={device.payload?.units?.[0]?.health ?? "—"} icon={CheckCircle2} sub="device condition" />
-              <Stat label="Last heartbeat" value={iotTimeAgo(device.timestamp)} icon={Clock} sub="alert if > 120s" />
-            </div>
-
-            <div style={{ marginTop: 18 }}>
-              <Card title="Channels (pipes)" sub="Each channel is a water pipe with its own valve and flow meter.">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  {channels.map(ch => (
-                    <div key={ch.channelId} style={{ borderRadius: 12, border: "1px solid " + (ch.fault ? "#f0dcae" : "var(--border)"), background: ch.fault ? "#fdf9ef" : "var(--mint)", padding: 14 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                        <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{ch.channelId}</span>
-                        <ValveBadge state={ch.valveState} />
-                      </div>
-                      <DefRow k="Flow rate" v={`${ch.flowRateLpm} L/min`} />
-                      <DefRow k="Total volume" v={`${ch.totalVolumeLitres} L`} />
-                      {ch.fault && <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 600, color: "#9a6a16", background: "#fdf3e0", borderRadius: 8, padding: "5px 9px" }}>⚠ Fault: {ch.fault}</div>}
+      {/* ── device list + detail ───────────────────────────────────────────── */}
+      {(() => {
+        const deviceListCard = (
+          <div style={{ ...softShadow, overflow: "hidden", alignSelf: "start" }}>
+            <div style={{ padding: "16px 16px 8px" }}><h3 style={{ fontSize: 16 }}>Devices ({devices.length})</h3></div>
+            <div style={{ maxHeight: "70vh", overflowY: "auto", padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+              {devices.map(d => {
+                const on = iotOnlineFor(d), isSel = selected === d.deviceId;
+                return (
+                  <button key={d.deviceId} onClick={() => setSelected(d.deviceId)} style={{
+                    textAlign: "left", padding: "11px 12px", borderRadius: 12, cursor: "pointer",
+                    border: `${isSel ? 2 : 1.5}px solid ${on ? "#08805A" : "#DC4141"}`,
+                    background: isSel ? (on ? "var(--mint-2)" : "#FBE8E8") : "#fff", transition: ".15s"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--f)", flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-.01em" }}>{d.deviceId}</span>
+                      <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 999, color: on ? "#08805A" : "#DC4141", background: on ? "#E4F4EE" : "#FBE4E4" }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 999, background: on ? "#08805A" : "#DC4141" }} />{on ? "Online" : "Offline"}
+                      </span>
                     </div>
-                  ))}
-                  {channels.length === 0 && <div style={{ gridColumn: "1/-1" }}><Empty msg="No channels reported." /></div>}
-                </div>
-              </Card>
+                    <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{[d.roUnitId, d.deviceType].filter(Boolean).join(" · ") || (iotIsTank(d) ? "RO Tank sensor" : "Device")} · FW {d.firmwareVersion || d.FIRMWARE_VERSION || "—"}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Last seen: {iotTimeAgo(d.timestamp)}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--teal-d)", fontWeight: 600, marginTop: 2 }}>{iotIsTank(d) ? `Tank ${iotTank(d.tankLevel).pct}% full` : `${d.payload?.inputPressure ?? 0} bar pressure`}</div>
+                  </button>
+                );
+              })}
+              {devices.length === 0 && <Empty msg="No devices found." />}
             </div>
+          </div>
+        );
 
-            <div style={{ marginTop: 18 }}>
-              <Card title="Live consumption" sub={canMeasure ? `Water drawn per channel over the live ${winLabel} window (cumulative meter deltas).` : "Gathering readings…"}>
-                {!canMeasure ? <Empty msg="Not enough heartbeats yet to measure consumption." /> : <>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-                    <span style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "var(--f)", lineHeight: 1 }}>{iotVol(totalConsumed)} L</span>
-                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>total across {consumption.length} channel{consumption.length !== 1 ? "s" : ""} · last {winLabel}</span>
+        // Tank devices: aligned 3-column layout (devices · tank · water quality).
+        if (isTank) {
+          return (
+            <div className="iot-monitor-grid" style={{ display: "grid", gridTemplateColumns: "224px minmax(390px,1fr) minmax(330px,1fr)", gap: 16, alignItems: "stretch" }}>
+              {deviceListCard}
+              <IoTTankPanel device={device} tank={tank} />
+              <IoTWaterQualityCard range={wqRange} />
+            </div>
+          );
+        }
+
+        // junctionBox devices (and no-selection): existing pressure/channels view.
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 18 }} className="iot-grid">
+            {deviceListCard}
+            <div style={{ minWidth: 0 }}>
+              {!device ? <div style={{ ...softShadow, padding: 18 }}><Empty msg="Select a device from the list." /></div> : <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+                  <div>
+                    <h2 style={{ fontSize: 22, lineHeight: 1.1, color: "var(--f)" }}>{device.deviceId}</h2>
+                    <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{[device.roUnitId, device.deviceType].filter(Boolean).join(" · ") || "Device"} · Firmware {device.firmwareVersion || device.FIRMWARE_VERSION || "—"}</div>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                    {consumption.map(c => (
-                      <div key={c.id} style={{ borderRadius: 12, border: "1px solid var(--border)", background: c.flowing ? "#eef7f0" : "var(--mint)", padding: 14 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{c.id}</span>
-                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: c.flowing ? "#1f7a3f" : "#9aa8a0", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                            {c.flowing && <span className="iot-flow-dot" style={{ width: 6, height: 6, borderRadius: 999, background: "#fff" }} />}
-                            {c.flowing ? "Flowing" : "Idle"}
-                          </span>
+                  <div style={{ ...softShadow, padding: "10px 16px", textAlign: "right" }}>
+                    <div style={{ fontSize: 11, color: "var(--muted)" }}>Last heartbeat</div>
+                    <div className="serif" style={{ fontSize: 20, color: iotOnlineFor(device) ? "var(--green)" : "#DC4141", margin: "2px 0" }}>{iotTimeAgo(device.timestamp)}</div>
+                    <div style={{ fontSize: 11, color: "var(--faint)" }}>alert if &gt; 120s</div>
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                  <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 18 }}>
+                    <IoTWave kind="ecg" color="#7FE3BE" opacity={0.4} />
+                    <span className="eyebrow" style={{ color: "var(--lime)", position: "relative", zIndex: 1 }}>Water pressure</span>
+                    <div className="serif" style={{ fontSize: 32, color: "#fff", margin: "7px 0 2px", lineHeight: 1 }}>{device.payload?.inputPressure ?? "—"} bar</div>
+                    <div style={{ fontSize: 12, color: "#B5E2D4" }}>input pressure</div>
+                    <Droplets size={20} color="var(--lime)" style={{ position: "absolute", right: 16, top: 16, opacity: 0.85 }} />
+                  </div>
+                  <div style={{ ...softShadow, padding: 18, position: "relative" }}>
+                    <span className="eyebrow" style={{ color: "var(--muted)" }}>Unit health</span>
+                    <div className="serif" style={{ fontSize: 26, color: "var(--f)", margin: "7px 0 2px", lineHeight: 1 }}>{device.payload?.units?.[0]?.health ?? "—"}</div>
+                    <div style={{ fontSize: 12, color: "var(--muted)" }}>device condition</div>
+                    <span style={{ position: "absolute", right: 16, top: 16, display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 999, background: "#E2F3EE", color: "#08805A" }}><ShieldCheck size={18} /></span>
+                  </div>
+                </div>
+
+                <div style={{ ...softShadow, padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16 }}>Channels (pipes)</h3>
+                      <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Each channel is a water pipe with its own valve and flow meter.</div>
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", cursor: "pointer", whiteSpace: "nowrap" }}>View all channels →</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 10 }}>
+                    {channels.map(ch => (
+                      <div key={ch.channelId} style={{ borderRadius: 12, border: "1px solid " + (ch.fault ? "#F6DEBC" : "var(--border)"), background: ch.fault ? "#FBF0E0" : "var(--mint)", padding: 14 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{ch.channelId}</span>
+                          <ValveBadge state={ch.valveState} />
                         </div>
-                        <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 22, color: "var(--f)", lineHeight: 1 }}>{iotVol(c.consumed)} <span style={{ fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>L</span></div>
-                        <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>now {c.flow} L/min</div>
+                        <DefRow k="Flow rate" v={`${ch.flowRateLpm} L/min`} />
+                        <DefRow k="Total volume" v={`${ch.totalVolumeLitres} L`} />
+                        {ch.fault && <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 600, color: "#986315", background: "#FBF0E0", borderRadius: 8, padding: "5px 9px" }}>⚠ Fault: {ch.fault}</div>}
                       </div>
                     ))}
+                    {channels.length === 0 && <div style={{ gridColumn: "1/-1" }}><Empty msg="No channels reported." /></div>}
                   </div>
-                </>}
-              </Card>
+                </div>
+              </>}
             </div>
+          </div>
+        );
+      })()}
 
-            {chartData.length > 1 && (
-              <div style={{ marginTop: 18 }}>
-                <Card title="Pressure over time" sub={`Input pressure across the last ${chartData.length} readings.`}>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={chartData} margin={{ left: 6, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
-                      <XAxis dataKey="time" tick={axisTick} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis tick={axisTick} axisLine={false} tickLine={false} />
-                      <Tooltip content={<TT />} />
-                      <Line type="monotone" dataKey="pressure" name="Pressure (bar)" stroke="#0f6e3f" strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Card>
+      {/* ── recent RO-tank readings (full width) ───────────────────────────── */}
+      {device && isTank && <IoTTankReadings items={wqItems} />}
+
+      {/* ── live consumption · pressure · flow (full width) ────────────────── */}
+      {device && !isTank && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 16 }}>
+          <div style={{ ...softShadow, padding: 18, minWidth: 0 }}>
+            <h3 style={{ fontSize: 16 }}>Live consumption</h3>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{canMeasure ? `Water drawn per channel over the live ${winLabel} window (cumulative meter deltas).` : "Gathering readings…"}</div>
+            {!canMeasure ? <div style={{ marginTop: 8 }}><Empty msg="Not enough heartbeats yet to measure consumption." /></div> : <>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "12px 0 12px", flexWrap: "wrap" }}>
+                <span className="serif" style={{ fontSize: 28, color: "var(--f)", lineHeight: 1 }}>{iotVol(totalConsumed)} L</span>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>total across {consumption.length} channel{consumption.length !== 1 ? "s" : ""} · last {winLabel}</span>
               </div>
-            )}
-
-            {chartData.length > 1 && (
-              <div style={{ marginTop: 18 }}>
-                <Card title="Flow rate over time" sub="Litres per minute through each pipe.">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <LineChart data={chartData} margin={{ left: 6, right: 16 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
-                      <XAxis dataKey="time" tick={axisTick} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                      <YAxis tick={axisTick} axisLine={false} tickLine={false} />
-                      <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-                      {chanIds.map((id, i) => (
-                        <Line key={id} type="monotone" dataKey={"flow_" + id} name={`${id} (L/min)`} stroke={IOT_FLOW_COLORS[i % IOT_FLOW_COLORS.length]} strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                      ))}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </Card>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {consumption.map(c => (
+                  <div key={c.id} style={{ borderRadius: 11, border: "1px solid var(--border)", background: c.flowing ? "#EEF7F3" : "var(--mint)", padding: "10px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--f)" }}>{c.id}</span>
+                      {c.flowing && <span className="iot-flow-dot" style={{ width: 7, height: 7, borderRadius: 999, background: "#08805A" }} />}
+                    </div>
+                    <div className="serif" style={{ fontSize: 18, color: "var(--f)", marginTop: 4, lineHeight: 1 }}>{iotVol(c.consumed)} <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>L</span></div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>now {c.flow} L/min</div>
+                  </div>
+                ))}
               </div>
-            )}
+            </>}
+          </div>
 
-            <div style={{ marginTop: 18 }}>
-              <Card title="Recent heartbeats" sub="Total volume (litres) per channel · one row per heartbeat · refreshes every 8s." pad={false}>
-                <Table head={["Sync history", ...chanIds.map(id => `${id} · Total vol (L)`), "Fault"]}>
-                  {hbRows.map((item, i) => {
-                    const chs = item.payload?.units?.[0]?.channels ?? [];
-                    const byId = Object.fromEntries(chs.map(c => [c.channelId, c]));
-                    const fault = chs.map(c => c.fault).filter(Boolean).join(", ");
+          <div style={{ ...softShadow, padding: 18, minWidth: 0 }}>
+            <h3 style={{ fontSize: 16 }}>Pressure over time</h3>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, marginBottom: 6 }}>Input pressure across the last {chartData.length} readings.</div>
+            {chartData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={210}>
+                <LineChart data={chartData} margin={{ left: -8, right: 12, top: 6 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="time" tick={axisTick} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
+                  <YAxis tick={axisTick} axisLine={false} tickLine={false} width={34} />
+                  <Tooltip content={<TT />} />
+                  <Line type="monotone" dataKey="pressure" name="Pressure (bar)" stroke="#0B6F52" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <div style={{ height: 180, display: "grid", placeItems: "center" }}><Empty msg="Gathering readings…" /></div>}
+          </div>
+
+          <div style={{ ...softShadow, padding: 18, minWidth: 0 }}>
+            <h3 style={{ fontSize: 16 }}>Flow rate over time</h3>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2, marginBottom: 6 }}>Litres per minute through each pipe.</div>
+            {chartData.length > 1 ? (
+              <ResponsiveContainer width="100%" height={210}>
+                <LineChart data={chartData} margin={{ left: -8, right: 12, top: 6 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="time" tick={axisTick} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
+                  <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} />
+                  <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                  {chanIds.map((id, i) => (
+                    <Line key={id} type="monotone" dataKey={"flow_" + id} name={id} stroke={IOT_FLOW_COLORS[i % IOT_FLOW_COLORS.length]} strokeWidth={2.5} dot={false} isAnimationActive={false} />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <div style={{ height: 180, display: "grid", placeItems: "center" }}><Empty msg="Gathering readings…" /></div>}
+          </div>
+        </div>
+      )}
+
+      {/* ── consumption · last 2 days (12-hour blocks, full width) ─────────── */}
+      {device && !isTank && (
+        <div style={{ ...softShadow, marginTop: 16, overflow: "hidden" }}>
+          <div style={{ padding: "16px 18px 12px" }}>
+            <h3 style={{ fontSize: 16 }}>Consumption — last 2 days (12-hour blocks)</h3>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{buckets2d
+              ? `Litres drawn per channel in each 12-hour IST block · ${iotStamp(buckets2d.from)} → ${iotStamp(buckets2d.to)} · ${buckets2d.spanH.toFixed(1)}h of data`
+              : "Water drawn per channel, split into IST morning (00:00–12:00) and evening (12:00–24:00) blocks."}</div>
+          </div>
+          {!buckets2d ? <div style={{ padding: "0 18px 18px" }}><Empty msg="Not enough 2-day history yet to break down consumption." /></div> : (() => {
+            const { chanIds: cids, rows, totals, grand, dailyAvg, days } = buckets2d;
+            const numTd = { ...td, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
+            const strong = { fontWeight: 700, color: "var(--f)" };
+            return (
+              <div style={{ overflowX: "auto" }}>
+                <Table head={["12-hour block (IST)", ...cids, "Total"]}>
+                  {rows.map((r, i) => {
+                    const rowTot = cids.reduce((s, id) => s + r.byChan[id], 0);
                     return (
-                      <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: fault ? "#fdf9ef" : "transparent" }}>
-                        <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{iotStamp(item.timestamp)}</td>
-                        {chanIds.map(id => {
-                          const c = byId[id];
-                          return (
-                            <td key={id} style={{ ...td, fontVariantNumeric: "tabular-nums", color: c?.fault ? "#9a6a16" : "var(--f)" }}>
-                              {iotVol(c?.totalVolumeLitres)}
-                            </td>
-                          );
-                        })}
-                        <td style={{ ...td, color: "#9a6a16", fontWeight: 600 }}>{fault || "—"}</td>
+                      <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td style={{ ...td, whiteSpace: "nowrap", textAlign: "left" }}>{r.b.label}</td>
+                        {cids.map(id => <td key={id} style={numTd}>{iotVolL(r.byChan[id])}</td>)}
+                        <td style={{ ...numTd, ...strong }}>{iotVolL(rowTot)}</td>
                       </tr>
                     );
                   })}
-                  {history.length === 0 && <tr><td colSpan={chanIds.length + 2} style={{ padding: 0 }}><Empty msg="No heartbeats yet." /></td></tr>}
+                  <tr style={{ borderTop: "2px solid var(--border)", background: "var(--mint-2)" }}>
+                    <td style={{ ...td, ...strong, textAlign: "left" }}>Total · last 2 days</td>
+                    {cids.map(id => <td key={id} style={{ ...numTd, ...strong }}>{iotVolL(totals[id])}</td>)}
+                    <td style={{ ...numTd, ...strong, color: "var(--forest)" }}>{iotVolL(grand)}</td>
+                  </tr>
+                  <tr style={{ background: "var(--mint)" }}>
+                    <td style={{ ...td, fontWeight: 600, color: "var(--slate)", textAlign: "left" }}>Average per day <span style={{ color: "var(--muted)", fontWeight: 400 }}>· over {days.toFixed(2)} day{days >= 2 ? "s" : ""}</span></td>
+                    {cids.map(id => <td key={id} style={{ ...numTd, fontWeight: 600, color: "var(--slate)" }}>{iotVolL(dailyAvg[id])}</td>)}
+                    <td style={{ ...numTd, fontWeight: 700, color: "var(--forest)" }}>{iotVolL(cids.reduce((s, id) => s + dailyAvg[id], 0))}</td>
+                  </tr>
                 </Table>
-                {history.length > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 12, padding: "12px 16px", borderTop: "1px solid var(--border)" }}>
-                    <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
-                      Showing {(hbPageClamped - 1) * HB_PER_PAGE + 1}–{Math.min(hbPageClamped * HB_PER_PAGE, history.length)} of {history.length}
-                    </span>
-                    <button onClick={() => setHbPage(p => Math.max(1, p - 1))} disabled={hbPageClamped <= 1}
-                      style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "#fff", color: hbPageClamped <= 1 ? "var(--muted)" : "var(--f)", cursor: hbPageClamped <= 1 ? "not-allowed" : "pointer", opacity: hbPageClamped <= 1 ? 0.5 : 1 }}>
-                      Prev
-                    </button>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)", minWidth: 40, textAlign: "center" }}>{hbPageClamped} / {hbTotalPages}</span>
-                    <button onClick={() => setHbPage(p => Math.min(hbTotalPages, p + 1))} disabled={hbPageClamped >= hbTotalPages}
-                      style={{ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--teal)", background: hbPageClamped >= hbTotalPages ? "#fff" : "var(--teal)", color: hbPageClamped >= hbTotalPages ? "var(--muted)" : "#fff", cursor: hbPageClamped >= hbTotalPages ? "not-allowed" : "pointer", opacity: hbPageClamped >= hbTotalPages ? 0.5 : 1 }}>
-                      Next
-                    </button>
-                  </div>
-                )}
-              </Card>
-            </div>
-          </>}
+              </div>
+            );
+          })()}
         </div>
-      </div>
+      )}
+
+      {/* ── recent heartbeats (full width) ─────────────────────────────────── */}
+      {device && !isTank && (
+        <div style={{ ...softShadow, marginTop: 16, overflow: "hidden" }}>
+          <div style={{ padding: "16px 18px 12px" }}>
+            <h3 style={{ fontSize: 16 }}>Recent heartbeats</h3>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Total volume (litres) per channel · one row per heartbeat · refreshes every 8s.</div>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <Table head={["Device heartbeat", ...chanIds.map(id => `${id} · Total vol`), "Fault"]}>
+              {hbRows.map((item, i) => {
+                const chs = item.payload?.units?.[0]?.channels ?? [];
+                const byId = Object.fromEntries(chs.map(c => [c.channelId, c]));
+                const fault = chs.map(c => c.fault).filter(Boolean).join(", ");
+                return (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: fault ? "#FBF0E0" : "transparent" }}>
+                    <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", textAlign: "left" }}>{iotStamp(item.timestamp)}</td>
+                    {chanIds.map(id => {
+                      const c = byId[id];
+                      return <td key={id} style={{ ...td, fontVariantNumeric: "tabular-nums", color: c?.fault ? "#986315" : "var(--f)" }}>{iotVolL(c?.totalVolumeLitres)}</td>;
+                    })}
+                    <td style={{ ...td, color: "#986315", fontWeight: 600 }}>{fault || "—"}</td>
+                  </tr>
+                );
+              })}
+              {history.length === 0 && <tr><td colSpan={chanIds.length + 2} style={{ padding: 0 }}><Empty msg="No heartbeats yet." /></td></tr>}
+            </Table>
+          </div>
+          {history.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
+                Showing {(hbPageClamped - 1) * HB_PER_PAGE + 1}–{Math.min(hbPageClamped * HB_PER_PAGE, history.length)} of {history.length}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button onClick={() => setHbPage(p => Math.max(1, p - 1))} disabled={hbPageClamped <= 1}
+                  style={{ fontSize: 12.5, fontWeight: 600, padding: "6px 12px", borderRadius: 9, border: "1px solid var(--border)", background: "#fff", color: hbPageClamped <= 1 ? "var(--faint)" : "var(--f)", cursor: hbPageClamped <= 1 ? "not-allowed" : "pointer" }}>Prev</button>
+                {pager.map((p, idx) => typeof p === "number" ? (
+                  <button key={idx} onClick={() => setHbPage(p)} style={{ fontSize: 12.5, fontWeight: 700, minWidth: 32, padding: "6px 8px", borderRadius: 9, border: "1px solid " + (p === hbPageClamped ? "var(--brand)" : "var(--border)"), background: p === hbPageClamped ? "var(--brand)" : "#fff", color: p === hbPageClamped ? "#fff" : "var(--slate)", cursor: "pointer" }}>{p}</button>
+                ) : <span key={idx} style={{ fontSize: 12.5, color: "var(--faint)", padding: "0 2px" }}>…</span>)}
+                <button onClick={() => setHbPage(p => Math.min(hbTotalPages, p + 1))} disabled={hbPageClamped >= hbTotalPages}
+                  style={{ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 9, border: "1px solid var(--brand)", background: hbPageClamped >= hbTotalPages ? "#fff" : "var(--brand)", color: hbPageClamped >= hbTotalPages ? "var(--faint)" : "#fff", cursor: hbPageClamped >= hbTotalPages ? "not-allowed" : "pointer" }}>Next</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -9022,19 +12219,29 @@ const _monthLong = (y, m) => new Date(y, m - 1, 1).toLocaleDateString("en-IN", {
 function EarnedRevenue() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
-  const [ym, setYm] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}`; });
+  const { sel, setSel, range } = useDateRange("this_month"); // date-range preset filter
+  const [apt, setApt] = useState("all");                     // apartment (society) filter
+  const [sort, setSort] = useState({ key: "earned", dir: "desc" }); // per-invoice table sort
+  const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "paid" ? "asc" : "desc" });
   useEffect(() => {
     api.logView(user.username, "Viewed Earned Revenue");
-    Promise.all([billingApi.getInvoices(), billingApi.getSubscriptions()])
-      .then(([inv, subs]) => setData({ inv, subs }))
-      .catch(() => setData({ inv: [], subs: [] }));
+    Promise.all([billingApi.getInvoices(), billingApi.getSubscriptions(), customerApi.getCustomers().catch(() => [])])
+      .then(([inv, subs, cust]) => setData({ inv, subs, cust }))
+      .catch(() => setData({ inv: [], subs: [], cust: [] }));
   }, []);
   if (!data) return <Loading />;
 
-  const DAY = 86400000;
   const subByCustomer = {};
   data.subs.forEach(s => { [s.customerNumber, s.zohoCustomerId, s.zohoId].filter(Boolean).forEach(k => { subByCustomer[k] = s; }); });
   const subFor = (i) => subByCustomer[i.customerNumber] || subByCustomer[i.zohoCustomerId] || subByCustomer[i.zohoId] || null;
+
+  // Join invoices → customer society so the apartment filter can scope revenue.
+  const custByZoho = {};
+  (data.cust || []).forEach(c => { [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber].forEach(k => { if (k) custByZoho[k] = c; }); });
+  const societyOf = (i) => {
+    for (const k of [i.zohoCustomerId, i.zohoId, i.customerNumber]) { if (k && custByZoho[k]) return custByZoho[k].society || "Unknown"; }
+    return i.society || "Unknown";
+  };
 
   const rows = data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).map(i => {
     const sub = subFor(i);
@@ -9043,125 +12250,144 @@ function EarnedRevenue() {
     const deposit = depositForPlan(plan, total);
     const recharge = Math.max(0, total - deposit);
     const months = termMonths(sub || { interval: i.interval, plan }) || 1;
-    const termDays = Math.max(1, Math.round(months * 30));
-    const perDay = recharge / termDays;
     const pd = new Date(i.date);
     const valid = !isNaN(pd.getTime());
-    const payMid = valid ? new Date(pd.getFullYear(), pd.getMonth(), pd.getDate()).getTime() : null;
-    const termStart = payMid;
-    const termEnd = payMid != null ? payMid + (termDays - 1) * DAY : null;
-    return { customer: i.customerName || "—", plan, total, deposit, recharge, months, termDays, perDay, payDay: pd, payMid, termStart, termEnd };
+    // Recognition model (per the AOP/Excel spec): the recharge is earned in its
+    // PAID calendar month, from the paid date to month end, prorated by that
+    // month's real day-count (30/31/28/29):
+    //   earned = ((monthEnd − paidDate + 1) × recharge) / daysInMonth
+    const monthEnd = valid ? new Date(pd.getFullYear(), pd.getMonth() + 1, 0) : null; // last day of the paid month
+    const daysInMonth = valid ? monthEnd.getDate() : 0;                                // 28/29/30/31
+    const daysRemaining = valid ? daysInMonth - pd.getDate() : 0;                       // month end − paid date
+    const earnedPerDay = daysInMonth > 0 ? recharge / daysInMonth : 0;
+    const earnedRevenue = daysInMonth > 0 ? ((daysRemaining + 1) * recharge) / daysInMonth : 0;
+    return { customer: i.customerName || "—", society: societyOf(i), plan, total, deposit, recharge, months,
+      payDay: pd, monthEnd, daysInMonth, daysRemaining, earnedPerDay, earnedRevenue };
   });
 
-  const daysInMonthFor = (r, y, m) => {
-    if (r.termStart == null || r.termEnd == null) return 0;
-    const mStart = new Date(y, m - 1, 1).getTime();
-    const mEnd = new Date(y, m, 0).getTime();       // midnight of the month's last day
-    const s = Math.max(r.termStart, mStart);
-    const e = Math.min(r.termEnd, mEnd);
-    if (e < s) return 0;
-    return Math.round((e - s) / DAY) + 1;           // inclusive
-  };
-  const earnedFor = (r, y, m) => r.perDay * daysInMonthFor(r, y, m);
   const paidInMonth = (r, y, m) => { const d = r.payDay; return d && !isNaN(d.getTime()) && d.getFullYear() === y && (d.getMonth() + 1) === m; };
 
-  const [selY, selM] = ym.split("-").map(Number);
-  const [pY, pM] = _addMonths(selY, selM, -1);
-  const monLabel = _monthLong(selY, selM);
+  // ----- Apartment (society) + date-range scoping -----
+  const aptOptions = Array.from(new Set(rows.map(r => r.society).filter(s => s && s !== "Unknown"))).sort();
+  const aptRows = apt === "all" ? rows : rows.filter(r => r.society === apt);
 
-  const collectedThis = rows.filter(r => paidInMonth(r, selY, selM));
-  const collectedPrev = rows.filter(r => paidInMonth(r, pY, pM));
-  const totalThis = collectedThis.reduce((s, r) => s + r.total, 0);
-  const totalPrev = collectedPrev.reduce((s, r) => s + r.total, 0);
-  const rechargeThis = collectedThis.reduce((s, r) => s + r.recharge, 0);
-  const rechargePrev = collectedPrev.reduce((s, r) => s + r.recharge, 0);
-  const depositThis = totalThis - rechargeThis;
+  const rngPrev = prevRange(sel.preset, range);
+  const collectedIn = (rng) => aptRows.filter(r => dateInRange(r.payDay, rng));
 
-  const now = new Date();
-  const options = Array.from({ length: 19 }, (_, k) => {
-    const [y, m] = _addMonths(now.getFullYear(), now.getMonth() + 1, k - 12);
-    const future = (y > now.getFullYear()) || (y === now.getFullYear() && m > now.getMonth() + 1);
-    return { val: `${y}-${m}`, label: _monthLong(y, m) + (future ? " · projected" : ""), future };
+  const collectNow = collectedIn(range), collectPrev = collectedIn(rngPrev);
+  const totalCollection = collectNow.reduce((s, r) => s + r.total, 0);
+  const totalCollectionPrev = collectPrev.reduce((s, r) => s + r.total, 0);
+  const rechargeNow = collectNow.reduce((s, r) => s + r.recharge, 0);
+  const rechargePrev = collectPrev.reduce((s, r) => s + r.recharge, 0);
+  const depositNow = totalCollection - rechargeNow;
+
+  const periodLabel = presetLabel(sel.preset);
+  const rangeText = rangeLabel(range);
+
+  // Per-invoice recognition = invoices PAID in the range; the Earned Revenue card
+  // equals this table's "Earned in period" column total.
+  const tableRows = collectNow.slice().sort((a, b) => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    if (sort.key === "paid") return ((a.payDay?.getTime() || 0) - (b.payDay?.getTime() || 0)) * dir;
+    return (a.earnedRevenue - b.earnedRevenue) * dir;
   });
-  const timeline = Array.from({ length: 12 }, (_, k) => {
-    const [y, m] = _addMonths(selY, selM, k - 6);
-    return {
-      label: _monthShort(y, m),
-      earned: Math.round(rows.reduce((s, r) => s + earnedFor(r, y, m), 0)),
-      recharge: Math.round(rows.filter(r => paidInMonth(r, y, m)).reduce((s, r) => s + r.recharge, 0)),
-    };
-  });
+  const totRow = tableRows.reduce((a, r) => ({
+    total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge,
+    earned: a.earned + r.earnedRevenue,
+  }), { total: 0, deposit: 0, recharge: 0, earned: 0 });
+  const earnedRevenue = totRow.earned;
+  const earnedRevenuePrev = collectPrev.reduce((s, r) => s + r.earnedRevenue, 0);
+
+  // Trend: up to 12 months ending at the range, but never before Jan 2026 (the
+  // business's first operating month). Earned = recognised revenue of invoices
+  // paid that month (same model as the table); line = recharge cash collected.
+  const anchorY = range.to.getFullYear(), anchorM = range.to.getMonth() + 1;
+  const timeline = Array.from({ length: 12 }, (_, k) => _addMonths(anchorY, anchorM, k - 11))
+    .filter(([y, m]) => y > 2026 || (y === 2026 && m >= 1))
+    .map(([y, m]) => {
+      const inMonth = aptRows.filter(r => paidInMonth(r, y, m));
+      return {
+        label: _monthShort(y, m),
+        earned: Math.round(inMonth.reduce((s, r) => s + r.earnedRevenue, 0)),
+        recharge: Math.round(inMonth.reduce((s, r) => s + r.recharge, 0)),
+      };
+    });
 
   const stats = [
-    { label: "Earned this month", value: inr(Math.round(totalThis)), icon: Scale, sub: monLabel, hero: true, delta: momPct(totalThis, totalPrev) },
-    { label: "Recharge collected", value: inr(Math.round(rechargeThis)), icon: Wallet, sub: `revenue portion · total ${inr(totalThis)}`, delta: momPct(rechargeThis, rechargePrev) },
-    { label: "Deposit collected", value: inr(Math.round(depositThis)), icon: Coins, sub: "total − recharge" },
-    { label: "Contributing recharges", value: collectedThis.filter(r => r.recharge > 0).length, icon: Receipt, sub: `paid in ${monLabel}` },
+    { label: "Total Collection", value: inr(Math.round(totalCollection)), icon: Wallet, sub: rangeText, hero: true, delta: momPct(totalCollection, totalCollectionPrev) },
+    { label: "Earned Revenue", value: inr(Math.round(earnedRevenue)), icon: Scale, sub: `recognised · ${periodLabel}`, hero: true, delta: momPct(earnedRevenue, earnedRevenuePrev) },
+    { label: "Recharge collected", value: inr(Math.round(rechargeNow)), icon: Repeat, sub: `revenue portion · total ${inr(totalCollection)}`, delta: momPct(rechargeNow, rechargePrev) },
+    { label: "Deposit collected", value: inr(Math.round(depositNow)), icon: Coins, sub: "total − recharge" },
+    { label: "Contributing recharges", value: collectNow.filter(r => r.recharge > 0).length, icon: Receipt, sub: `paid in ${periodLabel}` },
   ];
 
-  // Only invoices actually paid in the selected month (so "July" shows invoices paid in July, not every overlapping term).
-  const tableRows = rows.filter(r => paidInMonth(r, selY, selM)).sort((a, b) => earnedFor(b, selY, selM) - earnedFor(a, selY, selM));
-  const totRow = tableRows.reduce((a, r) => ({ total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge, earnedMonth: a.earnedMonth + earnedFor(r, selY, selM) }), { total: 0, deposit: 0, recharge: 0, earnedMonth: 0 });
-
-  const exportCsv = () => exportToCsv(`prowater-earned-${ym}.csv`, [
-    { label: "Customer", get: r => r.customer }, { label: "Plan", get: r => r.plan },
+  const exportCsv = () => exportToCsv(`prowater-earned-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
+    { label: "Customer", get: r => r.customer }, { label: "Apartment", get: r => r.society }, { label: "Plan", get: r => r.plan },
     { label: "Paid on", get: r => (r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "" },
     { label: "Total paid", get: r => r.total }, { label: "Deposit", get: r => r.deposit }, { label: "Recharge", get: r => r.recharge },
-    { label: "Term months", get: r => r.months }, { label: "Term days", get: r => r.termDays },
-    { label: "Earned/month", get: r => Math.round(r.recharge / (r.months || 1)) }, { label: "Earned/day", get: r => r.perDay.toFixed(2) },
-    { label: `Days in ${monLabel}`, get: r => daysInMonthFor(r, selY, selM) }, { label: `Earned in ${monLabel}`, get: r => earnedFor(r, selY, selM).toFixed(2) },
+    { label: "Earned/month", get: r => Math.round(r.recharge / (r.months || 1)) }, { label: "Earned/day", get: r => r.earnedPerDay.toFixed(2) },
+    { label: "Month End Date", get: r => r.monthEnd ? fmtDate(r.monthEnd) : "" },
+    { label: "Days remaining", get: r => r.daysRemaining },
+    { label: "Earned revenue", get: r => r.earnedRevenue.toFixed(2) },
   ], tableRows);
 
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Month</span>
-        <select value={ym} onChange={e => setYm(e.target.value)} style={selectStyle}>
-          {options.map(o => <option key={o.val} value={o.val}>{o.label}</option>)}
+        <select value={apt} onChange={e => setApt(e.target.value)} style={selectStyle}>
+          <option value="all">All apartments</option>
+          {aptOptions.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
+        <DateRangePicker value={sel} onChange={setSel} />
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 18 }}>
         <Card title="Earned vs recharge collected" sub="Bars = revenue recognised that month (accrual) · line = recharge cash collected">
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={timeline} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} tickMargin={12} height={38} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={64} />
               <Tooltip content={<TT prefix="₹" />} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="earned" name="Earned" fill="#5a7863" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+              <Bar dataKey="earned" name="Earned" fill="#0A9D6E" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
                 <LabelList dataKey="earned" position="top" formatter={(v) => v ? kLabel(v) : ""} style={{ fontSize: 10.5, fill: "var(--f)", fontWeight: 700 }} />
               </Bar>
-              <Line dataKey="recharge" name="Recharge collected" stroke="#c2671e" strokeWidth={2} dot={{ r: 3, fill: "#c2671e" }} isAnimationActive={false}>
-                <LabelList dataKey="recharge" position="bottom" offset={10} formatter={(v) => v ? kLabel(v) : ""} style={{ fontSize: 10.5, fill: "#c2671e", fontWeight: 700 }} />
+              <Line dataKey="recharge" name="Recharge collected" stroke="#986315" strokeWidth={2} dot={{ r: 3, fill: "#986315" }} isAnimationActive={false}>
+                <LabelList dataKey="recharge" position="bottom" offset={10} formatter={(v) => v ? kLabel(v) : ""} style={{ fontSize: 10.5, fill: "#986315", fontWeight: 700 }} />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
         </Card>
       </div>
       <div style={{ marginTop: 18 }}>
-        <Card pad={false} title={`Per-invoice recognition · ${monLabel}`} sub="Day-based: earned/day × days of the term falling inside the selected month. Yellow rows = a deposit was collected on this account.">
-          <Table head={["Customer", "Plan", "Paid on", "Total paid", "Deposit", "Recharge", "Term", "Earned/month", "Earned/day", `Days in ${_monthShort(selY, selM)}`, `Earned in ${_monthShort(selY, selM)}`]} maxHeight="calc(100vh - 460px)">
+        <Card pad={false} title={`Per-invoice recognition · ${rangeText}`} sub="Earned revenue = ((month end − paid date + 1) × recharge) ÷ days in the paid month. Yellow rows = a deposit was collected on this account.">
+          <Table head={["Customer", "Apartment", "Plan",
+            <button onClick={() => toggleSort("paid")} title="Sort by paid date"
+              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+              Paid on {sort.key === "paid" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+            </button>,
+            "Total paid", "Deposit", "Recharge", "Earned/month", "Earned/day", "Month End Date", "Days remaining", "Earned revenue"]} maxHeight="calc(100vh - 460px)">
             {tableRows.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: r.deposit > 0 ? "#fef9c3" : undefined }}>
+              <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: r.deposit > 0 ? "#FBF0E0" : undefined }}>
                 <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{r.customer}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.society}</td>
                 <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.plan}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{(r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "—"}</td>
                 <td style={{ ...td, fontWeight: 600 }}>{inr(r.total)}</td>
                 <td style={td}>{inr(r.deposit)}</td>
                 <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600 }}>{inr(r.recharge)}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12 }}>{r.months}mo · {r.termDays}d</td>
                 <td style={td}>{inr(Math.round(r.recharge / (r.months || 1)))}</td>
-                <td style={{ ...td, whiteSpace: "nowrap" }}>{inr2(r.perDay)}</td>
-                <td style={td}>{daysInMonthFor(r, selY, selM)}</td>
-                <td style={{ ...td, fontWeight: 600, color: "var(--forest)" }}>{inr(Math.round(earnedFor(r, selY, selM)))}</td>
+                <td style={{ ...td, whiteSpace: "nowrap" }}>{inr2(r.earnedPerDay)}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.monthEnd ? fmtDate(r.monthEnd) : "—"}</td>
+                <td style={td}>{r.daysRemaining}</td>
+                <td style={{ ...td, fontWeight: 600, color: "var(--forest)" }}>{inr(Math.round(r.earnedRevenue))}</td>
               </tr>
             ))}
             {tableRows.length > 0 && (
               <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={3}>Total ({tableRows.length})</td>
+                <td style={{ ...ftd, textAlign: "center" }} colSpan={4}>Total ({tableRows.length})</td>
                 <td style={ftd}>{inr(totRow.total)}</td>
                 <td style={ftd}>{inr(totRow.deposit)}</td>
                 <td style={ftd}>{inr(totRow.recharge)}</td>
@@ -9169,12 +12395,209 @@ function EarnedRevenue() {
                 <td style={ftd}></td>
                 <td style={ftd}></td>
                 <td style={ftd}></td>
-                <td style={ftd}>{inr(Math.round(totRow.earnedMonth))}</td>
+                <td style={ftd}>{inr(Math.round(totRow.earned))}</td>
               </tr>
             )}
           </Table>
           {tableRows.length === 0 && <Empty msg="No paid invoices to recognise." />}
         </Card>
+      </div>
+    </div>
+  );
+}
+
+/* ===========================================================================
+   AOP — Annual Operating Plan (Admin/DevOps only). Enter a monthly Subscription
+   Revenue (Incl GST) target for a financial year (Apr–Mar); each month's target
+   is checked against the recharge cash collected (same source as Earned Revenue).
+   Targets persist to localStorage (pw_aop_targets) until a backend exists.
+   =========================================================================== */
+const AOP_KEY = "pw_aop_targets";
+const AOP_YEARS = [2026, 2027, 2028];
+const AOP_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// Financial-year months for a start year Y: Apr(Y) … Mar(Y+1).
+const aopFYMonths = (y) => Array.from({ length: 12 }, (_, k) => {
+  const mi = 3 + k;                       // Apr = month-index 3
+  const yy = y + Math.floor(mi / 12), m = (mi % 12) + 1;
+  return { y: yy, m, key: `${yy}-${m}`, label: `${AOP_MON[m - 1]}-${String(yy).slice(2)}` };
+});
+// Achievement colour: <30% red, 30–80% amber, >80% green.
+const aopColor = (pct) => pct == null ? { c: "var(--muted)", bg: "var(--mint)" }
+  : pct < 30 ? { c: "#DC4141", bg: "#FBE8E8" }
+  : pct <= 80 ? { c: "#986315", bg: "#FBF0E0" }
+  : { c: "#08805A", bg: "#E2F3EE" };
+
+function AOP({ accessLevel = "view" }) {
+  const { user } = useAuth();
+  const canEdit = accessLevel === "admin" || accessLevel === "devops";
+  const [year, setYear] = useState(AOP_YEARS[0]);
+  const [targets, setTargets] = useState(() => LS.get(AOP_KEY, {}) || {});
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    api.logView(user.username, "Viewed AOP");
+    Promise.all([billingApi.getInvoices(), billingApi.getSubscriptions()])
+      .then(([inv, subs]) => setData({ inv, subs }))
+      .catch(() => setData({ inv: [], subs: [] }));
+  }, []);
+  if (!data) return <Loading />;
+
+  // Recharge cash collected per calendar month (paid invoices, recharge portion —
+  // the same split Earned Revenue uses: total − plan deposit).
+  const subBy = {};
+  data.subs.forEach(s => [s.customerNumber, s.zohoCustomerId, s.zohoId].filter(Boolean).forEach(k => { subBy[k] = s; }));
+  const paid = data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).map(i => {
+    const sub = subBy[i.customerNumber] || subBy[i.zohoCustomerId] || subBy[i.zohoId] || null;
+    const plan = sub?.plan || i.plan || "";
+    const total = i.total || 0;
+    const d = new Date(i.date);
+    return { recharge: Math.max(0, total - depositForPlan(plan, total)), y: isNaN(d.getTime()) ? null : d.getFullYear(), m: isNaN(d.getTime()) ? null : d.getMonth() + 1 };
+  });
+  const rechargeIn = (y, m) => Math.round(paid.reduce((s, r) => (r.y === y && r.m === m) ? s + r.recharge : s, 0));
+
+  const months = aopFYMonths(year);
+  const yearTargets = targets[year] || {};
+  const setTarget = (key, val) => {
+    const n = Number(String(val).replace(/[^0-9.]/g, "")) || 0;
+    setTargets(prev => { const next = { ...prev, [year]: { ...(prev[year] || {}), [key]: n } }; LS.set(AOP_KEY, next); return next; });
+  };
+
+  const rowData = months.map(mo => {
+    const target = yearTargets[mo.key] || 0;
+    const recharge = rechargeIn(mo.y, mo.m);
+    const pct = target > 0 ? (recharge / target) * 100 : null;
+    return { ...mo, target, recharge, pct };
+  });
+  const totTarget = rowData.reduce((s, r) => s + r.target, 0);
+  const totRecharge = rowData.reduce((s, r) => s + r.recharge, 0);
+  const yearPct = totTarget > 0 ? (totRecharge / totTarget) * 100 : null;
+  const fyLabel = `FY ${year}-${String(year + 1).slice(2)}`;
+
+  const exportCsv = () => exportToCsv(`prowater-aop-${year}.csv`, [
+    { label: "Particulars", get: r => r.label },
+    ...rowData.map(r => ({ label: r.label, get: row => row.pick(r) })),
+  ], [
+    { label: "Target - Subscription Revenue (Incl GST)", pick: r => r.target },
+    { label: "Recharges Collected", pick: r => r.recharge },
+    { label: "Target Achieved %", pick: r => r.pct == null ? "" : `${r.pct.toFixed(2)}%` },
+  ]);
+
+  const yc = aopColor(yearPct);
+  const cellNum = { padding: "10px 12px", textAlign: "center", fontSize: 13, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+  const cellHead = { ...cellNum, fontWeight: 700, color: "var(--f)", background: "var(--mint-2)", borderBottom: "2px solid var(--border)", position: "sticky", top: 0 };
+  const rowLabel = { padding: "10px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: "var(--f)", whiteSpace: "nowrap", position: "sticky", left: 0, background: "#fff", zIndex: 1 };
+
+  // ---- AI summary — computed narrative of the annual plan (not an LLM call). --
+  const monthsSet = rowData.filter(r => r.target > 0);
+  const withPct = monthsSet.filter(r => r.pct != null);
+  const gap = Math.max(0, Math.round(totTarget - totRecharge));
+  const statusTxt = yearPct == null ? "no targets set yet" : yearPct < 30 ? "significantly behind target" : yearPct <= 80 ? "on the way to target" : yearPct >= 100 ? "at or above target" : "close to target";
+  const best = withPct.slice().sort((a, b) => b.pct - a.pct)[0];
+  const worst = withPct.slice().sort((a, b) => a.pct - b.pct)[0];
+  const metCount = withPct.filter(r => r.pct >= 100).length;
+  const aopSummary = [
+    <>For <strong>{fyLabel}</strong>, the subscription-revenue target is <strong>{inr(Math.round(totTarget))}</strong>{monthsSet.length ? <> across {monthsSet.length} month{monthsSet.length > 1 ? "s" : ""} with targets set</> : <> — no monthly targets have been entered yet</>}.</>,
+    <>Recharges collected total <strong>{inr(Math.round(totRecharge))}</strong>{yearPct != null ? <> — <strong>{Math.round(yearPct)}%</strong> of target ({statusTxt})</> : null}.</>,
+    totTarget > 0 ? (gap > 0 ? <><strong>{inr(gap)}</strong> remains to hit the annual target.</> : <>The annual target has been fully met.</>) : null,
+    best ? <>Strongest month is <strong>{best.label}</strong> at <strong>{Math.round(best.pct)}%</strong> ({inr(best.recharge)} against a {inr(best.target)} target).</> : null,
+    (worst && withPct.length > 1 && worst.key !== best.key) ? <>Weakest month is <strong>{worst.label}</strong> at <strong>{Math.round(worst.pct)}%</strong> — the biggest gap to close.</> : null,
+    withPct.length ? <><strong>{metCount}</strong> of {withPct.length} month{withPct.length > 1 ? "s" : ""} with targets {metCount === 1 ? "has" : "have"} reached 100%.</> : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="fade-up">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div>
+          <div className="eyebrow">Analytics</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "var(--f)" }}>AOP · Annual Operating Plan</div>
+        </div>
+        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600, marginLeft: 8 }}>Financial year</span>
+        <select value={year} onChange={e => setYear(Number(e.target.value))} style={selectStyle}>
+          {AOP_YEARS.map(y => <option key={y} value={y}>{y}–{String(y + 1).slice(2)}</option>)}
+        </select>
+        <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
+      </div>
+
+      {/* AI summary */}
+      <div style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--brand) 7%, #fff) 0%, #fff 55%)", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 18, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}>
+          <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 10, background: "var(--mint-2)", color: "var(--brand)" }}><Sparkles size={17} /></span>
+          <div>
+            <h3 style={{ fontSize: 16, margin: 0, fontFamily: "'DM Sans',system-ui,sans-serif", letterSpacing: "-.02em" }}>AI Summary</h3>
+            <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 1 }}>Auto-generated from the plan below · {fyLabel}</div>
+          </div>
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 20, display: "grid", gap: 6 }}>
+          {aopSummary.map((s, i) => <li key={i} style={{ fontSize: 13, color: "var(--slate)", lineHeight: 1.55 }}>{s}</li>)}
+        </ul>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14 }}>
+        <Stat label="Subscription target" value={inr(Math.round(totTarget))} icon={Target} sub={`${fyLabel} · Incl GST`} hero />
+        <Stat label="Recharges collected" value={inr(Math.round(totRecharge))} icon={Wallet} sub={`${fyLabel} · from Earned Revenue`} />
+        <div style={{ background: "#fff", border: "1px solid var(--border)", borderLeft: `4px solid ${yc.c}`, borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span className="eyebrow" style={{ color: "var(--muted)" }}>Target to be achieved</span>
+            <TrendingUp size={18} color={yc.c} />
+          </div>
+          <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: yc.c, margin: "8px 0 2px", lineHeight: 1 }}>{yearPct == null ? "—" : `${Math.round(yearPct)}%`}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>{yearPct == null ? "set a target" : yearPct < 30 ? "behind target" : yearPct <= 80 ? "on the way" : "on target"}</div>
+        </div>
+        <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span className="eyebrow" style={{ color: "var(--muted)" }}>Recharge received</span>
+            <Repeat size={18} color="var(--teal)" />
+          </div>
+          <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "var(--f)", margin: "8px 0 2px", lineHeight: 1 }}>{yearPct == null ? "—" : `${yearPct.toFixed(2)}%`}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>recharges ÷ subscription target</div>
+        </div>
+      </div>
+
+      {/* AOP table — Particulars × months */}
+      <div style={{ marginTop: 18 }}>
+        <Card pad={false} title={`AOP — ${fyLabel}`} sub={canEdit ? "Enter each month's Subscription Revenue (Incl GST) target. Recharges are pulled live; achievement is target-checked." : "Subscription targets are read-only for your access level."}>
+          <div className="scroll-thin" style={{ overflowX: "auto" }}>
+            <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...cellHead, ...rowLabel, textAlign: "left", background: "var(--mint-2)", zIndex: 2 }}>Particulars</th>
+                  {rowData.map(r => <th key={r.key} style={cellHead}>{r.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={rowLabel}>Target - Subscription Revenue (Incl GST)</td>
+                  {rowData.map(r => (
+                    <td key={r.key} style={cellNum}>
+                      {canEdit
+                        ? <input type="text" inputMode="numeric" value={r.target ? r.target.toLocaleString("en-IN") : ""} placeholder="0"
+                            onChange={e => setTarget(r.key, e.target.value)}
+                            style={{ ...inp, width: 100, padding: "6px 8px", fontSize: 12.5, textAlign: "right", marginBottom: 0 }} />
+                        : (r.target ? inr(r.target) : "—")}
+                    </td>
+                  ))}
+                </tr>
+                <tr style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={rowLabel}>Recharges Collected</td>
+                  {rowData.map(r => <td key={r.key} style={{ ...cellNum, color: "var(--teal-d)", fontWeight: 600 }}>{r.recharge ? inr(r.recharge) : "—"}</td>)}
+                </tr>
+                <tr style={{ background: "var(--mint)" }}>
+                  <td style={{ ...rowLabel, background: "var(--mint)" }}>Target Achieved</td>
+                  {rowData.map(r => {
+                    const c = aopColor(r.pct);
+                    return <td key={r.key} style={{ ...cellNum, fontWeight: 700 }}>
+                      {r.pct == null ? <span style={{ color: "var(--muted)" }}>—</span>
+                        : <span style={{ color: c.c, background: c.bg, padding: "3px 9px", borderRadius: 999 }}>{r.pct.toFixed(2)}%</span>}
+                    </td>;
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </Card>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
+          Target Achieved = Recharges Collected ÷ Subscription Revenue (Incl GST). <span style={{ color: "#DC4141", fontWeight: 600 }}>&lt;30% red</span> · <span style={{ color: "#986315", fontWeight: 600 }}>30–80% amber</span> · <span style={{ color: "#08805A", fontWeight: 600 }}>&gt;80% green</span>. Targets are saved on this browser (pw_aop_targets) until the backend endpoint exists.
+        </div>
       </div>
     </div>
   );
@@ -9311,63 +12734,63 @@ function ApartmentPerformance() {
    move across 7 status columns via drag-and-drop.
    =========================================================================== */
 const PLAN_STATUSES_DEFAULT = [
-  { key: "New",          color: "#2563eb", bg: "#eef4ff" },
-  { key: "Picked Up",    color: "#7c3aed", bg: "#f4f0ff" },
-  { key: "In-Progress",  color: "#c2671e", bg: "#fef3e2" },
-  { key: "Testing & QA", color: "#0d7a8c", bg: "#e6f6f9" },
-  { key: "Staging",      color: "#4f46e5", bg: "#eef0ff" },
-  { key: "Live",         color: "#1f7a3f", bg: "#e9f7ee" },
+  { key: "New",          color: "#2A86D6", bg: "#E5F0FA" },
+  { key: "Picked Up",    color: "#2A86D6", bg: "#E5F0FA" },
+  { key: "In-Progress",  color: "#986315", bg: "#FBF0E0" },
+  { key: "Testing & QA", color: "#2A86D6", bg: "#E5F0FA" },
+  { key: "Staging",      color: "#2A86D6", bg: "#E5F0FA" },
+  { key: "Live",         color: "#08805A", bg: "#E2F3EE" },
 ];
 const PLAN_USERS = ["Anis", "Sujan", "Harsh", "Sri", "Arjun", "Pranshu", "Arun", "IQ Labs", "Zoho Vendor", "The Group"];
 // Priority scale (P0 = highest). Colours mirror the source sprint sheet.
 const PLAN_PRIORITIES = [
-  { key: "P0", color: "#b4232a" },
-  { key: "P1", color: "#c2671e" },
-  { key: "P2", color: "#1f7a3f" },
-  { key: "P3", color: "#3a6ea5" },
+  { key: "P0", color: "#DC4141" },
+  { key: "P1", color: "#986315" },
+  { key: "P2", color: "#08805A" },
+  { key: "P3", color: "#2A86D6" },
 ];
 const PLAN_SPRINTS_DEFAULT = ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Backlog"];
 // Legacy priority labels → P-scale (for tasks created before the switch).
 const PLAN_PRIO_MIGRATE = { Low: "P3", Medium: "P2", High: "P1", Urgent: "P0" };
-const PLAN_AVATAR_COLORS = ["#5a7863", "#2b7a78", "#0f6e3f", "#8a5a2b", "#9a3b6e", "#0d7a8c", "#3a6ea5", "#6d4fb5", "#b5694f", "#7a4fb5"];
+const PLAN_AVATAR_COLORS = ["#0A9D6E", "#0B6F52", "#0B6F52", "#986315", "#DC4141", "#2A86D6", "#2A86D6", "#2A86D6", "#DC4141", "#2A86D6"];
 // "The Group" tag means exactly these five people (not the vendors / Arun).
 const PLAN_GROUP = ["Anis", "Sujan", "Harsh", "Sri", "Arjun"];
 // Business-requirement categories every task is filed under.
 const PLAN_CATEGORIES_DEFAULT = [
-  { key: "Infrastructure",    color: "#0d7a8c" },
-  { key: "Accounts & Access", color: "#6d4fb5" },
-  { key: "Marketing",         color: "#c2671e" },
-  { key: "Mobile App",        color: "#2b7a78" },
-  { key: "Backend & APIs",    color: "#3a6ea5" },
-  { key: "IoT",               color: "#8a5a2b" },
-  { key: "Ticketing",         color: "#9a3b6e" },
-  { key: "Ops & Finance",     color: "#1f7a3f" },
-  { key: "Review & QA",       color: "#16545c" },
+  { key: "Infrastructure",    color: "#2A86D6" },
+  { key: "Accounts & Access", color: "#2A86D6" },
+  { key: "Marketing",         color: "#986315" },
+  { key: "Mobile App",        color: "#0B6F52" },
+  { key: "Backend & APIs",    color: "#2A86D6" },
+  { key: "IoT",               color: "#986315" },
+  { key: "Ticketing",         color: "#DC4141" },
+  { key: "Ops & Finance",     color: "#08805A" },
+  { key: "Review & QA",       color: "#0B6F52" },
   { key: "Messaging",         color: "#128c7e" },
-  { key: "Personal",          color: "#6b7280" },
+  { key: "Personal",          color: "#7D8A83" },
   // Sprint-board categories (from the product task sheet).
-  { key: "Customer App",      color: "#4c8c3f" },
-  { key: "Technician App",    color: "#2b7a78" },
-  { key: "PW Website",        color: "#3a6ea5" },
-  { key: "Zoho CRM",          color: "#c2671e" },
-  { key: "Zoho ERP",          color: "#8a5a2b" },
-  { key: "Zoho Billing",      color: "#9a3b6e" },
-  { key: "Zoho Inventory",    color: "#6d4fb5" },
-  { key: "Zoho FSM",          color: "#16766e" },
-  { key: "Freshdesk",         color: "#0d7a8c" },
-  { key: "Bug Fixes",         color: "#b4232a" },
-  { key: "Form",              color: "#5a7863" },
-  { key: "Wisdom",            color: "#7a4fb5" },
+  { key: "Customer App",      color: "#08805A" },
+  { key: "Technician App",    color: "#0B6F52" },
+  { key: "PW Website",        color: "#2A86D6" },
+  { key: "Zoho CRM",          color: "#986315" },
+  { key: "Zoho ERP",          color: "#986315" },
+  { key: "Zoho Billing",      color: "#DC4141" },
+  { key: "Zoho Inventory",    color: "#2A86D6" },
+  { key: "Zoho FSM",          color: "#0B6F52" },
+  { key: "Freshdesk",         color: "#2A86D6" },
+  { key: "Bug Fixes",         color: "#DC4141" },
+  { key: "Form",              color: "#0A9D6E" },
+  { key: "Wisdom",            color: "#2A86D6" },
 ];
 
 /* ---- Editable task config (admins manage via the "Modify Tasks" panel) ------
    Statuses, Sprints and Categories start from the defaults above but can be
    extended/edited by an admin; overrides persist to localStorage. */
-const PLAN_PALETTE = ["#0d7a8c", "#6d4fb5", "#c2671e", "#2b7a78", "#3a6ea5", "#8a5a2b", "#9a3b6e", "#1f7a3f", "#16545c", "#128c7e", "#b4232a", "#5a7863", "#7a4fb5", "#4c8c3f"];
+const PLAN_PALETTE = ["#2A86D6", "#2A86D6", "#986315", "#0B6F52", "#2A86D6", "#986315", "#DC4141", "#08805A", "#0B6F52", "#128c7e", "#DC4141", "#0A9D6E", "#2A86D6", "#08805A"];
 const planPickColor = (i) => PLAN_PALETTE[(i >= 0 ? i : 0) % PLAN_PALETTE.length];
 // A light background tint of a status colour (for the board column bg).
 const planTint = (hex) => {
-  const h = String(hex || "#888").replace("#", "");
+  const h = String(hex || "#A9B3AC").replace("#", "");
   const full = h.length === 3 ? h.split("").map(x => x + x).join("") : h;
   const n = parseInt(full, 16) || 0;
   const mix = (c) => Math.round(c + (255 - c) * 0.88);
@@ -9380,7 +12803,7 @@ let PLAN_CATEGORIES = LS.get("pw_plan_categories", null) || PLAN_CATEGORIES_DEFA
 const setPlanStatuses = (v) => { PLAN_STATUSES = v; LS.set("pw_plan_statuses", v); };
 const setPlanSprints = (v) => { PLAN_SPRINTS = v; LS.set("pw_plan_sprints", v); };
 const setPlanCategories = (v) => { PLAN_CATEGORIES = v; LS.set("pw_plan_categories", v); };
-const planCatMeta = (k) => PLAN_CATEGORIES.find(c => c.key === k) || { key: k || "General", color: "#8a968f" };
+const planCatMeta = (k) => PLAN_CATEGORIES.find(c => c.key === k) || { key: k || "General", color: "#7D8A83" };
 
 // Seed backlog — the agreed "next steps" list. Imported once into a fresh board
 // (see the seeding logic in TaskPlanner). { t: title, n: notes, a: assignees, c: category }.
@@ -9559,25 +12982,41 @@ async function planIdbDel(id) {
   const db = await planIdb();
   return new Promise((res) => { try { const tx = db.transaction(PLAN_IDB_STORE, "readwrite"); tx.objectStore(PLAN_IDB_STORE).delete(id); tx.oncomplete = () => res(); tx.onerror = () => res(); } catch { res(); } });
 }
-/* ---- Firebase Cloud Storage (attachment bytes, shared across devices) -----
-   Uses the Storage REST API with the same Firebase login idToken as the rest of
-   the app — no SDK. Enabled only when VITE_FIREBASE_STORAGE_BUCKET is set;
-   otherwise attachments fall back to IndexedDB (local). Bucket looks like
-   "your-project.appspot.com" (the part after gs:// in the Storage console). */
-const FIREBASE_STORAGE_BUCKET = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "";
-const fbStorageEnabled = () => !!FIREBASE_STORAGE_BUCKET;
-async function fbStorageUpload(path, file) {
+/* ---- Task Planner attachments — backend /documents/add --------------------
+   Files upload to the ProWater backend (POST /documents/add?email=<user>) as
+   multipart form-data under the field name `documents`. The backend stores them
+   in Cloud Storage and returns { name, path }; that `path` lives in the app's
+   Storage bucket (below), so a media URL is built from it for download. The
+   email is the signed-in user's — captured on the sign-in page and kept in the
+   session at login. On any failure the file falls back to local IndexedDB so the
+   task still saves. */
+const FIREBASE_STORAGE_BUCKET = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "backend-prowater.firebasestorage.app";
+// The email entered on the sign-in page (persisted in the session at login).
+function currentUserEmail() {
+  try { return JSON.parse(sessionStorage.getItem("pw_user") || "{}").email || ""; } catch { return ""; }
+}
+// A Storage object path → a public media (download) URL in the app's bucket.
+const documentDownloadUrl = (path) => path
+  ? `https://firebasestorage.googleapis.com/v0/b/${FIREBASE_STORAGE_BUCKET}/o/${encodeURIComponent(path)}?alt=media`
+  : "";
+// Upload one file to the backend as the signed-in user; returns { name, path, url }.
+async function planUploadDocument(file) {
+  const email = currentUserEmail();
+  if (!email) throw new Error("no signed-in email");
   const token = sessionStorage.getItem("pw_idToken");
-  const res = await fetch(`https://firebasestorage.googleapis.com/v0/b/${FIREBASE_STORAGE_BUCKET}/o?name=${encodeURIComponent(path)}`, {
+  const fd = new FormData();
+  fd.append("documents", file, file.name);
+  // NOTE: don't set Content-Type here — the browser adds the multipart boundary.
+  const res = await fetch(`${API_ORIGIN}/documents/add?email=${encodeURIComponent(email)}`, {
     method: "POST",
-    headers: { "Content-Type": file.type || "application/octet-stream", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: file,
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: fd,
   });
-  if (!res.ok) throw new Error(`Storage ${res.status}`);
-  const meta = await res.json();
-  const dtoken = (meta.downloadTokens || "").split(",")[0];
-  const url = `https://firebasestorage.googleapis.com/v0/b/${FIREBASE_STORAGE_BUCKET}/o/${encodeURIComponent(path)}?alt=media${dtoken ? `&token=${dtoken}` : ""}`;
-  return { url, path };
+  if (!res.ok) throw new Error(`Documents ${res.status}`);
+  const j = await res.json();
+  const f0 = (j.files || [])[0] || {};
+  if (!f0.path) throw new Error("no path in response");
+  return { name: f0.name || file.name, path: f0.path, url: documentDownloadUrl(f0.path) };
 }
 async function fbStorageDelete(path) {
   const token = sessionStorage.getItem("pw_idToken");
@@ -9856,7 +13295,7 @@ function TaskPlanner({ initialView = "board" }) {
         <div style={{ position: "relative", marginLeft: "auto" }}>
           <button onClick={toggleNotifs} title="Status-change notifications" style={{ ...btnGhost, padding: "9px 11px", position: "relative" }}>
             <Bell size={16} />
-            {unread > 0 && <span style={{ position: "absolute", top: -6, right: -6, minWidth: 18, height: 18, padding: "0 4px", borderRadius: 999, background: "#b4232a", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{unread}</span>}
+            {unread > 0 && <span style={{ position: "absolute", top: -6, right: -6, minWidth: 18, height: 18, padding: "0 4px", borderRadius: 999, background: "#DC4141", color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{unread}</span>}
           </button>
           {notifOpen && (
             <div style={{ position: "absolute", right: 0, top: "calc(100% + 8px)", width: 340, maxHeight: 420, overflowY: "auto", background: "#fff", border: "1px solid var(--border)", borderRadius: 14, boxShadow: "var(--shadow-lg)", zIndex: 30 }}>
@@ -9880,7 +13319,7 @@ function TaskPlanner({ initialView = "board" }) {
         <button onClick={() => setEditing(blank("New"))} style={btnPrimary}><Plus size={16} /> New Task</button>
       </div>
 
-      {warn && <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#9a6a16", background: "#fdf3e0", border: "1px solid #f0dcae", padding: "10px 14px", borderRadius: 11, marginBottom: 14 }}><AlertCircle size={16} />{warn}</div>}
+      {warn && <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#986315", background: "#FBF0E0", border: "1px solid #F6DEBC", padding: "10px 14px", borderRadius: 11, marginBottom: 14 }}><AlertCircle size={16} />{warn}</div>}
 
       {/* count chips */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
@@ -9937,7 +13376,7 @@ function TaskPlanner({ initialView = "board" }) {
                 <td style={td}><AssigneeStack names={t.assignees} size={22} /></td>
                 <td style={td}><span style={{ fontSize: 12, fontWeight: 700, color: pm.color }}>{t.priority}</span></td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{t.startDate ? fmtDate(t.startDate) : "—"}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5, color: isOverdue(t) ? "#b4232a" : undefined, fontWeight: isOverdue(t) ? 700 : 400 }}>{t.endDate ? fmtDate(t.endDate) : "—"}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5, color: isOverdue(t) ? "#DC4141" : undefined, fontWeight: isOverdue(t) ? 700 : 400 }}>{t.endDate ? fmtDate(t.endDate) : "—"}</td>
                 <td style={td}>{t.attachments?.length ? <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--teal)" }}><Paperclip size={13} />{t.attachments.length}</span> : "—"}</td>
               </tr>
             ); })}
@@ -9973,9 +13412,9 @@ function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
   const pct = total ? Math.round(done / total * 100) : 0;
 
   const buckets = [
-    { name: "Done", value: done, color: "#1f7a3f" },
-    { name: "In progress", value: inProgress, color: "#c2671e" },
-    { name: "Not started", value: notStarted, color: "#8a968f" },
+    { name: "Done", value: done, color: "#08805A" },
+    { name: "In progress", value: inProgress, color: "#986315" },
+    { name: "Not started", value: notStarted, color: "#7D8A83" },
   ].filter(b => b.value > 0);
 
   const cats = [...PLAN_CATEGORIES.map(c => c.key), "General"];
@@ -9999,9 +13438,9 @@ function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
         <style>{`@media(max-width:820px){.an-grid{grid-template-columns:1fr!important}}`}</style>
         <Card title="Delivery status" sub="Where all work stands right now">
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={300}>
             <PieChart>
-              <Pie data={buckets} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3}>
+              <Pie data={buckets} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
                 {buckets.map((b, i) => <Cell key={i} fill={b.color} />)}
               </Pie>
               <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
@@ -10011,11 +13450,11 @@ function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
         <Card title="Scope size by category" sub="How the work is distributed">
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={catBars} layout="vertical" margin={{ left: 20, right: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
               <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="name" tick={axisTick} axisLine={false} tickLine={false} width={112} />
               <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="value" name="tasks" radius={[0, 6, 6, 0]} maxBarSize={26}>
+              <Bar dataKey="value" name="tasks" radius={[0, 6, 6, 0]} maxBarSize={26} isAnimationActive={false}>
                 {catBars.map((b, i) => <Cell key={i} fill={b.color} />)}
               </Bar>
             </BarChart>
@@ -10046,7 +13485,7 @@ function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
                         <div key={t.id} onClick={() => onOpen(t)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 18px 9px 46px", cursor: "pointer", borderTop: "1px solid var(--border)" }}>
                           <span style={{ fontSize: 12, fontWeight: 600, color: sm.color, background: sm.bg, borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>{t.status}</span>
                           <span style={{ fontSize: 13, fontWeight: 600, color: "var(--f)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled task"}</span>
-                          {t.endDate && <span style={{ fontSize: 11.5, color: isOverdue(t) ? "#b4232a" : "var(--muted)", whiteSpace: "nowrap" }}>due {fmtDate(t.endDate)}</span>}
+                          {t.endDate && <span style={{ fontSize: 11.5, color: isOverdue(t) ? "#DC4141" : "var(--muted)", whiteSpace: "nowrap" }}>due {fmtDate(t.endDate)}</span>}
                           <AssigneeStack names={t.assignees} size={22} />
                         </div>
                       ); })}
@@ -10076,7 +13515,7 @@ function TaskCard({ t, overdue, onOpen, onDragStart, onDragEnd, dragging }) {
         <span style={{ fontSize: 10.5, fontWeight: 700, color: pm.color, background: `${pm.color}18`, padding: "2px 8px", borderRadius: 999 }}>{t.priority}</span>
         {t.category && t.category !== "General" && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 600, color: cm.color, background: `${cm.color}14`, padding: "2px 8px", borderRadius: 999 }}><Tag size={10} />{t.category}</span>}
         {t.sprint && <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--slate)", background: "var(--mint-2)", padding: "2px 8px", borderRadius: 999 }}>{t.sprint}</span>}
-        {t.endDate && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: overdue ? "#b4232a" : "var(--slate)" }}><CalendarDays size={12} />{fmtDate(t.endDate)}</span>}
+        {t.endDate && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: overdue ? "#DC4141" : "var(--slate)" }}><CalendarDays size={12} />{fmtDate(t.endDate)}</span>}
         {t.attachments?.length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "var(--teal)" }}><Paperclip size={12} />{t.attachments.length}</span>}
         <span style={{ marginLeft: "auto" }}><AssigneeStack names={t.assignees} size={24} /></span>
       </div>
@@ -10101,26 +13540,24 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
     if (tooBig.length) onWarn?.(`Skipped ${tooBig.length} file(s) over 15 MB.`);
     const ok = files.filter(f => f.size <= LIMIT);
     try {
-      // Upload each file to Firebase Storage (shared/cloud); if that's not
-      // configured or fails, stash the bytes in IndexedDB (local). Either way
-      // the task keeps only lightweight metadata.
+      // Upload each file to the backend (/documents/add, shared/cloud); if that
+      // fails, stash the bytes in IndexedDB (local). Either way the task keeps
+      // only lightweight metadata.
       const metas = [];
       let usedLocal = false;
       for (const f of ok) {
         const id = crypto.randomUUID();
         const base = { id, name: f.name, type: f.type, size: f.size };
-        if (fbStorageEnabled()) {
-          try {
-            const { url, path } = await fbStorageUpload(`planner/${t.id}/${id}-${f.name}`, f);
-            metas.push({ ...base, store: "firebase", url, path });
-            continue;
-          } catch { /* fall through to local */ usedLocal = true; }
-        }
+        try {
+          const { path, url } = await planUploadDocument(f);
+          metas.push({ ...base, store: "server", path, url });
+          continue;
+        } catch { /* fall through to local */ usedLocal = true; }
         const r = await planReadFile(f);
         await planIdbPut({ id, name: r.name, type: r.type, size: r.size, dataUrl: r.dataUrl });
         metas.push({ ...base, store: "idb" });
       }
-      if (usedLocal && fbStorageEnabled()) onWarn?.("Some files couldn't reach Firebase and were saved to this browser instead.");
+      if (usedLocal) onWarn?.("Some files couldn't reach the server and were saved to this browser instead.");
       if (metas.length) setT(prev => ({ ...prev, attachments: [...(prev.attachments || []), ...metas] }));
     } catch { onWarn?.("Could not read one of the files."); }
     setBusy(false);
@@ -10212,7 +13649,9 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--mint)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px" }}>
                   <Paperclip size={14} style={{ color: "var(--teal)", flexShrink: 0 }} />
                   <button onClick={() => openAttachment(a)} title="Download" style={{ fontSize: 13, color: "var(--f)", fontWeight: 600, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, background: "none", border: "none", cursor: "pointer", padding: 0 }}>{a.name}</button>
-                  <span title={a.store === "firebase" ? "Stored in Firebase (cloud)" : "Stored in this browser"} style={{ fontSize: 10, fontWeight: 700, color: a.store === "firebase" ? "#0f6e3f" : "#8a968f", background: a.store === "firebase" ? "#e9f7ee" : "#eef0ef", borderRadius: 999, padding: "2px 7px", flexShrink: 0 }}>{a.store === "firebase" ? "CLOUD" : "LOCAL"}</span>
+                  {(() => { const cloud = a.store !== "idb"; return (
+                  <span title={cloud ? "Stored on the server (cloud)" : "Stored in this browser"} style={{ fontSize: 10, fontWeight: 700, color: cloud ? "#0B6F52" : "#7D8A83", background: cloud ? "#E2F3EE" : "#ECEEED", borderRadius: 999, padding: "2px 7px", flexShrink: 0 }}>{cloud ? "CLOUD" : "LOCAL"}</span>
+                  ); })()}
                   <span style={{ fontSize: 11.5, color: "var(--muted)", flexShrink: 0 }}>{fmtSize(a.size)}</span>
                   <button onClick={() => removeAttachment(i)} title="Remove" style={{ ...iconBtn, padding: 5, background: "#fff" }}><Trash2 size={14} /></button>
                 </div>
@@ -10229,7 +13668,7 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
         )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {!isNew && <button onClick={() => onDelete(t)} style={{ ...btnGhost, color: "#b4232a", borderColor: "#f0c9c9" }}><Trash2 size={15} /> Delete</button>}
+          {!isNew && <button onClick={() => onDelete(t)} style={{ ...btnGhost, color: "#DC4141", borderColor: "#F5BFBF" }}><Trash2 size={15} /> Delete</button>}
           <button onClick={onClose} style={{ ...btnGhost, marginLeft: "auto" }}>Cancel</button>
           <button onClick={() => { const clean = { ...t }; delete clean._new; onSave(clean); }} disabled={!canSave} style={{ ...btnPrimary, opacity: canSave ? 1 : 0.5 }}><Check size={16} /> {isNew ? "Create task" : "Save changes"}</button>
         </div>
@@ -10284,11 +13723,11 @@ function SalesInsights() {
         <Card title="Leads by status" sub={society === "all" ? "Across all societies" : society}>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ left: -10, right: 8, top: 18 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e6efe9" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="name" tick={axisTick} axisLine={false} tickLine={false} interval={0} angle={-15} textAnchor="end" height={60} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
               <Tooltip content={<TT />} />
-              <Bar dataKey="leads" fill="#3a6ea5" radius={[5, 5, 0, 0]} maxBarSize={54} isAnimationActive={false}>
+              <Bar dataKey="leads" fill="#2A86D6" radius={[5, 5, 0, 0]} maxBarSize={54} isAnimationActive={false}>
                 <LabelList dataKey="leads" position="top" style={{ fontSize: 11, fill: "var(--f)", fontWeight: 700 }} />
               </Bar>
             </BarChart>
@@ -10358,7 +13797,7 @@ function SalesErrorCorrection({ isAdmin }) {
   const errored = deals.filter(d => norm(d.rawStatus) === "installed" && missingMoney(d));
   const filtered = errored.filter(d => (d.customer + d.society + d.phone + (d.flatNo || "")).toLowerCase().includes(q.toLowerCase()));
 
-  const Missing = () => <span style={{ fontSize: 11, fontWeight: 700, color: "#b4232a", background: "#fbe9e9", padding: "3px 8px", borderRadius: 7 }}>Missing</span>;
+  const Missing = () => <span style={{ fontSize: 11, fontWeight: 700, color: "#DC4141", background: "#FBE8E8", padding: "3px 8px", borderRadius: 7 }}>Missing</span>;
   const money = (v) => Number(v) > 0 ? inr(Number(v)) : <Missing />;
 
   const exportCsv = () => exportToCsv("prowater-sales-error-correction.csv", [
@@ -10370,8 +13809,8 @@ function SalesErrorCorrection({ isAdmin }) {
 
   return (
     <div className="fade-up">
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#9a6a16", background: "#fdf3e0", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
-        <AlertCircle size={15} /> Installed leads with a missing Plan Value, Deposit or To-Collect amount. Fix these in Zoho — cells flagged <span style={{ fontWeight: 700, color: "#b4232a" }}>Missing</span> are blank/zero.
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#986315", background: "#FBF0E0", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
+        <AlertCircle size={15} /> Installed leads with a missing Plan Value, Deposit or To-Collect amount. Fix these in Zoho — cells flagged <span style={{ fontWeight: 700, color: "#DC4141" }}>Missing</span> are blank/zero.
       </div>
       <Toolbar q={q} setQ={setQ} placeholder="Search name, society, phone, flat…" count={filtered.length}
         right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />
@@ -10382,7 +13821,7 @@ function SalesErrorCorrection({ isAdmin }) {
               <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{d.customer}</td>
               <td style={{ ...td, whiteSpace: "nowrap" }}>{d.phone || <Missing />}</td>
               <td style={td}>{d.flatNo || <Missing />}</td>
-              <td style={td}><span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, color: "#fff", background: "#1f7a3f", whiteSpace: "nowrap" }}>{d.rawStatus}</span></td>
+              <td style={td}><span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, color: "#fff", background: "#08805A", whiteSpace: "nowrap" }}>{d.rawStatus}</span></td>
               <td style={td}>{d.society || <Missing />}</td>
               <td style={{ ...td, whiteSpace: "nowrap" }}>{d.planTenure || <Missing />}</td>
               <td style={{ ...td, fontWeight: 600 }}>{money(d.value)}</td>
@@ -10478,36 +13917,12 @@ function ApartmentLeads() {
   );
 }
 
-/* Live Dashboard — one combined view across apartments + leads + billing:
-   penetration (installed leads ÷ flats) and recharge collected per apartment/month. */
-function LiveDashboard() {
-  const { user } = useAuth();
-  // Intentionally does NOT call any API — this section is paused while the
-  // apartment penetration + recharge model is being finalised.
-  useEffect(() => { api.logView(user.username, "Viewed Live Dashboard (WIP)"); }, []);
-  return (
-    <div className="fade-up">
-      <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "56px 24px", display: "grid", placeItems: "center", textAlign: "center" }}>
-        <div style={{ width: 74, height: 74, borderRadius: 20, background: "var(--mint-2)", color: "var(--teal)", display: "grid", placeItems: "center", marginBottom: 18 }}>
-          <Construction size={36} />
-        </div>
-        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "#9a6a16", background: "#fdf3e0", padding: "3px 10px", borderRadius: 999, marginBottom: 12 }}>Work in progress</span>
-        <h2 style={{ fontSize: 24, marginBottom: 8 }}>Live Dashboard</h2>
-        <p style={{ color: "var(--slate)", fontSize: 14.5, maxWidth: 480, lineHeight: 1.6, marginBottom: 6 }}>
-          We're finalising how apartment penetration and recharge revenue are combined across the apartments, leads and billing APIs. This view will be switched on soon.
-        </p>
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>No data is fetched while this section is paused.</span>
-      </div>
-    </div>
-  );
-}
-
 function Table({ head, children, maxHeight }) {
   return (
     <div className="scroll-thin" style={{ overflowX: "auto", overflowY: maxHeight ? "auto" : "visible", maxHeight: maxHeight || "none" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
         <thead>
-          <tr>{head.map((h, i) => <th key={i} style={{ textAlign: "center", padding: "13px 16px", fontSize: 11, letterSpacing: ".07em", textTransform: "uppercase", color: "#28323a", fontWeight: 700, borderBottom: "2px solid #dde7da", background: "#ebf4dd", whiteSpace: "nowrap", verticalAlign: "middle", position: maxHeight ? "sticky" : "static", top: 0, zIndex: 1 }}>{h}</th>)}</tr>
+          <tr>{head.map((h, i) => <th key={i} style={{ textAlign: "center", padding: "13px 16px", fontSize: 11, letterSpacing: ".07em", textTransform: "uppercase", color: "#0A1A12", fontWeight: 700, borderBottom: "2px solid #ECEEED", background: "#E2F0EA", whiteSpace: "nowrap", verticalAlign: "middle", position: maxHeight ? "sticky" : "static", top: 0, zIndex: 1 }}>{h}</th>)}</tr>
         </thead>
         <tbody>{children}</tbody>
       </table>
@@ -10549,26 +13964,26 @@ function Chip({ children }) {
 
 function Status({ s }) {
   const map = {
-    active: ["#1f7a3f", "#e6f4ea"], paid: ["#1f7a3f", "#e6f4ea"], approved: ["#1f7a3f", "#e6f4ea"], converted: ["#1f7a3f", "#e6f4ea"],
-    pending: ["#9a6a16", "#fdf3e0"], paused: ["#9a6a16", "#fdf3e0"],
-    failed: ["#b4232a", "#fbe9e9"], rejected: ["#b4232a", "#fbe9e9"], disabled: ["#6a7670", "#eceeed"],
+    active: ["#08805A", "#E2F3EE"], paid: ["#08805A", "#E2F3EE"], approved: ["#08805A", "#E2F3EE"], converted: ["#08805A", "#E2F3EE"],
+    pending: ["#986315", "#FBF0E0"], paused: ["#986315", "#FBF0E0"],
+    failed: ["#DC4141", "#FBE8E8"], rejected: ["#DC4141", "#FBE8E8"], disabled: ["#7D8A83", "#ECEEED"],
   };
-  const [c, bg] = map[s] || ["#6a7670", "#eceeed"];
+  const [c, bg] = map[s] || ["#7D8A83", "#ECEEED"];
   return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, textTransform: "capitalize" }}>{s}</span>;
 }
 
 function LogChip({ type }) {
   const palette = {
-    login_success: ["#1f7a3f", "#e6f4ea"], login_failed: ["#b4232a", "#fbe9e9"],
-    logout: ["#6a7670", "#eceeed"], user_created: ["#16545c", "#e2eff0"],
-    password_reset: ["#9a6a16", "#fdf3e0"], user_deleted: ["#b4232a", "#fbe9e9"],
-    user_toggled: ["#16545c", "#e2eff0"],
-    api_failure: ["#b4232a", "#fbe9e9"], api_recovery: ["#1f7a3f", "#e6f4ea"], logs_cleared: ["#9a6a16", "#fdf3e0"],
-    credit_approved: ["#1f7a3f", "#e6f4ea"], credit_rejected: ["#b4232a", "#fbe9e9"],
-    credit_manual: ["#16545c", "#e2eff0"],
-    reverted: ["#9a6a16", "#fdf3e0"],
+    login_success: ["#08805A", "#E2F3EE"], login_failed: ["#DC4141", "#FBE8E8"],
+    logout: ["#7D8A83", "#ECEEED"], user_created: ["#0B6F52", "#E2F3EE"],
+    password_reset: ["#986315", "#FBF0E0"], user_deleted: ["#DC4141", "#FBE8E8"],
+    user_toggled: ["#0B6F52", "#E2F3EE"],
+    api_failure: ["#DC4141", "#FBE8E8"], api_recovery: ["#08805A", "#E2F3EE"], logs_cleared: ["#986315", "#FBF0E0"],
+    credit_approved: ["#08805A", "#E2F3EE"], credit_rejected: ["#DC4141", "#FBE8E8"],
+    credit_manual: ["#0B6F52", "#E2F3EE"],
+    reverted: ["#986315", "#FBF0E0"],
   };
-  const [c, bg] = palette[type] || ["#6a7670", "#eceeed"];
+  const [c, bg] = palette[type] || ["#7D8A83", "#ECEEED"];
   return <span style={{ fontSize: 11, fontWeight: 600, color: c, background: bg, padding: "3px 8px", borderRadius: 7 }}>{type.replace(/_/g, " ")}</span>;
 }
 
@@ -10576,7 +13991,7 @@ function DefRow({ k, v }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
       <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{k}</span>
-      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--f)", textAlign: "right" }}>{v}</span>
+      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--f)", textAlign: "right" }}>{v == null || v === "" ? "—" : v}</span>
     </div>
   );
 }
@@ -10643,7 +14058,7 @@ const WowMomTT = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const p = payload[0]?.payload || {};
   const pct = p.pct;
-  const pctColor = pct == null ? "#fff" : pct > 0 ? "#a8d940" : pct < 0 ? "#ff9a9a" : "#fff";
+  const pctColor = pct == null ? "#fff" : pct > 0 ? "#0A9D6E" : pct < 0 ? "#F5BFBF" : "#fff";
   return (
     <div style={{ background: "var(--forest)", color: "#fff", padding: "9px 12px", borderRadius: 9, fontSize: 12, boxShadow: "var(--shadow-lg)" }}>
       <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
@@ -10662,7 +14077,7 @@ const Empty = ({ msg }) => <div style={{ padding: "28px", textAlign: "center", c
 
 const ApiError = ({ msg }) => (
   <div style={{ padding: "40px 28px", textAlign: "center", color: "var(--slate)" }}>
-    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 999, background: "#fbe9e9", color: "#b4232a", marginBottom: 12 }}>
+    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 999, background: "#FBE8E8", color: "#DC4141", marginBottom: 12 }}>
       <AlertCircle size={24} />
     </div>
     <h3 style={{ fontSize: 18, marginBottom: 6 }}>Couldn't load data</h3>
@@ -10677,18 +14092,18 @@ const selectStyle = { ...inp, width: "auto", padding: "9px 12px", cursor: "point
 const btnPrimary = { display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 12, background: "var(--grad-btn)", color: "#fff", fontWeight: 600, fontSize: 14, boxShadow: "0 8px 18px -8px rgba(22,84,92,.6)", justifyContent: "center" };
 const btnGhost = { display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 11, border: "1.5px solid var(--border)", background: "#fff", color: "var(--slate)", fontWeight: 600, fontSize: 13 };
 const iconBtn = { display: "inline-flex", padding: 7, borderRadius: 9, color: "var(--slate)", background: "var(--mint)", marginLeft: 5 };
-const td = { padding: "12px 16px", fontSize: 13.5, color: "#26302b", borderBottom: "1px solid #eef2f0", whiteSpace: "normal", wordBreak: "break-word", textAlign: "center", verticalAlign: "middle" };
+const td = { padding: "12px 16px", fontSize: 13.5, color: "var(--slate)", borderBottom: "1px solid var(--border)", whiteSpace: "normal", wordBreak: "break-word", textAlign: "center", verticalAlign: "middle" };
 // Sticky grand-total footer cell (money tables).
 const ftd = { ...td, position: "sticky", bottom: 0, background: "var(--mint-2)", fontWeight: 700, borderTop: "2px solid var(--border)" };
 const trStyle = { borderBottom: "1px solid var(--border)", cursor: "pointer" };
 const grid4 = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16 };
-const axisTick = { fontSize: 11, fill: "#869089" };
+const axisTick = { fontSize: 11, fill: "#A9B3AC" };
 const overlay = { position: "fixed", inset: 0, background: "rgba(13,40,24,.46)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", zIndex: 50 };
 const toastStyle = { position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "var(--forest)", color: "#fff", padding: "11px 18px", borderRadius: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, boxShadow: "var(--shadow-lg)", zIndex: 60 };
 
 /* ---------- helpers ---------- */
-const fmtDate = d => new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-const fmtTime = d => new Date(d).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const fmtDate = d => { if (d == null || d === "") return "—"; const x = new Date(d); return isNaN(x.getTime()) ? "—" : x.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); };
+const fmtTime = d => { if (d == null || d === "") return "—"; const x = new Date(d); return isNaN(x.getTime()) ? "—" : x.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }); };
 
 
 
