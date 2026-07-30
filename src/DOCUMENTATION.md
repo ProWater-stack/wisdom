@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/App.jsx`; this
 > doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.11**.
+> **Reflects:** `APP_VERSION` **2.29.29**.
 
 ---
 
@@ -106,7 +106,8 @@ Bearer-authed with the login idToken. `API_ORIGIN` constant. Endpoints:
   `…/o/<encoded path>?alt=media`.
 
 ### 3.3 Other
-- **AWS IoT** — `…execute-api.ap-southeast-2.amazonaws.com/prod` for device status/history (IoT Core).
+- **AWS IoT** — `…execute-api.ap-southeast-2.amazonaws.com/prod` (IoT Core). Two live GET routes: `/devices/status` (roster, polled 10s) and the bare `/devices/history?deviceId=…` (polled @8s for every roster device). That single history feed drives everything — liveness/last-seen, the RO-tank level + water quality, the Recent-readings ECG, junctionBox charts/heartbeats, and the 12-hour consumption table. *(v2.29.15: the separate `&days=1` / `&days=2` history polls were removed — they returned the same data as the bare feed.)*
+- **Weather (IoT Core)** — Google Maps Platform **Weather API** (`history/hours:lookup`) via a Cloud Function proxy (`weather-proxy/`), read by the frontend at `WEATHER_PROXY_URL`. Key held server-side, 60-min cache. Falls back to a labelled sample when the URL is unset/unreachable.
 - **Audit geo/IP** — `ipapi.co/json`, `api.ipify.org` (IP fallback), `api.bigdatacloud.net`
   reverse-geocode (used by the Logs Tracker to stamp location).
 - **Google Fonts** — Playfair Display + DM Sans.
@@ -210,18 +211,26 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 ### IoT Core (`iot`)
 - **Purpose:** live device telemetry — RO-tank level + water quality, and junctionBox pressure/flow.
 - **How:** AWS IoT `…execute-api.ap-southeast-2.amazonaws.com/prod` — device **status** + **history**.
-  Device monitor with status polling, recent heartbeats and fleet alerts. The device detail
-  **branches on the device schema**:
+  Device monitor with status polling, recent heartbeats and fleet alerts. Two live GET routes:
+  `/devices/status` (roster, 10s) and the bare `/devices/history?deviceId=…` (@8s for every roster
+  device). That one history feed drives everything — roster-wide **liveness**, the tank level /
+  water-quality / Recent-readings, and the 12-hour consumption table. *(v2.29.15: the separate
+  `&days=1` / `&days=2` polls were removed — they returned the same data as the bare feed.)*
+  The device detail **branches on the device schema**:
   - **RO-tank units** (`tankLevel` + `waterQuality` heartbeats) → a **Tank Level** illustration
     (four float switches 25/50/75/100% → live fill %) and a **Water Quality** panel showing pH /
     TDS / temperature as the **min–max range over the last day** vs their ideal bands, rated
     GOOD / AMBER / CHECK, with an overall summary and a **Recent readings** table. Fed by
-    `GET /devices/history?deviceId=…&days=1` (`{ items:[…] }`), polled every 30s. Ideal bands
+    the bare `GET /devices/history?deviceId=…` (`{ items:[…] }`), polled every 8s. Ideal bands
     (pH 6.5–8.5, TDS 50–300 mg/L, temp 15–25 °C) are app-side constants, not in the feed.
   - **junctionBox units** (`payload.units[].channels`) → the existing water-pressure / unit-health /
     channels grid with per-device pressure/flow charts and 12-hour consumption.
   Known tank device `E05A1B9C2DD4` is always kept in the roster, polled and selected by default.
+  The module top bar shows the **apartment name** (`Prabhavati`) as a centred pill so the site is clear (v2.29.14).
+- **Weather + correlation (v2.29.17):** a **live-weather strip** at the top of the module (temp/humidity/condition at Prabhavati — Garvebhavi Palya, Bengaluru, coords hardcoded in `WEATHER_LOCATION`), and a **"Weather correlation"** card inside Trend analysis. Data comes from the **Google Weather API** (`history/hours:lookup`, past 24h) through a **Cloud Function proxy** (`weather-proxy/` folder — holds the key server-side, 60-min cache, demand-driven, ~10–24 calls/day); the newest history hour is the live reading (no `currentConditions` call). `weatherApi` (60-min client cache + tolerant mapper) reads the proxy at `WEATHER_PROXY_URL` — **now LIVE** (`https://asia-south1-backend-prowater.cloudfunctions.net/weather`, deployed v2.29.18); if that ever goes blank/unreachable the UI falls back to a clearly-labelled SAMPLE. The correlation card joins each reading to its nearest weather hour and shows **Pearson r** (`iotPearson`/`iotWeatherCorrelate`) for outdoor temp vs water temp / TDS / pH, plus a dual-axis outdoor-vs-water-temp chart. All in-app, no LLM.
 - **UI (v2.29.2):** the tank is a transparent see-through graphic (lid/neck/shell) with the water block filling to the live level % and moving wave layers; the **Online** KPI shows a live green ECG heartbeat and **Offline** a red flatline; a deterministic **AI summary** strip at the top reads the fleet (counts, tank level, water-quality status, alerts — no LLM); the RO-tank **Recent readings** table is paginated 10/page. Water-quality ranges drop non-positive sensor dropouts.
+- **Recent readings ECG (v2.29.12 → v2.29.13):** above the table, one **ECG-style wave per metric** (pH / TDS / Temperature / Tank) drawn over the device's history feed. v2.29.13 upgraded the wave rendering — a faint monitor grid, shaded ideal band with dashed guides, a soft gradient area-fill, crisp non-scaling segment-coloured strokes (green/amber/red per segment) with a subtle glow, a haloed leading dot, and ~72-point bucket-averaging for smoothness — and moved the wave cards from the dark "monitor" look to clean **white / off-white** cards (light border + soft shadow, value coloured by band, deeper line colours tuned for legibility on white).
+- **Trend analysis (v2.29.16):** the section was rebuilt around a proper **interactive Recharts time-series** (`ComposedChart`) for the selected device — real time on X, the metric on Y, the **ideal band shaded** (`ReferenceArea` + dashed `ReferenceLine`s), each **out-of-range reading as a red dot**, and a hover tooltip (timestamp · value · in-/out-of-range · ideal). The focus metric is switched via tabs (with per-metric anomaly counts) or by clicking a mini-wave. An **"Anomalies only"** toggle isolates the out-of-range points in the chart (line hidden) and filters the readings table. Four deterministic **analytical tiles** sit on top — **Sensor health** (Good/Check from `iotSensorHealth`: reporting-gap, dropout rate, staleness), **Water quality** (Good/Warning/Critical from the window's worst band), **Alerts created** (out-of-range event count from `iotAnomalyScan`) and **Anomalies by metric** (per-metric counts) — plus an **Anomaly history** list (each event's date/time, worst value, High/Low). All in-app, no LLM. *Planned next step: correlate anomalies with a weather API.*
 
 ### Referral (`referral`)
 - **Purpose:** referrers, referees, credits, rewards momentum.

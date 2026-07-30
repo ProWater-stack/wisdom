@@ -1,0 +1,8 @@
+{
+  "name": "prowater-weather-proxy",
+  "version": "1.0.0",
+  "description": "Cloud Function proxy for Google Weather API (history/hours) — feeds the Wisdom2.0 dashboard weather + correlation.",
+  "main": "index.js",
+  "engines": { "node": ">=18" },
+  "dependencies": {}
+}

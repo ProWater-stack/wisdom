@@ -10,7 +10,7 @@ import {
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList,
-  ComposedChart, Line, ReferenceLine, LineChart
+  ComposedChart, Line, ReferenceLine, ReferenceArea, LineChart
 } from "recharts";
 import { ApiUsageTracker, makeCache } from "./lib/apiUsageTracker";
 import { notifyAdminEmail } from "./lib/notifyAdmin";
@@ -287,9 +287,27 @@ function setSectionOverride(sections, moduleId, tabId, level) {
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.29.11";
-const VERSION_DATE = "2026-07-29";
+const APP_VERSION = "2.29.29";
+const VERSION_DATE = "2026-07-30";
 const VERSION_HISTORY = [
+  { v: "2.29.29", note: "Task Planner: added a \"Timeline\" view (4th toggle alongside Board / List / Weekly) that lists tasks by the day they were ADDED (createdAt), newest first — grouped under Today / Yesterday / date headers with a per-day \"N tasks added\" count, and each entry showing the time, title, status + priority pills, category, assignees and who added it. Click any entry to open/edit the task. Lets you see the flow of what's being added to the board over time." },
+  { v: "2.29.28", note: "(1) Customer > Societies now opens with a \"Customer retention insights\" panel — the same 5-layer read (What happened / ongoing / Result / Positive vs Negative / recommended ACTIONS) on active vs churned customers, avg LTV (from paid invoices), dunning (payment-failing) customers, outstanding dues, and at-risk societies (highest inactive+dunning %). Actions: recover dunning, win back inactive (worst society first), service+renewal drive on the at-risk society, chase outstanding. (2) Apartment/Society filters on the analytics pages (Sales, Revenue, Earned Revenue) are now MULTI-SELECT (reusing MultiSelectFilter) instead of single dropdowns — pick any combination of societies; all KPIs/charts/tables scope to the selection." },
+  { v: "2.29.27", note: "(1) Analytics > Revenue (Net Revenue) gained the same \"Business insights\" panel — What happened (collections in the period vs previous + YoY), What's ongoing (recharge vs deposit split + outstanding receivables), Result (recurring recharge as % of collections — the durable revenue), Positive vs Negative (trend up/down, top/lagging society, deposit-heavy mix) and recommended ACTIONS (chase outstanding, recover dipped collections, grow recurring recharge, push a lagging society). Deterministic over the live invoices/customers. (2) Removed the \"Fleet health & insights\" section from IoT Device Monitor (added in 2.29.26) per request — the Device Monitor is back to its live-monitoring layout." },
+  { v: "2.29.26", note: "IoT Core > Device Monitor gained a \"Fleet health & insights\" analytics section at the top (for the IoT head). Fleet KPIs (devices, online, water-quality index = % of readings in range, devices needing attention); a 5-layer insight read (What happened / ongoing / Result / Positive vs Negative / recommended ACTIONS — dispatch offline devices, service the weakest device, inspect membranes when the WQ index dips); an anomaly-spike timeseries (out-of-range readings per day across the fleet, to catch spikes); and a best-to-worst devices table (status · water quality · anomalies · 0-5 health). Reuses the roster + per-device history already polled (no extra calls). Society-level rollup is noted as pending a device→society mapping (the feed identifies devices only). Deterministic, no LLM." },
+  { v: "2.29.25", note: "Analytics > Sales Insights now opens with a \"Business insights\" panel that reads the leads like a story, not just data — structured as: What happened (this month's leads/conversions vs last month), What's ongoing (open + idle-over-14-days leads), Result (overall close rate), Positive vs Negative (auto-flagged best/worst channel · society · rep, and trend direction), and \"Turn − into +\" recommended ACTIONS tied to each negative (assign idle leads, pause a weak channel, demo-drive a low society, coach a lagging rep). Exposed lead `source` in the mapper to power channel insights. All deterministic rules over the live Zoho lead data — the funnel + trend sit below it." },
+  { v: "2.29.24", note: "Analytics > Sales Insights now opens with the REAL picture (per Sales-head feedback) — a Lead conversion funnel that starts from TOTAL leads, not from conversions. Headline KPIs: Total leads · Converted (Won) · Conversion % (colour-coded red/amber/green) · Lost; a top-to-bottom funnel (Total → Contacted+ → Demo+ → Proposal+ → Converted) with drop-off % at each step; and a Leads-vs-conversion-% trend over time (monthly cohort, bar = leads, line = conversion %). Society filter scopes it all. Deterministic, from the live Zoho lead stages. (Next: full sales KPI suite — by campaign / salesperson / society — and the IoT KPI suite.)" },
+  { v: "2.29.23", note: "IoT Core weather correlation now works across the Today / Yesterday / This-Week filter — WITHOUT any extra API calls. The Google Weather endpoint only returns the last 24 h per call, so weatherApi now accumulates each fetched hour into a rolling multi-day store in localStorage (pw_weather_hist, deduped by hour, capped 8 days) and returns the merged history. The range filter's correlation then reads whatever period is selected (it builds up as the dashboard runs — partial Yesterday immediately from the last-24h overlap, full Yesterday after a day, This-Week over a week). Same call cadence as before." },
+  { v: "2.29.22", note: "IoT Core > Trend analysis & metric cards. (1) The combined weather chart now shows the OUTSIDE TEMPERATURE on a real labelled Y-axis (°C) as the readable reference, with water temp / TDS / pH overlaid on their own auto-scaled axes — easier to read than the fully-hidden axes. (2) A flashing red dot now pulses on the chart at any timestamp where a taste issue is likely (a combination of hard/flat TDS, off-neutral pH, or warm water). (3) The four metric cards (pH · TDS · Temperature · Tank) were rebuilt into real gauges with a much larger current-value number: pH shows a 0–14 acid→neutral→alkaline scale, TDS a 0–600 mg/L meter with safe/watch/unsafe zones, Temperature a Cold/Normal/Hot coloured range, and Tank a 0–100% level bar with a fill — each with a marker at the live value. (4) Removed the fleet-wide \"Active alerts\" card from the Device Monitor. All deterministic, no LLM." },
+  { v: "2.29.21", note: "IoT Core > Trend analysis refinements. (1) The three paired weather charts collapsed back into ONE combined chart — outdoor temp + water temp + TDS + pH on one time axis (each auto-scaled on its own hidden axis so the different units stay readable; hover for real values), with out-of-range points as red dots on every series. (2) Added a Today / Yesterday / This Week range filter that slices the window everything reads from; the selected device now pulls a 7-day history (…&days=7) to feed it. (3) Renamed the \"Alerts created\" tile to \"Total alerts\". (4) Recent-readings table no longer fills the whole cell amber/red — the out-of-range value itself goes bold, coloured and +1px so it pops without a heavy block. (5) \"What this means\" gained a For-residents-&-in-flat-purifiers read: expected tap-water taste (from central-RO TDS/pH/temp) and the load/servicing impact on each flat's own purifier, noting the sensors sit on the central RO. All deterministic, no LLM." },
+  { v: "2.29.20", note: "IoT Core > Weather correlation — the single outdoor-vs-water-temp chart became THREE compact paired charts (outdoor temp vs Water temp, vs TDS, vs pH), each on its own dual axis so the different scales stay readable, mapping 1:1 to the three r-cards above. Each sensor line now flags out-of-range readings as red dots (amber/red band → red), matching the trend chart. Outdoor temp is the shared orange reference line on every chart." },
+  { v: "2.29.19", note: "IoT Core weather readability. (1) Chart time axes (Trend analysis + Weather correlation) and the live-weather card now show 12-hour times with AM/PM instead of 24-hour. (2) The Weather correlation card gained a plain-English \"What this means\" annotation — a deterministic read for a business/data/user audience that states the outdoor conditions (dominant condition + temp range) and, in one line each, how water temperature, TDS and pH responded (with the honest caveat that it's correlation over a short ~24h window, not proof of cause). Water-temp shows the expected strong positive link to outdoor temp." },
+  { v: "2.29.18", note: "IoT Core weather went LIVE — the Cloud Function proxy (weather-proxy/) was deployed to backend-prowater and WEATHER_PROXY_URL is now set, so the live-weather strip and the sensor↔weather correlation run on real Google Weather API data for Prabhavati (Garvebhavi Palya, Bengaluru) instead of the sample. Verified end-to-end: proxy returns 200 with real conditions + 24h history, CORS open to the browser, 60-min cache HIT." },
+  { v: "2.29.17", note: "IoT Core > Device Monitor — weather + sensor↔weather correlation (Prabhavati). (1) A live-weather strip at the top of the module shows the current conditions at the apartment (Garvebhavi Palya, Bengaluru) — temp, humidity, condition — sourced from the Google Weather API's newest history hour (no separate current-conditions call). (2) A \"Weather correlation\" card inside Trend analysis joins each reading to its nearest weather hour and reports Pearson r for outdoor temp vs water temp / TDS / pH (with a plain-English strength read and what's physically expected), plus a dual-axis chart overlaying outdoor vs water temperature. (3) Data flows through a Cloud Function proxy (new weather-proxy/ folder) that holds the key server-side and caches 60 min — demand-driven, ~10–24 calls/day for one site. Until WEATHER_PROXY_URL is set, the UI shows a clearly-labelled SAMPLE so nothing is mistaken for real. Location is hardcoded (weather is regional). All correlation math is in-app, no LLM." },
+  { v: "2.29.16", note: "IoT Core > Device Monitor — rebuilt \"Recent readings\" into a Trend analysis panel per feedback. (1) A proper interactive time-series chart (Recharts) per device: real time on the X-axis, the metric on Y, the ideal band shaded, and every out-of-range reading drawn as a red dot, with a hover tooltip (time · value · in-range/out-of-range · ideal). Switch the focused metric via tabs or by clicking a mini-wave — pH / TDS / Temperature / Tank. (2) An \"Anomalies only\" filter that isolates the out-of-range points in the chart AND filters the readings table to just those rows. (3) Analytical tiles that read the window deterministically: Sensor health (Good/Check from reporting continuity, dropouts, staleness), Water quality (Good/Warning/Critical), Alerts created (out-of-range event count) and Anomalies-by-metric (per-metric counts). (4) An Anomaly history list — each out-of-range event with its date/time, worst value and High/Low direction. All in-app, no LLM. Next step (noted, not built): correlate anomalies with a weather API." },
+  { v: "2.29.15", note: "IoT Core > Device Monitor — consolidated the history API. The per-device `&days=1` and `&days=2` history polls were removed: they returned the SAME data as the bare `/devices/history?deviceId=…` feed, so the tank level, water quality, Recent-readings ECG and the 12-hour consumption table now all read off that single feed. The module now calls just two endpoints — `/devices/status` (roster) and `/devices/history?deviceId=…` (bare). (Supersedes the v2.29.14 change, which had instead dropped the bare call.)" },
+  { v: "2.29.14", note: "IoT Core > Device Monitor. (1) Added the apartment name — \"Prabhavati\" — as a centred pill in the module top bar (with a location pin), so it's clear which site the monitored devices belong to (hidden on narrow screens to avoid overlap). (2) Dropped the dummy `/devices/history?deviceId=…` (no-days) API call: the roster-wide liveness poll now hits the real day window `/devices/history?deviceId=…&days=1`, so device online/offline state, the heartbeat table, live consumption and the charts all run off real data instead of the placeholder feed. The two live endpoints are now /devices/status and /devices/history?…&days=1 / &days=2." },
+  { v: "2.29.13", note: "IoT Core > Device Monitor \"Recent readings\" ECG waves — visual upgrade per feedback. (1) Redrew each metric's wave as a high-quality trend: a faint monitor grid, the ideal band shaded with dashed guide lines, a soft gradient area-fill under the line, crisp segment-coloured strokes (green/amber/red per segment, non-scaling for sharp edges at any width) with a subtle glow, and a haloed leading dot at the latest reading; the day's readings are bucket-averaged to ~72 points so the line stays smooth. (2) Switched the wave cards from the dark \"monitor\" look to clean white / off-white cards (light border + soft shadow) to match the rest of the dashboard, with the metric value coloured by its current band and deeper line colours tuned for legibility on white. (3) Removed the explanatory subtitle line under the \"Recent readings\" heading." },
+  { v: "2.29.12", note: "IoT Core > Device Monitor \"Recent readings\": added (1) an ECG-style wave monitor — one dark glowing wave per metric (pH / TDS / Temperature / Tank) over the day's readings, with the ideal band shaded and out-of-range points dotted amber/red; and (2) quick anomaly filter chips (All · Any anomaly · pH · TDS · Temp · Tank) that each show a live out-of-range count and instantly filter the table to just those readings, so anomalies are one click away. Sorting, 10-per-page pagination and the per-cell out-of-range colour highlighting are unchanged." },
   { v: "2.29.11", note: "Customer Profile — dropped the \"AI summary\" card (it only stitched numbers into long sentences) per feedback. The profile fields table now surfaces Support tickets and Complaints as fields, and every value is highlighted only when it is a concern — amber (warning) or red (critical) — while healthy values stay plain: Status (red if not active), LTV (red if 0), Discounts (amber ≥20% of LTV / red ≥30%), Support tickets (amber ≥5 / red ≥8), Complaints (amber ≥1 / red ≥2). The Customer/Technician/Device score cards stay. The Spares-used card lost its \"AI analysis\" paragraph too — now just a readable spare→count table with a one-line factual sub." },
   { v: "2.29.10", note: "Fix: Customer Profile Device score could read 0.0 (\"Poor\") for a device with ZERO complaints — routine maintenance was over-penalised (every spare −0.35 and every ticket −0.10, so 12 spares + 20 service jobs drove it negative → clamped to 0). Reworked so complaints (real faults) are the primary driver (−1.3 each) while spares + above-routine service rate are capped \"wear\" (max −2 pts); a fault-free device now scores at least 3.0. Also fixed the contradictory AI line \"Device shows wear — 0 complaints\": with no complaints it now reads \"No faults logged, but heavy servicing (N spares, M jobs) — worth keeping an eye on.\"" },
   { v: "2.29.9", note: "Customer > All Customers Profile — 360° scoring + de-duplication (per feedback). Added three 0–5 scores with conditional colour formatting (green ≥4 / amber ≥2.5 / red < 2.5 / grey = no data): Customer score (loyalty + value + engagement, dinged by complaints & heavy discounting), Technician score (field-service quality — job timing + TDS reduction, null when there are no ops jobs) and Device score (health — dinged by complaints & spares). The Spares-used analysis moved onto the Profile page (from the Ops tab). The AI summary was reworked to interpretation only — it no longer restates the field values (LTV / deposit / discounts / referrals); it now reads the scores in plain English (\"strong customer\", \"device looks healthy\") with severity-coloured Focus areas highlighting the negatives." },
@@ -531,6 +549,7 @@ function mapZohoLead(z) {
     stage,
     rawStatus,
     owner: z.owner?.name || z.Owner?.name || z.owner || "—",
+    source: z.lead_source || z.Lead_Source || z.source || z.Source || pickLeadField(z, ["Lead_Source"], "leadsource", "source") || "—",
     updated: z.modified_time || z.Modified_Time || z.created_time || z.Created_Time || "",
     created: z.created_time || z.Created_Time || "",
     note: z.description || z.Description || "",
@@ -3249,7 +3268,7 @@ const doRefresh = async () => {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", minHeight: "100vh", width: "100%" }} className="shell-grid">
-      <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-side{position:fixed;z-index:40;height:100%;transform:translateX(-100%);transition:.25s}.pw-side.open{transform:none}.pw-topbar-burger{display:inline-flex!important}}`}</style>
+      <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-side{position:fixed;z-index:40;height:100%;transform:translateX(-100%);transition:.25s}.pw-side.open{transform:none}.pw-topbar-burger{display:inline-flex!important}.iot-apt-badge{display:none!important}}`}</style>
 
       {/* sidebar */}
       <aside className={`pw-side ${mobileNav ? "open" : ""}`} style={{
@@ -3314,6 +3333,13 @@ const doRefresh = async () => {
       <main style={{ minWidth: 0 }}>
         <div className="pw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px", borderBottom: "1px solid var(--border)", background: "rgba(243,248,236,.92)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
           <button className="pw-topbar-burger" onClick={() => setMobileNav(s => !s)} style={{ display: "none", color: "var(--f)" }}><Menu /></button>
+          {module === "iot" && (
+            <div className="iot-apt-badge" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", borderRadius: 999, background: "var(--mint-2)", border: "1px solid var(--border)", boxShadow: "0 1px 2px rgba(16,40,28,.05)", pointerEvents: "none", whiteSpace: "nowrap" }}>
+              <MapPin size={15} color="var(--teal)" />
+              <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase", color: "var(--muted)" }}>Apartment</span>
+              <span style={{ fontSize: 14.5, fontWeight: 800, color: "var(--forest)", letterSpacing: ".01em" }}>Prabhavati</span>
+            </div>
+          )}
           <div style={{ flex: 1 }}>
             <p className="eyebrow">{moduleMeta.label} · {tabIsAdmin ? "Admin access" : "View access"}</p>
             <h2 style={{ fontSize: 22, lineHeight: 1 }}>{moduleMeta.built ? (nav.find(n => n.id === tab)?.label || moduleMeta.label) : moduleMeta.label}</h2>
@@ -6739,12 +6765,13 @@ function SortHeader({ label, k, sort, onSort }) {
 function CustomerSocieties() {
   const { user } = useAuth();
   const [rows, setRows] = useState(null);
+  const [invs, setInvs] = useState([]);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState({ key: "count", dir: "desc" });
   const toggleSort = (k) => setSort(s => s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: k === "society" ? "asc" : "desc" });
   const [expanded, setExpanded] = useState(() => new Set());
   const toggleExpand = (k) => setExpanded(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
-  useEffect(() => { api.logView(user.username, "Viewed Societies"); customerApi.getCustomers().then(setRows).catch(() => setRows([])); }, []);
+  useEffect(() => { api.logView(user.username, "Viewed Societies"); Promise.all([customerApi.getCustomers(), billingApi.getInvoices().catch(() => [])]).then(([c, i]) => { setRows(c); setInvs(i || []); }).catch(() => setRows([])); }, []);
   if (!rows) return <Loading />;
 
   const NONE = "— No society —";
@@ -6764,6 +6791,32 @@ function CustomerSocieties() {
     else if (dt === "Hot & Cold") g.hotcold++;
   });
   const all = Object.values(groups);
+  // ── Retention insights: active vs churned / LTV / at-risk societies ──
+  const totalCust = rows.length;
+  const activeN = all.reduce((s, g) => s + g.active, 0);
+  const inactiveN = all.reduce((s, g) => s + g.inactive, 0);
+  const dunningN = all.reduce((s, g) => s + g.dunning, 0);
+  const activeRate = totalCust ? Math.round(activeN / totalCust * 1000) / 10 : 0;
+  const churnRate = totalCust ? Math.round((inactiveN) / totalCust * 1000) / 10 : 0;
+  const paidInvs = (invs || []).filter(i => i.status === "paid");
+  const totalLtv = paidInvs.reduce((s, i) => s + (i.total || 0), 0);
+  const avgLtv = totalCust ? Math.round(totalLtv / totalCust) : 0;
+  const outstandingTot = rows.reduce((s, c) => s + (Number(c.total_outstanding) || 0), 0);
+  const risk = all.filter(g => g.society !== NONE && g.count >= 5).map(g => ({ s: g.society, count: g.count, riskPct: Math.round((g.inactive + g.dunning) / g.count * 1000) / 10, activePct: Math.round(g.active / g.count * 1000) / 10 }));
+  const atRisk = [...risk].sort((a, b) => b.riskPct - a.riskPct)[0];
+  const healthiest = [...risk].sort((a, b) => b.activePct - a.activePct)[0];
+  const rPos = [], rNeg = [], rActs = [];
+  if (activeRate >= 85) rPos.push(`Healthy base — ${activeRate}% of customers active`);
+  if (avgLtv > 0) rPos.push(`Avg lifetime value ~${inr(avgLtv)} / customer`);
+  if (healthiest) rPos.push(`Healthiest society: ${healthiest.s} (${healthiest.activePct}% active)`);
+  if (dunningN > 0) { rNeg.push(`${dunningN} customers in dunning (payment failing)`); rActs.push(`Recover the ${dunningN} dunning customers now — a failed payment is the last step before churn; fix cards / follow up this week.`); }
+  if (inactiveN > 0) { rNeg.push(`${inactiveN} churned (inactive) — ${churnRate}% of base`); rActs.push(`Run a win-back on the ${inactiveN} inactive customers${atRisk ? `, starting with ${atRisk.s}` : ""} (offer / re-onboard).`); }
+  if (atRisk && atRisk.riskPct >= 20) { rNeg.push(`At-risk society: ${atRisk.s} — ${atRisk.riskPct}% inactive/dunning`); rActs.push(`Society "${atRisk.s}" is churning fastest — schedule a service + renewal drive there.`); }
+  if (outstandingTot > 0) { rNeg.push(`${inr(outstandingTot)} outstanding across customers`); rActs.push(`Chase the ${inr(outstandingTot)} outstanding — unpaid dues are an early churn signal.`); }
+  if (!rNeg.length) rActs.push("Retention looks solid — keep renewals and payment follow-ups tight.");
+  const rHappened = `${totalCust.toLocaleString("en-IN")} customers across ${all.filter(g => g.society !== NONE).length} societies — ${activeN} active, ${inactiveN} inactive, ${dunningN} in dunning.`;
+  const rOngoing = `${dunningN} customers failing payment right now${outstandingTot > 0 ? `, ${inr(outstandingTot)} outstanding` : ""}.`;
+  const rResult = `${activeRate}% of the base is active${avgLtv > 0 ? `, avg LTV ~${inr(avgLtv)}` : ""}. Churn (inactive) is ${churnRate}%.`;
   const namedSocieties = all.filter(g => g.society !== NONE).length;
   const biggest = all.filter(g => g.society !== NONE).reduce((b, g) => g.count > (b?.count || 0) ? g : b, null);
 
@@ -6786,6 +6839,34 @@ function CustomerSocieties() {
 
   return (
     <div className="fade-up">
+      <div style={{ marginBottom: 16 }}>
+        <Card title="Customer retention insights" sub="Active vs churned · LTV · at-risk societies — and what to fix">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 }}>
+            {[{ t: "What happened", body: rHappened, icon: "📈" }, { t: "What's ongoing", body: rOngoing, icon: "⏳" }, { t: "Result", body: rResult, icon: "🎯" }].map((b, i) => (
+              <div key={i} style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>{b.icon} {b.t}</div>
+                <div style={{ fontSize: 13, color: "var(--slate)", lineHeight: 1.5 }}>{b.body}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginTop: 12 }}>
+            <div style={{ background: "#EEF7F3", border: "1px solid #BFE6D6", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#0A7D53", marginBottom: 6 }}>Positive</div>
+              {rPos.length ? rPos.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#0A7D53", fontWeight: 800 }}>▲</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No standout positives yet.</div>}
+            </div>
+            <div style={{ background: "#FBF0F0", border: "1px solid #F0C9C9", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#DC4141", marginBottom: 6 }}>Negative</div>
+              {rNeg.length ? rNeg.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#DC4141", fontWeight: 800 }}>▼</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No red flags in this view.</div>}
+            </div>
+          </div>
+          <div style={{ marginTop: 12, background: "#fff", border: "1px dashed var(--brand)", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 6 }}>Turn − into + · recommended actions</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {rActs.map((a, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 8 }}><span style={{ color: "var(--teal)", fontWeight: 800, flex: "0 0 auto" }}>{i + 1}.</span>{a}</div>)}
+            </div>
+          </div>
+        </Card>
+      </div>
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 16 }}>
         <Toolbar q={q} setQ={setQ} placeholder="Search society…" count={filtered.length}
@@ -8892,7 +8973,7 @@ function NetRevenue() {
   const [invs, setInvs] = useState(null);
   const [custs, setCusts] = useState(null);
   const [err, setErr] = useState("");
-  const [apt, setApt] = useState("all"); // apartment (society) filter
+  const [apt, setApt] = useState(null); // apartment (society) filter
   const { sel, setSel, range } = useDateRange("this_month"); // date-range preset
 
  useEffect(() => {
@@ -8915,7 +8996,7 @@ function NetRevenue() {
 
   const paidAll = invs.filter(i => i.status === "paid" && i.date);
   const aptOptions = Array.from(new Set(paidAll.map(societyOf).filter(s => s && s !== "Unknown"))).sort();
-  const paid = apt === "all" ? paidAll : paidAll.filter(i => societyOf(i) === apt);
+  const paid = apt === null ? paidAll : paidAll.filter(i => apt.includes(societyOf(i)));
 
   // Collection date of an invoice (payment date wins over issue date).
   const paidOn = (i) => {
@@ -8959,6 +9040,29 @@ function NetRevenue() {
   const toLabel = dmy(range.to);
   const periodName = presetLabel(sel.preset);
 
+  // ── Business insights (revenue): what happened / ongoing / result / +/- / actions ──
+  const periodRecharge = daily.reduce((s, b) => s + (b.recharge || 0), 0);
+  const periodDeposit = daily.reduce((s, b) => s + (b.deposit || 0), 0);
+  const scopedInvs = apt === null ? invs : invs.filter(i => apt.includes(societyOf(i)));
+  const outstanding = scopedInvs.filter(i => i.status && i.status !== "paid").reduce((s, i) => s + (i.total || 0), 0);
+  const socRev = {};
+  paidAll.forEach(i => { if (!dateInRange(paidOn(i), range)) return; const s = societyOf(i); socRev[s] = (socRev[s] || 0) + i.total; });
+  const socArr = Object.entries(socRev).map(([s, v]) => ({ s, v })).sort((a, b) => b.v - a.v);
+  const topSoc = socArr[0], lowSoc = socArr[socArr.length - 1];
+  const rPos = [], rNeg = [], rActs = [];
+  if (momPct != null && momPct > 0) rPos.push(`Collections up ${momPct}% vs the previous period`);
+  if (yoyPct != null && yoyPct > 0) rPos.push(`Up ${yoyPct}% year-on-year`);
+  if (apt === null && topSoc) rPos.push(`Top society: ${topSoc.s} — ${inr(topSoc.v)}`);
+  if (momPct != null && momPct < 0) { rNeg.push(`Collections down ${Math.abs(momPct)}% vs the previous period`); rActs.push("Collections dipped — check for failed/late recharges and chase upcoming renewals to recover."); }
+  if (yoyPct != null && yoyPct < 0) rNeg.push(`Down ${Math.abs(yoyPct)}% year-on-year`);
+  if (outstanding > 0) { rNeg.push(`${inr(outstanding)} outstanding (billed, not collected)`); rActs.push(`Chase the ${inr(outstanding)} outstanding${apt === null ? "" : ` in ${apt.join(", ")}`} — assign follow-ups on the unpaid invoices.`); }
+  if (periodTotal && periodDeposit / periodTotal > 0.4) { rNeg.push(`Deposits are ${Math.round(periodDeposit / periodTotal * 100)}% of collections`); rActs.push("A large share is one-time refundable deposits — grow recurring plan recharges for durable revenue."); }
+  if (apt === null && socArr.length > 1 && lowSoc && topSoc && lowSoc.v < topSoc.v * 0.3) { rNeg.push(`Lagging society: ${lowSoc.s} — ${inr(lowSoc.v)}`); rActs.push(`Society "${lowSoc.s}" contributes little — a renewal / penetration push there could lift revenue.`); }
+  if (!rNeg.length) rActs.push("Revenue is trending well — protect renewals and keep collection follow-ups tight.");
+  const rHappened = `${inr(periodTotal)} collected in ${periodName}${momPct != null ? ` — ${momPct >= 0 ? "up" : "down"} ${Math.abs(momPct)}% vs the previous period` : ""}${yoyPct != null ? `, ${yoyPct >= 0 ? "+" : ""}${yoyPct}% YoY` : ""}.`;
+  const rOngoing = `${inr(periodRecharge)} recharge + ${inr(periodDeposit)} deposit this period. ${outstanding > 0 ? `${inr(outstanding)} still outstanding.` : "Nothing outstanding."}`;
+  const rResult = `Recurring recharge is ${periodTotal ? Math.round(periodRecharge / periodTotal * 100) : 0}% of collections — that's the real recurring revenue (deposits are one-time & refundable).`;
+
   const Delta = ({ p }) => {
     if (p == null) return <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>— 0%</span>;
     const up = p >= 0;
@@ -8979,15 +9083,41 @@ function NetRevenue() {
           <div style={{ fontSize: 20, fontWeight: 700, color: "var(--f)" }}>Net Revenue <span style={{ fontSize: 13, fontWeight: 500, color: "var(--muted)" }}>· From {fromLabel} To {toLabel}</span></div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <select value={apt} onChange={e => setApt(e.target.value)} style={selectStyle}>
-            <option value="all">All apartments</option>
-            {aptOptions.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+          <MultiSelectFilter label="Apartment" options={aptOptions} value={apt} onChange={setApt} width={240} />
           <DateRangePicker value={sel} onChange={setSel} />
           <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
         </div>
       </div>
 
+      {/* business insights */}
+      <div style={{ marginBottom: 18 }}>
+        <Card title="Business insights" sub="What happened · what's ongoing · the result · and what to fix">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 }}>
+            {[{ t: "What happened", body: rHappened, icon: "📈" }, { t: "What's ongoing", body: rOngoing, icon: "⏳" }, { t: "Result", body: rResult, icon: "🎯" }].map((b, i) => (
+              <div key={i} style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>{b.icon} {b.t}</div>
+                <div style={{ fontSize: 13, color: "var(--slate)", lineHeight: 1.5 }}>{b.body}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginTop: 12 }}>
+            <div style={{ background: "#EEF7F3", border: "1px solid #BFE6D6", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#0A7D53", marginBottom: 6 }}>Positive</div>
+              {rPos.length ? rPos.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#0A7D53", fontWeight: 800 }}>▲</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No standout positives yet.</div>}
+            </div>
+            <div style={{ background: "#FBF0F0", border: "1px solid #F0C9C9", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#DC4141", marginBottom: 6 }}>Negative</div>
+              {rNeg.length ? rNeg.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#DC4141", fontWeight: 800 }}>▼</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No red flags in this view.</div>}
+            </div>
+          </div>
+          <div style={{ marginTop: 12, background: "#fff", border: "1px dashed var(--brand)", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 6 }}>Turn − into + · recommended actions</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {rActs.map((a, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 8 }}><span style={{ color: "var(--teal)", fontWeight: 800, flex: "0 0 auto" }}>{i + 1}.</span>{a}</div>)}
+            </div>
+          </div>
+        </Card>
+      </div>
       {/* summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }} className="nr-cards">
         <style>{`@media(max-width:760px){.nr-cards{grid-template-columns:1fr!important}}`}</style>
@@ -11200,6 +11330,167 @@ function AppLogs() {
    valve telemetry, channels, history. Polls status (10s) and history (15s).
    =========================================================================== */
 const IOT_API_BASE = "https://xb2sxpw2k0.execute-api.ap-southeast-2.amazonaws.com/prod";
+
+/* ---- Weather (Prabhavati) + sensor↔weather correlation --------------------
+   Live weather + past-24h history for the apartment, via the Cloud Function
+   proxy (weather-proxy/). Paste the deployed URL into WEATHER_PROXY_URL and the
+   dashboard goes live; until then it shows a clearly-labelled SAMPLE so the UI
+   is visible. The newest history hour is the "live" reading (no separate current
+   call). Location is hardcoded — weather is regional so pincode-area coords are
+   exact enough. */
+const WEATHER_LOCATION = {
+  name: "Prabhavati",
+  area: "Garvebhavi Palya, Bengaluru",
+  address: "Ramayya Lyt, 28, 7th Main, 6th Cross, Garvebhavi Palya, Bengaluru, Karnataka 560068",
+  lat: 12.8925,
+  lon: 77.6320,
+};
+// >>> Paste the deployed Cloud Function URL here to go live (see weather-proxy/README.md):
+const WEATHER_PROXY_URL = "https://asia-south1-backend-prowater.cloudfunctions.net/weather";
+const _wxNum = (v) => { const n = Number(v); return isNaN(n) ? null : n; };
+// 24 hourly points on a Bengaluru-ish diurnal curve — used only when the proxy
+// URL is blank/unreachable, and always flagged sample:true in the UI.
+function _wxSampleData() {
+  const now = Date.now(), H = [];
+  for (let i = 23; i >= 0; i--) {
+    const t = now - i * 3600000, hr = new Date(t).getHours();
+    const phase = Math.sin(((hr - 9) / 24) * 2 * Math.PI);
+    H.push({ t, tempC: Math.round((25 + 5 * phase) * 10) / 10, humidity: Math.round(70 - 15 * phase), condition: hr > 6 && hr < 18 ? "Partly cloudy" : "Clear" });
+  }
+  return { location: WEATHER_LOCATION, history: H, current: H[H.length - 1], cachedAt: new Date(now).toISOString(), sample: true };
+}
+// Accumulate the 24h the proxy returns into a rolling multi-day store (localStorage),
+// deduped by hour and capped to 8 days. This makes Yesterday / This-Week correlation
+// possible WITHOUT any extra API calls — we just keep the hours we already fetched.
+const _WX_LS = "pw_weather_hist";
+const _wxHour = (ms) => Math.floor(ms / 3600000) * 3600000;
+function _wxMerge(fresh) {
+  let store = {};
+  try { store = JSON.parse(localStorage.getItem(_WX_LS) || "{}") || {}; } catch { store = {}; }
+  (fresh || []).forEach((h) => { if (h.t != null && !isNaN(h.t)) { const k = _wxHour(h.t); store[k] = { t: k, tempC: h.tempC, humidity: h.humidity, condition: h.condition }; } });
+  const cutoff = Date.now() - 8 * 86400000;
+  const merged = Object.values(store).filter((h) => h.t >= cutoff).sort((a, b) => a.t - b.t);
+  try { const obj = {}; merged.forEach((h) => { obj[h.t] = h; }); localStorage.setItem(_WX_LS, JSON.stringify(obj)); } catch { /* quota — skip persist */ }
+  return merged;
+}
+let _wxCache = null, _wxAt = 0, _wxInflight = null;
+const weatherApi = {
+  get: async (force) => {
+    const now = Date.now();
+    if (!force && _wxCache && now - _wxAt < 60 * 60 * 1000) return _wxCache;
+    if (_wxInflight) return _wxInflight;
+    if (!WEATHER_PROXY_URL) { _wxCache = _wxSampleData(); _wxAt = now; return _wxCache; }
+    _wxInflight = (async () => {
+      try {
+        const r = await fetch(`${WEATHER_PROXY_URL}?lat=${WEATHER_LOCATION.lat}&lon=${WEATHER_LOCATION.lon}`);
+        if (!r.ok) throw new Error("weather " + r.status);
+        const j = await r.json();
+        const hist = (j.history || []).map((h) => ({ t: new Date(h.t).getTime(), tempC: _wxNum(h.tempC), humidity: _wxNum(h.humidity), condition: h.condition || null }))
+          .filter((h) => !isNaN(h.t)).sort((a, b) => a.t - b.t);
+        const merged = _wxMerge(hist); // rolling multi-day store (no extra API calls)
+        const data = { location: j.location || WEATHER_LOCATION, history: merged.length ? merged : hist, current: hist.length ? hist[hist.length - 1] : (merged.length ? merged[merged.length - 1] : null), cachedAt: j.cachedAt || null, sample: false };
+        _wxCache = data; _wxAt = now; return data;
+      } catch { _wxCache = _wxSampleData(); _wxAt = now; return _wxCache; }
+      finally { _wxInflight = null; }
+    })();
+    return _wxInflight;
+  },
+};
+// Pearson correlation of two equal-length numeric arrays (null if <3 points or flat).
+function iotPearson(xs, ys) {
+  const n = Math.min(xs.length, ys.length);
+  if (n < 3) return null;
+  let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+  for (let i = 0; i < n; i++) { const x = xs[i], y = ys[i]; sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; }
+  const cov = sxy - (sx * sy) / n, vx = sxx - (sx * sx) / n, vy = syy - (sy * sy) / n;
+  if (vx <= 0 || vy <= 0) return null;
+  return cov / Math.sqrt(vx * vy);
+}
+// Join each reading to its nearest weather hour, then correlate outdoor temp vs
+// water temp / TDS / pH. Returns the r's + a paired series for the overlay chart.
+function iotWeatherCorrelate(chrono, weatherHours) {
+  if (!weatherHours || weatherHours.length < 3 || !chrono || chrono.length < 3) return null;
+  const wh = [...weatherHours].sort((a, b) => a.t - b.t);
+  const minW = wh[0].t - 3600000, maxW = wh[wh.length - 1].t + 3600000; // only correlate where weather exists
+  const nearest = (ms) => { let best = wh[0], bd = Infinity; for (const w of wh) { const d = Math.abs(w.t - ms); if (d < bd) { bd = d; best = w; } } return best; };
+  const oor = (b) => b === "amber" || b === "red";
+  const rows = [];
+  for (const it of chrono) {
+    const ms = new Date(it.timestamp).getTime(); if (isNaN(ms) || ms < minW || ms > maxW) continue;
+    const w = nearest(ms); if (!w || w.tempC == null) continue;
+    rows.push({ t: ms, out: w.tempC, wtemp: iotWqNum(it.waterQuality?.temp), tds: iotWqNum(it.waterQuality?.tds), ph: iotWqNum(it.waterQuality?.ph) });
+  }
+  if (rows.length < 3) return null;
+  const pick = (k) => { const xs = [], ys = []; rows.forEach((r) => { if (r.out != null && r[k] != null && r[k] > 0) { xs.push(r.out); ys.push(r[k]); } }); return { xs, ys }; };
+  const t = pick("wtemp"), d = pick("tds"), p = pick("ph");
+  return {
+    n: rows.length,
+    rTemp: iotPearson(t.xs, t.ys), rTds: iotPearson(d.xs, d.ys), rPh: iotPearson(p.xs, p.ys),
+    joined: rows.map((r) => ({
+      t: r.t, out: r.out, wtemp: r.wtemp, tds: r.tds, ph: r.ph,
+      oorTemp: r.wtemp != null && oor(iotWqClass("temp", r.wtemp)),
+      oorTds: r.tds != null && oor(iotWqClass("tds", r.tds)),
+      oorPh: r.ph != null && oor(iotWqClass("ph", r.ph)),
+      // Likely a perceptible TASTE issue = a combination of any: hard/flat TDS,
+      // off-neutral pH, or warm water. Flashed on the graph.
+      taste: (r.tds != null && (r.tds > 300 || r.tds < 50)) || (r.ph != null && (r.ph < 6.5 || r.ph > 8.5)) || (r.wtemp != null && r.wtemp > 30),
+    })),
+  };
+}
+// Plain-English read of the correlation for a business/data/user audience —
+// "the weather did X, so the water did Y". Deterministic, no LLM.
+function iotWeatherNarrative(wxCorr, weather, chrono) {
+  if (!wxCorr) return null;
+  const temps = (weather?.history || []).map((h) => h.tempC).filter((v) => v != null);
+  const oMin = temps.length ? Math.min(...temps) : null, oMax = temps.length ? Math.max(...temps) : null;
+  const conds = {}; (weather?.history || []).forEach((h) => { if (h.condition) conds[h.condition] = (conds[h.condition] || 0) + 1; });
+  const domCond = Object.keys(conds).sort((a, b) => conds[b] - conds[a])[0] || null;
+  const strength = (r) => { if (r == null) return { lvl: "none", dir: null }; const a = Math.abs(r); return { lvl: a >= 0.7 ? "strong" : a >= 0.4 ? "moderate" : a >= 0.2 ? "weak" : "none", dir: r > 0 ? "up" : "down" }; };
+  const sTemp = strength(wxCorr.rTemp), sTds = strength(wxCorr.rTds), sPh = strength(wxCorr.rPh);
+  const items = [
+    { emoji: "🌡️", label: "Water temperature", lvl: sTemp.lvl, text:
+      sTemp.lvl === "strong" ? "Closely followed the outside air — as it warmed or cooled outdoors, the tank water did the same. Expected: the tank sits in ambient heat."
+      : sTemp.lvl === "moderate" ? "Partly followed the outside air — some of the tank's warming/cooling is coming from the weather."
+      : "Barely moved with the outside air over this window." },
+    { emoji: "💧", label: "TDS", lvl: sTds.lvl, text:
+      sTds.lvl === "none" ? "Stayed independent of the weather — its changes come from the source water / RO, not outdoors."
+      : (sTds.dir === "down" ? "Drifted the opposite way to temperature" : "Rose and fell with temperature") + ` (${sTds.lvl} link). Part real — heat concentrates minerals through evaporation — and part sensor physics — TDS readings shift with water temperature. Worth watching, not alarming.` },
+    { emoji: "⚗️", label: "pH", lvl: sPh.lvl, text:
+      (sPh.lvl === "none" || sPh.lvl === "weak") ? "Essentially unaffected by the weather — pH changes point to the water chemistry or the RO, not outdoor conditions."
+      : `Shifted with the weather more than usual (${sPh.lvl} link) — worth a check.` },
+  ];
+  const wx = oMin != null ? `${domCond ? domCond + ", " : ""}${Math.round(oMin)}–${Math.round(oMax)} °C outdoors` : "the outdoor weather";
+  const headline = sTemp.lvl === "strong" || sTemp.lvl === "moderate"
+    ? `Over the last ~24 h (${wx}), the tank's water temperature moved with the weather; TDS ${sTds.lvl === "none" ? "stayed steady" : "drifted (" + sTds.lvl + ")"}, and pH was ${(sPh.lvl === "none" || sPh.lvl === "weak") ? "unaffected" : "affected"}.`
+    : `Over the last ~24 h (${wx}), the weather had little measurable effect on the water metrics.`;
+  const footer = `Based on ${wxCorr.n} readings over ~24 h — indicative, not conclusive, and correlation isn't proof of cause. It firms up as more days accumulate.`;
+  // ---- What residents would notice, and impact on the in-flat purifiers.
+  // Sensors are on the building's CENTRAL RO — its output feeds each flat's own
+  // point-of-use purifier, so central water quality sets the load on those.
+  const med = (arr) => { const a = arr.filter((v) => v != null && !isNaN(v) && v > 0).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null; };
+  const tdsMed = med(chrono.map((it) => iotWqNum(it.waterQuality?.tds)));
+  const phMed = med(chrono.map((it) => iotWqNum(it.waterQuality?.ph)));
+  const tempMed = med(chrono.map((it) => iotWqNum(it.waterQuality?.temp)));
+  let customer = null;
+  if (tdsMed != null) {
+    const base = tdsMed < 50 ? "may taste a little flat (low in minerals)" : tdsMed <= 150 ? "should taste clean and neutral" : tdsMed <= 300 ? "will taste fine — a touch more mineral, still good" : "may taste noticeably mineral or hard";
+    const extra = [];
+    if (phMed != null && phMed < 6.5) extra.push("a mild sour edge (slightly acidic)");
+    if (phMed != null && phMed > 8.5) extra.push("a faint soapy/bitter edge (slightly alkaline)");
+    if (tempMed != null && tempMed > 28) extra.push("water feels warm at the tap");
+    else if (tempMed != null && tempMed > 25) extra.push("water may feel a bit lukewarm");
+    const taste = `Residents' tap water ${base}${extra.length ? ", with " + extra.join(" and ") : ""}. (Central RO now ~${Math.round(tdsMed)} mg/L TDS, pH ${phMed != null ? phMed.toFixed(1) : "—"}, ~${tempMed != null ? Math.round(tempMed) : "—"} °C.)`;
+    const highLoad = (tdsMed > 300) || (tempMed != null && tempMed > 28);
+    const midLoad = (tdsMed > 150) || (tempMed != null && tempMed > 25);
+    const purifiers = highLoad
+      ? "The in-flat purifiers are getting harder / warmer water from the central RO, so their membranes and filters work harder — expect faster wear and more frequent servicing."
+      : midLoad
+        ? "The in-flat purifiers receive moderately mineralised water — a normal load; keep servicing on the usual schedule."
+        : "The central RO already delivers soft, clean water, so the in-flat purifiers see a light load and their filters/membranes should last longer.";
+    customer = { taste, purifiers };
+  }
+  return { headline, items, footer, customer };
+}
 const iotTimeAgo = (ts) => { if (!ts) return "Unknown"; const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s / 60)}m ago`; return `${Math.floor(s / 3600)}h ago`; };
 // Liveness window in seconds. junctionBox units heartbeat fast (120s); RO-tank
 // units report roughly every 20 minutes, so they get a much wider window.
@@ -11584,30 +11875,431 @@ function IoTWaterQualityCard({ range }) {
 const iotBandCell = (band) => band === "red" ? { color: "#DC4141", background: "#FBE8E8", fontWeight: 800 }
   : band === "amber" ? { color: "#a86e00", background: "#FBF0E0", fontWeight: 700 }
   : { color: "var(--f)" };
+// Value-only emphasis (no cell fill): out-of-range values go bold, coloured and
+// +1px so the eye catches them without a full amber/red block. (base td = 13.5px)
+const iotBandText = (band) => band === "red" ? { color: "#DC4141", fontWeight: 800, fontSize: 14.5 }
+  : band === "amber" ? { color: "#a86e00", fontWeight: 800, fontSize: 14.5 }
+  : {};
 // Tank level band: low tanks (≤25%) are critical (needs refill), ≤50% borderline.
 const iotTankBand = (pct) => pct <= 25 ? "red" : pct <= 50 ? "amber" : "green";
-function IoTTankReadings({ items }) {
+// ECG-style monitor wave for one metric over time. Downsampled to a clean trend,
+// drawn on a grid with an ideal band, a gradient area fill and a segment-coloured
+// glowing line (green in-range, amber/red where it drifts) + a leading dot.
+const IOT_WAVE_COL = { green: "#12a150", amber: "#d1830a", red: "#e0453f", na: "#8aa398" };
+function IoTMetricWave({ label, unit, values, ideal, classify, dp = 1, active = false, onClick }) {
+  const clean = (values || []).filter(v => v != null && !isNaN(v));
+  const latest = clean.length ? clean[clean.length - 1] : null;
+  const latestBand = latest == null ? "na" : classify(latest);
+  const worst = clean.reduce((w, v) => { const b = classify(v); return b === "red" ? "red" : (b === "amber" && w !== "red") ? "amber" : w; }, "green");
+  const N = 72;
+  let pts = clean;
+  if (clean.length > N) { pts = []; const bk = clean.length / N; for (let i = 0; i < N; i++) { const s = Math.floor(i * bk), e = Math.max(s + 1, Math.floor((i + 1) * bk)); let sum = 0, n = 0; for (let j = s; j < e && j < clean.length; j++) { sum += clean[j]; n++; } pts.push(sum / (n || 1)); } }
+  const W = 300, H = 74, padY = 9;
+  const lo = Math.min(ideal[0], ...(pts.length ? pts : [ideal[0]]));
+  const hi = Math.max(ideal[1], ...(pts.length ? pts : [ideal[1]]));
+  const span = (hi - lo) || 1;
+  const X = (i) => pts.length <= 1 ? W / 2 : (i / (pts.length - 1)) * W;
+  const Y = (v) => H - padY - ((v - lo) / span) * (H - 2 * padY);
+  const bTop = Y(ideal[1]), bBot = Y(ideal[0]);
+  const areaCol = IOT_WAVE_COL[worst] || IOT_WAVE_COL.green;
+  const gid = `iotwave-${label}`;
+  const segs = [];
+  for (let i = 0; i < pts.length - 1; i++) { const a = classify(pts[i]), b = classify(pts[i + 1]); segs.push({ x1: X(i), y1: Y(pts[i]), x2: X(i + 1), y2: Y(pts[i + 1]), band: a === "red" || b === "red" ? "red" : (a === "amber" || b === "amber" ? "amber" : "green") }); }
+  return (
+    <div onClick={onClick} title={onClick ? `Show ${label} trend` : undefined} style={{ background: "linear-gradient(180deg, #ffffff 0%, #f6faf8 100%)", borderRadius: 14, padding: "11px 13px 9px", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), boxShadow: active ? "0 0 0 2px rgba(10,157,110,.18), 0 6px 16px rgba(16,40,28,.08)" : "0 1px 2px rgba(16,40,28,.04), 0 6px 16px rgba(16,40,28,.06)", cursor: onClick ? "pointer" : "default", transition: "box-shadow .15s ease, border-color .15s ease" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6, marginBottom: 3 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", color: active ? "var(--forest)" : "#6b8577" }}>{label}</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: IOT_WAVE_COL[latestBand], fontVariantNumeric: "tabular-nums" }}>{latest == null ? "—" : latest.toFixed(dp)}<span style={{ fontSize: 9.5, color: "#8aa398", fontWeight: 600 }}>{unit ? ` ${unit}` : ""}</span></span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" style={{ display: "block", borderRadius: 8 }} aria-hidden>
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={areaCol} stopOpacity="0.22" />
+            <stop offset="1" stopColor={areaCol} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map(f => <line key={"h" + f} x1="0" x2={W} y1={H * f} y2={H * f} stroke="#1f6b47" strokeOpacity="0.06" strokeWidth="1" vectorEffect="non-scaling-stroke" />)}
+        {[0.2, 0.4, 0.6, 0.8].map(f => <line key={"v" + f} x1={W * f} x2={W * f} y1="0" y2={H} stroke="#1f6b47" strokeOpacity="0.06" strokeWidth="1" vectorEffect="non-scaling-stroke" />)}
+        <rect x="0" y={Math.min(bTop, bBot)} width={W} height={Math.abs(bBot - bTop)} fill="#12a150" opacity="0.07" />
+        <line x1="0" x2={W} y1={bTop} y2={bTop} stroke="#12a150" strokeOpacity=".28" strokeDasharray="4 4" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        <line x1="0" x2={W} y1={bBot} y2={bBot} stroke="#12a150" strokeOpacity=".28" strokeDasharray="4 4" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        {pts.length > 1 && <polygon points={`0,${H} ${pts.map((v, i) => `${X(i)},${Y(v)}`).join(" ")} ${W},${H}`} fill={`url(#${gid})`} />}
+        <g style={{ filter: `drop-shadow(0 1px 1.2px ${areaCol}44)` }}>
+          {segs.map((s, i) => <line key={i} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} stroke={IOT_WAVE_COL[s.band]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />)}
+        </g>
+        {pts.length > 0 && <circle cx={X(pts.length - 1)} cy={Y(pts[pts.length - 1])} r="3.4" fill="none" stroke={IOT_WAVE_COL[latestBand]} strokeOpacity=".3" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />}
+        {pts.length > 0 && <circle cx={X(pts.length - 1)} cy={Y(pts[pts.length - 1])} r="2.6" fill={IOT_WAVE_COL[latestBand]} stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+      </svg>
+    </div>
+  );
+}
+// ---- Trend analytics for the RO-tank readings (deterministic, no LLM). --------
+// Metric registry shared by the chart, the anomaly scan and the readings table.
+function iotTrendMetrics() {
+  return [
+    { k: "ph",   label: "pH",          unit: "",     dp: 1, ideal: IOT_WQ_IDEAL.ph,   get: (it) => iotWqNum(it.waterQuality?.ph),   cls: (v) => iotWqClass("ph", v) },
+    { k: "tds",  label: "TDS",         unit: "mg/L", dp: 0, ideal: IOT_WQ_IDEAL.tds,  get: (it) => iotWqNum(it.waterQuality?.tds),  cls: (v) => iotWqClass("tds", v) },
+    { k: "temp", label: "Temperature", unit: "°C", dp: 1, ideal: IOT_WQ_IDEAL.temp, get: (it) => iotWqNum(it.waterQuality?.temp), cls: (v) => iotWqClass("temp", v) },
+    { k: "tank", label: "Tank level",  unit: "%",    dp: 0, ideal: [50, 100],          get: (it) => iotTank(it.tankLevel).pct,       cls: (v) => iotTankBand(v) },
+  ];
+}
+// Scan chronological readings for out-of-range EVENTS (maximal runs) per metric.
+// Each event ~ one "alert"; extreme = worst value in the run, dir = High / Low.
+function iotAnomalyScan(chrono) {
+  const metrics = iotTrendMetrics();
+  const events = []; const perMetric = { ph: 0, tds: 0, temp: 0, tank: 0 };
+  metrics.forEach((m) => {
+    let run = null;
+    chrono.forEach((it) => {
+      const v = m.get(it);
+      const band = v == null ? "na" : m.cls(v);
+      const out = band === "amber" || band === "red";
+      if (out) {
+        perMetric[m.k]++;
+        const dir = m.k === "tank" ? "Low" : (v < m.ideal[0] ? "Low" : v > m.ideal[1] ? "High" : "—");
+        if (!run) run = { metric: m.k, label: m.label, unit: m.unit, dp: m.dp, startTs: it.timestamp, endTs: it.timestamp, extreme: v, sev: band, dir, n: 1 };
+        else { run.endTs = it.timestamp; run.n++; if (band === "red") run.sev = "red"; if ((run.dir === "High" && v > run.extreme) || (run.dir === "Low" && v < run.extreme)) run.extreme = v; }
+      } else if (run) { events.push(run); run = null; }
+    });
+    if (run) events.push(run);
+  });
+  events.sort((a, b) => new Date(b.startTs) - new Date(a.startTs));
+  return { events, perMetric };
+}
+// Sensor-health heuristic: reporting continuity + dropout rate + staleness.
+function iotSensorHealth(chrono) {
+  if (!chrono.length) return { verdict: "na", note: "No data yet." };
+  const ts = chrono.map((it) => new Date(it.timestamp).getTime()).sort((a, b) => a - b);
+  let maxGap = 0; for (let i = 1; i < ts.length; i++) maxGap = Math.max(maxGap, ts[i] - ts[i - 1]);
+  const gapMin = maxGap / 60000;
+  const dropouts = chrono.filter((it) => { const p = iotWqNum(it.waterQuality?.ph), t = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp); return (p == null || p <= 0) || (t == null || t <= 0) || (tp == null || tp <= 0); }).length;
+  const dropRate = dropouts / chrono.length;
+  const lastMin = (Date.now() - ts[ts.length - 1]) / 60000;
+  const stale = lastMin > IOT_TANK_ONLINE_SECS / 60;
+  const verdict = (stale || gapMin > 90 || dropRate > 0.15) ? "check" : "good";
+  const note = verdict === "good"
+    ? `Reporting steadily · ${chrono.length} readings, ${dropouts} dropouts`
+    : stale ? `No reading for ${Math.round(lastMin)} min` : gapMin > 90 ? `${Math.round(gapMin)} min gap in the feed` : `${dropouts} sensor dropouts (${Math.round(dropRate * 100)}%)`;
+  return { verdict, gapMin, dropouts, dropRate, lastMin, stale, n: chrono.length, note };
+}
+// Scale/meter gauge for a single metric — a real pH scale / TDS meter / temp
+// cold-normal-hot range / tank 0-100% bar, with a big current-value number.
+// Also the clickable metric selector for the trend chart (active = selected).
+const IOT_ZONE_COL = { red: "#f4bcb9", amber: "#f3d9a4", green: "#bfe6d6", cold: "#bcd8f2" };
+const IOT_GAUGE = {
+  ph:   { min: 0,  max: 14,  dp: 1, band: (v) => iotWqClass("ph", v),   zones: [[0, 6, "red"], [6, 6.5, "amber"], [6.5, 8.5, "green"], [8.5, 9, "amber"], [9, 14, "red"]], ticks: [0, 7, 14] },
+  tds:  { min: 0,  max: 600, dp: 0, band: (v) => iotWqClass("tds", v),  zones: [[0, 50, "red"], [50, 300, "green"], [300, 500, "amber"], [500, 600, "red"]], ticks: [0, 150, 300, 450, 600] },
+  temp: { min: 5,  max: 40,  dp: 1, band: (v) => iotWqClass("temp", v), zones: [[5, 10, "cold"], [10, 15, "amber"], [15, 25, "green"], [25, 32, "amber"], [32, 40, "red"]], ticks: [5, 15, 25, 32], zoneLabels: [["Cold", 7.5], ["Normal", 20], ["Hot", 36]] },
+  tank: { min: 0,  max: 100, dp: 0, band: (v) => iotTankBand(v),        zones: [[0, 25, "red"], [25, 50, "amber"], [50, 100, "green"]], ticks: [0, 25, 50, 75, 100], fill: true },
+};
+function IoTMetricGauge({ metricKey, label, unit, value, active, onClick }) {
+  const g = IOT_GAUGE[metricKey];
+  const band = value == null ? "na" : g.band(value);
+  const numCol = band === "red" ? "#DC4141" : band === "amber" ? "#a86e00" : band === "green" ? "#0A7D53" : "#6b8577";
+  const span = (g.max - g.min) || 1;
+  const pct = value == null ? null : Math.max(0, Math.min(100, ((value - g.min) / span) * 100));
+  return (
+    <div onClick={onClick} title={onClick ? `Show ${label} trend` : undefined} style={{ background: "#fff", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), boxShadow: active ? "0 0 0 2px rgba(10,157,110,.18), 0 6px 16px rgba(16,40,28,.08)" : "0 1px 2px rgba(16,40,28,.04), 0 6px 16px rgba(16,40,28,.06)", borderRadius: 14, padding: "12px 14px", cursor: onClick ? "pointer" : "default", transition: "box-shadow .15s ease, border-color .15s ease" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: active ? "var(--forest)" : "#6b8577" }}>{label}</span>
+        <span style={{ fontSize: 30, fontWeight: 800, color: numCol, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value == null ? "—" : value.toFixed(g.dp)}<span style={{ fontSize: 12.5, color: "#8aa398", fontWeight: 600 }}>{unit ? " " + unit : ""}</span></span>
+      </div>
+      <div style={{ position: "relative", marginTop: 12 }}>
+        <div style={{ display: "flex", height: 10, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(16,40,28,.06)" }}>
+          {g.zones.map((z, i) => <div key={i} style={{ width: ((z[1] - z[0]) / span * 100) + "%", background: g.fill ? "#eef2f0" : IOT_ZONE_COL[z[2]] }} />)}
+        </div>
+        {g.fill && pct != null && <div style={{ position: "absolute", top: 0, left: 0, height: 10, width: pct + "%", background: "linear-gradient(90deg,#7fc4f5,#2A86D6)", borderRadius: 6 }} />}
+        {pct != null && <div style={{ position: "absolute", top: -3, left: `${pct}%`, transform: "translateX(-50%)", width: 3, height: 16, background: "#0b1a12", borderRadius: 2, boxShadow: "0 0 0 2px #fff" }} />}
+        <div style={{ position: "relative", height: 13, marginTop: 5 }}>
+          {g.ticks.map((tk, i) => { const lp = ((tk - g.min) / span) * 100; return <span key={i} style={{ position: "absolute", left: lp + "%", transform: "translateX(-50%)", fontSize: 9, color: "var(--muted)", fontVariantNumeric: "tabular-nums" }}>{tk}</span>; })}
+        </div>
+        {g.zoneLabels && (
+          <div style={{ position: "relative", height: 12 }}>
+            {g.zoneLabels.map(([txt, at], i) => { const lp = ((at - g.min) / span) * 100; return <span key={i} style={{ position: "absolute", left: lp + "%", transform: "translateX(-50%)", fontSize: 8.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".04em" }}>{txt}</span>; })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+function IoTTankReadings({ items, weather }) {
   const all = items || [];
   const PER = 10;
   const [page, setPage] = useState(1);
-  const [sortDir, setSortDir] = useState("desc"); // newest → oldest by default
-  const sorted = [...all].sort((a, b) => { const d = new Date(b.timestamp) - new Date(a.timestamp); return sortDir === "desc" ? d : -d; });
+  const [sortDir, setSortDir] = useState("desc");
+  const [metric, setMetric] = useState("ph");
+  const [anomOnly, setAnomOnly] = useState(false);
+  const [showAllHist, setShowAllHist] = useState(false);
+  const [range, setRange] = useState("today"); // today | yesterday | week
+
+  // Slice the (up-to-7-day) window before anything else, so the chart, tiles,
+  // anomaly scan, table and correlation all reflect the chosen range.
+  const ranged = useMemo(() => {
+    const st = new Date(); st.setHours(0, 0, 0, 0); const startToday = st.getTime();
+    return all.filter((it) => {
+      const t = new Date(it.timestamp).getTime(); if (isNaN(t)) return false;
+      if (range === "today") return t >= startToday;
+      if (range === "yesterday") return t >= startToday - 86400000 && t < startToday;
+      return t >= startToday - 6 * 86400000; // this week = last 7 days
+    });
+  }, [all, range]);
+  const chrono = useMemo(() => [...ranged].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)), [ranged]);
+  const latestReading = chrono.length ? chrono[chrono.length - 1] : null;
+  const gaugeVal = { ph: iotWqNum(latestReading?.waterQuality?.ph), tds: iotWqNum(latestReading?.waterQuality?.tds), temp: iotWqNum(latestReading?.waterQuality?.temp), tank: latestReading ? iotTank(latestReading.tankLevel).pct : null };
+  const metrics = iotTrendMetrics();
+  const M = metrics.find((m) => m.k === metric) || metrics[0];
+  const scan = useMemo(() => iotAnomalyScan(chrono), [chrono]);
+  const health = useMemo(() => iotSensorHealth(chrono), [chrono]);
+  const wqRange = useMemo(() => iotWqRange(chrono), [chrono]);
+  const wqWorst = ["ph", "tds", "temp"].reduce((w, k) => { const c = iotWqBand(wqRange[k], k); return c === "red" ? "red" : (c === "amber" && w !== "red") ? "amber" : w; }, chrono.length ? "green" : "na");
+
+  const bandsOf = (it) => ({ ph: iotWqClass("ph", iotWqNum(it.waterQuality?.ph)), tds: iotWqClass("tds", iotWqNum(it.waterQuality?.tds)), temp: iotWqClass("temp", iotWqNum(it.waterQuality?.temp)), tank: iotTankBand(iotTank(it.tankLevel).pct) });
+  const isOut = (b) => b === "amber" || b === "red";
+  const anyOut = (it) => { const b = bandsOf(it); return isOut(b.ph) || isOut(b.tds) || isOut(b.temp) || isOut(b.tank); };
+
+  const series = useMemo(() => chrono.map((it) => { const v = M.get(it); if (v == null) return null; const band = M.cls(v); return { t: new Date(it.timestamp).getTime(), v, out: band === "amber" || band === "red", sev: band }; }).filter(Boolean), [chrono, metric]);
+  const chartData = anomOnly ? series.filter((d) => d.out) : series;
+  const yLo = Math.min(M.ideal[0], ...(series.length ? series.map((d) => d.v) : [M.ideal[0]]));
+  const yHi = Math.max(M.ideal[1], ...(series.length ? series.map((d) => d.v) : [M.ideal[1]]));
+  const yPad = ((yHi - yLo) || 1) * 0.12;
+  const anomEvents = scan.events;
+  const anomReadings = scan.perMetric.ph + scan.perMetric.tds + scan.perMetric.temp + scan.perMetric.tank;
+
+  const hm = (ms) => { const d = new Date(ms); let h = d.getHours(); const ap = h < 12 ? "AM" : "PM"; h = h % 12 || 12; return h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; };
+  const renderDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const out = payload.out; return <circle key={index} cx={cx} cy={cy} r={out ? 4 : 2} fill={out ? "#e0453f" : "#0A9D6E"} stroke="#fff" strokeWidth={out ? 1.4 : 0.8} />; };
+  const TT = ({ active, payload }) => {
+    if (!active || !payload || !payload.length) return null;
+    const d = payload[0].payload;
+    const status = d.sev === "green" ? "In range" : d.sev === "amber" ? "Borderline" : "Out of range";
+    const col = IOT_WAVE_COL[d.sev] || "#12a150";
+    return (
+      <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", boxShadow: "0 8px 22px rgba(16,40,28,.14)", fontSize: 12 }}>
+        <div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>
+        <div style={{ fontWeight: 800, fontSize: 15, color: col, fontVariantNumeric: "tabular-nums" }}>{d.v.toFixed(M.dp)}<span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600 }}>{M.unit ? " " + M.unit : ""}</span></div>
+        <div style={{ color: col, fontWeight: 700, marginTop: 2 }}>● {status}</div>
+        <div style={{ color: "var(--muted)", marginTop: 2 }}>Ideal {M.ideal[0]}–{M.ideal[1]}{M.unit ? " " + M.unit : ""}</div>
+      </div>
+    );
+  };
+
+  const VC = { good: ["#0A7D53"], warning: ["#a86e00"], critical: ["#DC4141"], check: ["#a86e00"], na: ["#6b8577"] };
+  const tile = (label, value, sub, vk) => (
+    <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "11px 13px" }}>
+      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+        {vk && <span style={{ width: 9, height: 9, borderRadius: 999, background: (VC[vk] || VC.na)[0], flex: "0 0 auto" }} />}
+        <span style={{ fontSize: 18, fontWeight: 800, color: (VC[vk] || ["var(--f)"])[0], fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value}</span>
+      </div>
+      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5, lineHeight: 1.4 }}>{sub}</div>
+    </div>
+  );
+  const wqVerdict = wqWorst === "green" ? "Good" : wqWorst === "amber" ? "Warning" : wqWorst === "red" ? "Critical" : "—";
+  const wqVk = wqWorst === "green" ? "good" : wqWorst === "amber" ? "warning" : wqWorst === "red" ? "critical" : "na";
+
+  const sorted = [...chrono].filter((it) => anomOnly ? anyOut(it) : true).sort((a, b) => { const dd = new Date(b.timestamp) - new Date(a.timestamp); return sortDir === "desc" ? dd : -dd; });
   const totalPages = Math.max(1, Math.ceil(sorted.length / PER));
   const cur = Math.min(page, totalPages);
   const rows = sorted.slice((cur - 1) * PER, cur * PER);
   const btn = (disabled) => ({ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 9, border: "1px solid " + (disabled ? "var(--border)" : "var(--brand)"), background: disabled ? "#fff" : "var(--brand)", color: disabled ? "var(--faint)" : "#fff", cursor: disabled ? "not-allowed" : "pointer" });
   const syncHead = (
-    <span onClick={() => { setSortDir(d => d === "desc" ? "asc" : "desc"); setPage(1); }}
-      style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, userSelect: "none" }} title="Sort by time">
+    <span onClick={() => { setSortDir((d) => d === "desc" ? "asc" : "desc"); setPage(1); }} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, userSelect: "none" }} title="Sort by time">
       Sync History {sortDir === "desc" ? <ArrowDown size={13} /> : <ArrowUp size={13} />}
     </span>
   );
+  const sevDot = (sev) => <span style={{ width: 8, height: 8, borderRadius: 999, background: IOT_WAVE_COL[sev] || IOT_WAVE_COL.amber, display: "inline-block", flex: "0 0 auto" }} />;
+  const histShown = showAllHist ? anomEvents : anomEvents.slice(0, 6);
+
+  // ---- weather correlation (outdoor temp vs the sensors) --------------------
+  const wxCorr = useMemo(() => iotWeatherCorrelate(chrono, weather?.history), [chrono, weather]);
+  const wxStory = useMemo(() => (wxCorr ? iotWeatherNarrative(wxCorr, weather, chrono) : null), [wxCorr, weather, chrono]);
+  const WXLVL = { strong: "#0A7D53", moderate: "#a86e00", weak: "#6b8577", none: "#8aa398" };
+  const WX_SERIES = [
+    { key: "wtemp", oorKey: "oorTemp", label: "Water temp", unit: "°C", color: "#0A9D6E", dp: 1 },
+    { key: "tds", oorKey: "oorTds", label: "TDS", unit: "mg/L", color: "#2A86D6", dp: 0 },
+    { key: "ph", oorKey: "oorPh", label: "pH", unit: "", color: "#7A5AF8", dp: 1 },
+  ];
+  const wxDot = (s) => (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const bad = payload[s.oorKey]; return <circle key={index} cx={cx} cy={cy} r={bad ? 3.6 : 0} fill={bad ? "#e0453f" : s.color} stroke="#fff" strokeWidth={bad ? 1.2 : 0} />; };
+  const bigTT = (props) => {
+    const { active, payload } = props; if (!active || !payload || !payload.length) return null; const d = payload[0].payload;
+    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed(unit === "mg/L" ? 0 : 1)}{unit ? " " + unit : ""}{bad ? " · out of range" : ""}</div>;
+    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#0A9D6E")}{row("TDS", d.tds, "mg/L", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}</div>);
+  };
+  // Flashing red ring at timestamps where taste is likely affected (temp+TDS+pH).
+  const tasteDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload || !payload.taste) return null; return (<g key={index}><circle cx={cx} cy={cy} r={5} fill="none" stroke="#e0453f" strokeWidth={2}><animate attributeName="r" values="5;9;5" dur="1.1s" repeatCount="indefinite" /><animate attributeName="opacity" values="1;0.15;1" dur="1.1s" repeatCount="indefinite" /></circle><circle cx={cx} cy={cy} r={2.6} fill="#e0453f"><animate attributeName="opacity" values="1;0.25;1" dur="1.1s" repeatCount="indefinite" /></circle></g>); };
+  const RCOL = { strong: "#0A7D53", mod: "#a86e00", weak: "#6b8577", none: "#6b8577", na: "#8aa398" };
+  const rLabel = (r) => r == null ? "—" : (r >= 0 ? "+" : "") + r.toFixed(2);
+  const rStrength = (r) => { if (r == null) return { t: "insufficient data", c: "na" }; const a = Math.abs(r), dir = r > 0 ? "positive" : "inverse"; if (a >= 0.7) return { t: `strong ${dir}`, c: "strong" }; if (a >= 0.4) return { t: `moderate ${dir}`, c: "mod" }; if (a >= 0.2) return { t: `weak ${dir}`, c: "weak" }; return { t: "little / no link", c: "none" }; };
+  const WxTT = ({ active, payload }) => { if (!active || !payload || !payload.length) return null; const d = payload[0].payload; return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "7px 10px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 2 }}>{iotStamp(d.t)}</div><div style={{ color: "#d1830a", fontWeight: 700 }}>Outdoor {d.out != null ? d.out.toFixed(1) : "—"} °C</div><div style={{ color: "#0A9D6E", fontWeight: 700 }}>Water {d.wtemp != null ? d.wtemp.toFixed(1) : "—"} °C</div></div>); };
+
   return (
     <div style={{ ...IOT_CARD, marginTop: 16, overflow: "hidden" }}>
-      <div style={{ padding: "16px 18px 12px" }}>
-        <h3 style={{ fontSize: 16 }}>Recent readings</h3>
-        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Tank level and water-quality per heartbeat · 10 per page · sortable · out-of-range values highlighted · from /devices/history?days=1.</div>
+      <div style={{ padding: "16px 18px 4px" }}>
+        <h3 style={{ fontSize: 16 }}>Trend analysis</h3>
+        <p style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 3 }}>Time-series per metric — out-of-range readings are flagged in red. Toggle <b>Anomalies</b> to isolate them.</p>
       </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "2px 18px 0" }}>
+        <CalendarRange size={14} color="var(--muted)" />
+        {[["today", "Today"], ["yesterday", "Yesterday"], ["week", "This Week"]].map(([k, label]) => {
+          const active = range === k;
+          return (
+            <button key={k} onClick={() => { setRange(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}</button>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 10, padding: "10px 18px 4px" }}>
+        {tile("Sensor health", health.verdict === "good" ? "Good" : health.verdict === "check" ? "Check" : "—", health.note, health.verdict === "good" ? "good" : health.verdict === "check" ? "check" : "na")}
+        {tile("Water quality", wqVerdict, chrono.length ? `${anomReadings} of ${chrono.length} readings out of range` : "No data yet.", wqVk)}
+        {tile("Total alerts", String(anomEvents.length), anomEvents.length ? "out-of-range events in this window" : "no anomaly events", anomEvents.length ? "critical" : "good")}
+        {tile("Anomalies by metric", String(anomReadings), `pH ${scan.perMetric.ph} · TDS ${scan.perMetric.tds} · Temp ${scan.perMetric.temp} · Tank ${scan.perMetric.tank}`, anomReadings ? "warning" : "good")}
+      </div>
+
+      {all.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10, padding: "12px 18px 6px" }}>
+          <IoTMetricGauge metricKey="ph" label="pH" unit="" value={gaugeVal.ph} active={metric === "ph"} onClick={() => setMetric("ph")} />
+          <IoTMetricGauge metricKey="tds" label="TDS" unit="mg/L" value={gaugeVal.tds} active={metric === "tds"} onClick={() => setMetric("tds")} />
+          <IoTMetricGauge metricKey="temp" label="Temp" unit="°C" value={gaugeVal.temp} active={metric === "temp"} onClick={() => setMetric("temp")} />
+          <IoTMetricGauge metricKey="tank" label="Tank" unit="%" value={gaugeVal.tank} active={metric === "tank"} onClick={() => setMetric("tank")} />
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "6px 18px 12px" }}>
+        {metrics.map((m) => { const active = metric === m.k; const oc = scan.perMetric[m.k]; return (
+          <button key={m.k} onClick={() => setMetric(m.k)} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{m.label}{oc ? ` · ${oc}` : ""}</button>
+        ); })}
+        <div style={{ flex: 1, minWidth: 8 }} />
+        <button onClick={() => { setAnomOnly((v) => !v); setPage(1); }} disabled={anomReadings === 0} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 800, padding: "6px 13px", borderRadius: 999, cursor: anomReadings === 0 ? "not-allowed" : "pointer", border: "1px solid " + (anomOnly ? "#DC4141" : "var(--border)"), background: anomOnly ? "#DC4141" : "#fff", color: anomOnly ? "#fff" : (anomReadings === 0 ? "var(--faint)" : "#DC4141") }}>
+          <AlertCircle size={14} /> Anomalies only{anomReadings ? ` (${anomReadings})` : ""}
+        </button>
+      </div>
+
+      <div style={{ padding: "0 12px 6px" }}>
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={chartData} margin={{ top: 8, right: 18, bottom: 4, left: 4 }}>
+              <CartesianGrid stroke="#1f6b47" strokeOpacity={0.08} vertical={false} />
+              <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={hm} tick={{ fontSize: 11, fill: "#6b8577" }} minTickGap={64} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+              <YAxis domain={[yLo - yPad, yHi + yPad]} tickFormatter={(v) => M.dp ? v.toFixed(M.dp) : Math.round(v)} tick={{ fontSize: 11, fill: "#6b8577" }} width={40} axisLine={false} tickLine={false} />
+              <Tooltip content={<TT />} />
+              <ReferenceArea y1={M.ideal[0]} y2={M.ideal[1]} fill="#12a150" fillOpacity={0.08} ifOverflow="extendDomain" />
+              <ReferenceLine y={M.ideal[0]} stroke="#12a150" strokeOpacity={0.4} strokeDasharray="4 4" />
+              <ReferenceLine y={M.ideal[1]} stroke="#12a150" strokeOpacity={0.4} strokeDasharray="4 4" />
+              <Line type="monotone" dataKey="v" stroke={anomOnly ? "transparent" : "#0A9D6E"} strokeWidth={anomOnly ? 0 : 2} dot={renderDot} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <Empty msg={all.length ? (anomOnly ? "No out-of-range readings for " + M.label + " in this window." : "No " + M.label + " readings yet.") : "No readings yet."} />
+        )}
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", padding: "4px 8px 0", fontSize: 11, color: "var(--muted)" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#0A9D6E", borderRadius: 2 }} /> {M.label}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#e0453f" }} /> out of range</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 10, background: "#12a150", opacity: 0.18, borderRadius: 2 }} /> ideal band ({M.ideal[0]}–{M.ideal[1]}{M.unit ? " " + M.unit : ""})</span>
+        </div>
+      </div>
+
+      <div style={{ padding: "12px 18px 4px" }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "var(--f)", marginBottom: 8 }}>Anomaly history {anomEvents.length ? `(${anomEvents.length})` : ""}</div>
+        {anomEvents.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: "#0A7D53", background: "#E2F3EE", border: "1px solid #BFE6D6", borderRadius: 10, padding: "10px 12px" }}>No anomalies detected — every reading in this window sits within the ideal range.</div>
+        ) : (
+          <div style={{ display: "grid", gap: 6 }}>
+            {histShown.map((e, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 11px", borderRadius: 10, border: "1px solid var(--border)", background: e.sev === "red" ? "#FEF4F4" : "#FEFBF3" }}>
+                {sevDot(e.sev)}
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: "var(--f)", minWidth: 96 }}>{e.label} {e.dir}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: IOT_WAVE_COL[e.sev], fontVariantNumeric: "tabular-nums" }}>{e.extreme.toFixed(e.dp)}{e.unit ? " " + e.unit : ""}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 11.5, color: "var(--muted)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{e.n > 1 ? `${e.n}× · ` : ""}{iotStamp(e.startTs)}</span>
+              </div>
+            ))}
+            {anomEvents.length > 6 && (
+              <button onClick={() => setShowAllHist((s) => !s)} style={{ justifySelf: "start", marginTop: 2, fontSize: 12, fontWeight: 700, color: "var(--teal)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}>{showAllHist ? "Show less" : `Show all ${anomEvents.length}`}</button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* weather correlation — does outside temperature move the water metrics? */}
+      {weather && (
+        <div style={{ padding: "12px 18px 4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--f)" }}>Weather correlation</div>
+            {weather.sample && <span style={{ fontSize: 10, fontWeight: 800, color: "#a86e00", background: "#FBF0DA", border: "1px solid #F0D9A8", borderRadius: 999, padding: "1px 8px" }}>SAMPLE</span>}
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>outdoor temp at {weather.location?.name || "site"} vs the water sensors</span>
+          </div>
+          {wxCorr ? (
+            <>
+              {wxStory && (
+                <div style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>What this means</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)", lineHeight: 1.5, marginBottom: 8 }}>{wxStory.headline}</div>
+                  <div style={{ display: "grid", gap: 7 }}>
+                    {wxStory.items.map((it, i) => (
+                      <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 15, lineHeight: 1.3, flex: "0 0 auto" }}>{it.emoji}</span>
+                        <div style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.45 }}><b style={{ color: WXLVL[it.lvl] || "var(--f)" }}>{it.label}:</b> {it.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {wxStory.customer && (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>For residents &amp; in-flat purifiers</div>
+                      <div style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.45, marginBottom: 4 }}><span style={{ fontSize: 14 }}>🚰</span> <b style={{ color: "var(--f)" }}>Taste:</b> {wxStory.customer.taste}</div>
+                      <div style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.45 }}><span style={{ fontSize: 14 }}>🏠</span> <b style={{ color: "var(--f)" }}>In-flat purifiers:</b> {wxStory.customer.purifiers}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 5, fontStyle: "italic" }}>Sensors sit on the building's central RO — before water reaches each flat's own purifier.</div>
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8, fontStyle: "italic" }}>{wxStory.footer}</div>
+                </div>
+              )}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginBottom: 10 }}>
+                {[{ k: "rTemp", label: "Outdoor °C ↔ Water temp", expect: "strong link expected" }, { k: "rTds", label: "Outdoor °C ↔ TDS", expect: "mild link plausible" }, { k: "rPh", label: "Outdoor °C ↔ pH", expect: "weak link expected" }].map(({ k, label, expect }) => {
+                  const r = wxCorr[k], s = rStrength(r), col = RCOL[s.c] || RCOL.na;
+                  return (
+                    <div key={k} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 12px" }}>
+                      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{label}</div>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
+                        <span style={{ fontSize: 20, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums" }}>{rLabel(r)}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{s.t}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>r · {expect}</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "8px 10px 4px" }}>
+                <ResponsiveContainer width="100%" height={230}>
+                  <ComposedChart data={wxCorr.joined} margin={{ top: 8, right: 10, bottom: 4, left: 4 }}>
+                    <CartesianGrid stroke="#1f6b47" strokeOpacity={0.08} vertical={false} />
+                    <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={hm} tick={{ fontSize: 11, fill: "#6b8577" }} minTickGap={64} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
+                    <YAxis yAxisId="out" orientation="left" domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "#d1830a" }} width={44} axisLine={false} tickLine={false} tickFormatter={(v) => Math.round(v) + "°C"} />
+                    <YAxis yAxisId="wtemp" hide domain={["auto", "auto"]} />
+                    <YAxis yAxisId="tds" hide domain={["auto", "auto"]} />
+                    <YAxis yAxisId="ph" hide domain={["auto", "auto"]} />
+                    <Tooltip content={bigTT} />
+                    <Line yAxisId="out" type="monotone" dataKey="out" stroke="#d1830a" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+                    {WX_SERIES.map((s) => <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={1.8} dot={wxDot(s)} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />)}
+                    <Line yAxisId="out" type="monotone" dataKey="out" stroke="transparent" dot={tasteDot} activeDot={false} isAnimationActive={false} legendType="none" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "6px 4px 0", fontSize: 11, color: "var(--muted)" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#d1830a", borderRadius: 2 }} /> outdoor temp</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#0A9D6E", borderRadius: 2 }} /> water temp</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#2A86D6", borderRadius: 2 }} /> TDS</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#7A5AF8", borderRadius: 2 }} /> pH</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#e0453f" }} /> out of range</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#e0453f", boxShadow: "0 0 0 3px rgba(224,69,63,.22)" }} /> flashing = likely taste issue</span>
+                <span>· {wxCorr.n} paired readings · lines auto-scaled to fit — hover for real values{weather.sample ? " · sample weather" : ""}</span>
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize: 12.5, color: "var(--muted)", background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px" }}>Not enough overlapping weather + sensor data yet to correlate.</div>
+          )}
+        </div>
+      )}
+      <div style={{ padding: "10px 18px 2px", fontSize: 13, fontWeight: 800, color: "var(--f)" }}>Recent readings</div>
       <div style={{ overflowX: "auto" }}>
         <Table head={[syncHead, "Tank", "pH", "TDS (mg/L)", "Temp (°C)"]}>
           {rows.map((it, i) => {
@@ -11617,19 +12309,19 @@ function IoTTankReadings({ items }) {
             return (
               <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{iotStamp(it.timestamp)}</td>
-                <td style={{ ...num, fontWeight: 700, ...iotBandCell(iotTankBand(t.pct)) }}>{t.pct}%</td>
-                <td style={{ ...num, ...iotBandCell(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
-                <td style={{ ...num, ...iotBandCell(iotWqClass("tds", tds)) }}>{tds == null ? "—" : Math.round(tds)}</td>
-                <td style={{ ...num, ...iotBandCell(iotWqClass("temp", tp)) }}>{tp == null ? "—" : tp.toFixed(1)}</td>
+                <td style={{ ...num, fontWeight: 700, ...iotBandText(iotTankBand(t.pct)) }}>{t.pct}%</td>
+                <td style={{ ...num, ...iotBandText(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
+                <td style={{ ...num, ...iotBandText(iotWqClass("tds", tds)) }}>{tds == null ? "—" : Math.round(tds)}</td>
+                <td style={{ ...num, ...iotBandText(iotWqClass("temp", tp)) }}>{tp == null ? "—" : tp.toFixed(1)}</td>
               </tr>
             );
           })}
-          {all.length === 0 && <tr><td colSpan={5} style={{ padding: 0 }}><Empty msg="No readings yet." /></td></tr>}
+          {sorted.length === 0 && <tr><td colSpan={5} style={{ padding: 0 }}><Empty msg={all.length ? "No readings match this filter." : "No readings yet."} /></td></tr>}
         </Table>
       </div>
-      {all.length > PER && (
+      {sorted.length > PER && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 18px", borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Showing {(cur - 1) * PER + 1}–{Math.min(cur * PER, all.length)} of {all.length} · {sortDir === "desc" ? "newest first" : "oldest first"}</span>
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Showing {(cur - 1) * PER + 1}–{Math.min(cur * PER, sorted.length)} of {sorted.length}{anomOnly ? " anomalies" : ""} · {sortDir === "desc" ? "newest first" : "oldest first"}</span>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={() => setPage(() => Math.max(1, cur - 1))} disabled={cur <= 1} style={btn(cur <= 1)}>Prev</button>
             <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--slate)", fontVariantNumeric: "tabular-nums" }}>{cur} / {totalPages}</span>
@@ -11656,54 +12348,75 @@ function IoTEcg({ alive }) {
   return <div aria-hidden className={`iot-ecg ${alive ? "alive" : "dead"}`}><div className="iot-ecg-track">{seg}{seg}</div></div>;
 }
 
+function iotWxEmoji(cond) { const c = (cond || "").toLowerCase(); if (/(thunder|storm)/.test(c)) return "⛈️"; if (/(rain|drizzle|shower)/.test(c)) return "🌧️"; if (/(snow|sleet|hail)/.test(c)) return "🌨️"; if (/(haze|mist|fog|smoke)/.test(c)) return "🌫️"; if (/(partly|few|scattered|mostly)/.test(c)) return "⛅"; if (/(cloud|overcast)/.test(c)) return "☁️"; if (/(clear|sun|fair)/.test(c)) return "☀️"; return "🌡️"; }
+// Live-weather strip for the apartment (newest history hour = the live reading).
+function IoTWeatherCard({ weather }) {
+  if (!weather) return null;
+  const cur = weather.current, loc = weather.location || WEATHER_LOCATION;
+  const asOf = cur?.t ? new Date(cur.t) : (weather.cachedAt ? new Date(weather.cachedAt) : null);
+  const hm = asOf ? (((asOf.getHours() % 12) || 12) + ":" + String(asOf.getMinutes()).padStart(2, "0") + " " + (asOf.getHours() < 12 ? "AM" : "PM")) : "—";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", background: "linear-gradient(180deg,#ffffff 0%,#f4f9ff 100%)", border: "1px solid var(--border)", borderRadius: 14, padding: "12px 16px", marginBottom: 14 }}>
+      <div style={{ fontSize: 30, lineHeight: 1 }}>{iotWxEmoji(cur?.condition)}</div>
+      <div style={{ minWidth: 140 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Live weather · {loc.name}</div>
+        <div style={{ fontSize: 12.5, color: "var(--muted)" }}>{loc.area || ""}</div>
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+        <span style={{ fontSize: 26, fontWeight: 800, color: "var(--f)", fontVariantNumeric: "tabular-nums" }}>{cur?.tempC != null ? Math.round(cur.tempC) : "—"}</span>
+        <span style={{ fontSize: 14, color: "var(--muted)", fontWeight: 700 }}>°C</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--slate)", fontSize: 13, fontWeight: 700 }}><Droplets size={15} color="#2A86D6" /> {cur?.humidity != null ? cur.humidity + "%" : "—"}</div>
+      <div style={{ fontSize: 13, color: "var(--slate)", fontWeight: 600 }}>{cur?.condition || "—"}</div>
+      <div style={{ flex: 1, minWidth: 8 }} />
+      <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap" }}>as of {hm}</div>
+      {weather.sample && <span style={{ fontSize: 10.5, fontWeight: 800, color: "#a86e00", background: "#FBF0DA", border: "1px solid #F0D9A8", borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap" }}>SAMPLE · connect feed</span>}
+    </div>
+  );
+}
 function IoTDevices() {
   const { user } = useAuth();
   const [roster, setRoster] = useState([]);            // from /devices/status (device roster + fallback metadata)
   const [historyByDevice, setHistoryByDevice] = useState({}); // deviceId -> [heartbeats] (newest-first, live)
+  const [weather, setWeather] = useState(null); // Prabhavati live weather + 24h history (for the correlation)
+  const [hist7dByDevice, setHist7dByDevice] = useState({}); // selected device -> last-7-days window (Trend analysis)
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [hbPage, setHbPage] = useState(1); // Recent heartbeats pagination (20 rows/page)
-  const [hist2dByDevice, setHist2dByDevice] = useState({}); // deviceId -> last-2-days items (for the 12h consumption table)
-  const [hist1dByDevice, setHist1dByDevice] = useState({}); // deviceId -> last-1-day items (RO-tank level + water-quality window)
 
   // Reset to the first page whenever a different device is selected.
   useEffect(() => { setHbPage(1); }, [selected]);
 
-  // Last-2-days history for the SELECTED device only (days=2 = today back 2 days).
-  // Powers the 12-hour consumption table. Changes slowly, so poll every 5 min.
+  // Demand-driven weather: fetch once when the module opens, then refresh every
+  // 30 min (the proxy caches 60 min, so this only hits Google ~hourly at most).
+  useEffect(() => {
+    let alive = true;
+    weatherApi.get().then((w) => { if (alive) setWeather(w); });
+    const t = setInterval(() => weatherApi.get(true).then((w) => { if (alive) setWeather(w); }), 30 * 60 * 1000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+
+  // NOTE: the per-device `&days=1` / `&days=2` history polls were removed — they
+  // returned the SAME data as the bare /devices/history?deviceId= feed below, so
+  // the tank level, water quality, Recent readings and 12-hour consumption all
+  // read from `historyByDevice` (the bare feed) directly.
+
+  // Selected device — pull a 7-day history window for the Trend analysis (the
+  // Today/Yesterday/This-Week filter slices it). Slow-changing, so poll every 5 min.
   useEffect(() => {
     if (!selected) return;
     let alive = true;
     const load = async () => {
       try {
-        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}&days=2`);
+        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}&days=7`);
         const data = await res.json();
-        const items = Array.isArray(data) ? data : (data.items || []); // days=2 returns { items }
-        if (alive) setHist2dByDevice(prev => ({ ...prev, [selected]: items }));
-      } catch { /* leave prior data; table shows its empty state */ }
+        const arr = Array.isArray(data) ? data : (data?.items ?? []);
+        if (alive && arr.length) setHist7dByDevice((p) => ({ ...p, [selected]: arr }));
+      } catch { /* keep prior; Trend falls back to the live window */ }
     };
     load();
     const t = setInterval(load, 5 * 60 * 1000);
-    return () => { alive = false; clearInterval(t); };
-  }, [selected]);
-
-  // Last-1-day history for the SELECTED device — the RO-tank level + water-quality
-  // window this view is built on. /devices/history?deviceId=…&days=1 → { items:[…] }.
-  // Powers the Tank Level %, the Water-Quality min–max ranges and Recent readings.
-  useEffect(() => {
-    if (!selected) return;
-    let alive = true;
-    const load = async () => {
-      try {
-        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}&days=1`);
-        const data = await res.json();
-        const items = Array.isArray(data) ? data : (data?.items ?? []);
-        if (alive) setHist1dByDevice((prev) => ({ ...prev, [selected]: items }));
-      } catch { /* keep prior data; cards fall back to the live poll / empty state */ }
-    };
-    load();
-    const t = setInterval(load, 30000);
     return () => { alive = false; clearInterval(t); };
   }, [selected]);
 
@@ -11731,9 +12444,10 @@ function IoTDevices() {
 
   // Poll /history for EVERY device in the roster every 8s. This is the source of
   // truth for liveness — /status ships a stale (often day-old) timestamp, so live
-  // devices were showing Offline. The endpoint now returns { items:[…] } (newest-
-  // first, downsampled) rather than a bare array — unwrap it, else history is empty
-  // and the heartbeat table / live consumption / charts all go blank.
+  // devices were showing Offline. The endpoint returns { items:[…] } (newest-first,
+  // downsampled) — unwrap it, else the heartbeat table / live consumption / charts
+  // / tank + water-quality / 12-hour consumption all go blank (they all read off
+  // this one feed now that the redundant &days=1 / &days=2 polls were removed).
   // Poll history for the roster PLUS any always-on known tank devices (which the
   // /status snapshot may omit), so their tank + water-quality readings load.
   const deviceIdsKey = Array.from(new Set([...roster.map(d => d.deviceId), ...IOT_KNOWN_TANK_DEVICES])).join(",");
@@ -11776,7 +12490,7 @@ function IoTDevices() {
 
   // ---- RO-tank level + water quality (from the days=1 window, falling back to the live poll).
   const isTank = iotIsTank(device);
-  const wqItems = hist1dByDevice[selected] ?? historyByDevice[selected] ?? [];
+  const wqItems = historyByDevice[selected] ?? [];
   const tank = iotTank(device?.tankLevel ?? wqItems[0]?.tankLevel);
   const wqRange = useMemo(() => iotWqRange(wqItems), [wqItems]);
 
@@ -11842,7 +12556,7 @@ function IoTDevices() {
   const canMeasure = chrono.length > 1;
 
   // 12-hour consumption breakdown over the last 2 days (IST) for the selected device.
-  const buckets2d = useMemo(() => iotBuckets12h(hist2dByDevice[selected]), [hist2dByDevice, selected]);
+  const buckets2d = useMemo(() => iotBuckets12h(historyByDevice[selected]), [historyByDevice, selected]);
 
   // ---- KPI status cards with mockup-matched decorative waveforms
   const kpiCards = [
@@ -11879,6 +12593,7 @@ function IoTDevices() {
         ${IOT_TANK_CSS}
       `}</style>
       <div style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Real-time water quality &amp; tank monitoring</div>
+      <IoTWeatherCard weather={weather} />
       {err && <ApiError msg={err} />}
       {toast && <div style={{ ...toastStyle, background: "#DC4141" }}><AlertCircle size={16} /> {toast}</div>}
 
@@ -11906,40 +12621,6 @@ function IoTDevices() {
           );
         })}
       </div>
-
-      {/* ── active alerts ──────────────────────────────────────────────────── */}
-      {alerts.length === 0 ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "14px 16px", borderRadius: "var(--radius)", border: "1px solid #B5E2D4", background: "#EEF7F3", color: "#08805A", fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
-          <CheckCircle2 size={16} /> All systems nominal — no active faults or offline devices.
-        </div>
-      ) : (
-        <div style={{ ...softShadow, marginBottom: 16, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "16px 18px 12px" }}>
-            <div>
-              <h3 style={{ fontSize: 16 }}>Active alerts ({alerts.length})</h3>
-              <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>Offline devices and channel faults across the fleet · click to inspect.</div>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--brand)", cursor: "pointer", whiteSpace: "nowrap" }}>View all alerts →</span>
-          </div>
-          <div>
-            {alerts.map((a) => {
-              const crit = a.sev === "critical";
-              const dev = devices.find(x => x.deviceId === a.device);
-              return (
-                <button key={a.key} onClick={() => setSelected(a.device)} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left", cursor: "pointer", padding: "12px 18px", background: "transparent", borderTop: "1px solid var(--border)" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 999, flexShrink: 0, background: crit ? "#DC4141" : "#986315" }} />
-                  <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: crit ? "#DC4141" : "#986315", width: 62, flexShrink: 0 }}>{crit ? "Critical" : "Warning"}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)", background: crit ? "#FBE8E8" : "transparent", padding: crit ? "3px 9px" : 0, borderRadius: 7, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>{a.device}</span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--f)", flexShrink: 0 }}>{a.title}</span>
-                  <span style={{ fontSize: 12.5, color: "var(--muted)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>· {a.detail}</span>
-                  <span style={{ fontSize: 12, color: "var(--muted)", flexShrink: 0 }}>{iotTimeAgo(dev?.timestamp)}</span>
-                  <ChevronRight size={16} color="var(--faint)" style={{ flexShrink: 0 }} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* ── device list + detail ───────────────────────────────────────────── */}
       {(() => {
@@ -12047,7 +12728,7 @@ function IoTDevices() {
       })()}
 
       {/* ── recent RO-tank readings (full width) ───────────────────────────── */}
-      {device && isTank && <IoTTankReadings items={wqItems} />}
+      {device && isTank && <IoTTankReadings items={hist7dByDevice[selected] ?? wqItems} weather={weather} />}
 
       {/* ── live consumption · pressure · flow (full width) ────────────────── */}
       {device && !isTank && (
@@ -12220,7 +12901,7 @@ function EarnedRevenue() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const { sel, setSel, range } = useDateRange("this_month"); // date-range preset filter
-  const [apt, setApt] = useState("all");                     // apartment (society) filter
+  const [apt, setApt] = useState(null);                     // apartment (society) filter
   const [sort, setSort] = useState({ key: "earned", dir: "desc" }); // per-invoice table sort
   const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "paid" ? "asc" : "desc" });
   useEffect(() => {
@@ -12269,7 +12950,7 @@ function EarnedRevenue() {
 
   // ----- Apartment (society) + date-range scoping -----
   const aptOptions = Array.from(new Set(rows.map(r => r.society).filter(s => s && s !== "Unknown"))).sort();
-  const aptRows = apt === "all" ? rows : rows.filter(r => r.society === apt);
+  const aptRows = apt === null ? rows : rows.filter(r => apt.includes(r.society));
 
   const rngPrev = prevRange(sel.preset, range);
   const collectedIn = (rng) => aptRows.filter(r => dateInRange(r.payDay, rng));
@@ -12334,10 +13015,7 @@ function EarnedRevenue() {
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <select value={apt} onChange={e => setApt(e.target.value)} style={selectStyle}>
-          <option value="all">All apartments</option>
-          {aptOptions.map(a => <option key={a} value={a}>{a}</option>)}
-        </select>
+        <MultiSelectFilter label="Apartment" options={aptOptions} value={apt} onChange={setApt} width={240} />
         <DateRangePicker value={sel} onChange={setSel} />
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
@@ -13153,6 +13831,52 @@ function TaskAdmin() {
   );
 }
 
+// Timeline view — tasks grouped by the day they were ADDED (createdAt), newest
+// first, so you can see the flow of what's being added to the board over time.
+function TaskTimelineView({ tasks, onOpen }) {
+  const withDate = (tasks || []).map(t => ({ t, ms: new Date(t.createdAt || t.startDate || 0).getTime() })).filter(x => x.ms && !isNaN(x.ms));
+  if (!withDate.length) return <Empty msg="No task-creation dates to show on the timeline yet." />;
+  withDate.sort((a, b) => b.ms - a.ms);
+  const dayKey = (ms) => { const d = new Date(ms); return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate(); };
+  const now = Date.now(), todayK = dayKey(now), yK = dayKey(now - 86400000);
+  const dayLabel = (ms) => { const k = dayKey(ms); if (k === todayK) return "Today"; if (k === yK) return "Yesterday"; return new Date(ms).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); };
+  const hm = (ms) => { const d = new Date(ms); let h = d.getHours(); const ap = h < 12 ? "AM" : "PM"; h = h % 12 || 12; return h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; };
+  const groups = []; let cur = null;
+  withDate.forEach(x => { const k = dayKey(x.ms); if (!cur || cur.k !== k) { cur = { k, label: dayLabel(x.ms), items: [] }; groups.push(cur); } cur.items.push(x); });
+  return (
+    <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: "16px 18px" }}>
+      {groups.map((g, gi) => (
+        <div key={gi} style={{ marginBottom: gi === groups.length - 1 ? 0 : 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: "var(--f)" }}>{g.label}</span>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{g.items.length} task{g.items.length !== 1 ? "s" : ""} added</span>
+          </div>
+          <div style={{ borderLeft: "2px solid var(--border)", marginLeft: 5, paddingLeft: 16, display: "grid", gap: 10 }}>
+            {g.items.map(({ t, ms }, i) => {
+              const sm = planStatusMeta(t.status), pm = planPrioMeta(t.priority);
+              return (
+                <div key={i} onClick={() => onOpen && onOpen(t)} style={{ position: "relative", cursor: "pointer", background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 13px" }}>
+                  <span style={{ position: "absolute", left: -22, top: 15, width: 11, height: 11, borderRadius: 999, background: sm.color || "var(--brand)", border: "2px solid #fff", boxShadow: "0 0 0 2px var(--border)" }} />
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{t.title || "Untitled task"}</span>
+                    <span style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{hm(ms)}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: sm.bg || "var(--mint-2)", color: sm.color || "var(--forest)" }}>{t.status}</span>
+                    {t.priority && <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: pm.color || "var(--slate)", background: (pm.color || "#888") + "1A" }}>{t.priority}</span>}
+                    {t.category && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{t.category}</span>}
+                    {(t.assignees && t.assignees.length) ? <span style={{ fontSize: 11.5, color: "var(--muted)" }}>· {t.assignees.join(", ")}</span> : null}
+                    {t.createdBy ? <span style={{ fontSize: 11, color: "var(--faint)" }}>· added by {t.createdBy}</span> : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 function TaskPlanner({ initialView = "board" }) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState(() => {
@@ -13271,7 +13995,7 @@ function TaskPlanner({ initialView = "board" }) {
     <div className="fade-up">
       {/* toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        {seg("board", "Board")}{seg("list", "List")}{seg("weekly", "Weekly View")}
+        {seg("board", "Board")}{seg("list", "List")}{seg("weekly", "Weekly View")}{seg("timeline", "Timeline")}
         <div style={{ position: "relative", minWidth: 200 }}>
           <Search size={15} style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search tasks…" style={{ ...inp, padding: "9px 12px 9px 32px" }} />
@@ -13386,6 +14110,7 @@ function TaskPlanner({ initialView = "board" }) {
       )}
 
       {view === "weekly" && <TaskWeeklyView tasks={filtered} onOpen={setEditing} isOverdue={isOverdue} />}
+      {view === "timeline" && <TaskTimelineView tasks={filtered} onOpen={setEditing} />}
 
       {editing && (
         <TaskEditor task={editing} onClose={() => setEditing(null)}
@@ -13682,13 +14407,68 @@ function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
 function SalesInsights() {
   const { user } = useAuth();
   const [deals, setDeals] = useState(null);
-  const [society, setSociety] = useState("all");
+  const [society, setSociety] = useState(null);
   const [sortSoc, setSortSoc] = useState({ key: "value", dir: "desc" });
   useEffect(() => { api.logView(user.username, "Viewed Sales insights"); salesApi.getDeals().then(d => setDeals(d.filter(notHiddenLead))).catch(() => setDeals([])); }, []);
   if (!deals) return <Loading />;
 
   const societies = ["all", ...Array.from(new Set(deals.map(d => d.society).filter(Boolean))).sort()];
-  const scoped = society === "all" ? deals : deals.filter(d => d.society === society);
+  const scoped = society === null ? deals : deals.filter(d => society.includes(d.society));
+
+  // ── Conversion funnel (start from TOTAL leads → Won) + cohort trend ──
+  const STAGE_ORDER = ["new", "contacted", "demo", "proposal", "won"];
+  const rankOf = (st) => STAGE_ORDER.indexOf(st);
+  const total = scoped.length;
+  const wonN = scoped.filter(d => d.stage === "won").length;
+  const lostN = scoped.filter(d => d.stage === "lost").length;
+  const convPct = total ? (wonN / total) * 100 : 0;
+  const reached = (r) => scoped.filter(d => d.stage !== "lost" && rankOf(d.stage) >= r).length;
+  const funnel = [
+    { key: "all", label: "Total leads", n: total },
+    { key: "contacted", label: "Contacted+", n: reached(1) },
+    { key: "demo", label: "Demo+", n: reached(2) },
+    { key: "proposal", label: "Proposal+", n: reached(3) },
+    { key: "won", label: "Converted (Won)", n: wonN },
+  ];
+  const MONL = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const trendMap = {};
+  scoped.forEach(d => { const dt = new Date(d.created || d.updated); if (isNaN(dt)) return; const k = dt.getFullYear() + "-" + dt.getMonth(); (trendMap[k] = trendMap[k] || { y: dt.getFullYear(), m: dt.getMonth(), leads: 0, won: 0 }); trendMap[k].leads++; if (d.stage === "won") trendMap[k].won++; });
+  const trend = Object.values(trendMap).sort((a, b) => (a.y - b.y) || (a.m - b.m)).slice(-8).map(t => ({ label: `${MONL[t.m]} '${String(t.y).slice(2)}`, leads: t.leads, won: t.won, conv: t.leads ? Math.round((t.won / t.leads) * 100) : 0 }));
+
+  // ── Business insights: what happened / ongoing / result / +/- / actions ──
+  const _mKey = (dt) => dt.getFullYear() + "-" + dt.getMonth();
+  const _now = new Date();
+  const _curK = _mKey(_now), _prevK = _mKey(new Date(_now.getFullYear(), _now.getMonth() - 1, 1));
+  const _inM = (d, k) => { const dt = new Date(d.created || d.updated); return !isNaN(dt) && _mKey(dt) === k; };
+  const curLeads = scoped.filter(d => _inM(d, _curK)), prevLeads = scoped.filter(d => _inM(d, _prevK));
+  const curWon = curLeads.filter(d => d.stage === "won").length, prevWon = prevLeads.filter(d => d.stage === "won").length;
+  const curConv = curLeads.length ? curWon / curLeads.length * 100 : 0, prevConv = prevLeads.length ? prevWon / prevLeads.length * 100 : 0;
+  const leadsDeltaPct = prevLeads.length ? Math.round((curLeads.length - prevLeads.length) / prevLeads.length * 100) : null;
+  const convDeltaPts = Math.round((curConv - prevConv) * 10) / 10;
+  const OPEN_STAGES = ["new", "contacted", "demo", "proposal"];
+  const openLeads = scoped.filter(d => OPEN_STAGES.includes(d.stage));
+  const idleDays = (d) => { const t = new Date(d.updated || d.created); return isNaN(t) ? 0 : (Date.now() - t.getTime()) / 86400000; };
+  const idleLeads = openLeads.filter(d => idleDays(d) > 14);
+  const groupConv = (keyFn, minN) => { const m = {}; scoped.forEach(d => { const k = (keyFn(d) || "—"); if (k === "—") return; (m[k] = m[k] || { k, total: 0, won: 0 }); m[k].total++; if (d.stage === "won") m[k].won++; }); return Object.values(m).filter(g => g.total >= (minN || 5)).map(g => ({ ...g, conv: g.total ? g.won / g.total * 100 : 0 })); };
+  const socG = groupConv(d => d.society), ownG = groupConv(d => d.owner), srcG = groupConv(d => d.source);
+  const bestOf = (arr) => arr.length ? [...arr].sort((a, b) => b.conv - a.conv)[0] : null;
+  const worstOf = (arr) => arr.length ? [...arr].sort((a, b) => a.conv - b.conv)[0] : null;
+  const bestSoc = bestOf(socG), worstSoc = worstOf(socG), bestSrc = bestOf(srcG), worstSrc = worstOf(srcG), bestOwn = bestOf(ownG), worstOwn = worstOf(ownG);
+  const pos = [], neg = [], acts = [];
+  if (convDeltaPts > 0.5) pos.push(`Conversion up ${convDeltaPts}pts vs last month`);
+  if (leadsDeltaPct != null && leadsDeltaPct > 0) pos.push(`Lead volume up ${leadsDeltaPct}% vs last month`);
+  if (bestSrc && bestSrc.conv >= convPct) pos.push(`Best channel: ${bestSrc.k} — ${Math.round(bestSrc.conv)}% of ${bestSrc.total} leads`);
+  if (bestSoc) pos.push(`Top society: ${bestSoc.k} — ${Math.round(bestSoc.conv)}%`);
+  if (convDeltaPts < -0.5) { neg.push(`Conversion down ${Math.abs(convDeltaPts)}pts vs last month`); acts.push("Conversion is sliding — review new-lead quality and how fast reps make first contact."); }
+  if (convPct < 5 && total >= 20) { neg.push(`Overall conversion only ${convPct.toFixed(1)}%`); acts.push("Overall close-rate is low — push reps to work the warm stages (Demo/Proposal) before chasing more raw volume."); }
+  if (idleLeads.length) { neg.push(`${idleLeads.length} open leads idle >14 days`); acts.push(`Assign / follow up the ${idleLeads.length} idle leads — that is the biggest recoverable pipeline sitting untouched.`); }
+  if (worstSrc && worstSrc.conv < convPct * 0.6 && worstSrc.total >= 10) { neg.push(`Channel ${worstSrc.k}: ${Math.round(worstSrc.conv)}% (${worstSrc.total} leads)`); acts.push(`Channel "${worstSrc.k}" converts far below average — pause or re-target its spend toward ${bestSrc ? bestSrc.k : "your best channel"}.`); }
+  if (worstSoc && worstSoc.conv < convPct * 0.6 && worstSoc.total >= 8) { neg.push(`Society ${worstSoc.k}: ${Math.round(worstSoc.conv)}%`); acts.push(`Society "${worstSoc.k}" is under-converting — schedule an on-site demo drive there.`); }
+  if (ownG.length > 1 && worstOwn && bestOwn && worstOwn.conv < bestOwn.conv * 0.6) { neg.push(`Rep ${worstOwn.k}: ${Math.round(worstOwn.conv)}% vs top ${Math.round(bestOwn.conv)}%`); acts.push(`Rep "${worstOwn.k}" trails the top performer — pair for coaching or rebalance their leads.`); }
+  if (!neg.length) acts.push("No red flags in this view — keep feeding the top of the funnel and protect follow-up speed.");
+  const happenedLine = `${curLeads.length} new leads this month, ${curWon} converted (${curConv.toFixed(1)}%)${leadsDeltaPct != null ? ` — volume ${leadsDeltaPct >= 0 ? "up" : "down"} ${Math.abs(leadsDeltaPct)}% vs last month` : ""}.`;
+  const ongoingLine = `${openLeads.length} leads still open${idleLeads.length ? `, of which ${idleLeads.length} are idle >14 days` : ""}. ${lostN} lost so far.`;
+  const resultLine = `${wonN} of ${total} leads converted overall — a ${convPct.toFixed(1)}% close rate.`;
 
   const byStatus = {};
   scoped.forEach(d => { const s = d.rawStatus || "—"; if (!byStatus[s]) byStatus[s] = { status: s, count: 0, value: 0 }; byStatus[s].count++; byStatus[s].value += d.value || 0; });
@@ -13703,7 +14483,7 @@ function SalesInsights() {
   const socTotal = socRows.reduce((a, r) => ({ count: a.count + r.count, value: a.value + r.value }), { count: 0, value: 0 });
 
   const stats = [
-    { label: "Leads in view", value: totalCount, icon: Briefcase, sub: society === "all" ? "all societies" : society, hero: true },
+    { label: "Leads in view", value: totalCount, icon: Briefcase, sub: society === null ? "all societies" : society.join(", "), hero: true },
     { label: "Plan value", value: inr(totalValue), icon: Wallet, sub: "in view" },
     { label: "Societies", value: Object.keys(bySociety).length, icon: Boxes, sub: "with leads" },
     { label: "Lead statuses", value: statusRows.length, icon: GitBranch, sub: "distinct" },
@@ -13714,13 +14494,92 @@ function SalesInsights() {
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Society</span>
-        <select value={society} onChange={e => setSociety(e.target.value)} style={selectStyle}>
-          {societies.map(s => <option key={s} value={s}>{s === "all" ? `All societies (${deals.length})` : s}</option>)}
-        </select>
+        <MultiSelectFilter label="Society" options={societies.filter(s => s !== "all")} value={society} onChange={setSociety} width={240} />
+      </div>
+      <div style={{ marginBottom: 18 }}>
+        <Card title="Business insights" sub="What happened · what's ongoing · the result · and what to fix">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 }}>
+            {[
+              { t: "What happened", body: happenedLine, icon: "📈" },
+              { t: "What's ongoing", body: ongoingLine, icon: "⏳" },
+              { t: "Result", body: resultLine, icon: "🎯" },
+            ].map((b, i) => (
+              <div key={i} style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>{b.icon} {b.t}</div>
+                <div style={{ fontSize: 13, color: "var(--slate)", lineHeight: 1.5 }}>{b.body}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginTop: 12 }}>
+            <div style={{ background: "#EEF7F3", border: "1px solid #BFE6D6", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#0A7D53", marginBottom: 6 }}>Positive</div>
+              {pos.length ? pos.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#0A7D53", fontWeight: 800 }}>▲</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No standout positives yet.</div>}
+            </div>
+            <div style={{ background: "#FBF0F0", border: "1px solid #F0C9C9", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#DC4141", marginBottom: 6 }}>Negative</div>
+              {neg.length ? neg.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#DC4141", fontWeight: 800 }}>▼</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No red flags in this view.</div>}
+            </div>
+          </div>
+          <div style={{ marginTop: 12, background: "#fff", border: "1px dashed var(--brand)", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 6 }}>Turn − into + · recommended actions</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {acts.map((a, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 8 }}><span style={{ color: "var(--teal)", fontWeight: 800, flex: "0 0 auto" }}>{i + 1}.</span>{a}</div>)}
+            </div>
+          </div>
+        </Card>
+      </div>
+      <div style={{ marginBottom: 18 }}>
+        <Card title="Lead conversion funnel" sub={society === null ? "The real picture — total leads down to conversions" : society.join(", ")}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
+            {[
+              { l: "Total leads", v: String(total), c: "var(--f)" },
+              { l: "Converted (Won)", v: String(wonN), c: "#0A7D53" },
+              { l: "Conversion %", v: convPct.toFixed(1) + "%", c: convPct < 5 ? "#DC4141" : convPct < 15 ? "#a86e00" : "#0A7D53" },
+              { l: "Lost", v: String(lostN), c: "#DC4141" },
+            ].map((k, i) => (
+              <div key={i} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{k.l}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: k.c, marginTop: 5, fontVariantNumeric: "tabular-nums" }}>{k.v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {funnel.map((f, i) => {
+              const pct = total ? (f.n / total) * 100 : 0;
+              const col = ["#A9B3AC", "#2A86D6", "#986315", "#7A5AF8", "#08805A"][i];
+              return (
+                <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 132, fontSize: 12.5, fontWeight: 700, color: "var(--f)", textAlign: "right", flexShrink: 0 }}>{f.label}</div>
+                  <div style={{ flex: 1, background: "#F1F4F3", borderRadius: 8, height: 30, position: "relative", overflow: "hidden" }}>
+                    <div style={{ width: Math.max(pct, 1.5) + "%", height: "100%", background: col, borderRadius: 8 }} />
+                    <div style={{ position: "absolute", top: 0, left: 10, height: 30, display: "flex", alignItems: "center", fontSize: 12.5, fontWeight: 800, color: pct > 14 ? "#fff" : "var(--f)" }}>{f.n}</div>
+                  </div>
+                  <div style={{ width: 50, fontSize: 12.5, fontWeight: 700, color: "var(--muted)", textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{Math.round(pct)}%</div>
+                </div>
+              );
+            })}
+          </div>
+          {trend.length > 1 && (
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--f)", marginBottom: 8 }}>Leads vs conversion % over time</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={trend} margin={{ left: -12, right: 6, top: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
+                  <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="l" tick={axisTick} axisLine={false} tickLine={false} width={34} allowDecimals={false} />
+                  <YAxis yAxisId="r" orientation="right" tick={axisTick} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => v + "%"} />
+                  <Tooltip content={<TT />} />
+                  <Bar yAxisId="l" dataKey="leads" fill="#2A86D6" radius={[5, 5, 0, 0]} maxBarSize={44} isAnimationActive={false} />
+                  <Line yAxisId="r" type="monotone" dataKey="conv" stroke="#0A7D53" strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
       </div>
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 18 }}>
-        <Card title="Leads by status" sub={society === "all" ? "Across all societies" : society}>
+        <Card title="Leads by status" sub={society === null ? "Across all societies" : society.join(", ")}>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={chartData} margin={{ left: -10, right: 8, top: 18 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
