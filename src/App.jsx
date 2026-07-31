@@ -254,7 +254,7 @@ const MODULE_SECTIONS = {
   fsm:           [{ id: "fsm_track", label: "Track Technician" }, { id: "fsm_amc", label: "AMC / Maintenance" }, { id: "fsm_quality", label: "Water Quality" }],
   erp:           [{ id: "erp_assets", label: "Asset Lifecycle" }],
   autoscheduler: [{ id: "as_society", label: "Auto GS - Society" }, { id: "as_iot", label: "IoT Alerts" }],
-  iot:           [{ id: "iot_devices", label: "Device Monitor" }],
+  iot:           [{ id: "iot_devices", label: "Device Monitor" }, { id: "iot_alerts", label: "Alerts" }],
   devicereplace: [{ id: "dr_list", label: "Replacements" }],
   about:         [{ id: "about_docs", label: "About" }, { id: "about_app_rel", label: "App Releases" }, { id: "about_tech_rel", label: "Technician Releases" }],
   logtracker:    [{ id: "log_all", label: "All Logs" }, { id: "log_failures", label: "Failures" }, { id: "log_api", label: "API Usage" }],
@@ -287,9 +287,22 @@ function setSectionOverride(sections, moduleId, tabId, level) {
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.29.29";
-const VERSION_DATE = "2026-07-30";
+const APP_VERSION = "2.29.42";
+const VERSION_DATE = "2026-07-31";
 const VERSION_HISTORY = [
+  { v: "2.29.42", note: "IoT Core > Tank Level: made the warming vapour clearly visible — it was too faint to see. Bigger/denser wisps (8, larger radii), peak opacity to 1.0, a stronger cool-grey body + double drop-shadow halo so the steam reads against the light upper shell, and slightly shorter rise so it isn't clipped as fast at high fill." },
+  { v: "2.29.41", note: "IoT Core > Tank Level: moved the 'Warming' tag out to the top-right corner of the whole Tank panel (aligned with the device-ID header row), using the empty header space there — was previously anchored to the tank graphic beside the lid. Now rendered by IoTTankPanel, not IoTTank." },
+  { v: "2.29.40", note: "IoT Core > Tank Level: moved the 'Warming' tag from centered-above-the-lid to the top-right corner of the tank graphic, using the empty space beside the lid so it no longer sits over the lid." },
+  { v: "2.29.39", note: "IoT Core > Tank Level: the warming vapour now triggers on warm water directly, not only on a rising trend. Previously it needed BOTH temp climbing AND >= 26 °C, so a steady 26 °C (Warning band) showed no steam. Now iotTempWarming flags warming whenever the latest water temp is above the ideal band (> 25 °C — the Warning/Hot zone), or when it's trending up into that zone — so an elevated tank temp visibly steams." },
+  { v: "2.29.38", note: "IoT Core > Tank Level: added a warming vapour animation inside the tank. When the water temp is above the ideal band (or trending up into it), iotTempWarming flags it and wisps of steam rise off the water surface (positioned at the live level, so they track the surface as it fills/drains), with an amber 'Warming' tag. Purely visual (CSS), driven by real temp history; threaded IoTDevices → IoTTankPanel → IoTTank alongside the refill rig; respects prefers-reduced-motion." },
+  { v: "2.29.37", note: "IoT Core > Tank Level: added a live refill animation. The RO tank pings its level every ~10 min; when the level steps UP across the recent window (~65 min), the tank is detected as actively refilling (iotTankRefilling). While refilling, a pump appears in the base gap with a spinning impeller, a pipe runs from the pump up the side and over into the tank neck, and blue water flows in animated waves through the tubes into the tank, with a 'Refilling' tag on top. Purely visual, driven by real level history; respects prefers-reduced-motion." },
+  { v: "2.29.36", note: "IoT Core > Recent readings table tweaks: (1) added a CSV Export button (exports the currently-filtered readings — time, tank %, pH, TDS, temp). (2) Duplicated the Today / Yesterday / This-Week range chips into the Recent-readings header (same `range` state as the top-of-panel control, so either set works). (3) Removed the Contamination severity column from the table (the Anomaly/Severity filter chips still classify contamination — the column itself is gone for a cleaner table)." },
+  { v: "2.29.35", note: "IoT Core > Weather correlation chart got show/hide toggles — a 'Show' row of chips (Water temp · TDS · pH · Tank, each coloured to its line) lets you turn any sensor line on/off on the combined chart; Outdoor temperature stays on by default as the shared reference. Controlled by `wxShow` state; the WX_SERIES lines are filtered by it." },
+  { v: "2.29.34", note: "IoT Core > Recent readings filter expanded from Contamination-only into a two-part filter: an Anomaly category (All · Contamination · Tank · Dead device) plus a Severity level (All · Critical · High · Medium), each chip showing a live count. Contamination uses the pH/TDS rules; Tank uses a new `iotTankSev` (≤25% High / ≤50% Medium refill urgency); Dead device flags when the selected device's last reading is >24h old (also shows a red banner above the table, and filters the table to its last-known readings). Severity filters on the worst of contamination/tank per row (`iotWorstSev`)." },
+  { v: "2.29.33", note: "IoT Core > Trend analysis > Recent readings table now classifies each row's CONTAMINATION severity per the water-quality business rules (pH + TDS): Critical = pH <6.0 or >9.0 (BR-PH-01); High = TDS >500 (out of safe) or pH outside the 6.5–8.5 ideal; Medium = TDS <50 (low/dilution, BR-TDS-02). A new \"Contamination\" column shows a colour-coded severity badge per reading (critical rows get a light-red row tint), and a new Contamination filter (All · Contaminated · Critical · High · Medium, each with a live count) narrows the table to the chosen severity. `iotContamSev(ph, tds)` is the shared classifier." },
+  { v: "2.29.32", note: "IoT Core > Trend analysis > Weather correlation chart now also plots the TANK level (%) alongside outdoor temp, water temp, TDS and pH — its own auto-scaled line (amber), out-of-range points flagged red, tank value added to the hover tooltip and the legend. `iotWeatherCorrelate.joined` now carries tank + oorTank per reading." },
+  { v: "2.29.31", note: "IoT Core > Alerts now PERSISTS anomalies to a local log (localStorage `pw_iot_alert_log`) instead of only showing live ones — so alerts no longer disappear when the ~1-day telemetry window slides past them. Each detection cycle emits per-occurrence anomaly events with a stable key (deviceId|rule|timestamp) and upserts them into the store (capped 2000 events / 45 days); the page renders from the stored log (with exact timestamps), plus a live '{n} logged' count and a Clear-log button. Fixed a false-positive: 'Dead device' no longer fires (and gets permanently logged) while a device's history is still loading — it only triggers on a real last-seen older than 24h. (Next: POST the log to Firebase for cross-device history.)" },
+  { v: "2.29.30", note: "IoT Core — new \"Alerts\" tab: a deterministic anomaly rules-engine over the fleet (per the water-quality business-rules guide). Detects: Dead device (no ping >24h), Critical pH out-of-bounds (<6/>9), pH out of ideal (6.5–8.5), pH rapid drift (|Δ|>0.8 in minutes), High TDS contamination spike (>600) / out-of-safe (>500), sudden TDS drop/dilution (<30), Acid/industrial intrusion (inverse-ion: pH↓>0.5 while TDS↑>150 in ≤10m — Critical), Temperature out of range (<10/>32), Tank level drastic drop (≥25% in a short span), and Sensor frozen/flatline (σ≈0). Each alert carries a severity (Critical/High/Medium), the reading value, occurrence count, likely cause and a proactive action. Page has KPI tiles (open/critical/high/dead/contamination/watched), an Anomalies-by-type chart, severity + type filters, and an \"Understanding the signals\" insight card (temp-vs-TDS drift, acid-intrusion signature, low-TDS buffering, flatline). Reuses the /devices/status + bare /devices/history feeds; no extra endpoints. Deterministic, no LLM." },
   { v: "2.29.29", note: "Task Planner: added a \"Timeline\" view (4th toggle alongside Board / List / Weekly) that lists tasks by the day they were ADDED (createdAt), newest first — grouped under Today / Yesterday / date headers with a per-day \"N tasks added\" count, and each entry showing the time, title, status + priority pills, category, assignees and who added it. Click any entry to open/edit the task. Lets you see the flow of what's being added to the board over time." },
   { v: "2.29.28", note: "(1) Customer > Societies now opens with a \"Customer retention insights\" panel — the same 5-layer read (What happened / ongoing / Result / Positive vs Negative / recommended ACTIONS) on active vs churned customers, avg LTV (from paid invoices), dunning (payment-failing) customers, outstanding dues, and at-risk societies (highest inactive+dunning %). Actions: recover dunning, win back inactive (worst society first), service+renewal drive on the at-risk society, chase outstanding. (2) Apartment/Society filters on the analytics pages (Sales, Revenue, Earned Revenue) are now MULTI-SELECT (reusing MultiSelectFilter) instead of single dropdowns — pick any combination of societies; all KPIs/charts/tables scope to the selection." },
   { v: "2.29.27", note: "(1) Analytics > Revenue (Net Revenue) gained the same \"Business insights\" panel — What happened (collections in the period vs previous + YoY), What's ongoing (recharge vs deposit split + outstanding receivables), Result (recurring recharge as % of collections — the durable revenue), Positive vs Negative (trend up/down, top/lagging society, deposit-heavy mix) and recommended ACTIONS (chase outstanding, recover dipped collections, grow recurring recharge, push a lagging society). Deterministic over the live invoices/customers. (2) Removed the \"Fleet health & insights\" section from IoT Device Monitor (added in 2.29.26) per request — the Device Monitor is back to its live-monitoring layout." },
@@ -3224,6 +3237,7 @@ const doRefresh = async () => {
     ],
     iot: [
       { id: "iot_devices", label: "Device Monitor", icon: Cpu },
+      { id: "iot_alerts", label: "Alerts", icon: AlertCircle },
     ],
     devicereplace: [
       { id: "dr_list", label: "Replacements", icon: Repeat },
@@ -3425,6 +3439,7 @@ const doRefresh = async () => {
             {tab === "as_society" && <AutoGSSociety key={refreshKey} accessLevel={tabAccess} />}
             {tab === "as_iot" && <IoTAlerts key={refreshKey} />}
             {tab === "iot_devices" && <IoTDevices key={refreshKey} />}
+            {tab === "iot_alerts" && <IoTAlertsPage key={refreshKey} />}
             {tab === "backtrack" && isModuleAdmin && <Backtrack key={refreshKey} />}
             {tab === "logs" && isModuleAdmin && <Logs key={refreshKey} />}
             {tab === "users" && isModuleAdmin && <UsersAdmin key={refreshKey} />}
@@ -11418,7 +11433,7 @@ function iotWeatherCorrelate(chrono, weatherHours) {
   for (const it of chrono) {
     const ms = new Date(it.timestamp).getTime(); if (isNaN(ms) || ms < minW || ms > maxW) continue;
     const w = nearest(ms); if (!w || w.tempC == null) continue;
-    rows.push({ t: ms, out: w.tempC, wtemp: iotWqNum(it.waterQuality?.temp), tds: iotWqNum(it.waterQuality?.tds), ph: iotWqNum(it.waterQuality?.ph) });
+    rows.push({ t: ms, out: w.tempC, wtemp: iotWqNum(it.waterQuality?.temp), tds: iotWqNum(it.waterQuality?.tds), ph: iotWqNum(it.waterQuality?.ph), tank: iotTank(it.tankLevel).pct });
   }
   if (rows.length < 3) return null;
   const pick = (k) => { const xs = [], ys = []; rows.forEach((r) => { if (r.out != null && r[k] != null && r[k] > 0) { xs.push(r.out); ys.push(r[k]); } }); return { xs, ys }; };
@@ -11427,10 +11442,11 @@ function iotWeatherCorrelate(chrono, weatherHours) {
     n: rows.length,
     rTemp: iotPearson(t.xs, t.ys), rTds: iotPearson(d.xs, d.ys), rPh: iotPearson(p.xs, p.ys),
     joined: rows.map((r) => ({
-      t: r.t, out: r.out, wtemp: r.wtemp, tds: r.tds, ph: r.ph,
+      t: r.t, out: r.out, wtemp: r.wtemp, tds: r.tds, ph: r.ph, tank: r.tank,
       oorTemp: r.wtemp != null && oor(iotWqClass("temp", r.wtemp)),
       oorTds: r.tds != null && oor(iotWqClass("tds", r.tds)),
       oorPh: r.ph != null && oor(iotWqClass("ph", r.ph)),
+      oorTank: r.tank != null && iotTankBand(r.tank) !== "green",
       // Likely a perceptible TASTE issue = a combination of any: hard/flat TDS,
       // off-neutral pH, or warm water. Flashed on the graph.
       taste: (r.tds != null && (r.tds > 300 || r.tds < 50)) || (r.ph != null && (r.ph < 6.5 || r.ph > 8.5)) || (r.wtemp != null && r.wtemp > 30),
@@ -11632,6 +11648,36 @@ const IOT_RAG = {
 // shell; the blue water block fills the shell from the bottom to --level with two moving
 // wave layers on the surface. The scale and the shell are the same height and top-aligned,
 // so 0-100% line up. Also holds the live/dead ECG styles for the Online/Offline KPIs.
+// Refill detection: the RO tank pings its level every ~10 min. Within the recent
+// window (~65 min of pings) if the level stepped UP — latest reading higher than
+// the earliest in the window — the tank is actively refilling, which drives the
+// pump + pipe + flowing-water animation on the tank graphic.
+function iotTankRefilling(chrono) {
+  if (!Array.isArray(chrono) || chrono.length < 2) return false;
+  const anchor = new Date(chrono[chrono.length - 1].timestamp).getTime();
+  if (!anchor) return false;
+  const win = chrono.filter((it) => { const t = new Date(it.timestamp).getTime(); return t && anchor - t <= 65 * 60 * 1000; });
+  if (win.length < 2) return false;
+  const pcts = win.map((it) => iotTank(it.tankLevel).pct).filter((p) => p != null);
+  if (pcts.length < 2) return false;
+  return pcts[pcts.length - 1] > pcts[0];
+}
+
+// Warming detection: warm water steams. The tank shows rising vapour whenever the
+// latest water temp is above the ideal band (> 25 °C — the Warning/Hot zone), OR
+// when it's trending up into that zone (rising and already >= 24 °C). Read from the
+// most recent temp in the ~65-min window so a stale hot reading doesn't linger.
+function iotTempWarming(chrono) {
+  if (!Array.isArray(chrono) || !chrono.length) return false;
+  const anchor = new Date(chrono[chrono.length - 1].timestamp).getTime();
+  if (!anchor) return false;
+  const win = chrono.filter((it) => { const t = new Date(it.timestamp).getTime(); return t && anchor - t <= 65 * 60 * 1000; });
+  const temps = win.map((it) => iotWqNum(it.waterQuality?.temp)).filter((v) => v != null);
+  if (!temps.length) return false;
+  const first = temps[0], last = temps[temps.length - 1];
+  return last > 25 || (last > first + 0.2 && last >= 24);
+}
+
 const IOT_TANK_CSS = `
 .pw-tank-visual{position:relative;display:flex;align-items:flex-start;justify-content:center;gap:10px;padding:2px}
 .pw-tank-scale{margin-top:50px;height:214px;display:flex;flex-direction:column;justify-content:space-between;color:#6d7d79;font-size:11.5px;font-weight:600;padding-right:8px}
@@ -11661,9 +11707,38 @@ const IOT_TANK_CSS = `
 .iot-ecg.alive .iot-ecg-seg{filter:drop-shadow(0 0 5px rgba(10,157,110,.5))}
 .iot-ecg.dead .iot-ecg-seg{filter:drop-shadow(0 0 4px rgba(220,65,65,.38));opacity:.8}
 @keyframes iotEcgScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+/* ── Refill rig: pump in the base gap + pipe up-and-over into the tank neck, ── */
+/* ── with blue water flowing in waves through the tubes. Shown only refilling. ── */
+.pw-refill{position:absolute;inset:0;z-index:7;pointer-events:none}
+.pw-pump{position:absolute;left:4px;bottom:2px;width:54px;height:34px;border-radius:9px;background:linear-gradient(180deg,#2b3541,#141a22);box-shadow:0 7px 13px rgba(0,0,0,.3),inset 0 2px 3px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center}
+.pw-pump::before{content:"";width:18px;height:18px;border-radius:50%;border:3px solid #4aa8e6;border-top-color:#cdefff;box-shadow:0 0 7px rgba(74,168,230,.6);animation:pwPumpSpin .65s linear infinite}
+.pw-pump-cap{position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:16px;height:10px;border-radius:4px 4px 0 0;background:#39434f}
+.pw-pipe{position:absolute;background:linear-gradient(90deg,#aebcc0,#eef5f6 46%,#b6c4c8);box-shadow:inset 0 0 4px rgba(0,0,0,.28);overflow:hidden}
+.pw-pipe-v{left:24px;top:16px;width:15px;height:240px;border-radius:7px}
+.pw-pipe-h{left:24px;top:16px;width:80px;height:15px;border-radius:7px 7px 0 0;background:linear-gradient(180deg,#eef5f6,#aebcc0)}
+.pw-pipe-out{left:89px;top:16px;width:15px;height:38px;border-radius:0 0 7px 7px}
+.pw-flow{position:absolute;inset:1px;border-radius:6px;background:linear-gradient(180deg,rgba(84,206,240,.9),rgba(0,140,205,.95))}
+.pw-flow::after{content:"";position:absolute;inset:-2px;background:repeating-linear-gradient(118deg,rgba(205,244,255,0) 0 5px,rgba(205,244,255,.55) 5px 9px,rgba(205,244,255,0) 9px 17px)}
+.pw-pipe-v .pw-flow::after,.pw-pipe-out .pw-flow::after{animation:pwFlowDown .9s linear infinite}
+.pw-pipe-h .pw-flow::after{animation:pwFlowRight .9s linear infinite}
+.pw-pour{position:absolute;left:94px;top:52px;width:6px;height:9px;border-radius:0 60% 55% 60%;background:linear-gradient(180deg,rgba(150,224,250,.95),rgba(0,140,205,.95));animation:pwPour .85s linear infinite}
+.pw-refill-tag{position:absolute;left:50%;top:2px;transform:translateX(-50%);z-index:8;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#0a6f8f;background:#e2f4fb;border:1px solid #b9e3f2;box-shadow:0 3px 8px rgba(10,111,143,.16)}
+.pw-refill-tag::before{content:"";width:7px;height:7px;border-radius:50%;background:#0a9dd4;animation:pwRefillBlink 1s ease-in-out infinite}
+@keyframes pwFlowDown{from{background-position:0 -17px}to{background-position:0 17px}}
+@keyframes pwFlowRight{from{background-position:-17px 0}to{background-position:17px 0}}
+@keyframes pwPumpSpin{to{transform:rotate(360deg)}}
+@keyframes pwPour{0%{transform:translateY(0) scale(.7);opacity:0}18%{opacity:1}100%{transform:translateY(30px) scale(1.05);opacity:0}}
+@keyframes pwRefillBlink{0%,100%{opacity:.35;transform:scale(.82)}50%{opacity:1;transform:scale(1)}}
+/* ── Warming vapour: wisps of steam rising off the water surface when the water ── */
+/* ── temp is trending up. Sits at the surface (bottom:var(--level)) inside shell. ── */
+.pw-vapor{position:absolute;left:6px;right:6px;bottom:var(--level);height:0;z-index:2;pointer-events:none;transition:bottom 700ms cubic-bezier(.2,.75,.2,1)}
+.pw-vapor-wisp{position:absolute;bottom:0;border-radius:50%;background:radial-gradient(circle at 50% 42%,rgba(255,255,255,1),rgba(214,232,240,.92) 44%,rgba(188,212,224,0) 72%);opacity:0;filter:blur(1.6px) drop-shadow(0 0 4px rgba(120,150,165,.6)) drop-shadow(0 2px 7px rgba(80,110,130,.5));animation:pwVapor linear infinite}
+.pw-warm-tag{position:absolute;right:0;top:0;z-index:8;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#a8480a;background:#fdeede;border:1px solid #f4cfa4;box-shadow:0 3px 8px rgba(168,72,10,.16)}
+.pw-warm-tag::before{content:"";width:7px;height:7px;border-radius:50%;background:#e8791a;animation:pwRefillBlink 1.1s ease-in-out infinite}
+@keyframes pwVapor{0%{transform:translateY(0) translateX(0) scale(.55);opacity:0}20%{opacity:1}58%{opacity:.72}100%{transform:translateY(-72px) translateX(7px) scale(2.1);opacity:0}}
 @media(max-width:1400px){.pw-tank-layout{grid-template-columns:1fr!important;justify-items:center}}
 @media(max-width:1150px){.iot-monitor-grid{grid-template-columns:1fr!important}}
-@media(prefers-reduced-motion:reduce){.pw-wave{animation:none!important}.pw-water{transition:none}.iot-ecg-track{animation:none!important}.pw-bubble{animation:none!important;opacity:0}}
+@media(prefers-reduced-motion:reduce){.pw-wave{animation:none!important}.pw-water{transition:none}.iot-ecg-track{animation:none!important}.pw-bubble{animation:none!important;opacity:0}.pw-pump::before,.pw-flow::after,.pw-pour,.pw-refill-tag::before{animation:none!important}.pw-pour{opacity:0}.pw-vapor-wisp{animation:none!important;opacity:0}.pw-warm-tag::before{animation:none!important}}
 `;
 const ValveBadge = ({ state }) => (
   <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: state === "OPEN" ? "#08805A" : "#DC4141" }}>{state ?? "—"}</span>
@@ -11743,12 +11818,23 @@ function IoTWave({ kind, color, opacity = 0.5 }) {
 // Transparent Sintex-style water storage tank: a see-through shell with a dark
 // screw lid + moulded neck, whose blue water block fills to the level % with two
 // moving wave layers riding the surface. Scale aligns 0-100% to the shell.
-function IoTTank({ pct = 0 }) {
+function IoTTank({ pct = 0, refilling = false, warming = false }) {
   const p = Math.max(0, Math.min(100, pct));
   return (
     <div className="pw-tank-visual" aria-hidden>
       <div className="pw-tank-scale"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div>
       <div className="pw-tank" style={{ "--level": `${p}%` }}>
+        {refilling && (
+          <div className="pw-refill">
+            <span className="pw-refill-tag">Refilling</span>
+            <div className="pw-pipe pw-pipe-v"><div className="pw-flow" /></div>
+            <div className="pw-pipe pw-pipe-h"><div className="pw-flow" /></div>
+            <div className="pw-pipe pw-pipe-out"><div className="pw-flow" /></div>
+            <span className="pw-pour" style={{ animationDelay: "0s" }} />
+            <span className="pw-pour" style={{ left: "97px", animationDelay: ".42s" }} />
+            <div className="pw-pump"><span className="pw-pump-cap" /></div>
+          </div>
+        )}
         <div className="pw-tank-lid" />
         <div className="pw-tank-neck" />
         <div className="pw-tank-shell">
@@ -11761,6 +11847,16 @@ function IoTTank({ pct = 0 }) {
               { l: "33%", s: 3, d: "2.4s", delay: "2.2s" }, { l: "62%", s: 4, d: "3.7s", delay: "0.3s" },
             ].map((b, i) => <span key={i} className="pw-bubble" style={{ left: b.l, width: b.s, height: b.s, animationDuration: b.d, animationDelay: b.delay }} />)}
           </div>
+          {warming && (
+            <div className="pw-vapor">
+              {[
+                { l: "16%", s: 20, d: "3.6s", delay: "0s" }, { l: "30%", s: 26, d: "4.4s", delay: "0.9s" },
+                { l: "44%", s: 18, d: "3.2s", delay: "0.4s" }, { l: "58%", s: 27, d: "4.8s", delay: "1.5s" },
+                { l: "70%", s: 22, d: "3.9s", delay: "0.2s" }, { l: "82%", s: 17, d: "3.4s", delay: "1.1s" },
+                { l: "24%", s: 15, d: "4.1s", delay: "2.0s" }, { l: "64%", s: 16, d: "3.7s", delay: "2.4s" },
+              ].map((v, i) => <span key={i} className="pw-vapor-wisp" style={{ left: v.l, width: v.s, height: v.s, animationDuration: v.d, animationDelay: v.delay }} />)}
+            </div>
+          )}
           <div className="pw-tank-shine" />
           <div className="pw-band band-1" />
           <div className="pw-band band-2" />
@@ -11775,16 +11871,17 @@ function IoTTank({ pct = 0 }) {
 
 // Tank Level panel — device header + realistic tank (with scale) + % readout and
 // the four float-switch states, laid out [tank | readout] per the design spec.
-function IoTTankPanel({ device, tank }) {
+function IoTTankPanel({ device, tank, refilling = false, warming = false }) {
   const meta = [device.roUnitId, device.deviceType].filter(Boolean).join(" · ") || "RO Tank sensor";
   const fw = device.firmwareVersion || device.FIRMWARE_VERSION || "—";
   return (
     <div style={{ ...IOT_CARD, position: "relative", overflow: "hidden", padding: "18px 20px", minHeight: 300,
       background: "radial-gradient(circle at 52% 58%, rgba(185,233,219,.27), transparent 43%), linear-gradient(180deg,#fff,#f8fcfa)" }}>
+      {warming && !refilling && <span className="pw-warm-tag" style={{ top: 18, right: 20 }}>Warming</span>}
       <h2 className="serif" style={{ fontSize: 20, fontWeight: 750, color: "var(--f)", lineHeight: 1.1 }}>{device.deviceId}</h2>
       <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 3 }}>{meta} · Firmware {fw}</div>
       <div className="pw-tank-layout" style={{ display: "grid", gridTemplateColumns: "minmax(180px,1fr) 140px", alignItems: "center", minHeight: 250, gap: 6, marginTop: 2 }}>
-        <IoTTank pct={tank.pct} />
+        <IoTTank pct={tank.pct} refilling={refilling} warming={warming} />
         <div style={{ alignSelf: "center" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "var(--f)" }}>Tank Level</div>
           <div className="serif" style={{ marginTop: 5, fontSize: 48, fontWeight: 780, letterSpacing: "-.05em", color: "var(--f)", lineHeight: 1 }}>{tank.pct}%</div>
@@ -11880,6 +11977,22 @@ const iotBandCell = (band) => band === "red" ? { color: "#DC4141", background: "
 const iotBandText = (band) => band === "red" ? { color: "#DC4141", fontWeight: 800, fontSize: 14.5 }
   : band === "amber" ? { color: "#a86e00", fontWeight: 800, fontSize: 14.5 }
   : {};
+// Contamination severity for a reading, per the water-quality business rules
+// (pH + TDS): Critical = pH <6.0 or >9.0 (BR-PH-01); High = TDS >500 (out of
+// safe) or pH outside the 6.5–8.5 ideal band; Medium = TDS <50 (low/dilution,
+// BR-TDS-02). Returns null when the reading is within safe limits.
+const IOT_CONTAM_SEV = { critical: { c: "#DC4141", bg: "#FBE8E8", label: "Critical" }, high: { c: "#a86e00", bg: "#FBF0E0", label: "High" }, medium: { c: "#2A86D6", bg: "#E5F0FA", label: "Medium" } };
+const iotContamSev = (ph, tds) => {
+  if (ph != null && (ph < 6.0 || ph > 9.0)) return "critical";
+  if (tds != null && tds > 500) return "high";
+  if (ph != null && (ph < 6.5 || ph > 8.5)) return "high";
+  if (tds != null && tds < 50) return "medium";
+  return null;
+};
+// Tank-level severity (refill urgency): ≤25% High, ≤50% Medium, else safe.
+const iotTankSev = (pct) => pct == null ? null : pct <= 25 ? "high" : pct <= 50 ? "medium" : null;
+const iotSevRank = { critical: 3, high: 2, medium: 1 };
+const iotWorstSev = (a, b) => (iotSevRank[a] || 0) >= (iotSevRank[b] || 0) ? (a || b || null) : (b || a || null);
 // Tank level band: low tanks (≤25%) are critical (needs refill), ≤50% borderline.
 const iotTankBand = (pct) => pct <= 25 ? "red" : pct <= 50 ? "amber" : "green";
 // ECG-style monitor wave for one metric over time. Downsampled to a clean trend,
@@ -12028,9 +12141,12 @@ function IoTTankReadings({ items, weather }) {
   const [page, setPage] = useState(1);
   const [sortDir, setSortDir] = useState("desc");
   const [metric, setMetric] = useState("ph");
+  const [wxShow, setWxShow] = useState({ wtemp: true, tds: true, ph: true, tank: true }); // which sensor lines show on the weather-correlation chart (outdoor temp is always on)
   const [anomOnly, setAnomOnly] = useState(false);
   const [showAllHist, setShowAllHist] = useState(false);
   const [range, setRange] = useState("today"); // today | yesterday | week
+  const [catF, setCatF] = useState("all"); // all | contamination | tank | dead (anomaly category)
+  const [sevF, setSevF] = useState("all"); // all | critical | high | medium (severity)
 
   // Slice the (up-to-7-day) window before anything else, so the chart, tiles,
   // anomaly scan, table and correlation all reflect the chosen range.
@@ -12096,10 +12212,27 @@ function IoTTankReadings({ items, weather }) {
   const wqVerdict = wqWorst === "green" ? "Good" : wqWorst === "amber" ? "Warning" : wqWorst === "red" ? "Critical" : "—";
   const wqVk = wqWorst === "green" ? "good" : wqWorst === "amber" ? "warning" : wqWorst === "red" ? "critical" : "na";
 
-  const sorted = [...chrono].filter((it) => anomOnly ? anyOut(it) : true).sort((a, b) => { const dd = new Date(b.timestamp) - new Date(a.timestamp); return sortDir === "desc" ? dd : -dd; });
+  const contamSevOf = (it) => iotContamSev(iotWqNum(it.waterQuality?.ph), iotWqNum(it.waterQuality?.tds));
+  const tankSevOf = (it) => iotTankSev(iotTank(it.tankLevel).pct);
+  const rowSevOf = (it) => iotWorstSev(contamSevOf(it), tankSevOf(it));
+  const lastSeenTs = all.length ? Math.max(...all.map((it) => new Date(it.timestamp).getTime()).filter((t) => !isNaN(t))) : NaN;
+  const deviceDead = !isNaN(lastSeenTs) && (Date.now() - lastSeenTs) > 24 * 3600000;
+  const catCounts = { contamination: 0, tank: 0, dead: deviceDead ? 1 : 0 };
+  const sevCounts = { critical: 0, high: 0, medium: 0 };
+  chrono.forEach((it) => { if (contamSevOf(it)) catCounts.contamination++; if (tankSevOf(it)) catCounts.tank++; const s = rowSevOf(it); if (s) sevCounts[s]++; });
+  const passCat = (it) => catF === "all" ? true : catF === "contamination" ? contamSevOf(it) != null : catF === "tank" ? tankSevOf(it) != null : deviceDead;
+  const passSev = (it) => sevF === "all" ? true : rowSevOf(it) === sevF;
+  const sorted = [...chrono].filter((it) => (anomOnly ? anyOut(it) : true) && passCat(it) && passSev(it)).sort((a, b) => { const dd = new Date(b.timestamp) - new Date(a.timestamp); return sortDir === "desc" ? dd : -dd; });
   const totalPages = Math.max(1, Math.ceil(sorted.length / PER));
   const cur = Math.min(page, totalPages);
   const rows = sorted.slice((cur - 1) * PER, cur * PER);
+  const exportReadings = () => exportToCsv(`prowater-iot-readings-${range}.csv`, [
+    { label: "Time", get: (it) => iotStamp(it.timestamp) },
+    { label: "Tank %", get: (it) => iotTank(it.tankLevel).pct },
+    { label: "pH", get: (it) => { const v = iotWqNum(it.waterQuality?.ph); return v == null ? "" : v.toFixed(1); } },
+    { label: "TDS (mg/L)", get: (it) => { const v = iotWqNum(it.waterQuality?.tds); return v == null ? "" : Math.round(v); } },
+    { label: "Temp (°C)", get: (it) => { const v = iotWqNum(it.waterQuality?.temp); return v == null ? "" : v.toFixed(1); } },
+  ], sorted);
   const btn = (disabled) => ({ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 9, border: "1px solid " + (disabled ? "var(--border)" : "var(--brand)"), background: disabled ? "#fff" : "var(--brand)", color: disabled ? "var(--faint)" : "#fff", cursor: disabled ? "not-allowed" : "pointer" });
   const syncHead = (
     <span onClick={() => { setSortDir((d) => d === "desc" ? "asc" : "desc"); setPage(1); }} style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5, userSelect: "none" }} title="Sort by time">
@@ -12117,12 +12250,13 @@ function IoTTankReadings({ items, weather }) {
     { key: "wtemp", oorKey: "oorTemp", label: "Water temp", unit: "°C", color: "#0A9D6E", dp: 1 },
     { key: "tds", oorKey: "oorTds", label: "TDS", unit: "mg/L", color: "#2A86D6", dp: 0 },
     { key: "ph", oorKey: "oorPh", label: "pH", unit: "", color: "#7A5AF8", dp: 1 },
+    { key: "tank", oorKey: "oorTank", label: "Tank", unit: "%", color: "#986315", dp: 0 },
   ];
   const wxDot = (s) => (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const bad = payload[s.oorKey]; return <circle key={index} cx={cx} cy={cy} r={bad ? 3.6 : 0} fill={bad ? "#e0453f" : s.color} stroke="#fff" strokeWidth={bad ? 1.2 : 0} />; };
   const bigTT = (props) => {
     const { active, payload } = props; if (!active || !payload || !payload.length) return null; const d = payload[0].payload;
-    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed(unit === "mg/L" ? 0 : 1)}{unit ? " " + unit : ""}{bad ? " · out of range" : ""}</div>;
-    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#0A9D6E")}{row("TDS", d.tds, "mg/L", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}</div>);
+    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "mg/L" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}{bad ? " · out of range" : ""}</div>;
+    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#0A9D6E")}{row("TDS", d.tds, "mg/L", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}{row("Tank", d.tank, "%", d.oorTank, "#986315")}</div>);
   };
   // Flashing red ring at timestamps where taste is likely affected (temp+TDS+pH).
   const tasteDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload || !payload.taste) return null; return (<g key={index}><circle cx={cx} cy={cy} r={5} fill="none" stroke="#e0453f" strokeWidth={2}><animate attributeName="r" values="5;9;5" dur="1.1s" repeatCount="indefinite" /><animate attributeName="opacity" values="1;0.15;1" dur="1.1s" repeatCount="indefinite" /></circle><circle cx={cx} cy={cy} r={2.6} fill="#e0453f"><animate attributeName="opacity" values="1;0.25;1" dur="1.1s" repeatCount="indefinite" /></circle></g>); };
@@ -12268,6 +12402,13 @@ function IoTTankReadings({ items, weather }) {
                   );
                 })}
               </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Show</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#d1830a", display: "inline-flex", alignItems: "center", gap: 5 }} title="Outdoor temperature is always shown"><span style={{ width: 12, height: 3, background: "#d1830a", borderRadius: 2 }} />Outdoor temp</span>
+                {WX_SERIES.map((s) => { const on = wxShow[s.key]; return (
+                  <button key={s.key} onClick={() => setWxShow((p) => ({ ...p, [s.key]: !p[s.key] }))} style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? s.color : "var(--border)"), background: on ? s.color : "#fff", color: on ? "#fff" : "var(--muted)" }}>{s.label}</button>
+                ); })}
+              </div>
               <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "8px 10px 4px" }}>
                 <ResponsiveContainer width="100%" height={230}>
                   <ComposedChart data={wxCorr.joined} margin={{ top: 8, right: 10, bottom: 4, left: 4 }}>
@@ -12277,9 +12418,10 @@ function IoTTankReadings({ items, weather }) {
                     <YAxis yAxisId="wtemp" hide domain={["auto", "auto"]} />
                     <YAxis yAxisId="tds" hide domain={["auto", "auto"]} />
                     <YAxis yAxisId="ph" hide domain={["auto", "auto"]} />
+                    <YAxis yAxisId="tank" hide domain={["auto", "auto"]} />
                     <Tooltip content={bigTT} />
                     <Line yAxisId="out" type="monotone" dataKey="out" stroke="#d1830a" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
-                    {WX_SERIES.map((s) => <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={1.8} dot={wxDot(s)} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />)}
+                    {WX_SERIES.filter((s) => wxShow[s.key]).map((s) => <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={1.8} dot={wxDot(s)} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />)}
                     <Line yAxisId="out" type="monotone" dataKey="out" stroke="transparent" dot={tasteDot} activeDot={false} isAnimationActive={false} legendType="none" />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -12289,6 +12431,7 @@ function IoTTankReadings({ items, weather }) {
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#0A9D6E", borderRadius: 2 }} /> water temp</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#2A86D6", borderRadius: 2 }} /> TDS</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#7A5AF8", borderRadius: 2 }} /> pH</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#986315", borderRadius: 2 }} /> tank</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#e0453f" }} /> out of range</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#e0453f", boxShadow: "0 0 0 3px rgba(224,69,63,.22)" }} /> flashing = likely taste issue</span>
                 <span>· {wxCorr.n} paired readings · lines auto-scaled to fit — hover for real values{weather.sample ? " · sample weather" : ""}</span>
@@ -12299,7 +12442,38 @@ function IoTTankReadings({ items, weather }) {
           )}
         </div>
       )}
-      <div style={{ padding: "10px 18px 2px", fontSize: 13, fontWeight: 800, color: "var(--f)" }}>Recent readings</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 18px 4px" }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--f)" }}>Recent readings</span>
+        <div style={{ flex: 1, minWidth: 8 }} />
+        <CalendarRange size={14} color="var(--muted)" />
+        {[["today", "Today"], ["yesterday", "Yesterday"], ["week", "This Week"]].map(([k, label]) => { const active = range === k; return (
+          <button key={k} onClick={() => { setRange(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}</button>
+        ); })}
+        <button onClick={exportReadings} style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 9, border: "1px solid var(--border)", background: "#fff", color: "var(--teal)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}><Download size={14} /> Export</button>
+      </div>
+      {deviceDead && (
+        <div style={{ display: "flex", alignItems: "center", gap: 9, margin: "0 18px 8px", padding: "10px 12px", borderRadius: 10, border: "1px solid #F0C9C9", background: "#FBF0F0", color: "#DC4141", fontSize: 12.5, fontWeight: 700 }}>
+          <AlertCircle size={15} /> Dead device — no ping for {Math.round((Date.now() - lastSeenTs) / 3600000)}h. The readings below are the last known.
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "4px 18px 10px" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Anomaly</span>
+        {[["all", "All"], ["contamination", "Contamination"], ["tank", "Tank"], ["dead", "Dead device"]].map(([k, label]) => {
+          const active = catF === k; const cnt = k === "all" ? null : catCounts[k]; const dim = k !== "all" && !cnt;
+          return (
+            <button key={k} disabled={dim} onClick={() => { setCatF(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "5px 11px", borderRadius: 999, cursor: dim ? "not-allowed" : "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : (dim ? "var(--faint)" : "var(--slate)") }}>{label}{cnt != null ? ` (${cnt})` : ""}</button>
+          );
+        })}
+        <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 2px" }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Severity</span>
+        {[["all", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"]].map(([k, label]) => {
+          const active = sevF === k; const cnt = k === "all" ? null : sevCounts[k]; const dim = k !== "all" && !cnt;
+          const on = active && k !== "all" ? IOT_CONTAM_SEV[k]?.c : null;
+          return (
+            <button key={k} disabled={dim} onClick={() => { setSevF(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "5px 11px", borderRadius: 999, cursor: dim ? "not-allowed" : "pointer", border: "1px solid " + (active ? (on || "var(--brand)") : "var(--border)"), background: active ? (on || "var(--brand)") : "#fff", color: active ? "#fff" : (dim ? "var(--faint)" : "var(--slate)") }}>{label}{cnt != null ? ` (${cnt})` : ""}</button>
+          );
+        })}
+      </div>
       <div style={{ overflowX: "auto" }}>
         <Table head={[syncHead, "Tank", "pH", "TDS (mg/L)", "Temp (°C)"]}>
           {rows.map((it, i) => {
@@ -12371,6 +12545,227 @@ function IoTWeatherCard({ weather }) {
       <div style={{ flex: 1, minWidth: 8 }} />
       <div style={{ fontSize: 11.5, color: "var(--muted)", whiteSpace: "nowrap" }}>as of {hm}</div>
       {weather.sample && <span style={{ fontSize: 10.5, fontWeight: 800, color: "#a86e00", background: "#FBF0DA", border: "1px solid #F0D9A8", borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap" }}>SAMPLE · connect feed</span>}
+    </div>
+  );
+}
+// ── IoT Alerts rules engine (deterministic; thresholds per the water-quality
+// business-rules guide). Runs over each device's history + liveness and returns
+// a de-duplicated alert per (device, rule) with an occurrence count. ──────────
+const IOT_ALERT_SEV = { critical: { c: "#DC4141", bg: "#FBE8E8", label: "Critical" }, high: { c: "#a86e00", bg: "#FBF0E0", label: "High" }, medium: { c: "#2A86D6", bg: "#E5F0FA", label: "Medium" } };
+function iotRunAlerts(devices, histByDevice) {
+  const alerts = [];
+  const now = Date.now();
+  (devices || []).forEach((d) => {
+    const chrono = [...((histByDevice && histByDevice[d.deviceId]) || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const lastTs = chrono.length ? new Date(chrono[chrono.length - 1].timestamp).getTime() : (d.timestamp ? new Date(d.timestamp).getTime() : null);
+    // Dead device — no ping for > 24h.
+    if (lastTs == null) alerts.push({ deviceId: d.deviceId, rule: "DEAD", name: "Dead device", sev: "critical", ts: null, value: "never reported", detail: "No telemetry ever received from this device.", action: "Verify install, power and connectivity.", cause: "Never provisioned, or offline since install.", count: 1 });
+    else { const ageH = (now - lastTs) / 3600000; if (ageH > 24) alerts.push({ deviceId: d.deviceId, rule: "DEAD", name: "Dead device", sev: "critical", ts: lastTs, value: `${Math.round(ageH)}h since last ping`, detail: "No telemetry received for over 24 hours.", action: "Dispatch a technician — check power, SIM/connectivity and the sensor unit.", cause: "Power loss, network/SIM drop, or a failed sensor board.", count: 1 }); }
+    if (!iotIsTank(d)) return;
+    const agg = {};
+    const flag = (rule, name, sev, ts, value, detail, action, cause) => { const cur = agg[rule]; if (!cur) agg[rule] = { rule, name, sev, ts, value, detail, action, cause, count: 1 }; else { cur.count++; if (ts >= cur.ts) { cur.ts = ts; cur.value = value; } } };
+    let prev = null; const tdsWin = [];
+    chrono.forEach((it) => {
+      const ts = new Date(it.timestamp).getTime();
+      const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp), tank = iotTank(it.tankLevel).pct;
+      if (ph != null) {
+        if (ph < 6.0 || ph > 9.0) flag("PH_CRIT", "Critical pH out of bounds", "critical", ts, `pH ${ph.toFixed(1)}`, "pH beyond the safe 6.0–9.0 band (BR-PH-01).", "Emergency: divert flow, inspect chemical dosing.", "Dosing failure or acid/alkali intrusion.");
+        else if (ph < 6.5 || ph > 8.5) flag("PH_OOR", "pH out of range", "high", ts, `pH ${ph.toFixed(1)}`, "pH outside the ideal 6.5–8.5 band.", "Check dosing and source water.", "Dosing drift or a source-water shift.");
+      }
+      if (tds != null) {
+        if (tds > 600) flag("TDS_SPIKE", "High TDS contamination spike", "high", ts, `${Math.round(tds)} mg/L`, "TDS above 600 mg/L (BR-TDS-01).", "Divert to waste; check RO membrane / filtration.", "RO membrane breakdown, scaling, or contamination.");
+        else if (tds > 500) flag("TDS_OOR", "TDS out of safe range", "high", ts, `${Math.round(tds)} mg/L`, "TDS above the 500 mg/L safe limit.", "Check filtration / RO membrane.", "Membrane wear or high mineral load.");
+        if (tds < 30) flag("TDS_DROP", "Sudden TDS drop (dilution)", "medium", ts, `${Math.round(tds)} mg/L`, "TDS below 30 mg/L (BR-TDS-02).", "Schedule calibration; check for line breaks.", "Over-purification, dilution, or a disconnected sensor.");
+      }
+      if (tp != null && (tp < 10 || tp > 32)) flag("TEMP_OOR", "Temperature out of range", "high", ts, `${tp.toFixed(1)} °C`, "Water temperature beyond 10–32 °C.", "Inspect heat source / ambient exposure.", "Heat-exchanger fault, solar heating, or cold influx.");
+      if (prev) {
+        const gapMin = (ts - prev.ts) / 60000;
+        if (gapMin > 0 && gapMin <= 15) {
+          if (ph != null && prev.ph != null && Math.abs(ph - prev.ph) > 0.8) flag("PH_DRIFT", "pH rapid drift", "high", ts, `Δ${(ph - prev.ph).toFixed(1)} in ${Math.round(gapMin)}m`, "pH moved > 0.8 within minutes (BR-PH-02).", "Flag chemical-dosing failure; inspect feed pumps.", "Dosing-pump failure.");
+          if (ph != null && prev.ph != null && tds != null && prev.tds != null && (ph - prev.ph) < -0.5 && (tds - prev.tds) > 150) flag("COR_ACID", "Acid / industrial intrusion", "critical", ts, `pH ↓${(prev.ph - ph).toFixed(1)}, TDS ↑${Math.round(tds - prev.tds)}`, "pH crashed while TDS surged — the classic contaminant signature (BR-COR-01).", "Auto-shutdown intake; emergency site inspection.", "Acid or industrial contaminant intrusion.");
+          if (tank != null && prev.tank != null && (prev.tank - tank) >= 25 && gapMin <= 60) flag("TANK_DROP", "Tank level dropped drastically", "high", ts, `${prev.tank}%→${tank}% in ${Math.round(gapMin)}m`, "Tank fell ≥ 25% in a short span.", "Check for a leak/burst or stuck valve; verify the pump.", "Leak/burst, valve failure, or abnormal draw.");
+        }
+      }
+      tdsWin.push(tds); if (tdsWin.length > 24) tdsWin.shift();
+      prev = { ts, ph, tds, tp, tank };
+    });
+    const vals = tdsWin.filter((v) => v != null);
+    if (vals.length >= 20) { const m = vals.reduce((s, v) => s + v, 0) / vals.length; const sd = Math.sqrt(vals.reduce((s, v) => s + (v - m) * (v - m), 0) / vals.length); if (sd < 0.5) flag("FLATLINE", "Sensor frozen / flatline", "medium", lastTs, "σ ≈ 0", "TDS hasn't varied across many samples (BR-SYS-01).", "Raise a 'sensor frozen' ticket; watchdog reboot.", "Frozen ADC or a stuck sensor probe."); }
+    Object.values(agg).forEach((a) => alerts.push({ deviceId: d.deviceId, ...a }));
+  });
+  const sevRank = { critical: 0, high: 1, medium: 2 };
+  alerts.sort((a, b) => (sevRank[a.sev] - sevRank[b.sev]) || ((b.ts || 0) - (a.ts || 0)));
+  return alerts;
+}
+// Per-occurrence anomaly EVENTS (one per triggering reading + dead/flatline),
+// each with a STABLE key so re-detecting the same event across polls doesn't
+// duplicate it in the persisted log.
+function iotAnomalyEvents(devices, histByDevice) {
+  const events = [], now = Date.now();
+  const mk = (deviceId, rule, name, sev, ts, value, detail, action, cause) => ({ key: deviceId + "|" + rule + "|" + (ts || 0), deviceId, rule, name, sev, ts, value, detail, action, cause });
+  (devices || []).forEach((d) => {
+    const chrono = [...((histByDevice && histByDevice[d.deviceId]) || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    const lastTs = chrono.length ? new Date(chrono[chrono.length - 1].timestamp).getTime() : (d.timestamp ? new Date(d.timestamp).getTime() : null);
+    // Only flag DEAD on a real, stale last-seen — never on a null timestamp
+    // (that just means history hasn't loaded yet; avoids false positives that
+    // would otherwise be persisted permanently into the log).
+    if (lastTs != null) { const ageH = (now - lastTs) / 3600000; if (ageH > 24) events.push(mk(d.deviceId, "DEAD", "Dead device", "critical", lastTs, `${Math.round(ageH)}h since last ping`, "No telemetry received for over 24 hours.", "Dispatch a technician — check power, SIM/connectivity and the sensor unit.", "Power loss, network/SIM drop, or a failed sensor board.")); }
+    if (!iotIsTank(d)) return;
+    let prev = null; const tdsWin = [];
+    chrono.forEach((it) => {
+      const ts = new Date(it.timestamp).getTime();
+      const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp), tank = iotTank(it.tankLevel).pct;
+      if (ph != null) { if (ph < 6.0 || ph > 9.0) events.push(mk(d.deviceId, "PH_CRIT", "Critical pH out of bounds", "critical", ts, `pH ${ph.toFixed(1)}`, "pH beyond the safe 6.0–9.0 band (BR-PH-01).", "Emergency: divert flow, inspect chemical dosing.", "Dosing failure or acid/alkali intrusion.")); else if (ph < 6.5 || ph > 8.5) events.push(mk(d.deviceId, "PH_OOR", "pH out of range", "high", ts, `pH ${ph.toFixed(1)}`, "pH outside the ideal 6.5–8.5 band.", "Check dosing and source water.", "Dosing drift or a source-water shift.")); }
+      if (tds != null) { if (tds > 600) events.push(mk(d.deviceId, "TDS_SPIKE", "High TDS contamination spike", "high", ts, `${Math.round(tds)} mg/L`, "TDS above 600 mg/L (BR-TDS-01).", "Divert to waste; check RO membrane / filtration.", "RO membrane breakdown, scaling, or contamination.")); else if (tds > 500) events.push(mk(d.deviceId, "TDS_OOR", "TDS out of safe range", "high", ts, `${Math.round(tds)} mg/L`, "TDS above the 500 mg/L safe limit.", "Check filtration / RO membrane.", "Membrane wear or high mineral load.")); if (tds < 30) events.push(mk(d.deviceId, "TDS_DROP", "Sudden TDS drop (dilution)", "medium", ts, `${Math.round(tds)} mg/L`, "TDS below 30 mg/L (BR-TDS-02).", "Schedule calibration; check for line breaks.", "Over-purification, dilution, or a disconnected sensor.")); }
+      if (tp != null && (tp < 10 || tp > 32)) events.push(mk(d.deviceId, "TEMP_OOR", "Temperature out of range", "high", ts, `${tp.toFixed(1)} °C`, "Water temperature beyond 10–32 °C.", "Inspect heat source / ambient exposure.", "Heat-exchanger fault, solar heating, or cold influx."));
+      if (prev) { const gapMin = (ts - prev.ts) / 60000; if (gapMin > 0 && gapMin <= 15) {
+        if (ph != null && prev.ph != null && Math.abs(ph - prev.ph) > 0.8) events.push(mk(d.deviceId, "PH_DRIFT", "pH rapid drift", "high", ts, `Δ${(ph - prev.ph).toFixed(1)} in ${Math.round(gapMin)}m`, "pH moved > 0.8 within minutes (BR-PH-02).", "Flag chemical-dosing failure; inspect feed pumps.", "Dosing-pump failure."));
+        if (ph != null && prev.ph != null && tds != null && prev.tds != null && (ph - prev.ph) < -0.5 && (tds - prev.tds) > 150) events.push(mk(d.deviceId, "COR_ACID", "Acid / industrial intrusion", "critical", ts, `pH ↓${(prev.ph - ph).toFixed(1)}, TDS ↑${Math.round(tds - prev.tds)}`, "pH crashed while TDS surged — the classic contaminant signature (BR-COR-01).", "Auto-shutdown intake; emergency site inspection.", "Acid or industrial contaminant intrusion."));
+        if (tank != null && prev.tank != null && (prev.tank - tank) >= 25 && gapMin <= 60) events.push(mk(d.deviceId, "TANK_DROP", "Tank level dropped drastically", "high", ts, `${prev.tank}%→${tank}% in ${Math.round(gapMin)}m`, "Tank fell ≥ 25% in a short span.", "Check for a leak/burst or stuck valve; verify the pump.", "Leak/burst, valve failure, or abnormal draw."));
+      } }
+      tdsWin.push(tds); if (tdsWin.length > 24) tdsWin.shift();
+      prev = { ts, ph, tds, tp, tank };
+    });
+    const vals = tdsWin.filter((v) => v != null);
+    if (vals.length >= 20) { const m = vals.reduce((s, v) => s + v, 0) / vals.length; const sd = Math.sqrt(vals.reduce((s, v) => s + (v - m) * (v - m), 0) / vals.length); if (sd < 0.5) events.push(mk(d.deviceId, "FLATLINE", "Sensor frozen / flatline", "medium", lastTs, "σ ≈ 0", "TDS hasn't varied across many samples (BR-SYS-01).", "Raise a 'sensor frozen' ticket; watchdog reboot.", "Frozen ADC or a stuck sensor probe.")); }
+  });
+  return events;
+}
+// Persistent local anomaly log (localStorage) — upsert by stable key, so alerts
+// survive after the live data window slides past them. Capped to 2000 / 45 days.
+// (Later this can be POSTed to Firebase; for now it's the local capture table.)
+const IOT_ALERT_LOG_LS = "pw_iot_alert_log";
+function iotLogAlerts(events) {
+  let store = {};
+  try { const o = JSON.parse(localStorage.getItem(IOT_ALERT_LOG_LS) || "{}"); if (o && typeof o === "object") store = o; } catch { store = {}; }
+  const nowIso = new Date().toISOString();
+  (events || []).forEach((e) => { if (!e.key) return; if (store[e.key]) store[e.key].lastLoggedAt = nowIso; else store[e.key] = { ...e, firstLoggedAt: nowIso, lastLoggedAt: nowIso }; });
+  let arr = Object.values(store);
+  const cutoff = Date.now() - 45 * 86400000;
+  arr = arr.filter((a) => a.ts == null || a.ts >= cutoff).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  if (arr.length > 2000) arr = arr.slice(0, 2000);
+  const next = {}; arr.forEach((a) => { next[a.key] = a; });
+  try { localStorage.setItem(IOT_ALERT_LOG_LS, JSON.stringify(next)); } catch { /* quota */ }
+  return arr;
+}
+function iotClearAlertLog() { try { localStorage.removeItem(IOT_ALERT_LOG_LS); } catch { /* ignore */ } }
+function IoTAlertsPage() {
+  const { user } = useAuth();
+  const [roster, setRoster] = useState([]);
+  const [hist, setHist] = useState({});
+  const [sevF, setSevF] = useState("all");
+  const [typeF, setTypeF] = useState("all");
+  useEffect(() => {
+    api.logView(user.username, "Viewed IoT Alerts");
+    let alive = true;
+    const load = async () => {
+      try {
+        const res = await fetch(`${IOT_API_BASE}/devices/status`);
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        const ids = Array.from(new Set([...list.map((d) => d.deviceId), ...IOT_KNOWN_TANK_DEVICES]));
+        if (alive) setRoster(list.length ? list : ids.map((id) => ({ deviceId: id, deviceType: "RO Tank" })));
+        const results = await Promise.all(ids.map(async (id) => { try { const r = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${id}`); const j = await r.json(); return [id, Array.isArray(j) ? j : (j?.items ?? [])]; } catch { return [id, []]; } }));
+        if (alive) setHist((prev) => { const n = { ...prev }; results.forEach(([id, arr]) => { if (arr && arr.length) n[id] = arr; }); return n; });
+      } catch { /* keep prior */ }
+    };
+    load();
+    const t = setInterval(load, 60000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  const devices = useMemo(() => { const ids = Array.from(new Set([...roster.map((d) => d.deviceId), ...IOT_KNOWN_TANK_DEVICES])); return ids.map((id) => iotMergeLatest(roster.find((d) => d.deviceId === id) || { deviceId: id, deviceType: "RO Tank" }, hist[id])); }, [roster, hist]);
+  // Persisted anomaly log — detect on each poll, upsert into localStorage, and
+  // render from the stored log so alerts don't vanish when the live window moves.
+  const [alerts, setAlerts] = useState(() => iotLogAlerts([]));
+  useEffect(() => { setAlerts(iotLogAlerts(iotAnomalyEvents(devices, hist))); }, [devices, hist]);
+  const clearLog = () => { iotClearAlertLog(); setAlerts([]); };
+  const bySev = { critical: 0, high: 0, medium: 0 };
+  alerts.forEach((a) => { bySev[a.sev] = (bySev[a.sev] || 0) + 1; });
+  const deadN = alerts.filter((a) => a.rule === "DEAD").length;
+  const contamN = alerts.filter((a) => ["PH_CRIT", "TDS_SPIKE", "COR_ACID", "TDS_OOR", "PH_OOR"].includes(a.rule)).length;
+  const byType = {};
+  alerts.forEach((a) => { byType[a.name] = (byType[a.name] || 0) + 1; });
+  const typeRows = Object.entries(byType).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
+  const TYPES = [["all", "All"], ...typeRows.map((t) => [t.name, t.name])];
+  const shown = alerts.filter((a) => (sevF === "all" || a.sev === sevF) && (typeF === "all" || a.name === typeF));
+  const kpis = [
+    { l: "Open alerts", v: String(alerts.length), c: alerts.length ? "#DC4141" : "#0A7D53" },
+    { l: "Critical", v: String(bySev.critical), c: bySev.critical ? "#DC4141" : "#6b8577" },
+    { l: "High", v: String(bySev.high), c: bySev.high ? "#a86e00" : "#6b8577" },
+    { l: "Dead devices", v: String(deadN), c: deadN ? "#DC4141" : "#0A7D53" },
+    { l: "Contamination", v: String(contamN), c: contamN ? "#a86e00" : "#0A7D53" },
+    { l: "Devices watched", v: String(devices.length), c: "var(--f)" },
+  ];
+  const chip = (active, on, label, count) => (
+    <button onClick={on} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}{count != null ? ` (${count})` : ""}</button>
+  );
+  return (
+    <div className="fade-up ov-sans">
+      <div style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Every anomaly detected across the fleet is captured and stored locally, so the log persists after the live window moves on — with severity, likely cause and the action to take.</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 16 }}>
+        {kpis.map((k, i) => (
+          <div key={i} style={{ ...IOT_CARD, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{k.l}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: k.c, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{k.v}</div>
+          </div>
+        ))}
+      </div>
+      {typeRows.length > 0 && (
+        <div style={{ ...IOT_CARD, padding: "14px 16px", marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--f)", marginBottom: 10 }}>Anomalies by type</div>
+          <ResponsiveContainer width="100%" height={Math.max(120, typeRows.length * 34)}>
+            <BarChart data={typeRows} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: "#6b8577" }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 11, fill: "var(--f)" }} axisLine={false} tickLine={false} />
+              <Tooltip cursor={{ fill: "rgba(220,65,65,.06)" }} />
+              <Bar dataKey="n" fill="#DC4141" radius={[0, 5, 5, 0]} maxBarSize={20} isAnimationActive={false}><LabelList dataKey="n" position="right" style={{ fontSize: 11, fill: "var(--f)", fontWeight: 700 }} /></Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Severity</span>
+        {chip(sevF === "all", () => setSevF("all"), "All", alerts.length)}
+        {chip(sevF === "critical", () => setSevF("critical"), "Critical", bySev.critical)}
+        {chip(sevF === "high", () => setSevF("high"), "High", bySev.high)}
+        {chip(sevF === "medium", () => setSevF("medium"), "Medium", bySev.medium)}
+        <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 4px" }} />
+        <select value={typeF} onChange={(e) => setTypeF(e.target.value)} style={selectStyle}>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        <div style={{ flex: 1, minWidth: 8 }} />
+        <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>{alerts.length} logged</span>
+        {alerts.length > 0 && <button onClick={clearLog} title="Clear the local anomaly log" style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 9, border: "1px solid var(--border)", background: "#fff", color: "#DC4141", cursor: "pointer" }}>Clear log</button>}
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        {shown.map((a, i) => { const s = IOT_ALERT_SEV[a.sev] || IOT_ALERT_SEV.medium; return (
+          <div key={i} style={{ ...IOT_CARD, padding: "12px 14px", borderLeft: `4px solid ${s.c}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 10.5, fontWeight: 800, padding: "2px 9px", borderRadius: 999, color: s.c, background: s.bg, textTransform: "uppercase", letterSpacing: ".04em" }}>{s.label}</span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "var(--f)" }}>{a.name}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: s.c, fontVariantNumeric: "tabular-nums" }}>{a.value}</span>
+              {a.count > 1 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", background: "var(--mint-2)", padding: "2px 8px", borderRadius: 999 }}>×{a.count}</span>}
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 12, fontFamily: "ui-monospace,monospace", color: "var(--muted)" }}>{a.deviceId}</span>
+              <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{a.ts ? iotStamp(a.ts) : "—"}</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--slate)", marginTop: 7, lineHeight: 1.5 }}>{a.detail}</div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
+              <div style={{ fontSize: 12, color: "var(--f)" }}><b style={{ color: "var(--teal)" }}>Action:</b> {a.action}</div>
+              <div style={{ fontSize: 12, color: "var(--muted)" }}><b>Likely cause:</b> {a.cause}</div>
+            </div>
+          </div>
+        ); })}
+        {shown.length === 0 && <div style={{ ...IOT_CARD, padding: "18px", textAlign: "center", color: "#0A7D53", fontWeight: 600 }}>✓ No anomalies match this filter — the fleet is clear.</div>}
+      </div>
+      <div style={{ ...IOT_CARD, padding: "14px 16px", marginTop: 18, background: "#F6FAF8" }}>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Understanding the signals</div>
+        <div style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.55, display: "grid", gap: 5 }}>
+          <div>• <b>TDS drifts with temperature</b> (~2%/°C) — a warm-afternoon TDS rise can be thermal, not contamination. The rules watch <b>rapid</b> spikes, not slow drift.</div>
+          <div>• <b>Acid intrusion signature:</b> pH crashing while TDS surges together (inverse-ion) is the strongest contamination flag — treated as Critical.</div>
+          <div>• <b>Low-TDS (RO) water has no buffer</b>, so its pH can swing from minor CO₂ absorption — pH volatility on low-TDS lines is often benign.</div>
+          <div>• A <b>flatline</b> (zero variance) usually means a frozen sensor, not perfect water — worth a reboot/recalibration.</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -12496,6 +12891,8 @@ function IoTDevices() {
 
   const history = historyByDevice[selected] ?? []; // newest-first
   const chrono = [...history].reverse();           // oldest-first, for time-series charts
+  const tankRefilling = useMemo(() => isTank && iotTankRefilling(chrono), [isTank, chrono]);
+  const tankWarming = useMemo(() => isTank && iotTempWarming(chrono), [isTank, chrono]);
   // Recent heartbeats pagination — 20 rows per page.
   const HB_PER_PAGE = 10;
   const hbTotalPages = Math.max(1, Math.ceil(history.length / HB_PER_PAGE));
@@ -12658,7 +13055,7 @@ function IoTDevices() {
           return (
             <div className="iot-monitor-grid" style={{ display: "grid", gridTemplateColumns: "224px minmax(390px,1fr) minmax(330px,1fr)", gap: 16, alignItems: "stretch" }}>
               {deviceListCard}
-              <IoTTankPanel device={device} tank={tank} />
+              <IoTTankPanel device={device} tank={tank} refilling={tankRefilling} warming={tankWarming} />
               <IoTWaterQualityCard range={wqRange} />
             </div>
           );
