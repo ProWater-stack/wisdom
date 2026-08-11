@@ -5,7 +5,7 @@ import {
   LogOut, Search, Plus, Eye, EyeOff, Shield, ShieldCheck, Filter,
   TrendingUp, Award, Wallet, ChevronRight, X, CheckCircle2, Clock,
   AlertCircle, Download, Lock, ArrowUpRight, Trash2, KeyRound, Menu,
-  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Mail, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical
+  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Mail, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical, Gauge, Waves, Upload, PlayCircle
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -246,7 +246,7 @@ const MODULE_SECTIONS = {
   referral:      [{ id: "overview", label: "Overview" }, { id: "referrers", label: "Referrers" }, { id: "referees", label: "Referees" }, { id: "credits", label: "Credits" }, { id: "tracker", label: "Tracker" }, { id: "analytics", label: "Analytics" }, { id: "backtrack", label: "Backtrack", adminOnly: true }],
   sales:         [{ id: "sales_overview", label: "Pipeline" }, { id: "sales_leads", label: "Leads & Deals" }, { id: "sales_apartments", label: "Apartment Leads" }, { id: "sales_analytics", label: "Sales Analytics" }, { id: "sales_errors", label: "Error Correction" }],
   planner:       [{ id: "plan_board", label: "Task Board" }, { id: "plan_weekly", label: "Weekly View" }, { id: "plan_admin", label: "Modify Tasks", adminOnly: true }],
-  analytics:     [{ id: "an_overview", label: "Overview" }, { id: "analytics", label: "Referral" }, { id: "an_sales", label: "Sales" }, { id: "an_earned", label: "Earned Revenue" }, { id: "an_aop", label: "AOP", adminOnly: true }, { id: "an_apartment", label: "Apartment Performance" }, { id: "an_billing", label: "Billing" }, { id: "an_revenue", label: "Revenue" }, { id: "an_penetration", label: "Penetration Tracker" }, { id: "an_credits", label: "Credits" }, { id: "an_applogs", label: "App Logs" }],
+  analytics:     [{ id: "an_overview", label: "Overview" }, { id: "analytics", label: "Referral" }, { id: "an_sales", label: "Sales" }, { id: "an_earned", label: "Earned Revenue" }, { id: "an_reconciliation", label: "Reconciliation" }, { id: "an_dptxn", label: "DP Transaction" }, { id: "an_aop", label: "AOP", adminOnly: true }, { id: "an_apartment", label: "Apartment Performance" }, { id: "an_billing", label: "Billing" }, { id: "an_revenue", label: "Revenue" }, { id: "an_penetration", label: "Penetration Tracker" }, { id: "an_credits", label: "Credits" }, { id: "an_applogs", label: "App Logs" }],
   employee:      [{ id: "emp_users", label: "Users" }],
   ticketing:     [{ id: "tk_overview", label: "Overview" }, { id: "tk_tickets", label: "Tickets" }, { id: "tk_ops", label: "Ops Tickets" }],
   customer:      [{ id: "cust_list", label: "Customers" }, { id: "cust_all", label: "All Customers" }, { id: "cust_societies", label: "Societies" }],
@@ -287,10 +287,35 @@ function setSectionOverride(sections, moduleId, tabId, level) {
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.29.42";
-const VERSION_DATE = "2026-07-31";
+const APP_VERSION = "2.29.68";
+const VERSION_DATE = "2026-08-11";
 const VERSION_HISTORY = [
-  { v: "2.29.42", note: "IoT Core > Tank Level: made the warming vapour clearly visible — it was too faint to see. Bigger/denser wisps (8, larger radii), peak opacity to 1.0, a stronger cool-grey body + double drop-shadow halo so the steam reads against the light upper shell, and slightly shorter rise so it isn't clipped as fast at high fill." },
+  { v: "2.29.68", note: "Analytics > DP Transaction: added a Transaction Type filter (chips on the feed's own `transaction_type` field — APP / PAYMENT_LINK / etc — next to Payment Type). DISCOUNT-type rows are now excluded from this view entirely (table, KPIs, CSV) — they're a non-cash discount adjustment, not real recharge collected (confirmed live: every DISCOUNT row has `revenue_amount`/`deposit_amount`/`transaction_amount` all zero, so this doesn't change any KPI figure, just removes zero-value noise rows from the table)." },
+  { v: "2.29.67", note: "Analytics > DP Transaction: added an admin-only \"Upload JSON\" control at the top right. Choosing a .json file validates it client-side (extension + that it actually parses); once valid, the control becomes a \"Run API\" button that POSTs the file as multipart/form-data (field `file`) to `POST /dp-transactions/add`. The raw response — success or failure — is shown verbatim in a popup (pretty-printed JSON body, HTTP status, and a plain-English error message extracted from `message`/`error`/`detail` on failure). A successful run also silently refreshes the table with the newly-imported data. Non-admins never see the control at all (`user.role === \"admin\"`, same convention as Credits)." },
+  { v: "2.29.66", note: "Customer > All Customers > Transactions: added a \"Current paid transaction — revenue recognition\" breakdown card above the payments table, for the customer's most recent paid invoice. Shows Due date and Payment date, the Recharge tenure (start/end/days), then a month-by-month split of Earned revenue (accrual), Collected Revenue (cash-basis) and Outstanding revenue (receivable) — verified exactly against the user's reference spreadsheet (Sanjith/MJR: due 7/26, paid 8/1, ₹350 recharge → tenure 31 days, ₹68 earned in Jul + ₹282 in Aug, ₹0 collected in Jul + ₹350 in Aug, ₹350 outstanding as of Jul-end + ₹0 once paid). New `invoiceMonthlyBreakdown()` helper generalizes Earned Revenue's per-invoice month-split math to show EVERY touched month (including the accrual before actual payment, which Earned Revenue's own table never surfaces — that table only shows an invoice's paid-month slice)." },
+  { v: "2.29.65", note: "Analytics > DP Transaction: three changes. (1) Validity and Litres now MERGE onto the TRANSACTION row when its Paid_Date exactly matches its COLLECTION_SUMMARY twin (same collection event, same timestamp down to the microsecond) — previously those two fields only ever showed on the COLLECTION_SUMMARY row and were blank on the default-shown TRANSACTION row. CSV export uses the same merged value. (2) Removed the City column from the table (still exported in the CSV). (3) Added pagination — 50 rows per page, Prev/Next controls, resets to page 1 on any filter/search change; the Grand Total footer still sums the FULL filtered set, not just the visible page." },
+  { v: "2.29.64", note: "Analytics > DP Transaction: fixed two layout bugs from the v2.29.63 column additions. The Type badge (row_type pill) was wrapping \"TRANSACTION\"/\"COLLECTION_SUMMARY\" across three lines inside itself, ballooning row height — now stays on one line. The Transaction key column was showing the full 36+ character raw key (e.g. `DPTX_36b1c5a1fabf498eabbc58aa59c1adab`), also wrapping across multiple lines — now shows a short truncated form (`36b1c5a1…`, `DPTX_` prefix stripped) with the full key available on hover. Both cells are back to single-line row height, matching the rest of the table." },
+  { v: "2.29.63", note: "Analytics > DP Transaction: added six raw feed columns to the table — Transaction key and Transaction type (`transaction_key`/`transaction_type`), Start Date and End Date (the feed's own `t.validity_start_date`/`t.validity_end_date`, distinct from the invoice Start/End Date used in Earned Revenue), Validity, and Litres — placed between Type and Plan, also added to the CSV export. Like every other field in this feed, these are split across the two row types: Transaction key/type/Start Date/End Date only populate on TRANSACTION rows, Validity/Litres only on the COLLECTION_SUMMARY twin — shown as \"—\" on whichever row doesn't carry them, same complementary-null pattern as Deposit/Revenue." },
+  { v: "2.29.62", note: "Analytics > DP Transaction: added click-to-sort on the Paid date column (arrow indicator, defaults descending — newest first); a Grand Total footer row summing Deposit and Revenue for whatever's currently shown (respects the date range, apartment, payment-type and search filters); and a previous-period percentage delta on both KPI cards (Deposit Collected, Recharge Collected), comparing against the immediately-preceding period of the same length as the selected range — same ▲/▼ badge convention used on every other KPI card in the app." },
+  { v: "2.29.61", note: "Analytics > DP Transaction: added a Payment Type filter — chips labelled with the raw `row_type` API value verbatim (\"TRANSACTION\", \"COLLECTION_SUMMARY\"), each showing a live count, plus an \"All\" option. Defaults to TRANSACTION only (the row carrying `deposit_amount`/`revenue_amount`, the KPI fields — its COLLECTION_SUMMARY twin has those null), so the table no longer shows every collection event twice out of the box." },
+  { v: "2.29.60", note: "Analytics: new \"DP Transaction\" tab (between Reconciliation and AOP), reading `GET https://api-7ca73ntgua-el.a.run.app/dp-transactions` — an unauthenticated, cursor-paginated feed (`{ transactions, has_more, next_cursor }`, not page-number based, so it gets its own fetch loop, `fetchAllDpTransactions`, capped at 80 pages / ~2000 rows with a truncation notice). Filters: a custom date-range picker on `Paid_Date` (native `Date` parses its `\"YYYY-MM-DD HH:MM:SS.ffffff\"` format directly), and an Apartment multi-select sourced from the feed's own `partner_name` values (not a separate societies list). KPI cards: Deposit Collected (`Σ deposit_amount`) and Recharge Collected (`Σ revenue_amount`), both null-safe. Table shows raw rows unmerged — each collection event appears as both a COLLECTION_SUMMARY row (has `Deposit`/`Recharge_received`/`collection_total`, `deposit_amount`/`revenue_amount` null) and a TRANSACTION row (the reverse), tagged with a Type badge. Search covers `phone`, `current_device`, `partner_name`. CSV export." },
+  { v: "2.29.59", note: "Analytics > Reconciliation: rewrote the AR roll-forward in plain language — \"AR roll-forward\" → \"Outstanding balance, step by step\"; \"Opening/Closing Balance\", \"Due Added\", \"Collected\" → \"Owed before this period\", \"Newly due this period\", \"Actually paid this period\", \"Still owed at period end\". Added a one-line ₹-value equation above the cards (already owed + newly due − actually paid = still owed) and an invoice count under each figure (e.g. \"2 unpaid invoices from earlier\") so the calculation is visible at a glance, not just the result. Simplified the tie-out line (\"Ties to independent outstanding-balance check\" → \"Verified — matches the total of all unpaid invoices\") and the advance-receipts memo." },
+  { v: "2.29.58", note: "Analytics > Reconciliation: added a standard accounts-receivable roll-forward — Opening Balance + Due Added − Collected = Closing Balance. Opening Balance = every invoice due before the selected period that wasn't collected as of the period's start (carried-forward backlog, previously missing entirely — the tab only analysed each period's own dues in isolation). \"Collected\" here excludes advance receipts (cash for invoices not yet due — reported as a separate memo line, not netted, since they aren't part of AR yet). Closing Balance is cross-checked against an independent sum (every invoice due on/before period end, still uncollected) with a visible tie/mismatch indicator — the two must always agree by construction. The four ledger cells match the KPI cards' exact typography (`eyebrow` label class, DM Sans 800-weight value) instead of the serif headline font used elsewhere." },
+  { v: "2.29.57", note: "Analytics: new \"Reconciliation\" tab (between Earned Revenue and AOP), with a custom date-range picker and an Apartment (society) multi-select filter, same pattern as Earned Revenue. Fixes a real bug: \"collected revenue\" elsewhere in the app was effectively bucketed by an invoice's DUE date, not when the payment actually landed — e.g. due 28 Jul, paid 3 Aug was showing as July revenue. This tab separates the two views: Due in period (accrual, by due date), Collected in period (cash-basis, by actual paid_date — the corrected figure), Collected on time (of what was due, paid within its own due-month), and Receivable (due in a period but not collected by that period's end — whether it was paid late in a LATER period, or never paid at all). A monthly Due/Collected/Receivable trend chart and a per-invoice table (search + On time/Late/Outstanding filter chips, Days Late) back it up. Verified against the exact reported example (due 28 Jul, paid 3 Aug): shows ₹0 collected + full Receivable in July, correctly shows the full amount as Collected in August. The old unused `Reconciliation()` component (invoice↔subscription matching, never wired into any tab) was renamed `SubscriptionReconciliation()` to free up the name — it's dead code, kept as-is otherwise." },
+  { v: "2.29.56", note: "Analytics > Earned Revenue > Per-invoice recognition: added the SPILLOVER month split. When an invoice's validity window (End Date) reaches into the calendar month after the paid month (e.g. paid in August, end 7 Sept), three new columns show that slice: Next month, Days in next month, and Earned revenue (next month) — same `recharge × days / tenureDays` math, no late-payment clip (payment has already landed by then). \"—\" when the tenure doesn't cross into another month. Table footer and CSV both include the next-month total." },
+  { v: "2.29.55", note: "Analytics > Earned Revenue > Per-invoice recognition: fixed \"Days in paid month\" counting days before the invoice was actually paid, when the due date and paid date fall in the same calendar month. Example: Arun K Sinha, due 8 Aug, paid 10 Aug, end 7 Sept — previously counted from the due date (8 Aug → 31 Aug = 24 days, ₹271 earned), now counts from whichever is later, the due date or the actual paid date (10 Aug → 31 Aug = 22 days, ₹248 earned). Only affects invoices paid a few days into their own due-date month; the reference-sheet example (due/paid in different months) is unaffected since the paid date never became the binding boundary there." },
+  { v: "2.29.54", note: "Analytics > Earned Revenue > Per-invoice recognition: reordered and renamed columns — was Due Date, Next Billing, Paid on; now Start Date, Paid on, End Date (Due Date → Start Date, Next Billing → End Date). Underlying fields/sort keys (`dueDay`/\"due\", `nextBillDay`/\"nextBilling\") are unchanged — display only. CSV export column labels updated to match." },
+  { v: "2.29.53", note: "Analytics > Earned Revenue > Per-invoice recognition: removed the Plan column (still used internally for the deposit/term math, just not shown); added a search box (customer or apartment) above the table via the shared Toolbar component — narrows only the displayed rows + the table's own \"Total (N)\" footer, the KPI cards and trend chart above stay on the full period regardless of search; and added click-to-sort on Due Date and Next Billing (matching the existing Paid on sort — arrow indicator, ascending default)." },
+  { v: "2.29.52", note: "Analytics > Earned Revenue > Per-invoice recognition, verified against a real reference spreadsheet (Sanjith/MJR: due 7/26, paid 8/1, ₹350 recharge → ₹68 earned in Jul + ₹282 in Aug). Two fixes: (1) \"Next Billing\" (validity end) is now COMPUTED from the invoice's due date — `dueDate + 1 calendar month − 1 day` (e.g. due 2 Jul → validity end 1 Aug) — instead of read from the linked subscription's raw `nextBilling` field, which just preserved day-of-month (due 5 Aug → 5 Sept) and didn't follow a real calendar-month cycle. Side effect: no longer depends on matching a subscription, so invoices that previously fell back to ₹0 earned now get a real figure. (2) Recognition formula rebuilt to match the reference exactly: `tenureDays = validityEnd − validityStart + 1` (inclusive), `daysInPaidMonth` = however many of those validity days fall within the invoice's own PAID calendar month, `earned = recharge × daysInPaidMonth / tenureDays`. Replaces the single lump-sum-per-invoice model; a tenure crossing a month boundary is now correctly split so only its paid-month slice shows here (68÷282 verified exactly: 350×25/31=282). \"Validity days\"/\"Month End Date\" columns replaced with \"Tenure days\" and \"Days in paid month\" so both inputs to the new formula are visible." },
+  { v: "2.29.51", note: "Analytics > Earned Revenue > Per-invoice recognition: changed the recognition formula's numerator from (month end − paid date + 1) to (validity end − validity start − 1) — validity start = the invoice's due date, validity end = the linked subscription's next billing date (`sub.nextBilling`). Denominator (days in the paid month) is unchanged. Renamed \"Days remaining\" to \"Validity days\" (now validityEnd−validityStart−1); added a \"Next Billing\" column next to Due Date so both anchor dates are visible; removed \"Month End Date\" from the table/CSV (the denominator's month-end is still computed internally, just no longer shown). Falls back to ₹0 earned when the invoice's subscription can't be matched (no `nextBilling`). NOTE: for multi-month plans this can push Earned revenue well above the recharge amount within a single month, since the numerator now spans most of the WHOLE paid term (e.g. ~365 days for annual) rather than just days-remaining-in-the-paid-month — confirmed intentional with the user." },
+  { v: "2.29.50", note: "Analytics > Earned Revenue > Per-invoice recognition: removed the Earned/day column from the table and CSV export (Earned/month, Month End Date, Days remaining and Earned revenue stay). Also dropped the now-unused `earnedPerDay` field and the `inr2` helper that only existed to format it — no other display used them." },
+  { v: "2.29.49", note: "Analytics > Earned Revenue > Per-invoice recognition: added a Due Date column (from the invoice's due_date, between Plan and Paid on) to both the table and the CSV export. Also re-verified the existing \"Paid on\" column: it already reads `i.paidDate || i.date` (the real API paid_date, added v2.29.48), so no change was needed there — confirming it, not duplicating it." },
+  { v: "2.29.48", note: "Analytics > Earned Revenue > Per-invoice recognition: the billing API now returns a real `paid_date` on invoices (confirmed live, e.g. INV-000666). `mapInvoice()` maps it to `paidDate`, and the recognition table now uses `i.paidDate || i.date` as the invoice's paid date (falling back to invoice date for older invoices that predate the field) instead of always using the invoice/created date as a proxy for when it was actually paid. Recognition math (day-based proration across the paid month) is unchanged — only which date feeds it." },
+  { v: "2.29.47", note: "IoT Core > Device Monitor: the Total Dispensed stat (RO Unit Sensors card) is now date-filterable — Today / Yesterday / This Week / This Month / Last Month chips sit right on the card, and Total dispensed / Average dispensed recompute for whichever period is selected. This filter is now SHARED with Trend analysis + Recent readings below (both used to own a separate, page-local Today/Yesterday/Week filter) — lifted `range` state up to IoTDevices so picking a period in one place updates both (`IOT_RANGE_OPTIONS`, `iotFilterByRange`, `IoTRangeChips`). Two new options — This Month and Last Month (real calendar months) — join the existing rolling-7-day \"This Week\". To support them, the Trend analysis history fetch widened from `&days=7` to `&days=62` (renamed `hist7dByDevice` → `histRangeByDevice`), which safely covers a full previous calendar month regardless of where in the current month \"today\" falls. Total dispensed now reads as the counter value as of the end of the selected period (not always \"right now\"); the card shows \"No dispensed-litres data for this period\" instead of disappearing when a period has none." },
+  { v: "2.29.46", note: "IoT Core > Device Monitor > RO Unit Sensors: simplified the Total Dispensed stat down to two figures — Total dispensed and Average dispensed (per day) — dropping \"This window\" (the raw litres in whatever ~1–2 day span the history feed happens to have loaded, which read as confusing/arbitrary on its own)." },
+  { v: "2.29.45", note: "IoT Core > Device Monitor > RO Unit Sensors: the Total Dispensed stat gained an \"Average / day\" figure alongside Total dispensed and This window — `iotDispensedRange` now normalises the window delta by its actual time span (the history feed is a downsampled ~1–2 day window, not exactly 1 day) instead of just showing the raw window delta twice over. Shows \"—\" until there's at least 30 min of span to average over, so it doesn't flash a wild estimate right after load." },
+  { v: "2.29.44", note: "IoT Core > Device Monitor: fixed a load flash — the module used to drop its full-page spinner as soon as the device ROSTER arrived, so the device list, tank graphic, gauges and Water Quality card briefly rendered with empty/zero data (\"Awaiting sensor readings\", 0% tank, — gauges) before the first device-HISTORY round-trip landed a beat later. A new `historyLoaded` flag keeps the loading state up until both requests have completed at least once. Also replaced the generic small spinner with a dedicated `IoTLoading` panel — bigger spinner, \"Loading live device data…\" copy, and an indeterminate progress bar — so it's clearly a loading state, not a blank module." },
+  { v: "2.29.43", note: "IoT Core > Device Monitor: the RO-tank feed's heartbeat now includes pressure, flow rate and a lifetime dispensed-litres counter (waterQuality.pressure/flowMLPM/totalDispensed) — wired in at full parity with pH/TDS/temp. A new \"RO Unit Sensors\" card (separate from Water Quality, since pressure/flow aren't a potability reading) shows pressure & flow as a live min–max range with GOOD/WARNING/CRITICAL bands — assumed operating ranges (pressure 0–4 bar green / 4–6 amber / outside red, flow 0–3 L/min green / 3–6 amber / outside red; both legitimately read 0 while idle, unlike pH/TDS/temp), plus a \"Total dispensed\" stat (lifetime total + delta over the selected window — a running counter, not banded). Pressure & flow also gained their own gauges and Trend-analysis tabs/charts/anomaly-event scanning (iotTrendMetrics, iotAnomalyScan generalized to loop over the full metric registry instead of hardcoded ph/tds/temp/tank), and the Recent-readings table + CSV export gained Pressure/Flow/Dispensed columns. IoTWaterQualityCard is now reused for both cards via `keys`/`title`/`noun` props instead of being hardcoded to ph/tds/temp. (Live-tested against the real device: E05A1B9C2DD4 is currently reporting 655.34 bar pressure, correctly flagged CRITICAL — looks like a sensor fault worth checking on the unit.)" },
   { v: "2.29.41", note: "IoT Core > Tank Level: moved the 'Warming' tag out to the top-right corner of the whole Tank panel (aligned with the device-ID header row), using the empty header space there — was previously anchored to the tank graphic beside the lid. Now rendered by IoTTankPanel, not IoTTank." },
   { v: "2.29.40", note: "IoT Core > Tank Level: moved the 'Warming' tag from centered-above-the-lid to the top-right corner of the tank graphic, using the empty space beside the lid so it no longer sits over the lid." },
   { v: "2.29.39", note: "IoT Core > Tank Level: the warming vapour now triggers on warm water directly, not only on a rising trend. Previously it needed BOTH temp climbing AND >= 26 °C, so a steady 26 °C (Warning band) showed no steam. Now iotTempWarming flags warming whenever the latest water temp is above the ideal band (> 25 °C — the Warning/Hot zone), or when it's trending up into that zone — so an elevated tank temp visibly steams." },
@@ -1182,6 +1207,7 @@ function mapInvoice(iv) {
     status:         mapInvoiceStatus(p.status || p.invoice_status),
     rawStatus:      p.status || p.invoice_status || "",
     date:           p.invoice_date || p.date || p.created_at || p.created_time || "",
+    paidDate:       p.paid_date || p.paidDate || "",   // real payment date (added to the API ~2026-08); "" for unpaid/older invoices
     lastModified:   p.last_modified_time || p.modified_time || "",   // 👈 ADD THIS LINE
     dueDate:        p.due_date || p.due_at || "",
     plan:           p.plan_name || p.plan || "",
@@ -1598,6 +1624,36 @@ const billingApi = {
     await Promise.all([billingApi.getSubscriptions(true), billingApi.getInvoices(true)]);
   },
 };
+
+/* ---- DP Transactions (deposit/recharge collection feed) -------------------
+   GET /dp-transactions on the same origin as billing, but unauthenticated and
+   cursor-paginated ({ transactions, has_more, next_cursor } — not page-number
+   based like the admin endpoints above, so it needs its own fetch loop rather
+   than fetchAllPagesFast). Each collection event appears as TWO raw rows — a
+   COLLECTION_SUMMARY (Deposit/Recharge_received/collection_total populated,
+   deposit_amount/revenue_amount null) and a TRANSACTION (the reverse) — kept
+   as-is, unmerged, since the module shows raw records. Capped at 80 pages
+   (~2000 rows) as a sane ceiling; flips `truncated` if the feed had more. */
+let _dpCache = null, _dpCacheAt = 0;
+const DP_CACHE_MS = 5 * 60 * 1000;
+async function fetchAllDpTransactions(force = false) {
+  if (!force && _dpCache && (Date.now() - _dpCacheAt) < DP_CACHE_MS) return _dpCache;
+  const all = [];
+  let cursor = null, truncated = false;
+  for (let page = 0; page < 80; page++) {
+    const url = `${API_ORIGIN}/dp-transactions${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`${res.status}`);
+    const json = await res.json();
+    all.push(...(Array.isArray(json.transactions) ? json.transactions : []));
+    if (!json.has_more || json.next_cursor == null) { cursor = null; break; }
+    cursor = json.next_cursor;
+    if (page === 79) truncated = true;
+  }
+  const result = { rows: all, truncated };
+  _dpCache = result; _dpCacheAt = Date.now();
+  return result;
+}
 
 
 const seedUsers = [
@@ -3196,6 +3252,8 @@ const doRefresh = async () => {
       { id: "analytics", label: "Referral", icon: BarChart3 },
       { id: "an_sales", label: "Sales", icon: Briefcase },
       { id: "an_earned", label: "Earned Revenue", icon: Scale },
+      { id: "an_reconciliation", label: "Reconciliation", icon: ArrowLeftRight },
+      { id: "an_dptxn", label: "DP Transaction", icon: Landmark },
       ...(isModuleAdmin ? [{ id: "an_aop", label: "AOP", icon: Target }] : []),
       { id: "an_apartment", label: "Apartment Performance", icon: Boxes },
       { id: "an_billing", label: "Billing", icon: Receipt },
@@ -3384,6 +3442,8 @@ const doRefresh = async () => {
             {tab === "analytics" && <Analytics key={refreshKey} />}
             {tab === "an_sales" && <SalesInsights key={refreshKey} />}
             {tab === "an_earned" && <EarnedRevenue key={refreshKey} />}
+            {tab === "an_reconciliation" && <Reconciliation key={refreshKey} />}
+            {tab === "an_dptxn" && <DPTransactions key={refreshKey} />}
             {tab === "an_aop" && isModuleAdmin && <AOP key={refreshKey} accessLevel={tabAccess} />}
             {tab === "an_apartment" && <ApartmentPerformance key={refreshKey} />}
             {tab === "an_billing" && <BillingAnalytics key={refreshKey} />}
@@ -7079,6 +7139,106 @@ function CustSparesAnalysis({ tickets }) {
   );
 }
 
+// Per-invoice recognition breakdown for ONE invoice — due date, payment date,
+// recharge tenure, and a month-by-month split of Earned revenue (accrual),
+// Collected Revenue (cash-basis) and Outstanding revenue (receivable).
+// Verified exactly against the user's reference sheet (Sanjith/MJR: due
+// 7/26/2026, paid 8/1/2026, ₹350 recharge):
+//   Recharge tenure: start 7/26/2026, end 8/25/2026, 31 days.
+//   Earned revenue:     7/31/2026 → 68     ·  8/1/2026 → 282
+//   Collected Revenue:  7/1/2026  → 0      ·  8/1/2026 → 350
+//   Outstanding revenue:7/31/2026 → 350    ·  8/1/2026 → 0
+// Same tenure/earned math as EarnedRevenue()'s per-invoice model, but shows
+// EVERY month the validity window touches (including the accrual before
+// actual payment, which EarnedRevenue's own table never surfaces — that
+// table only shows an invoice's own paid-month slice). Collected/Outstanding
+// stop being tracked once the invoice is actually paid (nothing left to
+// resolve after that), while Earned keeps going into any spillover month.
+function invoiceMonthlyBreakdown(dueDate, paidDate, recharge) {
+  const dd = dueDate instanceof Date ? dueDate : new Date(dueDate);
+  const pd = paidDate instanceof Date ? paidDate : new Date(paidDate);
+  if (isNaN(dd.getTime()) || isNaN(pd.getTime()) || !(recharge > 0)) return null;
+  const nb = new Date(dd.getFullYear(), dd.getMonth() + 1, dd.getDate() - 1); // validity end
+  const tenureDays = Math.round((nb - dd) / 86400000) + 1;
+  if (tenureDays <= 0) return null;
+
+  const paidMonthStart = new Date(pd.getFullYear(), pd.getMonth(), 1);
+  const dueMonthStart = new Date(dd.getFullYear(), dd.getMonth(), 1);
+  const lastMonthStart = new Date(nb.getFullYear(), nb.getMonth(), 1);
+
+  const earned = [], collected = [], outstanding = [];
+  let cursor = new Date(dueMonthStart);
+  while (cursor <= lastMonthStart) {
+    const mStart = new Date(cursor);
+    const mEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const isPaidMonth = cursor.getTime() === paidMonthStart.getTime();
+
+    let overlapStart = dd > mStart ? dd : mStart;
+    if (isPaidMonth && pd > overlapStart) overlapStart = pd; // late-payment clip, same as Earned Revenue
+    const overlapEnd = nb < mEnd ? nb : mEnd;
+    const days = overlapEnd >= overlapStart ? Math.round((overlapEnd - overlapStart) / 86400000) + 1 : 0;
+    // Label the paid month's row with the actual payment date — but only when
+    // that date genuinely falls within the days being counted. When payment
+    // lands BEFORE the due date (an advance payment, in the same month as
+    // the due date), the accrual for that month still starts at the due
+    // date, so the payment date isn't part of it — fall back to the
+    // month-end label used everywhere else, same as an unpaid month.
+    const labelDate = (isPaidMonth && pd >= overlapStart && pd <= overlapEnd) ? pd : mEnd;
+    if (days > 0) earned.push({ date: labelDate, days, amount: (recharge * days) / tenureDays });
+
+    if (cursor <= paidMonthStart) {
+      if (isPaidMonth) { collected.push({ date: pd, amount: recharge }); outstanding.push({ date: pd, amount: 0 }); }
+      else { collected.push({ date: mStart, amount: 0 }); outstanding.push({ date: mEnd, amount: recharge }); }
+    }
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
+  }
+  // Advance payment (paid before the due month even started) — the loop
+  // above never reaches the paid month since it only walks forward from the
+  // due month. Rare, but covers it: a single settled row at the paid date.
+  if (collected.length === 0) { collected.push({ date: pd, amount: recharge }); outstanding.push({ date: pd, amount: 0 }); }
+
+  return { tenureDays, validityStart: dd, validityEnd: nb, earned, collected, outstanding };
+}
+
+// Renders invoiceMonthlyBreakdown() as a small 3-column sheet (label · date ·
+// value), styled after the reference spreadsheet the user shared — one
+// underlined section header per group, one row per line item.
+function InvoiceBreakdownCard({ inv, recharge }) {
+  const dd = inv.dueDate ? new Date(inv.dueDate) : null;
+  const pd = new Date(inv.paidDate || inv.date);
+  const b = (dd && !isNaN(dd.getTime())) ? invoiceMonthlyBreakdown(dd, pd, recharge) : null;
+  if (!b) return null;
+  const sectionRow = (key, label) => (
+    <tr key={key}><td colSpan={3} style={{ ...td, textAlign: "left", fontWeight: 800, color: "var(--f)", textDecoration: "underline", paddingTop: 16 }}>{label}</td></tr>
+  );
+  const row = (key, label, date, value, bold) => (
+    <tr key={key} style={{ borderBottom: "1px solid var(--border)" }}>
+      <td style={{ ...td, textAlign: "left", fontWeight: bold ? 700 : 500 }}>{label}</td>
+      <td style={{ ...td, whiteSpace: "nowrap" }}>{date ? fmtDate(date) : "—"}</td>
+      <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{value}</td>
+    </tr>
+  );
+  return (
+    <Card pad={false} title="Current paid transaction — revenue recognition"
+      sub={`Invoice ${inv.number || inv.id} · how ${inr(recharge)} of recharge splits across calendar months, from due date to the end of its tenure.`}
+      style={{ marginBottom: 16 }}>
+      <Table head={["", "Date", "Amount"]}>
+        {row("due", "Due date", dd, inr(recharge), true)}
+        {row("paid", "Payment date", pd, inr(recharge), true)}
+        {sectionRow("s1", "Recharge tenure")}
+        {row("tstart", "Start date", b.validityStart, "")}
+        {row("tend", "End date", b.validityEnd, `${b.tenureDays} days`)}
+        {sectionRow("s2", "Earned revenue")}
+        {b.earned.map((r, i) => row(`e${i}`, "Earned revenue", r.date, inr(Math.round(r.amount))))}
+        {sectionRow("s3", "Collected Revenue")}
+        {b.collected.map((r, i) => row(`c${i}`, "Collected Revenue", r.date, inr(Math.round(r.amount))))}
+        {sectionRow("s4", "Outstanding revenue")}
+        {b.outstanding.map((r, i) => row(`o${i}`, "Outstanding revenue", r.date, r.amount > 0 ? inr(Math.round(r.amount)) : "—"))}
+      </Table>
+    </Card>
+  );
+}
+
 function AllCustomers() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
@@ -7130,6 +7290,11 @@ function AllCustomers() {
     const txns = invs.filter(i => belongs(i, keys)).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
     const totalPaid = txns.filter(t => t.status === "paid").reduce((s, t) => s + (t.total || 0), 0);
     const planName = custSubs[0]?.plan || sel.plan;
+    // Current paid transaction — the most recent paid invoice (txns is
+    // already sorted newest-first) — feeds the revenue-recognition breakdown
+    // card at the top of the Transactions sub-screen.
+    const currentPaid = txns.find(t => t.status === "paid" && (t.total || 0) > 0 && t.dueDate);
+    const currentPaidRecharge = currentPaid ? Math.max(0, (currentPaid.total || 0) - depositForPlan(currentPaid.plan || planName, currentPaid.total || 0)) : 0;
     // Ticket lookup by Purifier ID. Ops = the same filter the Ticketing > Ops tab uses (Issue Category ≠ Complaint).
     const purl = String(sel.purifier_id || "").trim().toLowerCase();
     const custTickets = purl ? tickets.filter(t => String(t.purifierId || "").trim().toLowerCase() === purl) : [];
@@ -7273,6 +7438,7 @@ function AllCustomers() {
               <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total paid</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{inr(totalPaid)}</div></div>
               <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Payments</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{txns.length}</div></div>
             </div>
+            {currentPaid && currentPaidRecharge > 0 && <InvoiceBreakdownCard inv={currentPaid} recharge={currentPaidRecharge} />}
             <Card pad={false}>
               <Table head={["Date", "Invoice", "Amount", "Plan", "Status"]} maxHeight="calc(100vh - 340px)">
                 {txns.map(t => (
@@ -7765,7 +7931,12 @@ function ReconBadge({ state }) {
   return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{label}</span>;
 }
 
-function Reconciliation() {
+// NOTE: this component is currently unused (not wired into any tab) — kept
+// for its invoice↔subscription matching logic in case it's needed again.
+// Distinct from the "Reconciliation" analytics tab (see the other
+// `function Reconciliation()` below), which reconciles COLLECTED CASH vs
+// DUE amounts by period, a different concept from matching-a-plan.
+function SubscriptionReconciliation() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
@@ -11592,34 +11763,89 @@ function iotTank(tankLevel) {
   return { pct: step ? step.pct : 0, label: step ? step.label : "Empty", sensors, has: !!tankLevel };
 }
 // Ideal operating bands — not in the feed; standard potable-water ranges.
-const IOT_WQ_IDEAL = { ph: [6.5, 8.5], tds: [50, 300], temp: [15, 25] };
+// Pressure/flow bands are ASSUMED residential-RO operating ranges (not a spec
+// from the device vendor) — tune once real safe limits are confirmed. Both
+// legitimately read 0 while the unit is idle (no tap open), so 0 is "green",
+// not a dropout — unlike pH/TDS/temp, which are never ~0 for real water.
+const IOT_WQ_IDEAL = { ph: [6.5, 8.5], tds: [50, 300], temp: [15, 25], pressure: [0, 4], flowMLPM: [0, 3] };
 const IOT_WQ_META = {
-  ph:   { label: "pH Level",    unit: "",     icon: FlaskConical, dp: 1 },
-  tds:  { label: "TDS",         unit: "mg/L", icon: Droplets,     dp: 0 },
-  temp: { label: "Temperature", unit: "°C",   icon: Thermometer,  dp: 1 },
+  ph:       { label: "pH Level",    unit: "",     icon: FlaskConical, dp: 1 },
+  tds:      { label: "TDS",         unit: "mg/L", icon: Droplets,     dp: 0 },
+  temp:     { label: "Temperature", unit: "°C",   icon: Thermometer,  dp: 1 },
+  pressure: { label: "Pressure",    unit: "bar",  icon: Gauge,        dp: 2 },
+  flowMLPM: { label: "Flow rate",   unit: "L/min",icon: Waves,        dp: 2 },
 };
 // waterQuality values arrive as { value, unit } (value is sometimes a string).
 const iotWqNum = (m) => { if (m == null) return null; const n = Number(typeof m === "object" ? m.value : m); return isNaN(n) ? null : n; };
-// min / max / latest for ph, tds, temp across a window of heartbeats (newest-first).
-// Non-positive readings are dropped as sensor dropouts (pH/TDS/temp are never ~0
-// for real water), so a single 0 glitch doesn't skew the displayed range.
+// min / max / latest for ph, tds, temp, pressure, flowMLPM across a window of
+// heartbeats (newest-first). Non-positive pH/TDS/temp readings are dropped as
+// sensor dropouts (never ~0 for real water); pressure/flow keep a legitimate 0
+// (idle) but still drop negatives (sensor glitch).
+const IOT_WQ_DROP_ZERO = { ph: true, tds: true, temp: true, pressure: false, flowMLPM: false };
 function iotWqRange(items) {
   const out = {};
-  ["ph", "tds", "temp"].forEach((k) => {
-    const vals = (items || []).map((it) => iotWqNum(it?.waterQuality?.[k])).filter((v) => v != null && v > 0);
+  Object.keys(IOT_WQ_META).forEach((k) => {
+    const dropZero = IOT_WQ_DROP_ZERO[k];
+    const vals = (items || []).map((it) => iotWqNum(it?.waterQuality?.[k])).filter((v) => v != null && (dropZero ? v > 0 : v >= 0));
     out[k] = vals.length ? { min: Math.min(...vals), max: Math.max(...vals), latest: vals[0], n: vals.length } : null;
   });
   return out;
 }
+// Shared date-range filter — same options power the Trend analysis / Recent
+// readings chips AND the Total Dispensed stat, so picking a period in one
+// place is meaningful everywhere dates are sliced. "week" stays a rolling
+// last-7-days window (pre-existing Trend analysis semantics), while "month" /
+// "lastMonth" are real calendar months. Needs `items` with real ISO
+// `timestamp` fields (newest- or oldest-first, order doesn't matter here).
+const IOT_RANGE_OPTIONS = [["today", "Today"], ["yesterday", "Yesterday"], ["week", "This Week"], ["month", "This Month"], ["lastMonth", "Last Month"]];
+function iotFilterByRange(items, range) {
+  const now = new Date();
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  const startToday = startOfToday.getTime();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+  return (items || []).filter((it) => {
+    const t = new Date(it.timestamp).getTime();
+    if (isNaN(t)) return false;
+    if (range === "today") return t >= startToday;
+    if (range === "yesterday") return t >= startToday - 86400000 && t < startToday;
+    if (range === "month") return t >= startOfMonth;
+    if (range === "lastMonth") return t >= startOfLastMonth && t < startOfMonth;
+    return t >= startToday - 6 * 86400000; // "week" (default) = rolling last 7 days
+  });
+}
+// totalDispensed is a lifetime, monotonically-increasing counter (not a banded
+// quality metric) — the latest reading is the all-time total; the window delta
+// is latest − oldest in the given (newest-first) window, clamped ≥0 in case a
+// device reset the counter. avgPerDay normalises that delta by the window's
+// actual time span (the feed is a downsampled ~1–2 day window, not exactly a
+// day), so "this window" and "average/day" read as different, useful numbers
+// instead of near-duplicates. Needs ≥30 min of span to avoid a wild
+// division-by-a-sliver-of-time estimate right after the page loads.
+function iotDispensedRange(items) {
+  const rows = (items || [])
+    .map((it) => ({ v: iotWqNum(it?.waterQuality?.totalDispensed), t: new Date(it.timestamp).getTime() }))
+    .filter((r) => r.v != null && r.v >= 0 && !isNaN(r.t));
+  if (!rows.length) return null;
+  const latest = rows[0], oldest = rows[rows.length - 1]; // newest-first
+  const windowDelta = Math.max(0, latest.v - oldest.v);
+  const spanMs = Math.max(0, latest.t - oldest.t);
+  const avgPerDay = spanMs >= 30 * 60000 ? windowDelta / (spanMs / 86400000) : null;
+  return { total: latest.v, windowDelta, avgPerDay };
+}
 // Precise 3-tier water-quality classification (ProWater thresholds).
-//   pH   green 6.5–8.5 · amber 6.0–6.4 / 8.6–9.0 · red <6.0 / >9.0
-//   TDS  green 50–300  · amber 301–500          · red <50 / >500  (mg/L)
-//   Temp green 15–25   · amber 10–14.9 / 25.1–32 · red <10 / >32   (°C)
+//   pH       green 6.5–8.5 · amber 6.0–6.4 / 8.6–9.0 · red <6.0 / >9.0
+//   TDS      green 50–300  · amber 301–500          · red <50 / >500   (mg/L)
+//   Temp     green 15–25   · amber 10–14.9 / 25.1–32 · red <10 / >32    (°C)
+//   Pressure green 0–4     · amber 4.01–6            · red <0 / >6     (bar, assumed)
+//   Flow     green 0–3     · amber 3.01–6            · red <0 / >6     (L/min, assumed)
 function iotWqClass(k, v) {
   if (v == null) return "na";
-  if (k === "ph")   return (v < 6.0 || v > 9.0) ? "red" : (v < 6.5 || v > 8.5) ? "amber" : "green";
-  if (k === "tds")  return (v < 50 || v > 500)  ? "red" : (v > 300)            ? "amber" : "green";
-  if (k === "temp") return (v < 10 || v > 32)   ? "red" : (v < 15 || v > 25)   ? "amber" : "green";
+  if (k === "ph")       return (v < 6.0 || v > 9.0) ? "red" : (v < 6.5 || v > 8.5) ? "amber" : "green";
+  if (k === "tds")      return (v < 50 || v > 500)  ? "red" : (v > 300)            ? "amber" : "green";
+  if (k === "temp")     return (v < 10 || v > 32)   ? "red" : (v < 15 || v > 25)   ? "amber" : "green";
+  if (k === "pressure") return (v < 0 || v > 6)     ? "red" : (v > 4)              ? "amber" : "green";
+  if (k === "flowMLPM") return (v < 0 || v > 6)     ? "red" : (v > 3)              ? "amber" : "green";
   return "na";
 }
 // Worst band touched by a min–max range (endpoints suffice for contiguous bands).
@@ -11630,9 +11856,11 @@ function iotWqBand(range, k) {
 }
 // Plain-English note per metric per band — drives the in-card AI summary.
 const IOT_WQ_NOTE = {
-  ph:   { green: "balanced and safe", amber: "mildly off-neutral — minor scaling or taste change", red: "corrosive / unsafe — action required" },
-  tds:  { green: "excellent mineral balance for drinking", amber: "moderately mineralised — may affect taste or leave deposits", red: "outside the safe range — possible contamination or over-purification" },
-  temp: { green: "optimal storage temperature", amber: "elevated — raises microbial-growth risk over time", red: "extreme — rapid microbial growth or a sensor / freeze fault" },
+  ph:       { green: "balanced and safe", amber: "mildly off-neutral — minor scaling or taste change", red: "corrosive / unsafe — action required" },
+  tds:      { green: "excellent mineral balance for drinking", amber: "moderately mineralised — may affect taste or leave deposits", red: "outside the safe range — possible contamination or over-purification" },
+  temp:     { green: "optimal storage temperature", amber: "elevated — raises microbial-growth risk over time", red: "extreme — rapid microbial growth or a sensor / freeze fault" },
+  pressure: { green: "normal operating pressure (idle or dispensing)", amber: "elevated — check for a blocked line or a closed downstream valve", red: "abnormal — sensor fault or a dangerous over-pressure" },
+  flowMLPM: { green: "normal draw — idle or typical dispensing", amber: "unusually high flow — check for an open tap or a leak", red: "very high flow — possible burst line or sensor fault" },
 };
 const IOT_CARD = { background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 // RAG badge palette for water-quality status.
@@ -11906,19 +12134,22 @@ function IoTTankPanel({ device, tank, refilling = false, warming = false }) {
   );
 }
 
-// Water Quality panel — pH / TDS / temperature as a live min–max range vs the ideal
-// band, each with a Green/Amber/Red badge, plus an in-card AI summary of the readings.
-function IoTWaterQualityCard({ range }) {
+// Water Quality panel — a live min–max range vs the ideal band per metric, each
+// with a Green/Amber/Red badge, plus an in-card AI summary of the readings.
+// Reused for both the potability card (pH/TDS/temp) and the RO-unit sensors
+// card (pressure/flow) via the `keys`/`title`/`noun` props — same generic
+// range/band scaffolding (IOT_WQ_META/IDEAL + iotWqClass), different metric set.
+function IoTWaterQualityCard({ range, keys = ["ph", "tds", "temp"], title = "Water Quality", subtitle = "Live sensor readings", noun = "Water quality", extra }) {
   const fmt = (v, dp) => (v == null ? "—" : Number(v).toFixed(dp));
-  const rows = ["ph", "tds", "temp"].map((k) => {
+  const rows = keys.map((k) => {
     const band = iotWqBand(range[k], k);
     return { k, meta: IOT_WQ_META[k], r: range[k], ideal: IOT_WQ_IDEAL[k], band, rag: IOT_RAG[band] || IOT_RAG.na };
   });
   const rated = rows.filter((r) => r.r);
   const worst = rated.some((r) => r.band === "red") ? "red" : rated.some((r) => r.band === "amber") ? "amber" : rated.length ? "green" : "na";
-  const verdict = worst === "green" ? "Water quality is excellent — every reading is in the ideal band."
-    : worst === "amber" ? "Water quality is acceptable, but one or more readings are drifting from ideal."
-    : worst === "red" ? "Water quality needs attention — a reading is outside the safe range."
+  const verdict = worst === "green" ? `${noun} is excellent — every reading is in the ideal band.`
+    : worst === "amber" ? `${noun} is acceptable, but one or more readings are drifting from ideal.`
+    : worst === "red" ? `${noun} needs attention — a reading is outside the safe range.`
     : "Awaiting sensor readings for this device.";
   const co = worst === "red" ? { icon: "#ef4444", strong: "#b91c1c", bg: "linear-gradient(90deg,#fdeaea,#fdf3f3)", bd: "#f6cdcd" }
     : worst === "amber" ? { icon: "#d99114", strong: "#a86e00", bg: "linear-gradient(90deg,#fff5df,#fffaf0)", bd: "#f2e0b4" }
@@ -11927,8 +12158,8 @@ function IoTWaterQualityCard({ range }) {
   return (
     <div style={{ ...IOT_CARD, padding: "18px 20px", display: "flex", flexDirection: "column" }}>
       <div>
-        <h3 style={{ fontSize: 16, fontWeight: 720 }}>Water Quality</h3>
-        <div style={{ fontSize: 12, color: "#8b9a95", marginTop: 3 }}>Live sensor readings</div>
+        <h3 style={{ fontSize: 16, fontWeight: 720 }}>{title}</h3>
+        <div style={{ fontSize: 12, color: "#8b9a95", marginTop: 3 }}>{subtitle}</div>
       </div>
       <div style={{ marginTop: 6 }}>
         {rows.map(({ k, meta, r, ideal, rag }, i) => (
@@ -11946,7 +12177,7 @@ function IoTWaterQualityCard({ range }) {
           </div>
         ))}
       </div>
-      {/* in-card AI summary of the water quality */}
+      {/* in-card AI summary of the readings */}
       <div style={{ marginTop: "auto", paddingTop: 13 }}>
         <div style={{ borderRadius: 12, border: `1px solid ${co.bd}`, background: co.bg, padding: "12px 14px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -11962,7 +12193,56 @@ function IoTWaterQualityCard({ range }) {
             </ul>
           )}
         </div>
+        {extra}
       </div>
+    </div>
+  );
+}
+
+// Reusable date-range chip row — Today / Yesterday / This Week / This Month /
+// Last Month — shared by the Total Dispensed stat and Trend analysis / Recent
+// readings (IOT_RANGE_OPTIONS + iotFilterByRange), so "period" means the same
+// thing everywhere in the IoT module.
+function IoTRangeChips({ range, setRange }) {
+  return (
+    <>
+      {IOT_RANGE_OPTIONS.map(([k, label]) => {
+        const active = range === k;
+        return (
+          <button key={k} onClick={() => setRange(k)} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}</button>
+        );
+      })}
+    </>
+  );
+}
+const IOT_RANGE_LABEL = { today: "today", yesterday: "yesterday", week: "this week", month: "this month", lastMonth: "last month" };
+// Total-dispensed stat block — a plain running-total display (not banded, since
+// totalDispensed is a lifetime counter, not a quality metric with an ideal
+// range) plus a period-average, both scoped to the shared date-range filter.
+// Passed as `extra` into the RO-unit-sensors IoTWaterQualityCard.
+function IoTDispensedStat({ dispensed, range, setRange }) {
+  return (
+    <div style={{ marginTop: 10, borderRadius: 12, border: "1px solid var(--border)", background: "#F6FAF8", padding: "11px 14px" }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <IoTRangeChips range={range} setRange={setRange} />
+      </div>
+      {!dispensed ? (
+        <div style={{ fontSize: 12, color: "var(--muted)" }}>No dispensed-litres data for {IOT_RANGE_LABEL[range] || "this period"}.</div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Total dispensed</div>
+            <div className="serif" style={{ fontSize: 19, color: "var(--f)", marginTop: 3, lineHeight: 1 }}>{dispensed.total.toFixed(2)} <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)" }}>L</span></div>
+            <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>as of {IOT_RANGE_LABEL[range] || "this period"}</div>
+          </div>
+          <div style={{ width: 1, alignSelf: "stretch", background: "var(--border)" }} />
+          <div style={{ flex: 1, textAlign: "right" }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Average dispensed</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--f)", marginTop: 3 }}>{dispensed.avgPerDay == null ? "—" : `${dispensed.avgPerDay.toFixed(2)} L/day`}</div>
+            <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{IOT_RANGE_LABEL[range] || "this period"}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -12050,17 +12330,19 @@ function IoTMetricWave({ label, unit, values, ideal, classify, dp = 1, active = 
 // Metric registry shared by the chart, the anomaly scan and the readings table.
 function iotTrendMetrics() {
   return [
-    { k: "ph",   label: "pH",          unit: "",     dp: 1, ideal: IOT_WQ_IDEAL.ph,   get: (it) => iotWqNum(it.waterQuality?.ph),   cls: (v) => iotWqClass("ph", v) },
-    { k: "tds",  label: "TDS",         unit: "mg/L", dp: 0, ideal: IOT_WQ_IDEAL.tds,  get: (it) => iotWqNum(it.waterQuality?.tds),  cls: (v) => iotWqClass("tds", v) },
-    { k: "temp", label: "Temperature", unit: "°C", dp: 1, ideal: IOT_WQ_IDEAL.temp, get: (it) => iotWqNum(it.waterQuality?.temp), cls: (v) => iotWqClass("temp", v) },
-    { k: "tank", label: "Tank level",  unit: "%",    dp: 0, ideal: [50, 100],          get: (it) => iotTank(it.tankLevel).pct,       cls: (v) => iotTankBand(v) },
+    { k: "ph",       label: "pH",          unit: "",      dp: 1, ideal: IOT_WQ_IDEAL.ph,       get: (it) => iotWqNum(it.waterQuality?.ph),       cls: (v) => iotWqClass("ph", v) },
+    { k: "tds",      label: "TDS",         unit: "mg/L",  dp: 0, ideal: IOT_WQ_IDEAL.tds,      get: (it) => iotWqNum(it.waterQuality?.tds),      cls: (v) => iotWqClass("tds", v) },
+    { k: "temp",     label: "Temperature", unit: "°C",    dp: 1, ideal: IOT_WQ_IDEAL.temp,     get: (it) => iotWqNum(it.waterQuality?.temp),     cls: (v) => iotWqClass("temp", v) },
+    { k: "tank",     label: "Tank level",  unit: "%",     dp: 0, ideal: [50, 100],              get: (it) => iotTank(it.tankLevel).pct,           cls: (v) => iotTankBand(v) },
+    { k: "pressure", label: "Pressure",    unit: "bar",   dp: 2, ideal: IOT_WQ_IDEAL.pressure, get: (it) => iotWqNum(it.waterQuality?.pressure), cls: (v) => iotWqClass("pressure", v) },
+    { k: "flowMLPM", label: "Flow rate",   unit: "L/min", dp: 2, ideal: IOT_WQ_IDEAL.flowMLPM, get: (it) => iotWqNum(it.waterQuality?.flowMLPM), cls: (v) => iotWqClass("flowMLPM", v) },
   ];
 }
 // Scan chronological readings for out-of-range EVENTS (maximal runs) per metric.
 // Each event ~ one "alert"; extreme = worst value in the run, dir = High / Low.
 function iotAnomalyScan(chrono) {
   const metrics = iotTrendMetrics();
-  const events = []; const perMetric = { ph: 0, tds: 0, temp: 0, tank: 0 };
+  const events = []; const perMetric = Object.fromEntries(metrics.map((m) => [m.k, 0]));
   metrics.forEach((m) => {
     let run = null;
     chrono.forEach((it) => {
@@ -12104,6 +12386,8 @@ const IOT_GAUGE = {
   tds:  { min: 0,  max: 600, dp: 0, band: (v) => iotWqClass("tds", v),  zones: [[0, 50, "red"], [50, 300, "green"], [300, 500, "amber"], [500, 600, "red"]], ticks: [0, 150, 300, 450, 600] },
   temp: { min: 5,  max: 40,  dp: 1, band: (v) => iotWqClass("temp", v), zones: [[5, 10, "cold"], [10, 15, "amber"], [15, 25, "green"], [25, 32, "amber"], [32, 40, "red"]], ticks: [5, 15, 25, 32], zoneLabels: [["Cold", 7.5], ["Normal", 20], ["Hot", 36]] },
   tank: { min: 0,  max: 100, dp: 0, band: (v) => iotTankBand(v),        zones: [[0, 25, "red"], [25, 50, "amber"], [50, 100, "green"]], ticks: [0, 25, 50, 75, 100], fill: true },
+  pressure: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("pressure", v), zones: [[0, 4, "green"], [4, 6, "amber"]], ticks: [0, 2, 4, 6] },
+  flowMLPM: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("flowMLPM", v), zones: [[0, 3, "green"], [3, 6, "amber"]], ticks: [0, 1.5, 3, 4.5, 6] },
 };
 function IoTMetricGauge({ metricKey, label, unit, value, active, onClick }) {
   const g = IOT_GAUGE[metricKey];
@@ -12135,7 +12419,7 @@ function IoTMetricGauge({ metricKey, label, unit, value, active, onClick }) {
     </div>
   );
 }
-function IoTTankReadings({ items, weather }) {
+function IoTTankReadings({ items, weather, range, setRange }) {
   const all = items || [];
   const PER = 10;
   const [page, setPage] = useState(1);
@@ -12144,34 +12428,27 @@ function IoTTankReadings({ items, weather }) {
   const [wxShow, setWxShow] = useState({ wtemp: true, tds: true, ph: true, tank: true }); // which sensor lines show on the weather-correlation chart (outdoor temp is always on)
   const [anomOnly, setAnomOnly] = useState(false);
   const [showAllHist, setShowAllHist] = useState(false);
-  const [range, setRange] = useState("today"); // today | yesterday | week
   const [catF, setCatF] = useState("all"); // all | contamination | tank | dead (anomaly category)
   const [sevF, setSevF] = useState("all"); // all | critical | high | medium (severity)
 
-  // Slice the (up-to-7-day) window before anything else, so the chart, tiles,
-  // anomaly scan, table and correlation all reflect the chosen range.
-  const ranged = useMemo(() => {
-    const st = new Date(); st.setHours(0, 0, 0, 0); const startToday = st.getTime();
-    return all.filter((it) => {
-      const t = new Date(it.timestamp).getTime(); if (isNaN(t)) return false;
-      if (range === "today") return t >= startToday;
-      if (range === "yesterday") return t >= startToday - 86400000 && t < startToday;
-      return t >= startToday - 6 * 86400000; // this week = last 7 days
-    });
-  }, [all, range]);
+  // Slice the (up-to-62-day) window before anything else, so the chart, tiles,
+  // anomaly scan, table and correlation all reflect the chosen range. `range` is
+  // now owned by the parent (IoTDevices) so the same period also drives the
+  // Total Dispensed stat above — see iotFilterByRange / IOT_RANGE_OPTIONS.
+  const ranged = useMemo(() => iotFilterByRange(all, range), [all, range]);
   const chrono = useMemo(() => [...ranged].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)), [ranged]);
   const latestReading = chrono.length ? chrono[chrono.length - 1] : null;
-  const gaugeVal = { ph: iotWqNum(latestReading?.waterQuality?.ph), tds: iotWqNum(latestReading?.waterQuality?.tds), temp: iotWqNum(latestReading?.waterQuality?.temp), tank: latestReading ? iotTank(latestReading.tankLevel).pct : null };
   const metrics = iotTrendMetrics();
+  const gaugeVal = Object.fromEntries(metrics.map((m) => [m.k, latestReading ? m.get(latestReading) : null]));
   const M = metrics.find((m) => m.k === metric) || metrics[0];
   const scan = useMemo(() => iotAnomalyScan(chrono), [chrono]);
   const health = useMemo(() => iotSensorHealth(chrono), [chrono]);
   const wqRange = useMemo(() => iotWqRange(chrono), [chrono]);
   const wqWorst = ["ph", "tds", "temp"].reduce((w, k) => { const c = iotWqBand(wqRange[k], k); return c === "red" ? "red" : (c === "amber" && w !== "red") ? "amber" : w; }, chrono.length ? "green" : "na");
 
-  const bandsOf = (it) => ({ ph: iotWqClass("ph", iotWqNum(it.waterQuality?.ph)), tds: iotWqClass("tds", iotWqNum(it.waterQuality?.tds)), temp: iotWqClass("temp", iotWqNum(it.waterQuality?.temp)), tank: iotTankBand(iotTank(it.tankLevel).pct) });
+  const bandsOf = (it) => Object.fromEntries(metrics.map((m) => { const v = m.get(it); return [m.k, v == null ? "na" : m.cls(v)]; }));
   const isOut = (b) => b === "amber" || b === "red";
-  const anyOut = (it) => { const b = bandsOf(it); return isOut(b.ph) || isOut(b.tds) || isOut(b.temp) || isOut(b.tank); };
+  const anyOut = (it) => Object.values(bandsOf(it)).some(isOut);
 
   const series = useMemo(() => chrono.map((it) => { const v = M.get(it); if (v == null) return null; const band = M.cls(v); return { t: new Date(it.timestamp).getTime(), v, out: band === "amber" || band === "red", sev: band }; }).filter(Boolean), [chrono, metric]);
   const chartData = anomOnly ? series.filter((d) => d.out) : series;
@@ -12179,7 +12456,7 @@ function IoTTankReadings({ items, weather }) {
   const yHi = Math.max(M.ideal[1], ...(series.length ? series.map((d) => d.v) : [M.ideal[1]]));
   const yPad = ((yHi - yLo) || 1) * 0.12;
   const anomEvents = scan.events;
-  const anomReadings = scan.perMetric.ph + scan.perMetric.tds + scan.perMetric.temp + scan.perMetric.tank;
+  const anomReadings = Object.values(scan.perMetric).reduce((s, v) => s + v, 0);
 
   const hm = (ms) => { const d = new Date(ms); let h = d.getHours(); const ap = h < 12 ? "AM" : "PM"; h = h % 12 || 12; return h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; };
   const renderDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const out = payload.out; return <circle key={index} cx={cx} cy={cy} r={out ? 4 : 2} fill={out ? "#e0453f" : "#0A9D6E"} stroke="#fff" strokeWidth={out ? 1.4 : 0.8} />; };
@@ -12232,6 +12509,9 @@ function IoTTankReadings({ items, weather }) {
     { label: "pH", get: (it) => { const v = iotWqNum(it.waterQuality?.ph); return v == null ? "" : v.toFixed(1); } },
     { label: "TDS (mg/L)", get: (it) => { const v = iotWqNum(it.waterQuality?.tds); return v == null ? "" : Math.round(v); } },
     { label: "Temp (°C)", get: (it) => { const v = iotWqNum(it.waterQuality?.temp); return v == null ? "" : v.toFixed(1); } },
+    { label: "Pressure (bar)", get: (it) => { const v = iotWqNum(it.waterQuality?.pressure); return v == null ? "" : v.toFixed(2); } },
+    { label: "Flow rate (L/min)", get: (it) => { const v = iotWqNum(it.waterQuality?.flowMLPM); return v == null ? "" : v.toFixed(2); } },
+    { label: "Total dispensed (L)", get: (it) => { const v = iotWqNum(it.waterQuality?.totalDispensed); return v == null ? "" : v.toFixed(2); } },
   ], sorted);
   const btn = (disabled) => ({ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 9, border: "1px solid " + (disabled ? "var(--border)" : "var(--brand)"), background: disabled ? "#fff" : "var(--brand)", color: disabled ? "var(--faint)" : "#fff", cursor: disabled ? "not-allowed" : "pointer" });
   const syncHead = (
@@ -12274,19 +12554,14 @@ function IoTTankReadings({ items, weather }) {
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "2px 18px 0" }}>
         <CalendarRange size={14} color="var(--muted)" />
-        {[["today", "Today"], ["yesterday", "Yesterday"], ["week", "This Week"]].map(([k, label]) => {
-          const active = range === k;
-          return (
-            <button key={k} onClick={() => { setRange(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}</button>
-          );
-        })}
+        <IoTRangeChips range={range} setRange={(k) => { setRange(k); setPage(1); }} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 10, padding: "10px 18px 4px" }}>
         {tile("Sensor health", health.verdict === "good" ? "Good" : health.verdict === "check" ? "Check" : "—", health.note, health.verdict === "good" ? "good" : health.verdict === "check" ? "check" : "na")}
         {tile("Water quality", wqVerdict, chrono.length ? `${anomReadings} of ${chrono.length} readings out of range` : "No data yet.", wqVk)}
         {tile("Total alerts", String(anomEvents.length), anomEvents.length ? "out-of-range events in this window" : "no anomaly events", anomEvents.length ? "critical" : "good")}
-        {tile("Anomalies by metric", String(anomReadings), `pH ${scan.perMetric.ph} · TDS ${scan.perMetric.tds} · Temp ${scan.perMetric.temp} · Tank ${scan.perMetric.tank}`, anomReadings ? "warning" : "good")}
+        {tile("Anomalies by metric", String(anomReadings), `pH ${scan.perMetric.ph} · TDS ${scan.perMetric.tds} · Temp ${scan.perMetric.temp} · Tank ${scan.perMetric.tank} · Pressure ${scan.perMetric.pressure} · Flow ${scan.perMetric.flowMLPM}`, anomReadings ? "warning" : "good")}
       </div>
 
       {all.length > 0 && (
@@ -12295,6 +12570,8 @@ function IoTTankReadings({ items, weather }) {
           <IoTMetricGauge metricKey="tds" label="TDS" unit="mg/L" value={gaugeVal.tds} active={metric === "tds"} onClick={() => setMetric("tds")} />
           <IoTMetricGauge metricKey="temp" label="Temp" unit="°C" value={gaugeVal.temp} active={metric === "temp"} onClick={() => setMetric("temp")} />
           <IoTMetricGauge metricKey="tank" label="Tank" unit="%" value={gaugeVal.tank} active={metric === "tank"} onClick={() => setMetric("tank")} />
+          <IoTMetricGauge metricKey="pressure" label="Pressure" unit="bar" value={gaugeVal.pressure} active={metric === "pressure"} onClick={() => setMetric("pressure")} />
+          <IoTMetricGauge metricKey="flowMLPM" label="Flow" unit="L/min" value={gaugeVal.flowMLPM} active={metric === "flowMLPM"} onClick={() => setMetric("flowMLPM")} />
         </div>
       )}
 
@@ -12446,9 +12723,7 @@ function IoTTankReadings({ items, weather }) {
         <span style={{ fontSize: 13, fontWeight: 800, color: "var(--f)" }}>Recent readings</span>
         <div style={{ flex: 1, minWidth: 8 }} />
         <CalendarRange size={14} color="var(--muted)" />
-        {[["today", "Today"], ["yesterday", "Yesterday"], ["week", "This Week"]].map(([k, label]) => { const active = range === k; return (
-          <button key={k} onClick={() => { setRange(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}</button>
-        ); })}
+        <IoTRangeChips range={range} setRange={(k) => { setRange(k); setPage(1); }} />
         <button onClick={exportReadings} style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 9, border: "1px solid var(--border)", background: "#fff", color: "var(--teal)", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}><Download size={14} /> Export</button>
       </div>
       {deviceDead && (
@@ -12475,10 +12750,11 @@ function IoTTankReadings({ items, weather }) {
         })}
       </div>
       <div style={{ overflowX: "auto" }}>
-        <Table head={[syncHead, "Tank", "pH", "TDS (mg/L)", "Temp (°C)"]}>
+        <Table head={[syncHead, "Tank", "pH", "TDS (mg/L)", "Temp (°C)", "Pressure (bar)", "Flow (L/min)", "Dispensed (L)"]}>
           {rows.map((it, i) => {
             const t = iotTank(it.tankLevel);
             const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp);
+            const pr = iotWqNum(it.waterQuality?.pressure), fl = iotWqNum(it.waterQuality?.flowMLPM), disp = iotWqNum(it.waterQuality?.totalDispensed);
             const num = { ...td, fontVariantNumeric: "tabular-nums" };
             return (
               <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid var(--border)" }}>
@@ -12487,10 +12763,13 @@ function IoTTankReadings({ items, weather }) {
                 <td style={{ ...num, ...iotBandText(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
                 <td style={{ ...num, ...iotBandText(iotWqClass("tds", tds)) }}>{tds == null ? "—" : Math.round(tds)}</td>
                 <td style={{ ...num, ...iotBandText(iotWqClass("temp", tp)) }}>{tp == null ? "—" : tp.toFixed(1)}</td>
+                <td style={{ ...num, ...iotBandText(iotWqClass("pressure", pr)) }}>{pr == null ? "—" : pr.toFixed(2)}</td>
+                <td style={{ ...num, ...iotBandText(iotWqClass("flowMLPM", fl)) }}>{fl == null ? "—" : fl.toFixed(2)}</td>
+                <td style={num}>{disp == null ? "—" : disp.toFixed(2)}</td>
               </tr>
             );
           })}
-          {sorted.length === 0 && <tr><td colSpan={5} style={{ padding: 0 }}><Empty msg={all.length ? "No readings match this filter." : "No readings yet."} /></td></tr>}
+          {sorted.length === 0 && <tr><td colSpan={8} style={{ padding: 0 }}><Empty msg={all.length ? "No readings match this filter." : "No readings yet."} /></td></tr>}
         </Table>
       </div>
       {sorted.length > PER && (
@@ -12769,16 +13048,45 @@ function IoTAlertsPage() {
     </div>
   );
 }
+// Full-panel loading state for the IoT module — shown until BOTH the device
+// roster AND the first device-history round-trip have landed. Without waiting
+// for history too, the module used to flash the device list with an empty
+// tank/gauges/"Awaiting sensor readings" state for a beat before real numbers
+// arrived. Self-contained (spinner + indeterminate progress bar), no external
+// gif asset.
+function IoTLoading() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: "100px 20px" }}>
+      <style>{`
+        @keyframes iotLoadSpin { to { transform: rotate(360deg); } }
+        @keyframes iotLoadBar { 0% { left: -40%; } 100% { left: 100%; } }
+        .iot-loading-spinner { width: 40px; height: 40px; border: 3.5px solid var(--border); border-top-color: var(--teal); border-radius: 999px; animation: iotLoadSpin .9s linear infinite; }
+        .iot-loading-track { position: relative; width: 220px; height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; }
+        .iot-loading-fill { position: absolute; top: 0; width: 40%; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--teal), var(--brand)); animation: iotLoadBar 1.1s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .iot-loading-spinner, .iot-loading-fill { animation: none !important; } }
+      `}</style>
+      <div className="iot-loading-spinner" aria-hidden />
+      <div style={{ fontSize: 14, fontWeight: 700, color: "var(--f)" }}>Loading live device data…</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", maxWidth: 280 }}>Connecting to IoT Core and fetching device sensor history.</div>
+      <div className="iot-loading-track"><div className="iot-loading-fill" /></div>
+    </div>
+  );
+}
 function IoTDevices() {
   const { user } = useAuth();
   const [roster, setRoster] = useState([]);            // from /devices/status (device roster + fallback metadata)
   const [historyByDevice, setHistoryByDevice] = useState({}); // deviceId -> [heartbeats] (newest-first, live)
   const [weather, setWeather] = useState(null); // Prabhavati live weather + 24h history (for the correlation)
-  const [hist7dByDevice, setHist7dByDevice] = useState({}); // selected device -> last-7-days window (Trend analysis)
+  const [histRangeByDevice, setHistRangeByDevice] = useState({}); // selected device -> ~62-day window (Trend analysis + Total Dispensed)
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [historyLoaded, setHistoryLoaded] = useState(false); // first /devices/history round-trip done (any outcome)
   const [err, setErr] = useState("");
   const [hbPage, setHbPage] = useState(1); // Recent heartbeats pagination (20 rows/page)
+  // Shared date-range filter — Today / Yesterday / This Week / This Month / Last
+  // Month — drives BOTH the Total Dispensed stat (RO Unit Sensors card, above)
+  // and Trend analysis / Recent readings (below), via iotFilterByRange.
+  const [range, setRange] = useState("today");
 
   // Reset to the first page whenever a different device is selected.
   useEffect(() => { setHbPage(1); }, [selected]);
@@ -12797,17 +13105,19 @@ function IoTDevices() {
   // the tank level, water quality, Recent readings and 12-hour consumption all
   // read from `historyByDevice` (the bare feed) directly.
 
-  // Selected device — pull a 7-day history window for the Trend analysis (the
-  // Today/Yesterday/This-Week filter slices it). Slow-changing, so poll every 5 min.
+  // Selected device — pull a ~62-day history window for Trend analysis AND the
+  // Total Dispensed stat (the Today/Yesterday/Week/Month/Last-Month filter
+  // slices it — 62 days safely covers "Last Month" no matter where in the
+  // current month "today" falls). Slow-changing, so poll every 5 min.
   useEffect(() => {
     if (!selected) return;
     let alive = true;
     const load = async () => {
       try {
-        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}&days=7`);
+        const res = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${selected}&days=62`);
         const data = await res.json();
         const arr = Array.isArray(data) ? data : (data?.items ?? []);
-        if (alive && arr.length) setHist7dByDevice((p) => ({ ...p, [selected]: arr }));
+        if (alive && arr.length) setHistRangeByDevice((p) => ({ ...p, [selected]: arr }));
       } catch { /* keep prior; Trend falls back to the live window */ }
     };
     load();
@@ -12865,6 +13175,7 @@ function IoTDevices() {
         for (const [id, data] of results) if (data) next[id] = data;
         return next;
       });
+      setHistoryLoaded(true); // flip once the first round-trip lands, success or not — don't spin forever
     };
     load();
     const t = setInterval(load, 8000);
@@ -12888,6 +13199,10 @@ function IoTDevices() {
   const wqItems = historyByDevice[selected] ?? [];
   const tank = iotTank(device?.tankLevel ?? wqItems[0]?.tankLevel);
   const wqRange = useMemo(() => iotWqRange(wqItems), [wqItems]);
+  // Total Dispensed is scoped to the shared date-range filter (falls back to the
+  // short live window if the ~62-day fetch hasn't landed yet).
+  const dispensedItems = useMemo(() => iotFilterByRange(histRangeByDevice[selected] ?? wqItems, range), [histRangeByDevice, selected, wqItems, range]);
+  const dispensed = useMemo(() => iotDispensedRange(dispensedItems), [dispensedItems]);
 
   const history = historyByDevice[selected] ?? []; // newest-first
   const chrono = [...history].reverse();           // oldest-first, for time-series charts
@@ -12963,7 +13278,7 @@ function IoTDevices() {
     { label: "With faults", value: faulty, sub: "channel fault active", icon: ShieldCheck, wave: "ripple", wc: "#986315", wo: 0.42 },
   ];
 
-  if (loading) return <Loading />;
+  if (loading || !historyLoaded) return <IoTLoading />;
 
   const softShadow = { background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 
@@ -13050,14 +13365,23 @@ function IoTDevices() {
           </div>
         );
 
-        // Tank devices: aligned 3-column layout (devices · tank · water quality).
+        // Tank devices: aligned 3-column layout (devices · tank · water quality),
+        // plus a full-width row for the RO unit's own sensors (pressure/flow/
+        // dispensed) — kept separate from the potability card since pressure &
+        // flow aren't a "water quality" reading, and dispensed litres is a
+        // running total, not a banded metric.
         if (isTank) {
           return (
-            <div className="iot-monitor-grid" style={{ display: "grid", gridTemplateColumns: "224px minmax(390px,1fr) minmax(330px,1fr)", gap: 16, alignItems: "stretch" }}>
-              {deviceListCard}
-              <IoTTankPanel device={device} tank={tank} refilling={tankRefilling} warming={tankWarming} />
-              <IoTWaterQualityCard range={wqRange} />
-            </div>
+            <>
+              <div className="iot-monitor-grid" style={{ display: "grid", gridTemplateColumns: "224px minmax(390px,1fr) minmax(330px,1fr)", gap: 16, alignItems: "stretch" }}>
+                {deviceListCard}
+                <IoTTankPanel device={device} tank={tank} refilling={tankRefilling} warming={tankWarming} />
+                <IoTWaterQualityCard range={wqRange} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 16 }}>
+                <IoTWaterQualityCard range={wqRange} keys={["pressure", "flowMLPM"]} title="RO Unit Sensors" subtitle="Pressure & flow — live" noun="RO unit performance" extra={<IoTDispensedStat dispensed={dispensed} range={range} setRange={setRange} />} />
+              </div>
+            </>
           );
         }
 
@@ -13125,7 +13449,7 @@ function IoTDevices() {
       })()}
 
       {/* ── recent RO-tank readings (full width) ───────────────────────────── */}
-      {device && isTank && <IoTTankReadings items={hist7dByDevice[selected] ?? wqItems} weather={weather} />}
+      {device && isTank && <IoTTankReadings items={histRangeByDevice[selected] ?? wqItems} weather={weather} range={range} setRange={setRange} />}
 
       {/* ── live consumption · pressure · flow (full width) ────────────────── */}
       {device && !isTank && (
@@ -13285,7 +13609,6 @@ function IoTDevices() {
    ANALYTICS — Earned Revenue (day-based) · Apartment Performance · Sales
    =========================================================================== */
 const momPct = (cur, prev) => (prev ? Math.round(((cur - prev) / prev) * 100) : null);
-const inr2 = (n) => "₹" + (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // Compact ₹ label for chart data-labels (₹43k / ₹8.1k / ₹950).
 const kLabel = (v) => { const n = Number(v) || 0; return n >= 1000 ? "₹" + (n / 1000).toFixed(n >= 10000 ? 0 : 1) + "k" : "₹" + Math.round(n); };
 const _addMonths = (y, m, n) => { const idx = y * 12 + (m - 1) + n; return [Math.floor(idx / 12), (idx % 12) + 1]; };
@@ -13300,7 +13623,8 @@ function EarnedRevenue() {
   const { sel, setSel, range } = useDateRange("this_month"); // date-range preset filter
   const [apt, setApt] = useState(null);                     // apartment (society) filter
   const [sort, setSort] = useState({ key: "earned", dir: "desc" }); // per-invoice table sort
-  const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "paid" ? "asc" : "desc" });
+  const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: (key === "paid" || key === "due" || key === "nextBilling") ? "asc" : "desc" });
+  const [search, setSearch] = useState(""); // per-invoice table search (customer / apartment)
   useEffect(() => {
     api.logView(user.username, "Viewed Earned Revenue");
     Promise.all([billingApi.getInvoices(), billingApi.getSubscriptions(), customerApi.getCustomers().catch(() => [])])
@@ -13328,19 +13652,63 @@ function EarnedRevenue() {
     const deposit = depositForPlan(plan, total);
     const recharge = Math.max(0, total - deposit);
     const months = termMonths(sub || { interval: i.interval, plan }) || 1;
-    const pd = new Date(i.date);
+    // Prefer the API's real paid_date (added ~2026-08); fall back to invoice
+    // date for older invoices that predate that field.
+    const pd = new Date(i.paidDate || i.date);
     const valid = !isNaN(pd.getTime());
-    // Recognition model (per the AOP/Excel spec): the recharge is earned in its
-    // PAID calendar month, from the paid date to month end, prorated by that
-    // month's real day-count (30/31/28/29):
-    //   earned = ((monthEnd − paidDate + 1) × recharge) / daysInMonth
-    const monthEnd = valid ? new Date(pd.getFullYear(), pd.getMonth() + 1, 0) : null; // last day of the paid month
-    const daysInMonth = valid ? monthEnd.getDate() : 0;                                // 28/29/30/31
-    const daysRemaining = valid ? daysInMonth - pd.getDate() : 0;                       // month end − paid date
-    const earnedPerDay = daysInMonth > 0 ? recharge / daysInMonth : 0;
-    const earnedRevenue = daysInMonth > 0 ? ((daysRemaining + 1) * recharge) / daysInMonth : 0;
+    const monthStart = valid ? new Date(pd.getFullYear(), pd.getMonth(), 1) : null;      // 1st of the paid month
+    const monthEnd = valid ? new Date(pd.getFullYear(), pd.getMonth() + 1, 0) : null;     // last day of the paid month
+    const dd = i.dueDate ? new Date(i.dueDate) : null;
+    const dueValid = dd && !isNaN(dd.getTime());
+    // Validity end follows the CALENDAR month from the due date — one month
+    // later, minus a day (e.g. due 2 Jul → validity end 1 Aug) — computed
+    // directly off the due date so it always respects real month lengths
+    // (28/29/30/31), rather than trusting the subscription's raw
+    // next_billing_date, which just preserves day-of-month (5 Aug → 5 Sept)
+    // and didn't line up with the expected calendar-month cycle.
+    const nb = dueValid ? new Date(dd.getFullYear(), dd.getMonth() + 1, dd.getDate() - 1) : null;
+    const nbValid = nb && !isNaN(nb.getTime());
+    // Recognition model (verified against the reference sheet — Sanjith/MJR:
+    // due 7/26, validity end 8/25, ₹350 recharge → ₹68 earned in Jul + ₹282 in
+    // Aug, summing to exactly ₹350):
+    //   tenureDays = validityEnd − validityStart + 1                    (inclusive, e.g. 31)
+    //   daysInPaidMonth = validity days that overlap the invoice's PAID
+    //                     calendar month, starting no earlier than the
+    //                     ACTUAL PAID DATE when it lands later than the due
+    //                     date within that same month (can't earn revenue
+    //                     for days before the payment landed — e.g. due 8
+    //                     Aug, paid 10 Aug: count from the 10th, not the 8th)
+    //   earned = recharge × daysInPaidMonth / tenureDays
+    // This table shows ONE row per invoice — only the slice recognised in
+    // its own paid month, not the (possibly nonzero) slice in the month
+    // before it.
+    const tenureDays = (dueValid && nbValid) ? Math.round((nb - dd) / 86400000) + 1 : null;
+    let daysInPaidMonth = 0;
+    if (dueValid && nbValid && valid) {
+      let overlapStart = dd > monthStart ? dd : monthStart;
+      if (pd > overlapStart) overlapStart = pd;
+      const overlapEnd = nb < monthEnd ? nb : monthEnd;
+      daysInPaidMonth = overlapEnd >= overlapStart ? Math.round((overlapEnd - overlapStart) / 86400000) + 1 : 0;
+    }
+    const earnedRevenue = tenureDays > 0 ? (recharge * daysInPaidMonth) / tenureDays : 0;
+    // Spillover: when the validity window (End Date) reaches into the month
+    // AFTER the paid month, that slice is earned there too — e.g. Arun K
+    // Sinha (paid Aug, end 7 Sept) earns a further 7 days in September. No
+    // late-payment clip here — the clip only matters for the paid month
+    // itself (payment has already landed by the time the next month starts).
+    const nextMonthStart = valid ? new Date(pd.getFullYear(), pd.getMonth() + 1, 1) : null;
+    const nextMonthEnd = valid ? new Date(pd.getFullYear(), pd.getMonth() + 2, 0) : null;
+    let daysInNextMonth = 0;
+    if (dueValid && nbValid && nextMonthStart) {
+      const overlapStart = dd > nextMonthStart ? dd : nextMonthStart;
+      const overlapEnd = nb < nextMonthEnd ? nb : nextMonthEnd;
+      daysInNextMonth = overlapEnd >= overlapStart ? Math.round((overlapEnd - overlapStart) / 86400000) + 1 : 0;
+    }
+    const nextMonthEarned = tenureDays > 0 ? (recharge * daysInNextMonth) / tenureDays : 0;
+    const nextMonthLabel = (daysInNextMonth > 0 && nextMonthStart) ? nextMonthStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : null;
     return { customer: i.customerName || "—", society: societyOf(i), plan, total, deposit, recharge, months,
-      payDay: pd, monthEnd, daysInMonth, daysRemaining, earnedPerDay, earnedRevenue };
+      payDay: pd, dueDay: dueValid ? dd : null, nextBillDay: nbValid ? nb : null, tenureDays, daysInPaidMonth, earnedRevenue,
+      daysInNextMonth, nextMonthEarned, nextMonthLabel };
   });
 
   const paidInMonth = (r, y, m) => { const d = r.payDay; return d && !isNaN(d.getTime()) && d.getFullYear() === y && (d.getMonth() + 1) === m; };
@@ -13363,18 +13731,32 @@ function EarnedRevenue() {
   const rangeText = rangeLabel(range);
 
   // Per-invoice recognition = invoices PAID in the range; the Earned Revenue card
-  // equals this table's "Earned in period" column total.
-  const tableRows = collectNow.slice().sort((a, b) => {
+  // equals this table's (unfiltered by search) "Earned in period" column total —
+  // the search box only narrows which rows are DISPLAYED, it never changes the
+  // KPI cards or the trend chart above.
+  const sortedRows = collectNow.slice().sort((a, b) => {
     const dir = sort.dir === "asc" ? 1 : -1;
     if (sort.key === "paid") return ((a.payDay?.getTime() || 0) - (b.payDay?.getTime() || 0)) * dir;
+    if (sort.key === "due") return ((a.dueDay?.getTime() || 0) - (b.dueDay?.getTime() || 0)) * dir;
+    if (sort.key === "nextBilling") return ((a.nextBillDay?.getTime() || 0) - (b.nextBillDay?.getTime() || 0)) * dir;
     return (a.earnedRevenue - b.earnedRevenue) * dir;
   });
-  const totRow = tableRows.reduce((a, r) => ({
+  const totRow = sortedRows.reduce((a, r) => ({
     total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge,
-    earned: a.earned + r.earnedRevenue,
-  }), { total: 0, deposit: 0, recharge: 0, earned: 0 });
+    earned: a.earned + r.earnedRevenue, nextEarned: a.nextEarned + r.nextMonthEarned,
+  }), { total: 0, deposit: 0, recharge: 0, earned: 0, nextEarned: 0 });
   const earnedRevenue = totRow.earned;
   const earnedRevenuePrev = collectPrev.reduce((s, r) => s + r.earnedRevenue, 0);
+  // Search narrows the DISPLAYED rows + the table's own "Total (N)" footer
+  // (visTotal) — matches, term, or society. KPI cards above stay on sortedRows.
+  const searchQ = search.trim().toLowerCase();
+  const tableRows = searchQ
+    ? sortedRows.filter(r => r.customer.toLowerCase().includes(searchQ) || r.society.toLowerCase().includes(searchQ))
+    : sortedRows;
+  const visTotal = searchQ ? tableRows.reduce((a, r) => ({
+    total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge,
+    earned: a.earned + r.earnedRevenue, nextEarned: a.nextEarned + r.nextMonthEarned,
+  }), { total: 0, deposit: 0, recharge: 0, earned: 0, nextEarned: 0 }) : totRow;
 
   // Trend: up to 12 months ending at the range, but never before Jan 2026 (the
   // business's first operating month). Earned = recognised revenue of invoices
@@ -13401,12 +13783,17 @@ function EarnedRevenue() {
 
   const exportCsv = () => exportToCsv(`prowater-earned-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
     { label: "Customer", get: r => r.customer }, { label: "Apartment", get: r => r.society }, { label: "Plan", get: r => r.plan },
+    { label: "Start Date (due date)", get: r => r.dueDay ? fmtDate(r.dueDay) : "" },
     { label: "Paid on", get: r => (r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "" },
+    { label: "End Date (next billing)", get: r => r.nextBillDay ? fmtDate(r.nextBillDay) : "" },
     { label: "Total paid", get: r => r.total }, { label: "Deposit", get: r => r.deposit }, { label: "Recharge", get: r => r.recharge },
-    { label: "Earned/month", get: r => Math.round(r.recharge / (r.months || 1)) }, { label: "Earned/day", get: r => r.earnedPerDay.toFixed(2) },
-    { label: "Month End Date", get: r => r.monthEnd ? fmtDate(r.monthEnd) : "" },
-    { label: "Days remaining", get: r => r.daysRemaining },
+    { label: "Earned/month", get: r => Math.round(r.recharge / (r.months || 1)) },
+    { label: "Tenure days", get: r => r.tenureDays ?? "" },
+    { label: "Days in paid month", get: r => r.daysInPaidMonth ?? "" },
     { label: "Earned revenue", get: r => r.earnedRevenue.toFixed(2) },
+    { label: "Next month", get: r => r.nextMonthLabel || "" },
+    { label: "Days in next month", get: r => r.daysInNextMonth || "" },
+    { label: "Earned revenue (next month)", get: r => r.nextMonthEarned ? r.nextMonthEarned.toFixed(2) : "" },
   ], tableRows);
 
   return (
@@ -13437,46 +13824,649 @@ function EarnedRevenue() {
         </Card>
       </div>
       <div style={{ marginTop: 18 }}>
-        <Card pad={false} title={`Per-invoice recognition · ${rangeText}`} sub="Earned revenue = ((month end − paid date + 1) × recharge) ÷ days in the paid month. Yellow rows = a deposit was collected on this account.">
-          <Table head={["Customer", "Apartment", "Plan",
+        <Toolbar q={search} setQ={setSearch} placeholder="Search customer or apartment…" count={tableRows.length} />
+        <Card pad={false} title={`Per-invoice recognition · ${rangeText}`} sub="Earned revenue = recharge × (validity days falling in the paid month) ÷ (validity end date − validity start date + 1). Validity start = due date; validity end = one calendar month later, minus a day (e.g. due 2 Jul → validity end 1 Aug) — so a tenure crossing a month boundary is split, and only its paid-month slice is recognised here. The last three columns show the spillover into the FOLLOWING month, when the validity window reaches that far. Yellow rows = a deposit was collected on this account.">
+          <Table head={["Customer", "Apartment",
+            <button onClick={() => toggleSort("due")} title="Sort by start date"
+              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+              Start Date {sort.key === "due" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+            </button>,
             <button onClick={() => toggleSort("paid")} title="Sort by paid date"
               style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
               Paid on {sort.key === "paid" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
             </button>,
-            "Total paid", "Deposit", "Recharge", "Earned/month", "Earned/day", "Month End Date", "Days remaining", "Earned revenue"]} maxHeight="calc(100vh - 460px)">
+            <button onClick={() => toggleSort("nextBilling")} title="Sort by end date"
+              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+              End Date {sort.key === "nextBilling" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+            </button>,
+            "Total paid", "Deposit", "Recharge", "Earned/month", "Tenure days", "Days in paid month", "Earned revenue", "Next month", "Days in next month", "Earned revenue (next month)"]} maxHeight="calc(100vh - 460px)">
             {tableRows.map((r, i) => (
               <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: r.deposit > 0 ? "#FBF0E0" : undefined }}>
                 <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{r.customer}</td>
                 <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.society}</td>
-                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.plan}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.dueDay ? fmtDate(r.dueDay) : "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{(r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "—"}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.nextBillDay ? fmtDate(r.nextBillDay) : "—"}</td>
                 <td style={{ ...td, fontWeight: 600 }}>{inr(r.total)}</td>
                 <td style={td}>{inr(r.deposit)}</td>
                 <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600 }}>{inr(r.recharge)}</td>
                 <td style={td}>{inr(Math.round(r.recharge / (r.months || 1)))}</td>
-                <td style={{ ...td, whiteSpace: "nowrap" }}>{inr2(r.earnedPerDay)}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.monthEnd ? fmtDate(r.monthEnd) : "—"}</td>
-                <td style={td}>{r.daysRemaining}</td>
+                <td style={td}>{r.tenureDays ?? "—"}</td>
+                <td style={td}>{r.daysInPaidMonth ?? "—"}</td>
                 <td style={{ ...td, fontWeight: 600, color: "var(--forest)" }}>{inr(Math.round(r.earnedRevenue))}</td>
+                <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap" }}>{r.nextMonthLabel || "—"}</td>
+                <td style={td}>{r.daysInNextMonth || "—"}</td>
+                <td style={{ ...td, fontWeight: 600, color: r.nextMonthEarned ? "var(--forest)" : "var(--muted)" }}>{r.nextMonthEarned ? inr(Math.round(r.nextMonthEarned)) : "—"}</td>
               </tr>
             ))}
             {tableRows.length > 0 && (
               <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={4}>Total ({tableRows.length})</td>
-                <td style={ftd}>{inr(totRow.total)}</td>
-                <td style={ftd}>{inr(totRow.deposit)}</td>
-                <td style={ftd}>{inr(totRow.recharge)}</td>
+                <td style={{ ...ftd, textAlign: "center" }} colSpan={5}>Total ({tableRows.length})</td>
+                <td style={ftd}>{inr(visTotal.total)}</td>
+                <td style={ftd}>{inr(visTotal.deposit)}</td>
+                <td style={ftd}>{inr(visTotal.recharge)}</td>
                 <td style={ftd}></td>
                 <td style={ftd}></td>
                 <td style={ftd}></td>
+                <td style={ftd}>{inr(Math.round(visTotal.earned))}</td>
                 <td style={ftd}></td>
-                <td style={ftd}>{inr(Math.round(totRow.earned))}</td>
+                <td style={ftd}></td>
+                <td style={ftd}>{inr(Math.round(visTotal.nextEarned))}</td>
               </tr>
             )}
           </Table>
           {tableRows.length === 0 && <Empty msg="No paid invoices to recognise." />}
         </Card>
       </div>
+    </div>
+  );
+}
+
+/* ===========================================================================
+   RECONCILIATION — Collected (cash-basis, by ACTUAL paid date) vs Receivable
+   (amount due in a period that wasn't collected by that period's end).
+   Fixes the bug where "collected revenue" was being bucketed by an invoice's
+   DUE date instead of when the money actually came in — e.g. due 28 Jul,
+   paid 3 Aug was showing as July revenue; it now shows as August revenue
+   (Collected), while July correctly shows it as Receivable (money that was
+   due in July but not in hand by 31 Jul).
+   =========================================================================== */
+function Reconciliation() {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const { sel, setSel, range } = useDateRange("this_month"); // custom date-range preset filter
+  const [apt, setApt] = useState(null);                     // apartment (society) filter
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all"); // all | onTime | late | outstanding
+
+  useEffect(() => {
+    api.logView(user.username, "Viewed Reconciliation");
+    Promise.all([billingApi.getInvoices(), customerApi.getCustomers().catch(() => [])])
+      .then(([inv, cust]) => setData({ inv, cust }))
+      .catch(() => setData({ inv: [], cust: [] }));
+  }, []);
+  if (!data) return <Loading />;
+
+  const custByZoho = {};
+  (data.cust || []).forEach(c => { [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber].forEach(k => { if (k) custByZoho[k] = c; }); });
+  const societyOf = (i) => {
+    for (const k of [i.zohoCustomerId, i.zohoId, i.customerNumber]) { if (k && custByZoho[k]) return custByZoho[k].society || "Unknown"; }
+    return i.society || "Unknown";
+  };
+  const aptOptions = Array.from(new Set(data.inv.map(societyOf).filter(s => s && s !== "Unknown"))).sort();
+  const aptOk = (i) => apt === null || apt.includes(societyOf(i));
+
+  // One reconciliation "fact" per invoice with a due date and a positive amount.
+  // dueValid + periodEnd = the due date's calendar month, end of day on the
+  // last day — the deadline by which the invoice should have been collected.
+  const facts = data.inv.filter(i => (i.total || 0) > 0 && i.dueDate && aptOk(i)).map(i => {
+    const due = new Date(i.dueDate);
+    const dueOk = !isNaN(due.getTime());
+    const periodEnd = dueOk ? endOfDay(new Date(due.getFullYear(), due.getMonth() + 1, 0)) : null;
+    const isPaid = i.status === "paid";
+    // Prefer the API's real paid_date; fall back to invoice date for older
+    // invoices that predate that field.
+    const paidRaw = i.paidDate || (isPaid ? i.date : null);
+    const paid = paidRaw ? new Date(paidRaw) : null;
+    const paidOk = paid && !isNaN(paid.getTime());
+    const onTime = isPaid && paidOk && dueOk && paid <= periodEnd;
+    const late = isPaid && paidOk && dueOk && paid > periodEnd;
+    const outstanding = !isPaid; // never paid, as of now
+    const daysLate = late ? Math.round((paid - periodEnd) / 86400000) : (outstanding && dueOk ? Math.max(0, Math.round((new Date() - periodEnd) / 86400000)) : 0);
+    return {
+      customer: i.customerName || "—", society: societyOf(i), number: i.number, total: i.total || 0,
+      due, dueOk, paid, paidOk, isPaid, onTime, late, outstanding, periodEnd, daysLate,
+    };
+  });
+
+  // "Due in period": invoices whose DUE DATE falls in the selected range —
+  // the accrual/expected view.
+  const dueInRange = facts.filter(f => f.dueOk && dateInRange(f.due, range));
+  const dueTotal = dueInRange.reduce((s, f) => s + f.total, 0);
+  const collectedOnTimeTotal = dueInRange.filter(f => f.onTime).reduce((s, f) => s + f.total, 0);
+  const receivableTotal = dueInRange.filter(f => f.late || f.outstanding).reduce((s, f) => s + f.total, 0);
+
+  // "Collected in period": cash ACTUALLY received in the range, by its real
+  // paid date — regardless of which period it was originally due in. This is
+  // the corrected figure (was previously bucketed by due date).
+  const collectedInRange = facts.filter(f => f.isPaid && f.paidOk && dateInRange(f.paid, range));
+  const collectedTotal = collectedInRange.reduce((s, f) => s + f.total, 0);
+  const collectedFromEarlierDue = collectedInRange.filter(f => !(f.dueOk && dateInRange(f.due, range))).reduce((s, f) => s + f.total, 0);
+
+  // ---- AR roll-forward (standard accounts-receivable ledger flow) ----------
+  // Opening Balance + Due Added − Collected = Closing Balance. "Collected" here
+  // excludes advance receipts (cash for invoices due AFTER this period — those
+  // aren't yet part of AR, so netting them in would understate the balance);
+  // they're reported separately as a memo line. Closing is cross-checked
+  // against an independent sum (every invoice due on/before period end that
+  // isn't collected by period end) — the two must always agree by construction;
+  // a mismatch would mean a bug, not a real accounting discrepancy.
+  const openingFacts = facts.filter(f => f.dueOk && f.due < range.from && (!f.isPaid || (f.paidOk && f.paid >= range.from)));
+  const openingBalance = openingFacts.reduce((s, f) => s + f.total, 0);
+  const collectedAppliedFacts = facts.filter(f => f.isPaid && f.paidOk && f.paid >= range.from && f.paid <= range.to && f.dueOk && f.due <= range.to);
+  const collectedApplied = collectedAppliedFacts.reduce((s, f) => s + f.total, 0);
+  const advanceReceipts = facts.filter(f => f.isPaid && f.paidOk && f.paid >= range.from && f.paid <= range.to && f.dueOk && f.due > range.to).reduce((s, f) => s + f.total, 0);
+  const closingBalance = openingBalance + dueTotal - collectedApplied;
+  const closingFacts = facts.filter(f => f.dueOk && f.due <= range.to && (!f.isPaid || (f.paidOk && f.paid > range.to)));
+  const closingCheck = closingFacts.reduce((s, f) => s + f.total, 0);
+  const rollforwardTies = Math.abs(closingBalance - closingCheck) < 1;
+
+  const stats = [
+    { label: "Due in period", value: inr(Math.round(dueTotal)), icon: Receipt, sub: `${dueInRange.length} invoice${dueInRange.length !== 1 ? "s" : ""} due`, hero: true },
+    { label: "Collected in period", value: inr(Math.round(collectedTotal)), icon: Wallet, sub: "by actual receipt date, not due date" },
+    { label: "Collected on time", value: inr(Math.round(collectedOnTimeTotal)), icon: CheckCircle2, sub: "of amount due, paid within its own period" },
+    { label: "Receivable", value: inr(Math.round(receivableTotal)), icon: Hourglass, sub: "due in period, not collected by period end" },
+  ];
+
+  // Monthly trend spanning the selected range — Due / Collected / Receivable
+  // per calendar month, so the shift (money due in one month landing as
+  // collected in the next) is visible at a glance.
+  const trend = [];
+  { let y = range.from.getFullYear(), m = range.from.getMonth();
+    const endY = range.to.getFullYear(), endM = range.to.getMonth();
+    let guard = 0;
+    while ((y < endY || (y === endY && m <= endM)) && guard++ < 60) {
+      const mStart = new Date(y, m, 1), mEnd = endOfDay(new Date(y, m + 1, 0));
+      const dueHere = facts.filter(f => f.dueOk && f.due >= mStart && f.due <= mEnd);
+      const collectedHere = facts.filter(f => f.isPaid && f.paidOk && f.paid >= mStart && f.paid <= mEnd);
+      trend.push({
+        label: _monthShort(y, m + 1),
+        due: Math.round(dueHere.reduce((s, f) => s + f.total, 0)),
+        collected: Math.round(collectedHere.reduce((s, f) => s + f.total, 0)),
+        receivable: Math.round(dueHere.filter(f => f.late || f.outstanding).reduce((s, f) => s + f.total, 0)),
+      });
+      m++; if (m > 11) { m = 0; y++; }
+    }
+  }
+
+  const chips = [
+    ["all", `All (${dueInRange.length})`],
+    ["onTime", `On time (${dueInRange.filter(f => f.onTime).length})`],
+    ["late", `Late (${dueInRange.filter(f => f.late).length})`],
+    ["outstanding", `Outstanding (${dueInRange.filter(f => f.outstanding).length})`],
+  ];
+  const searchQ = search.trim().toLowerCase();
+  const tableRows = dueInRange
+    .filter(f => filter === "all" || (filter === "onTime" ? f.onTime : filter === "late" ? f.late : f.outstanding))
+    .filter(f => !searchQ || f.customer.toLowerCase().includes(searchQ) || f.society.toLowerCase().includes(searchQ))
+    .sort((a, b) => b.due - a.due);
+
+  const exportCsv = () => exportToCsv(`prowater-reconciliation-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
+    { label: "Customer", get: f => f.customer }, { label: "Apartment", get: f => f.society },
+    { label: "Invoice total", get: f => f.total },
+    { label: "Due date", get: f => f.dueOk ? fmtDate(f.due) : "" },
+    { label: "Period end", get: f => f.periodEnd ? fmtDate(f.periodEnd) : "" },
+    { label: "Paid on", get: f => f.paidOk ? fmtDate(f.paid) : "" },
+    { label: "Status", get: f => f.onTime ? "On time" : f.late ? "Late" : "Outstanding" },
+    { label: "Days late", get: f => f.daysLate || "" },
+  ], tableRows);
+
+  return (
+    <div className="fade-up">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <MultiSelectFilter label="Apartment" options={aptOptions} value={apt} onChange={setApt} width={240} />
+        <DateRangePicker value={sel} onChange={setSel} />
+        <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+
+      {collectedFromEarlierDue > 0 && (
+        <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", borderRadius: 10, border: "1px solid #F0D9A8", background: "#FBF0DA", color: "#8a5a00", fontSize: 12.5, fontWeight: 600 }}>
+          <Info size={16} style={{ flexShrink: 0 }} />
+          {inr(Math.round(collectedFromEarlierDue))} of the collected total is for invoices due in an earlier (or later) period — collected here because that's when the payment actually landed, not when it was originally due.
+        </div>
+      )}
+
+      <div style={{ marginTop: 18 }}>
+        <Card title="Outstanding balance, step by step" sub={`What was already owed, what became newly due, what actually came in, and what's still owed — for ${rangeLabel(range)}.`}>
+          <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 14, fontSize: 13, color: "var(--slate)", fontWeight: 600 }}>
+            <span>{inr(Math.round(openingBalance))}</span><span style={{ color: "var(--muted)", fontWeight: 400 }}>already owed</span>
+            <span style={{ color: "var(--muted)" }}>+</span>
+            <span>{inr(Math.round(dueTotal))}</span><span style={{ color: "var(--muted)", fontWeight: 400 }}>newly due</span>
+            <span style={{ color: "var(--muted)" }}>−</span>
+            <span>{inr(Math.round(collectedApplied))}</span><span style={{ color: "var(--muted)", fontWeight: 400 }}>actually paid</span>
+            <span style={{ color: "var(--muted)" }}>=</span>
+            <span style={{ color: "var(--forest)" }}>{inr(Math.round(closingBalance))}</span><span style={{ color: "var(--muted)", fontWeight: 400 }}>still owed</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 0, border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
+            {[
+              { label: "Owed before this period", value: openingBalance, sub: `${openingFacts.length} unpaid invoice${openingFacts.length !== 1 ? "s" : ""} from earlier · as of ${dmy(range.from)}` },
+              { label: "Newly due this period", value: dueTotal, sub: `${dueInRange.length} invoice${dueInRange.length !== 1 ? "s" : ""} due ${rangeLabel(range)}` },
+              { label: "Actually paid this period", value: collectedApplied, sub: `${collectedAppliedFacts.length} payment${collectedAppliedFacts.length !== 1 ? "s" : ""} received, for anything owed up to ${dmy(range.to)}` },
+              { label: "Still owed at period end", value: closingBalance, sub: `${closingFacts.length} invoice${closingFacts.length !== 1 ? "s" : ""} unpaid · as of ${dmy(range.to)}`, hero: true },
+            ].map((c, i) => (
+              <div key={i} style={{ padding: "18px 16px", borderLeft: i ? "1px solid var(--border)" : "none", background: c.hero ? "var(--mint)" : "#fff" }}>
+                <span className="eyebrow" style={{ color: "var(--muted)" }}>{c.label}</span>
+                <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 26, color: c.hero ? "var(--forest)" : "var(--f)", margin: "8px 0 2px", lineHeight: 1 }}>{inr(Math.round(c.value))}</div>
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 12, fontSize: 12, color: "var(--muted)" }}>
+            {advanceReceipts > 0 && <span>Note: {inr(Math.round(advanceReceipts))} was paid in advance this period for invoices not yet due — kept separate, not counted above.</span>}
+            <span style={{ marginLeft: advanceReceipts > 0 ? 0 : "auto", display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 700, color: rollforwardTies ? "#08805A" : "#DC4141" }}>
+              {rollforwardTies ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
+              {rollforwardTies ? "Verified — matches the total of all unpaid invoices" : `Doesn't match the total of all unpaid invoices: ${inr(Math.round(closingCheck))}`}
+            </span>
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Card title="Due vs collected vs receivable, by month" sub="Due = accrual (due date). Collected = cash-basis (actual paid date). Receivable = due in that month, not collected by that month's end.">
+          {trend.length === 0 ? <Empty msg="No invoices in this window." /> : (
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={trend} margin={{ left: 8, right: 12, top: 24 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
+                <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} tickMargin={12} height={38} />
+                <YAxis tick={axisTick} axisLine={false} tickLine={false} width={64} />
+                <Tooltip content={<TT prefix="₹" />} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                <Bar dataKey="due" name="Due" fill="#B5E2D4" radius={[5, 5, 0, 0]} maxBarSize={30} isAnimationActive={false} />
+                <Bar dataKey="collected" name="Collected" fill="#08805A" radius={[5, 5, 0, 0]} maxBarSize={30} isAnimationActive={false} />
+                <Bar dataKey="receivable" name="Receivable" fill="#DC4141" radius={[5, 5, 0, 0]} maxBarSize={30} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Toolbar q={search} setQ={setSearch} placeholder="Search customer or apartment…" count={tableRows.length}
+          right={
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {chips.map(([id, label]) => (
+                <button key={id} onClick={() => setFilter(id)} style={{
+                  padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  border: "1.5px solid " + (filter === id ? "var(--teal)" : "var(--border)"),
+                  background: filter === id ? "var(--mint-2)" : "#fff",
+                  color: filter === id ? "var(--teal-d)" : "var(--slate)"
+                }}>{label}</button>
+              ))}
+            </div>
+          } />
+        <Card pad={false} title={`Invoices due · ${rangeLabel(range)}`} sub="Yellow = paid late (after its own period end). Red = still outstanding.">
+          <Table head={["Customer", "Apartment", "Total", "Due date", "Period end", "Paid on", "Status", "Days late"]} maxHeight="calc(100vh - 460px)">
+            {tableRows.map((f, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: f.outstanding ? "#FBE8E8" : f.late ? "#FBF0E0" : undefined }}>
+                <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{f.customer}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{f.society}</td>
+                <td style={{ ...td, fontWeight: 600 }}>{inr(f.total)}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{f.dueOk ? fmtDate(f.due) : "—"}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{f.periodEnd ? fmtDate(f.periodEnd) : "—"}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{f.paidOk ? fmtDate(f.paid) : "—"}</td>
+                <td style={{ ...td, textAlign: "center" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, color: f.onTime ? "#08805A" : f.late ? "#986315" : "#DC4141", background: f.onTime ? "#E2F3EE" : f.late ? "#FBF0E0" : "#FBE8E8" }}>
+                    {f.onTime ? "On time" : f.late ? "Late" : "Outstanding"}
+                  </span>
+                </td>
+                <td style={{ ...td, fontWeight: (f.late || f.outstanding) ? 700 : 400, color: (f.late || f.outstanding) ? "#DC4141" : "var(--muted)" }}>{f.daysLate || "—"}</td>
+              </tr>
+            ))}
+            {tableRows.length === 0 && <tr><td colSpan={8} style={{ padding: 0 }}><Empty msg="No invoices match this filter." /></td></tr>}
+          </Table>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+/* ===========================================================================
+   DP TRANSACTIONS — raw deposit/recharge collection feed from GET
+   /dp-transactions (cursor-paginated, unauthenticated, same origin as
+   billing). Filtered by Paid_Date (custom date-range) + partner_name
+   (apartment) multi-select; KPIs sum deposit_amount / revenue_amount exactly
+   as the API reports them (null-safe). Table shows the raw rows — including
+   both the COLLECTION_SUMMARY and TRANSACTION rows per collection event, since
+   this tab is meant to mirror the feed, not reshape it.
+   =========================================================================== */
+function DPTransactions() {
+  const { user } = useAuth();
+  const [state, setState] = useState(null); // { rows, truncated } | null
+  const [err, setErr] = useState("");
+  const { sel, setSel, range } = useDateRange("this_month"); // custom date-range preset, filters on Paid_Date
+  const [apt, setApt] = useState(null);                     // apartment (partner_name) filter
+  const [search, setSearch] = useState("");
+  const [rowType, setRowType] = useState("TRANSACTION");    // payment-type filter — raw row_type value; "all" or a literal value like "TRANSACTION"
+  const [txnType, setTxnType] = useState("all");            // transaction_type filter — "all" or a literal value like "APP" (DISCOUNT is hard-excluded below, not offered as a choice)
+  const [sortDir, setSortDir] = useState("desc");           // Paid date column sort
+  const [page, setPage] = useState(1);                      // table pagination — this feed can run to thousands of rows
+  const DP_PER_PAGE = 50;
+  const isAdmin = user.role === "admin";                    // Upload JSON / Run API is admin-only
+  const [uploadFile, setUploadFile] = useState(null);       // File selected via the hidden input, once it passes JSON validation
+  const [uploadError, setUploadError] = useState("");       // inline error — bad file, or the Run API call itself failed
+  const [running, setRunning] = useState(false);            // Run API request in flight
+  const [apiResult, setApiResult] = useState(null);         // { ok, status, body, message? } — feeds the response popup
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    api.logView(user.username, "Viewed DP Transactions");
+    fetchAllDpTransactions()
+      .then(setState)
+      .catch(e => setErr(e.message || "Could not load DP transactions."));
+  }, []);
+  useEffect(() => { setPage(1); }, [search, rowType, txnType, apt, sel]);
+  if (err) return <ApiError msg={err} />;
+  if (!state) return <Loading />;
+
+  // Admin-only bulk import — upload a .json file, validate it client-side,
+  // then POST it (as multipart/form-data, field "file") to the /add endpoint.
+  // Any response (success or failure) is shown verbatim in a popup so the
+  // admin can see exactly what the backend did with the file.
+  const onPickFile = (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = ""; // clears the input so picking the SAME filename again still fires onChange
+    if (!f) return;
+    setUploadError("");
+    setApiResult(null);
+    if (!/\.json$/i.test(f.name)) {
+      setUploadError("Please choose a .json file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        JSON.parse(String(reader.result || "")); // validates it parses — the ORIGINAL file (not the re-serialised text) is what gets uploaded
+        setUploadFile(f);
+      } catch {
+        setUploadError("That file isn't valid JSON — check it and try again.");
+        setUploadFile(null);
+      }
+    };
+    reader.onerror = () => setUploadError("Couldn't read that file — please try again.");
+    reader.readAsText(f);
+  };
+
+  const clearUpload = () => { setUploadFile(null); setUploadError(""); };
+
+  const runApi = async () => {
+    if (!uploadFile || running) return;
+    setRunning(true); setUploadError(""); setApiResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", uploadFile, uploadFile.name);
+      const res = await fetch(`${API_ORIGIN}/dp-transactions/add`, { method: "POST", body: fd });
+      let bodyText = "", body = null;
+      try { bodyText = await res.text(); } catch { /* no body */ }
+      if (bodyText) { try { body = JSON.parse(bodyText); } catch { body = bodyText; } }
+      if (!res.ok) {
+        const message = (body && typeof body === "object" && (body.message || body.error || body.detail)) || `Request failed — HTTP ${res.status}`;
+        setApiResult({ ok: false, status: res.status, body, message });
+      } else {
+        setApiResult({ ok: true, status: res.status, body });
+        setUploadFile(null); // done — back to "Upload JSON" for the next file
+        fetchAllDpTransactions(true).then(setState).catch(() => { /* table just won't refresh; the popup already confirmed success */ });
+      }
+    } catch (e) {
+      setApiResult({ ok: false, status: null, body: null, message: e.message || "Couldn't reach the server — check your connection and try again." });
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  // DISCOUNT transaction_type rows are excluded outright, everywhere in this
+  // view — they're a non-cash discount adjustment, not real recharge
+  // collected, so counting them in Deposit/Recharge Collected would
+  // overstate actual cash received. Not offered as a filter choice at all
+  // (unlike Payment Type's "All"), since there's no case where they should
+  // be included here.
+  const rows = state.rows.filter(r => r.transaction_type !== "DISCOUNT");
+  const aptOptions = Array.from(new Set(rows.map(r => r.partner_name).filter(Boolean))).sort();
+  const aptOk = (r) => apt === null || apt.includes(r.partner_name);
+
+  // Paid_Date arrives as "YYYY-MM-DD HH:MM:SS.ffffff" — native Date parses it fine.
+  const paidOk = (r) => {
+    if (!r.Paid_Date) return false;
+    const d = new Date(r.Paid_Date);
+    return !isNaN(d.getTime()) && dateInRange(d, range);
+  };
+
+  // Payment-type (row_type) filter — defaults to TRANSACTION only, since that's
+  // the row carrying deposit_amount/revenue_amount (the KPI fields); the
+  // COLLECTION_SUMMARY row for the same event is a duplicate view with those
+  // fields null. Chip labels show the raw API value verbatim, not a friendly name.
+  const rowTypeOptions = Array.from(new Set(rows.map(r => r.row_type).filter(Boolean))).sort();
+  const dateAptFiltered = rows.filter(r => aptOk(r) && paidOk(r));
+  const rowTypeCounts = {};
+  dateAptFiltered.forEach(r => { const k = r.row_type || "—"; rowTypeCounts[k] = (rowTypeCounts[k] || 0) + 1; });
+  const rowTypeOk = (r) => rowType === "all" || r.row_type === rowType;
+
+  // Transaction Type filter — the feed's transaction_type field (only
+  // populated on TRANSACTION rows; DISCOUNT is already gone entirely, so
+  // the remaining values are things like APP / PAYMENT_LINK).
+  const txnTypeOptions = Array.from(new Set(rows.map(r => r.transaction_type).filter(Boolean))).sort();
+  const txnTypeCounts = {};
+  dateAptFiltered.forEach(r => { const k = r.transaction_type || "—"; txnTypeCounts[k] = (txnTypeCounts[k] || 0) + 1; });
+  const txnTypeOk = (r) => txnType === "all" || r.transaction_type === txnType;
+
+  const inRange = dateAptFiltered.filter(rowTypeOk).filter(txnTypeOk);
+
+  // Validity/litres live on the COLLECTION_SUMMARY row and are null on its
+  // TRANSACTION twin — but both rows of the same collection event share the
+  // exact same Paid_Date timestamp (down to the microsecond). So when a
+  // TRANSACTION row's Paid_Date exactly matches another row that DOES carry
+  // Validity/litres, borrow those values for display — merges the pair back
+  // together without hiding either row. Built off dateAptFiltered (before the
+  // Payment Type chip filter) so the COLLECTION_SUMMARY twin is still
+  // available to match against even when the chip is narrowed to TRANSACTION.
+  const validityLitresByPaidDate = {};
+  dateAptFiltered.forEach(r => {
+    if (r.Paid_Date && (r.litres != null || r.Validity != null)) {
+      validityLitresByPaidDate[r.Paid_Date] = { litres: r.litres, Validity: r.Validity };
+    }
+  });
+  const litresOf = (r) => r.litres != null ? r.litres : (r.row_type === "TRANSACTION" ? validityLitresByPaidDate[r.Paid_Date]?.litres ?? null : null);
+  const validityOf = (r) => r.Validity != null ? r.Validity : (r.row_type === "TRANSACTION" ? validityLitresByPaidDate[r.Paid_Date]?.Validity ?? null : null);
+
+  const depositCollected = inRange.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
+  const rechargeCollected = inRange.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+
+  // Previous-period comparison — same unit as the selected preset (month for
+  // the default "This Month", quarter for "This Quarter", etc.), matching the
+  // MoM/QoQ/YoY convention used elsewhere (Earned Revenue, Reconciliation).
+  const rngPrev = prevRange(sel.preset, range);
+  const prevFiltered = rows.filter(r => aptOk(r) && rowTypeOk(r) && txnTypeOk(r) && r.Paid_Date && dateInRange(new Date(r.Paid_Date), rngPrev));
+  const depositPrev = prevFiltered.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
+  const rechargePrev = prevFiltered.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+
+  const stats = [
+    { label: "Deposit Collected", value: inr(Math.round(depositCollected)), icon: Landmark, sub: rangeLabel(range), hero: true, delta: momPct(depositCollected, depositPrev) },
+    { label: "Recharge Collected", value: inr(Math.round(rechargeCollected)), icon: Repeat, sub: rangeLabel(range), delta: momPct(rechargeCollected, rechargePrev) },
+  ];
+
+  const searchQ = search.trim().toLowerCase();
+  const tableRows = inRange
+    .filter(r => !searchQ ||
+      (r.phone || "").toLowerCase().includes(searchQ) ||
+      (r.current_device || "").toLowerCase().includes(searchQ) ||
+      (r.partner_name || "").toLowerCase().includes(searchQ))
+    .sort((a, b) => (new Date(a.Paid_Date) - new Date(b.Paid_Date)) * (sortDir === "asc" ? 1 : -1));
+  const grandDeposit = tableRows.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
+  const grandRevenue = tableRows.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+
+  // Pagination — this feed can run into the thousands of rows; the Grand
+  // Total footer still sums the FULL filtered set (tableRows), only the
+  // rendered rows are sliced to the current page.
+  const dpTotalPages = Math.max(1, Math.ceil(tableRows.length / DP_PER_PAGE));
+  const dpCurPage = Math.min(page, dpTotalPages);
+  const dpPageStart = (dpCurPage - 1) * DP_PER_PAGE;
+  const pageRows = tableRows.slice(dpPageStart, dpPageStart + DP_PER_PAGE);
+
+  const exportCsv = () => exportToCsv(`prowater-dp-transactions-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
+    { label: "Paid date", get: r => r.Paid_Date || "" },
+    { label: "Apartment (partner_name)", get: r => r.partner_name || "" },
+    { label: "Customer", get: r => r.CustomerName || "" },
+    { label: "Phone", get: r => r.phone || "" },
+    { label: "Current device", get: r => r.current_device || "" },
+    { label: "Row type", get: r => r.row_type || "" },
+    { label: "Transaction key", get: r => r.transaction_key || "" },
+    { label: "Transaction type", get: r => r.transaction_type || "" },
+    { label: "Start Date", get: r => r["t.validity_start_date"] || "" },
+    { label: "End Date", get: r => r["t.validity_end_date"] || "" },
+    { label: "Validity", get: r => validityOf(r) ?? "" },
+    { label: "Litres", get: r => litresOf(r) ?? "" },
+    { label: "Plan", get: r => r.Plan || "" },
+    { label: "Deposit amount", get: r => r.deposit_amount ?? "" },
+    { label: "Revenue amount", get: r => r.revenue_amount ?? "" },
+    { label: "Transaction amount", get: r => r.transaction_amount ?? "" },
+    { label: "City", get: r => r.City || "" },
+    { label: "Device status", get: r => r.device_status || "" },
+  ], tableRows);
+
+  return (
+    <div className="fade-up">
+      {state.truncated && (
+        <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", borderRadius: 10, border: "1px solid #F0D9A8", background: "#FBF0DA", color: "#8a5a00", fontSize: 12.5, fontWeight: 600 }}>
+          <Info size={16} style={{ flexShrink: 0 }} />
+          The DP Transactions feed has more records than this page loaded (capped at ~2,000) — figures below may be incomplete for very wide date ranges.
+        </div>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <MultiSelectFilter label="Apartment" options={aptOptions} value={apt} onChange={setApt} width={260} />
+        <DateRangePicker value={sel} onChange={setSel} />
+        <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
+        {isAdmin && (
+          <>
+            <input ref={fileInputRef} type="file" accept=".json,application/json" onChange={onPickFile} style={{ display: "none" }} />
+            {!uploadFile ? (
+              <button onClick={() => fileInputRef.current?.click()} style={btnGhost}><Upload size={15} /> Upload JSON</button>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span title={uploadFile.name} style={{ fontSize: 12.5, color: "var(--muted)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{uploadFile.name}</span>
+                <button onClick={runApi} disabled={running} style={{ ...btnPrimary, opacity: running ? .7 : 1, cursor: running ? "not-allowed" : "pointer" }}>
+                  {running ? <RefreshCw size={15} style={{ animation: "pw-spin .7s linear infinite" }} /> : <PlayCircle size={15} />} {running ? "Running…" : "Run API"}
+                </button>
+                <button onClick={clearUpload} disabled={running} title="Remove file" style={{ ...iconBtn, opacity: running ? .5 : 1 }}><X size={15} /></button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      {isAdmin && uploadError && (
+        <div style={{ marginBottom: 14, display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", borderRadius: 10, border: "1px solid #F3C6C6", background: "#FBE8E8", color: "#B23B3B", fontSize: 12.5, fontWeight: 600 }}>
+          <AlertCircle size={16} style={{ flexShrink: 0 }} />
+          {uploadError}
+        </div>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+
+      <div style={{ marginTop: 18 }}>
+        <Toolbar q={search} setQ={setSearch} placeholder="Search phone, device or apartment…" count={tableRows.length}
+          right={
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Payment Type</span>
+              {[["all", `All (${dateAptFiltered.length})`], ...rowTypeOptions.map(rt => [rt, `${rt} (${rowTypeCounts[rt] || 0})`])].map(([id, label]) => (
+                <button key={id} onClick={() => setRowType(id)} style={{
+                  padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  border: "1.5px solid " + (rowType === id ? "var(--teal)" : "var(--border)"),
+                  background: rowType === id ? "var(--mint-2)" : "#fff",
+                  color: rowType === id ? "var(--teal-d)" : "var(--slate)"
+                }}>{label}</button>
+              ))}
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", marginLeft: 10 }}>Transaction Type</span>
+              {[["all", `All (${dateAptFiltered.length})`], ...txnTypeOptions.map(tt => [tt, `${tt} (${txnTypeCounts[tt] || 0})`])].map(([id, label]) => (
+                <button key={id} onClick={() => setTxnType(id)} style={{
+                  padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  border: "1.5px solid " + (txnType === id ? "var(--teal)" : "var(--border)"),
+                  background: txnType === id ? "var(--mint-2)" : "#fff",
+                  color: txnType === id ? "var(--teal-d)" : "var(--slate)"
+                }}>{label}</button>
+              ))}
+            </div>
+          } />
+        <Card pad={false} title={`Transactions · ${rangeLabel(range)}`} sub="Raw records from the DP Transactions feed — filtered by Paid_Date, apartment, payment type and transaction type. A collection event can appear as both a COLLECTION_SUMMARY and a TRANSACTION row; shown as TRANSACTION only by default. DISCOUNT transaction_type rows are excluded entirely — not real cash collected.">
+          <Table head={[
+            <button key="paidSort" onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")} title="Sort by paid date"
+              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+              Paid date {sortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+            </button>,
+            "Apartment", "Customer", "Phone", "Device", "Type", "Transaction key", "Transaction type", "Start Date", "End Date", "Validity", "Litres", "Plan", "Deposit", "Revenue"]} maxHeight="calc(100vh - 460px)">
+            {pageRows.map((r, i) => (
+              <tr key={r.id ? `${r.id}-${i}` : i} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.partner_name || "—"}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.CustomerName || "—"}</td>
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.phone || "—"}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.current_device || "—"}</td>
+                <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
+                  <span style={{ display: "inline-block", whiteSpace: "nowrap", fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: r.row_type === "TRANSACTION" ? "#08805A" : "#2A86D6", background: r.row_type === "TRANSACTION" ? "#E2F3EE" : "#E5F0FA" }}>{r.row_type || "—"}</span>
+                </td>
+                <td style={{ ...td, fontSize: 11, textAlign: "center", fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                  {r.transaction_key ? <span title={r.transaction_key}>{r.transaction_key.replace(/^DPTX_/, "").slice(0, 8)}…</span> : "—"}
+                </td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.transaction_type || "—"}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_start_date"] ? fmtDate(new Date(r["t.validity_start_date"])) : "—"}</td>
+                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_end_date"] ? fmtDate(new Date(r["t.validity_end_date"])) : "—"}</td>
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{validityOf(r) != null ? Number(validityOf(r)).toLocaleString("en-IN") : "—"}</td>
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{litresOf(r) != null ? Number(litresOf(r)).toLocaleString("en-IN") : "—"}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.Plan || "—"}</td>
+                <td style={{ ...td, fontWeight: 600 }}>{r.deposit_amount != null ? inr(r.deposit_amount) : "—"}</td>
+                <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600 }}>{r.revenue_amount != null ? inr(r.revenue_amount) : "—"}</td>
+              </tr>
+            ))}
+            {tableRows.length > 0 && (
+              <tr>
+                <td style={{ ...ftd, textAlign: "center" }} colSpan={13}>Grand Total ({tableRows.length})</td>
+                <td style={ftd}>{inr(Math.round(grandDeposit))}</td>
+                <td style={ftd}>{inr(Math.round(grandRevenue))}</td>
+              </tr>
+            )}
+            {tableRows.length === 0 && <tr><td colSpan={15} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
+          </Table>
+          {tableRows.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 16px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{dpPageStart + 1}–{Math.min(dpPageStart + DP_PER_PAGE, tableRows.length)} of {tableRows.length}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={dpCurPage <= 1} style={{ ...btnGhost, padding: "6px 12px", opacity: dpCurPage <= 1 ? .5 : 1, cursor: dpCurPage <= 1 ? "not-allowed" : "pointer" }}><ChevronLeft size={15} /> Prev</button>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--f)" }}>Page {dpCurPage} / {dpTotalPages}</span>
+                <button onClick={() => setPage(p => Math.min(dpTotalPages, p + 1))} disabled={dpCurPage >= dpTotalPages} style={{ ...btnGhost, padding: "6px 12px", opacity: dpCurPage >= dpTotalPages ? .5 : 1, cursor: dpCurPage >= dpTotalPages ? "not-allowed" : "pointer" }}>Next <ChevronRight size={15} /></button>
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+      {apiResult && (
+        <Modal onClose={() => setApiResult(null)}
+          title={apiResult.ok ? "API response" : "API error"}
+          sub={`POST /dp-transactions/add${apiResult.status ? ` · HTTP ${apiResult.status}` : ""}`}>
+          {!apiResult.ok && (
+            <div style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "10px 12px", borderRadius: 10, background: "#FBE8E8", color: "#B23B3B", fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+              <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+              {apiResult.message}
+            </div>
+          )}
+          {apiResult.ok && (
+            <div style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "10px 12px", borderRadius: 10, background: "#E2F3EE", color: "#08805A", fontSize: 13, fontWeight: 600, marginBottom: 14 }}>
+              <CheckCircle2 size={16} style={{ flexShrink: 0, marginTop: 1 }} />
+              Upload succeeded — the table above has been refreshed with the latest data.
+            </div>
+          )}
+          <div className="eyebrow" style={{ marginBottom: 6 }}>Response body</div>
+          <pre style={{ background: "var(--mint)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, fontSize: 12, lineHeight: 1.5, overflow: "auto", maxHeight: "50vh", whiteSpace: "pre-wrap", wordBreak: "break-word", fontFamily: "monospace", margin: 0 }}>
+            {apiResult.body == null ? "(empty response body)" : typeof apiResult.body === "string" ? apiResult.body : JSON.stringify(apiResult.body, null, 2)}
+          </pre>
+        </Modal>
+      )}
     </div>
   );
 }

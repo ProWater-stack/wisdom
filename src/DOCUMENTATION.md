@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/App.jsx`; this
 > doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.42**.
+> **Reflects:** `APP_VERSION` **2.29.68**.
 
 ---
 
@@ -194,6 +194,15 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   into the Ticketing feed, counted **month-wise** — `Jan'26 · N` — each month expandable to its Issue-Category
   breakdown; Ops reuses the `Issue Category ≠ Complaint` filter), and **Referral** (referrals made / converted /
   pending, referral code, and the referee list — joined to the referral API by any shared key). All deterministic.
+  **Transactions (v2.29.66):** above the payments table, a "Current paid transaction — revenue recognition"
+  card for the customer's most recent paid invoice (`txns.find(t => t.status === "paid" ...)`, `txns` is
+  already newest-first) — Due date, Payment date, Recharge tenure (start/end/days), then a month-by-month
+  split of **Earned revenue** (accrual), **Collected Revenue** (cash-basis) and **Outstanding revenue**
+  (receivable). New `invoiceMonthlyBreakdown()` helper (generalizes Earned Revenue's per-invoice month-split
+  math to show EVERY touched month, including the accrual slice before actual payment — Earned Revenue's own
+  table never shows that, since it only surfaces an invoice's own paid-month slice). Verified exactly against
+  the user's reference spreadsheet: due 7/26, paid 8/1, ₹350 recharge → tenure 31 days, Earned ₹68 (Jul) + ₹282
+  (Aug), Collected ₹0 (Jul) + ₹350 (Aug), Outstanding ₹350 (as of Jul-end) + ₹0 (once paid).
 
 ### Billing & Subscription (`billing`)
 - **Purpose:** subscriptions, invoices, deposits, and **Billing Analytics**.
@@ -209,7 +218,7 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - Field service: technician tracking, AMC schedule, water quality. (Marked "soon".)
 
 ### IoT Core (`iot`)
-- **Purpose:** live device telemetry — RO-tank level + water quality, and junctionBox pressure/flow.
+- **Purpose:** live device telemetry — RO-tank level + water quality + pressure/flow/dispensed, and junctionBox pressure/flow.
 - **How:** AWS IoT `…execute-api.ap-southeast-2.amazonaws.com/prod` — device **status** + **history**.
   Device monitor with status polling, recent heartbeats and fleet alerts. Two live GET routes:
   `/devices/status` (roster, 10s) and the bare `/devices/history?deviceId=…` (@8s for every roster
@@ -233,6 +242,15 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - **UI (v2.29.2):** the tank is a transparent see-through graphic (lid/neck/shell) with the water block filling to the live level % and moving wave layers; the **Online** KPI shows a live green ECG heartbeat and **Offline** a red flatline; a deterministic **AI summary** strip at the top reads the fleet (counts, tank level, water-quality status, alerts — no LLM); the RO-tank **Recent readings** table is paginated 10/page. Water-quality ranges drop non-positive sensor dropouts.
 - **Recent readings ECG (v2.29.12 → v2.29.13):** above the table, one **ECG-style wave per metric** (pH / TDS / Temperature / Tank) drawn over the device's history feed. v2.29.13 upgraded the wave rendering — a faint monitor grid, shaded ideal band with dashed guides, a soft gradient area-fill, crisp non-scaling segment-coloured strokes (green/amber/red per segment) with a subtle glow, a haloed leading dot, and ~72-point bucket-averaging for smoothness — and moved the wave cards from the dark "monitor" look to clean **white / off-white** cards (light border + soft shadow, value coloured by band, deeper line colours tuned for legibility on white).
 - **Trend analysis (v2.29.16):** the section was rebuilt around a proper **interactive Recharts time-series** (`ComposedChart`) for the selected device — real time on X, the metric on Y, the **ideal band shaded** (`ReferenceArea` + dashed `ReferenceLine`s), each **out-of-range reading as a red dot**, and a hover tooltip (timestamp · value · in-/out-of-range · ideal). The focus metric is switched via tabs (with per-metric anomaly counts) or by clicking a mini-wave. An **"Anomalies only"** toggle isolates the out-of-range points in the chart (line hidden) and filters the readings table. Four deterministic **analytical tiles** sit on top — **Sensor health** (Good/Check from `iotSensorHealth`: reporting-gap, dropout rate, staleness), **Water quality** (Good/Warning/Critical from the window's worst band), **Alerts created** (out-of-range event count from `iotAnomalyScan`) and **Anomalies by metric** (per-metric counts) — plus an **Anomaly history** list (each event's date/time, worst value, High/Low). All in-app, no LLM. *Planned next step: correlate anomalies with a weather API.*
+- **Pressure / flow / dispensed-litres (v2.29.43):** the RO-tank heartbeat (`waterQuality`) grew three fields — `pressure` (bar), `flowMLPM` (flow rate, L/min) and `totalDispensed` (lifetime dispensed litres, a monotonically-increasing counter). Wired in at full parity with pH/TDS/temp:
+  - **RO Unit Sensors** card (separate from **Water Quality**, since pressure/flow describe the unit's plumbing, not potability) — `IoTWaterQualityCard` is now a generic component (`keys`/`title`/`subtitle`/`noun`/`extra` props) reused for both the potability card (`ph`/`tds`/`temp`) and this one (`pressure`/`flowMLPM`), so both share the same min–max range + GOOD/WARNING/CRITICAL band + AI-summary scaffolding. **Total dispensed** renders separately underneath (`IoTDispensedStat`) as a plain lifetime-total + this-window-delta stat — not banded, since a running counter has no "ideal range."
+  - Ideal bands are **assumed** residential-RO operating ranges, not a vendor spec (documented inline at `IOT_WQ_IDEAL`): pressure green 0–4 bar / amber 4–6 / red outside; flow green 0–3 L/min / amber 3–6 / red outside. Both legitimately read **0 while idle** (no tap open) — unlike pH/TDS/temp, 0 is *not* treated as a sensor dropout for these two (`IOT_WQ_DROP_ZERO`).
+  - Pressure & flow also got their own **gauges** (`IOT_GAUGE`), and joined **Trend analysis** as selectable metric tabs/charts — `iotTrendMetrics()` and `iotAnomalyScan()` were generalized to loop over the full metric registry instead of a hardcoded `ph/tds/temp/tank` list, so any future metric added there needs no other call-site changes. **Recent readings** table and CSV export gained Pressure / Flow / Dispensed columns.
+  - Live-tested against the real device (`E05A1B9C2DD4`) via the local dev preview: it's currently reporting **655.34 bar**, correctly flagged CRITICAL by the new banding — almost certainly a sensor fault on the physical unit, worth a field check.
+- **Loading state (v2.29.44):** fixed a load flash — the module used to drop its full-page spinner as soon as `/devices/status` (the roster) resolved, so the device list, tank graphic, gauges and Water Quality card briefly rendered with empty/zero data ("Awaiting sensor readings", 0% tank, `—` gauges) for a beat before the first `/devices/history` round-trip landed. A `historyLoaded` flag now gates the loading state on **both** requests completing at least once. Replaced the small generic spinner with a dedicated `IoTLoading` panel — bigger spinner, "Loading live device data…" copy, and an indeterminate progress bar — so the wait reads clearly as loading, not a blank/broken module.
+- **Dispensed average (v2.29.45):** the **Total Dispensed** stat (under RO Unit Sensors) gained an **Average / day** figure next to Total dispensed and This window. `iotDispensedRange` now also tracks each reading's timestamp and divides the window delta by its actual span (the history feed is a downsampled ~1–2 day window, not exactly 1 day), instead of the window delta appearing twice under different labels. Shows `—` until the window has at least 30 minutes of span, so it can't flash a wildly inflated estimate right after the page loads.
+- **Dispensed stat simplified (v2.29.46):** dropped **This window** from the Total Dispensed stat — showing the raw litres dispensed across whatever ~1–2 day span the history feed happened to have loaded read as an arbitrary, hard-to-explain number on its own. Now just two figures: **Total dispensed** (lifetime) and **Average dispensed** (per day, from `iotDispensedRange`'s `avgPerDay`).
+- **Shared date-range filter (v2.29.47):** the Total Dispensed stat is now date-filterable with its own **Today / Yesterday / This Week / This Month / Last Month** chips, and that filter is **shared** with Trend analysis + Recent readings below (previously each owned a separate, page-local Today/Yesterday/Week filter) — `range` state moved up to `IoTDevices`, so picking a period in either place updates both. Two new options join the existing rolling-7-day "This Week": **This Month** and **Last Month**, real calendar months (`iotFilterByRange`, `IOT_RANGE_OPTIONS`, reusable `IoTRangeChips`). The Trend analysis history fetch widened from `&days=7` to `&days=62` (`hist7dByDevice` renamed `histRangeByDevice`) so "Last Month" has data to filter regardless of where in the current month "today" falls. Total dispensed now reads as the counter value as of the end of the selected period rather than always "right now"; the card shows "No dispensed-litres data for this period" instead of vanishing when a period has none (e.g. Last Month, before the device started reporting `pressure`/`flowMLPM`/`totalDispensed`).
 
 ### Referral (`referral`)
 - **Purpose:** referrers, referees, credits, rewards momentum.
@@ -267,9 +285,9 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - Local-first: does **not** flag "Server Down".
 
 ### Analytics (`analytics`)
-Cross-module reporting. Sub-tabs: **Overview**, Referral, Sales, Earned Revenue, AOP (admin/devops),
-Apartment Performance, Billing, Revenue (Net Revenue), **Penetration Tracker**, Credits, App Logs.
-(The old "Live Dashboard" tab was removed in 2.26.0.)
+Cross-module reporting. Sub-tabs: **Overview**, Referral, Sales, Earned Revenue, **Reconciliation**, **DP
+Transaction**, AOP (admin/devops), Apartment Performance, Billing, Revenue (Net Revenue), **Penetration
+Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.0.)
 
 - **Overview (`AnalyticsOverview`, `an_overview`)** — a filtered command dashboard. Loads customers,
   subscriptions, invoices, leads, **referrers**, tickets, apartments. Two filters scope the page:
@@ -309,6 +327,141 @@ Apartment Performance, Billing, Revenue (Net Revenue), **Penetration Tracker**, 
   (date-range) filter and a Society filter, search and CSV export (the old unused-credit KPIs / by-society
   and by-plan charts / holders table were removed). **App Logs** reads the Firestore `logs` collection
   (with a `GET /admin/get-app-logs` preference).
+  - **Real `paid_date` (v2.29.48):** `GET /admin/get-all-invoices` started returning a genuine `paid_date` field on each invoice (confirmed live, e.g. `INV-000666`). `mapInvoice()` now maps it to `paidDate`; **Earned Revenue's Per-invoice recognition table** uses `paidDate || date` as the invoice's paid date (was: invoice/created date only, used as a proxy). Same day-based proration math, just a more accurate input date; falls back gracefully for older invoices that predate the field. Other "paid date" proxies elsewhere in the file (Net Revenue's `lastModified || date`, a few `status==="paid"` period-bucketing spots) haven't been switched over yet — tracked separately.
+  - **Due Date column (v2.29.49):** Per-invoice recognition table + CSV export gained a **Due Date** column (from `invoice.dueDate` / `due_date`), placed between Plan and Paid on. The existing Paid on column was re-checked, not changed — it already reads the real `paidDate` from the API (v2.29.48 above).
+  - **Earned/day removed (v2.29.50):** dropped the Earned/day column from the table and CSV (Earned/month, Month End Date, Days remaining, Earned revenue stay). The now-unused `earnedPerDay` field and the `inr2` currency-with-decimals helper (which only existed to format it) were removed too.
+  - **Recognition formula changed (v2.29.51):** the numerator changed from `(month end − paid date + 1)` to `(validity end − validity start − 1)` — **validity start = the invoice's due date**, **validity end = the linked subscription's `nextBilling` date**. The denominator (days in the paid month) is unchanged and still computed from the paid date's calendar month, but its **Month End Date column was removed** from the table/CSV (no longer shown, though still used internally). "Days remaining" was renamed **"Validity days"** (now `validityEnd − validityStart − 1`, not `monthEnd − paidDate`), and a new **Next Billing** column sits beside Due Date so both anchor dates are visible. Falls back to `₹0` earned when the invoice's subscription can't be matched (no `nextBilling`) rather than guessing. **Scale warning:** for multi-month plans this pushes Earned revenue well above the recharge amount within a single month, since the numerator now spans most of the WHOLE paid term (e.g. ~365 days for annual) instead of just days-remaining-in-the-paid-month — confirmed intentional with the user; sample-data total went from ₹13,475/yr under the old formula to ₹2,30,262/yr under this one.
+  - **Recognition rebuilt and verified against a real reference spreadsheet (v2.29.52):** two fixes. (1) **Next Billing / validity end is now COMPUTED**, not read from the subscription: `dueDate + 1 calendar month − 1 day` (e.g. due 2 Jul → validity end 1 Aug), replacing the raw subscription `nextBilling` field (which just preserved day-of-month — due 5 Aug → 5 Sept — and didn't follow a real calendar-month cycle). No longer depends on matching a subscription, so invoices that previously fell back to `₹0` now get a real figure. (2) **The formula itself changed** to a month-split model verified exactly against a real reference sheet (Sanjith/MJR: due 7/26, paid 8/1, ₹350 recharge → sheet shows ₹68 earned in Jul + ₹282 in Aug): `tenureDays = validityEnd − validityStart + 1` (inclusive — note: **+1**, not the −1 from v2.29.51 above, corrected after checking the reference), `daysInPaidMonth` = however many of those validity days fall inside the invoice's own paid calendar month, `earned = recharge × daysInPaidMonth ÷ tenureDays`. A tenure crossing a month boundary is now split, and the table (one row per invoice) shows only its **paid-month slice** — reproduced the reference exactly: `350 × 25 ÷ 31 = 282`. "Validity days" was replaced with two columns, **Tenure days** and **Days in paid month**, so both formula inputs are visible.
+  - **Search, column trim, more sorting (v2.29.53):** removed the **Plan** column (still used internally for the deposit/term math, just not displayed); added a **search box** (customer or apartment) above the table via the shared `Toolbar` component — narrows only the displayed rows and the table's own "Total (N)" footer, while the KPI cards and trend chart above stay on the full period regardless of search (`sortedRows`/`totRow` vs. search-filtered `tableRows`/`visTotal`); and added click-to-sort on **Due Date** and **Next Billing** (same pattern as the existing Paid on sort — arrow indicator, ascending default).
+  - **Reordered & renamed (v2.29.54):** column order changed from Due Date / Next Billing / Paid on to **Start Date / Paid on / End Date** (Due Date → Start Date, Next Billing → End Date) — display and CSV labels only, the underlying `dueDay`/`nextBillDay` fields and `"due"`/`"nextBilling"` sort keys are unchanged.
+  - **"Days in paid month" fix (v2.29.55):** when the due date and paid date fall in the **same calendar month** and the payment landed AFTER the due date (a late payment), the overlap window that feeds `daysInPaidMonth` now starts from whichever is later — the due date or the actual paid date — instead of always the due date. Example: Arun K Sinha, due 8 Aug, paid 10 Aug, end 7 Sept — was 24 days / ₹271 (counted from the due date, including 2 days before he'd actually paid); now 22 days / ₹248 (counted from the paid date). Doesn't affect invoices paid *before* their due date (the common case, still anchored on due date), or invoices whose due date and paid date fall in different months (the paid date was never the binding boundary there — see the Sanjith reference in v2.29.52, unaffected).
+  - **Spillover month (v2.29.56):** three new columns — **Next month**, **Days in next month**, **Earned revenue (next month)** — show the slice of an invoice's validity window that lands in the calendar month AFTER its paid month (e.g. paid August, end 7 Sept → 21 days in September). Same `recharge × days ÷ tenureDays` math, no late-payment clip (the clip only matters for the paid month, since by the following month the payment has already landed). Shows "—" when the tenure doesn't reach into another month. Verified: paid-month + next-month earned sums to exactly the recharge for every sample row not affected by the v2.29.55 late-payment clip. Table footer and CSV both include the next-month total.
+
+- **Reconciliation (`Reconciliation`, `an_reconciliation`, v2.29.57–58)** — a dedicated tab (between Earned
+  Revenue and AOP) fixing a real bug where "collected revenue" elsewhere in the app was effectively
+  bucketed by an invoice's **due date**, not by when the payment actually landed (e.g. due 28 Jul, paid
+  3 Aug was showing as July revenue). Same filter pattern as Earned Revenue — a custom date-range picker
+  (`useDateRange`/`DateRangePicker`, supports Today/…/Custom) and an Apartment (society) multi-select.
+  Builds one "fact" per invoice with a due date: `periodEnd` = the due date's calendar month end;
+  `onTime` = paid (by `paidDate || date`) on or before `periodEnd`; `late` = paid after `periodEnd`;
+  `outstanding` = never paid (`status !== "paid"`).
+  - **Due in period** — accrual view: invoices whose **due date** falls in the selected range.
+  - **Collected in period** — cash-basis view: invoices whose **actual paid date** falls in the selected
+    range, regardless of which period they were originally due in. This is the corrected figure — a late
+    payment now shows up as revenue in the month it actually arrived, not the month it was due.
+  - **Collected on time** — of the amount due in the period, how much was paid within its own due-month.
+  - **Receivable** — amount due in the period that was **not** collected by that period's end (either
+    paid later, in a different period, or never paid) — surfaces as red/amber rows in the table
+    (Outstanding / Late) and its own KPI, instead of silently vanishing into "collected" for the wrong
+    month.
+  - A banner appears whenever some of the period's "Collected" total belongs to invoices due in a
+    different period, explaining the mismatch inline.
+  - Monthly **Due / Collected / Receivable** trend chart (`ComposedChart`, one bar per metric per
+    calendar month spanning the selected range) makes the month-to-month shift visible.
+  - Per-invoice table: Customer, Apartment, Total, Due date, Period end, Paid on, Status (On time /
+    Late / Outstanding badge), Days late — with search (customer/apartment) and status filter chips,
+    CSV export.
+  - Verified against the exact reported example (due 28 Jul, paid 3 Aug): July shows ₹0 collected + the
+    full amount as Receivable; August shows the full amount as Collected.
+  - The file already had an **unused** `Reconciliation()` component (invoice↔subscription matching —
+    flags active subscriptions with no paid invoice, orphan payments, etc. — never wired into any tab).
+    It was renamed `SubscriptionReconciliation()` to free up the name; otherwise untouched dead code.
+  - **AR roll-forward (v2.29.58):** a standard accounts-receivable ledger flow — **Opening Balance +
+    Due Added − Collected = Closing Balance** — sitting above the trend chart. **Opening Balance** =
+    every invoice due *before* the selected period that wasn't collected as of the period's start (the
+    carried-forward backlog; previously the tab only analysed each period's own dues in isolation, with
+    no concept of a running balance). **Collected** here deliberately **excludes advance receipts** —
+    cash for invoices not yet due — reported as a separate memo line instead of netted in, since money
+    for a not-yet-due invoice isn't part of AR yet. **Closing Balance** is cross-checked against an
+    independent sum (every invoice due on/before period end, still uncollected) with a visible
+    tie/mismatch indicator (`rollforwardTies`) — the two must always agree by construction; a mismatch
+    would flag a bug, not a real accounting discrepancy. Verified: full-year view ties opening ₹0 → due
+    ₹43,300 → collected ₹39,000 → closing ₹4,300; a Jul–Sep custom range correctly carries the ₹4,300
+    backlog into Opening Balance. The four ledger cells match the **KPI cards' exact typography**
+    (`eyebrow` label class, DM Sans 800-weight value) instead of the serif headline font used elsewhere.
+  - **Plain-language rewrite (v2.29.59):** the section title changed from "AR roll-forward" to
+    **"Outstanding balance, step by step"**, and the jargon labels became plain English — Opening/Closing
+    Balance → **"Owed before this period"** / **"Still owed at period end"**; Due Added → **"Newly due
+    this period"**; Collected → **"Actually paid this period"**. A one-line ₹-value equation now sits
+    above the four cards (e.g. `₹4,300 already owed + ₹0 newly due − ₹0 actually paid = ₹4,300 still
+    owed`), and each cell shows an **invoice count** under its figure (e.g. "2 unpaid invoices from
+    earlier") so the calculation is visible at a glance, not just the result. The tie-out line simplified
+    from "Ties to independent outstanding-balance check" to **"Verified — matches the total of all unpaid
+    invoices"**, and the advance-receipts memo reworded in plain English.
+
+- **DP Transaction (`DPTransactions`, `an_dptxn`, v2.29.60)** — a dedicated tab (between Reconciliation
+  and AOP) reading a brand-new, unauthenticated feed: `GET
+  https://api-7ca73ntgua-el.a.run.app/dp-transactions` (same origin as billing, but no auth header and no
+  `/admin/` prefix). **Cursor-paginated**, not page-number based — the response is
+  `{ status, count, transactions, has_more, next_cursor }`, so it gets its own fetch loop
+  (`fetchAllDpTransactions`, module-level 5-min cache) rather than reusing `fetchAllPagesFast`. Capped at
+  80 pages (~2000 rows); shows a truncation banner if the feed had more.
+  - **Filters:** a **custom date-range picker** (same `useDateRange`/`DateRangePicker` as Earned
+    Revenue/Reconciliation — Today/…/Custom) filtering on the feed's **`Paid_Date`** field (arrives as
+    `"YYYY-MM-DD HH:MM:SS.ffffff"`; native `Date` parses it directly, no reformatting needed), and an
+    **Apartment multi-select** sourced from the feed's own **`partner_name`** values (not the societies
+    list used elsewhere).
+  - **KPI cards:** **Deposit Collected** (`Σ deposit_amount`) and **Recharge Collected**
+    (`Σ revenue_amount`), both null-safe (`Number(x) || 0`).
+  - **Table shows raw rows, unmerged** — each collection event appears **twice** in the feed: a
+    `COLLECTION_SUMMARY` row (`Deposit`/`Recharge_received`/`collection_total` populated,
+    `deposit_amount`/`revenue_amount` null) and a `TRANSACTION` row (the reverse), tagged with a colour
+    badge in a Type column. Columns (v2.29.65): Paid date, Apartment, Customer, Phone, Device, Type,
+    Transaction key, Transaction type, Start Date, End Date, Validity, Litres, Plan, Deposit, Revenue
+    (City removed from the table in v2.29.65 — still in the CSV export).
+  - **Search** covers `phone`, `current_device`, `partner_name`. CSV export includes a wider raw column
+    set (adds Row type, Transaction amount, Device status).
+  - Verified against the live feed (not sample data — this endpoint has no auth gate): August 2026 showed
+    76 records, ₹4,000 Deposit Collected, ₹12,103 Recharge Collected; search-by-phone correctly narrowed
+    to that customer's summary + transaction row pair.
+  - **Payment Type filter (v2.29.61):** chips above the table, labelled with the raw `row_type` API value
+    verbatim (`TRANSACTION`, `COLLECTION_SUMMARY`), each showing a live count, plus an **All** chip.
+    Defaults to `TRANSACTION` only — the row carrying `deposit_amount`/`revenue_amount` (the KPI fields;
+    its `COLLECTION_SUMMARY` twin has those null) — so the table no longer shows every collection event
+    twice out of the box.
+  - **Sort, Grand Total, and KPI comparison (v2.29.62):** the **Paid date** column header is now
+    click-to-sort (arrow indicator, defaults descending — newest first). The table has a **Grand Total**
+    footer row summing Deposit and Revenue for whatever's currently shown (respects date range, apartment,
+    payment type, and search). Both KPI cards (Deposit Collected, Recharge Collected) now show a
+    previous-period percentage delta (`momPct`, same ▲/▼ badge convention as every other KPI card in the
+    app) — comparing against the immediately-preceding period of the same length as the selected date
+    range (e.g. This Month → previous calendar month).
+  - **Six more raw columns (v2.29.63):** **Transaction key**, **Transaction type** (`transaction_key`/
+    `transaction_type`), **Start Date**/**End Date** (the feed's own `t.validity_start_date`/
+    `t.validity_end_date` — a different field from the invoice Start/End Date used in Earned Revenue),
+    **Validity**, and **Litres** — placed between Type and Plan, also added to the CSV export. Same
+    complementary-null split as everything else in this feed: Transaction key/type/Start Date/End Date
+    only populate on `TRANSACTION` rows; Validity/Litres only on the `COLLECTION_SUMMARY` twin — the
+    other row type shows "—" for each.
+  - **Layout fix (v2.29.64):** the Type badge and Transaction key cell were both wrapping their content
+    across multiple lines, ballooning row height. Type badge now stays on one line. Transaction key
+    shows a truncated form (`DPTX_` prefix stripped, first 8 hex chars + `…`) with the full raw key on
+    hover — the underlying data (CSV export, `r.transaction_key`) is unchanged, this is display-only.
+  - **Validity/Litres merge, City removed, pagination (v2.29.65):** Validity and Litres — which only
+    ever populate on the `COLLECTION_SUMMARY` row — now also show on its `TRANSACTION` twin whenever
+    the two rows share the exact same `Paid_Date` (down to the microsecond, which the same collection
+    event always does). CSV export uses the same merged value. The **City** column was removed from
+    the table (still in the CSV). The table is now **paginated** — 50 rows per page, Prev/Next controls,
+    resets to page 1 on any filter or search change — while the Grand Total footer keeps summing the
+    full filtered set, not just the visible page.
+  - **Admin-only Upload JSON / Run API (v2.29.67):** an "Upload JSON" control at the top right,
+    visible only when `user.role === "admin"`. Choosing a `.json` file validates it client-side
+    (extension + that it actually parses) before anything is sent anywhere; once valid, the control
+    becomes a **Run API** button that POSTs the file as `multipart/form-data` (field `file`) to
+    `POST https://api-7ca73ntgua-el.a.run.app/dp-transactions/add`. The raw response — success or
+    failure — is shown verbatim in a popup (`Modal`): pretty-printed JSON body, HTTP status in the
+    subtitle, and on failure a plain-English message extracted from the body's `message`/`error`/
+    `detail` field (falling back to `Request failed — HTTP <status>`, or a network-error message if
+    the request never reached the server). A successful run clears the selected file and silently
+    re-fetches the table (`fetchAllDpTransactions(true)`) so the newly-imported rows show up without
+    a page reload.
+  - **Transaction Type filter + DISCOUNT exclusion (v2.29.68):** a second chip filter, next to
+    Payment Type, on the feed's own `transaction_type` field (`APP`, `PAYMENT_LINK`, etc.).
+    **`DISCOUNT`-type rows are excluded from this entire view** — table, KPIs, CSV — not offered as a
+    filter choice at all, since they're a non-cash discount adjustment rather than real recharge
+    collected. Verified live that every `DISCOUNT` row has `revenue_amount`/`deposit_amount`/
+    `transaction_amount` all zero, so this is purely about removing zero-value noise rows from the
+    table — it doesn't change any KPI figure.
 
 ### Task Planner (`planner`)
 - **Purpose:** ClickUp-style Kanban for internal tasks (Scoping → … → Live).
