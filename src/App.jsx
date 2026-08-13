@@ -246,7 +246,7 @@ const MODULE_SECTIONS = {
   referral:      [{ id: "overview", label: "Overview" }, { id: "referrers", label: "Referrers" }, { id: "referees", label: "Referees" }, { id: "credits", label: "Credits" }, { id: "tracker", label: "Tracker" }, { id: "analytics", label: "Analytics" }, { id: "backtrack", label: "Backtrack", adminOnly: true }],
   sales:         [{ id: "sales_overview", label: "Pipeline" }, { id: "sales_leads", label: "Leads & Deals" }, { id: "sales_apartments", label: "Apartment Leads" }, { id: "sales_analytics", label: "Sales Analytics" }, { id: "sales_errors", label: "Error Correction" }],
   planner:       [{ id: "plan_board", label: "Task Board" }, { id: "plan_weekly", label: "Weekly View" }, { id: "plan_admin", label: "Modify Tasks", adminOnly: true }],
-  analytics:     [{ id: "an_overview", label: "Overview" }, { id: "analytics", label: "Referral" }, { id: "an_sales", label: "Sales" }, { id: "an_earned", label: "Earned Revenue" }, { id: "an_reconciliation", label: "Reconciliation" }, { id: "an_dptxn", label: "DP Transaction" }, { id: "an_aop", label: "AOP", adminOnly: true }, { id: "an_apartment", label: "Apartment Performance" }, { id: "an_billing", label: "Billing" }, { id: "an_revenue", label: "Revenue" }, { id: "an_penetration", label: "Penetration Tracker" }, { id: "an_credits", label: "Credits" }, { id: "an_applogs", label: "App Logs" }],
+  analytics:     [{ id: "an_overview", label: "Overview" }, { id: "analytics", label: "Referral" }, { id: "an_sales", label: "Sales" }, { id: "an_earned", label: "Earned Revenue" }, { id: "an_reconciliation", label: "Reconciliation" }, { id: "an_dptxn", label: "DP Transaction" }, { id: "an_aop", label: "AOP", adminOnly: true }, { id: "an_apartment", label: "Apartment Performance" }, { id: "an_churn", label: "Renewal & Churn Risk" }, { id: "an_billing", label: "Billing" }, { id: "an_revenue", label: "Revenue" }, { id: "an_penetration", label: "Penetration Tracker" }, { id: "an_credits", label: "Credits" }, { id: "an_applogs", label: "App Logs" }],
   employee:      [{ id: "emp_users", label: "Users" }],
   ticketing:     [{ id: "tk_overview", label: "Overview" }, { id: "tk_tickets", label: "Tickets" }, { id: "tk_ops", label: "Ops Tickets" }],
   customer:      [{ id: "cust_list", label: "Customers" }, { id: "cust_all", label: "All Customers" }, { id: "cust_societies", label: "Societies" }],
@@ -287,9 +287,25 @@ function setSectionOverride(sections, moduleId, tabId, level) {
    Convention (user requirement): bump APP_VERSION and PREPEND a VERSION_HISTORY
    entry on EVERY change. The version is shown in the sidebar / home / login
    footers, the Logs Tracker banner, and the About module changelog. */
-const APP_VERSION = "2.29.68";
-const VERSION_DATE = "2026-08-11";
+const APP_VERSION = "2.29.84";
+const VERSION_DATE = "2026-08-13";
 const VERSION_HISTORY = [
+  { v: "2.29.84", note: "Analytics > Earned Revenue: removed Invoice ID, Payment Mode and Customer from the per-invoice table's visible columns (now 16 wide — Invoice #, Reference Number, Apartment, dates, amounts…) — footer colSpan adjusted 9→6 to match. All three stay in the CSV export unchanged, so nothing exported is lost, just decluttered on screen." },
+  { v: "2.29.83", note: "Analytics > Earned Revenue: added Reference Number and Payment Mode as two more columns in the per-invoice recognition table (right after Invoice ID) and its CSV export — both are now returned by GET /admin/get-all-invoices. `mapInvoice()` maps the new `reference_number`/`payment_mode` fields; shows \"—\" for older cached invoices or sample data that predate them." },
+  { v: "2.29.82", note: "Two new features. (1) Analytics > Renewal & Churn Risk (new tab, `an_churn`): flags customers whose subscription renews within 30 days, who have an overdue/failed invoice, or whose account is in Zoho \"dunning\" — reuses the exact renewal-due and overdue-detection logic already live in Billing Analytics/Billing Overview, joined onto one customer-level risk table with a High/Medium/Low score, KPI cards, a deterministic Business insights panel, and CSV export. Deliberately does NOT add an IoT \"device gone quiet\" signal — there's no existing join between a customer's purifier_id and the real IoT device fleet, so faking one would be misleading. (2) Customer > All Customers > per-customer view gained an always-visible \"at a glance\" strip (Status, Customer score, LTV, Open tickets, Last payment, Referral code — visible on every sub-tab, not just Profile) and a new \"Timeline\" tab merging payments, tickets, referrals and discount/credit-note events into one chronological feed, so a customer's whole relationship can be read without clicking between the Transactions/Tickets/Ops/Referral tabs individually." },
+  { v: "2.29.81", note: "Analytics > DP Transaction: three changes. (1) Fixed the \"Performance by apartment\" KPI cards showing only 4 of the 6 apartments in the Apartment filter — it was silently dropping any apartment with zero transactions in the current filters; now shows all 6 (idle ones read \"No activity this period\"), with a \"N of M active\" count in the section header. (2) Added a deterministic \"Business insights\" panel (What happened / What's ongoing / Result / Positive / Negative / recommended actions — same pattern as Net Revenue and Sales Insights, no LLM involved) covering the collection trend vs previous period, the recharge/deposit mix, the top apartment, and which apartments went idle. (3) Both the aggregate Deposit/Recharge KPI cards and each per-apartment card now show a live Deposit-vs-Recharge split percentage (plus a new stacked-bar \"Deposit vs Recharge split\" card) — recomputed from whatever's actually in the current date/apartment/type filters, never a fixed ratio." },
+  { v: "2.29.80", note: "Analytics > Earned Revenue: added Invoice # and Invoice ID as the first two columns of the per-invoice recognition table (and to its CSV export) — makes it possible to trace any recognised-revenue row back to the exact invoice it came from." },
+  { v: "2.29.79", note: "Removed ProWater AI entirely — the floating chat assistant, its Sparkles button, and every setAIContext/getAIContext call across every module were pulled out (this reverses v2.29.74 through v2.29.78). The Home page's lightweight customer/invoice snapshot fetch (added in v2.29.78 solely to feed the assistant) was removed too. The deployed Cloud Function backend (asia-south1-backend-prowater.cloudfunctions.net/aiChat) was also undeployed via `gcloud functions delete`. The source for the Cloud Function still lives in `functions-aiChat/` at the project root if this is ever revisited — nothing about the rest of the dashboard depended on it." },
+  { v: "2.29.78", note: "ProWater AI: fixed a real gap where asking a basic global question (\"what is the active customer count\", \"total revenue collected\") from the Home/Overview landing page — before opening any specific module this session — got \"I don't have access to that\" even though the figures are simple lookups. Home() now fetches a lightweight customer + invoice snapshot on load (both endpoints are already request-cached, so this adds no real load) and publishes it as a baseline — total/active/inactive customers, total revenue collected, and module count. Any module's own richer context still overrides this the moment it's visited, so this only fills the gap before the user has navigated anywhere. Verified live: asked \"what is the active customer count and total revenue collected\" straight from the Home page and got back the correct figures (6 active customers, ₹39,000 collected) instead of the old \"I don't have that data\" fallback." },
+  { v: "2.29.77", note: "ProWater AI: extended live-data context to every remaining module and sub-module in the app — Sales (Pipeline, Leads & Deals, Apartment Leads, Sales Analytics, Error Correction), Referral (Overview, Referrers, Referees, Credits, Tracker, Backtrack), Customer (All Customers, Societies), Billing & Subscription (Overview, Subscriptions, Invoices, Deposits & Refunds), FSM (Track Technician, AMC/Maintenance, Water Quality), ERP (Asset Lifecycle), Auto Scheduler (Auto GS - Society, IoT Alerts), Ticketing (Overview, Tickets, Ops Tickets), IoT Core (Alerts), Analytics (Referral, Sales, AOP, Revenue, Penetration Tracker, Credits, App Logs), Task Planner (Board, Weekly View, Modify Tasks), Employee (Users), Device Replacement, Logs Tracker (All Logs, Failures, API Usage), and About. Every screen in the tool now publishes a small KPI summary the assistant can read — up from 8 modules in v2.29.76 to effectively all of them. Illustrative/sample-data screens (Track Technician's demo fleet, FSM Water Quality's synthetic TDS readings, ERP Asset Lifecycle's synthetic depreciation, Auto Scheduler's IoT Alerts) publish an explicit note saying so, so the assistant doesn't present placeholder numbers as real. Verified live: asked ProWater AI \"how many open alerts and devices watched right now\" from the IoT Alerts screen and got back the exact on-screen figures (5 open alerts — 4 High, 1 Medium — and 2 devices watched)." },
+  { v: "2.29.76", note: "ProWater AI: extended live-data context from 3 modules to 8 — added Analytics Overview (total collection, net/earned revenue, deposits, active customers, MRR, societies, pending receivables, open tickets), Customers (total/active/inactive, device-mix, new-this-month, society count), Billing Analytics (MRR, ARR, cash vs recognised this month, outstanding, churn rate, credits), IoT Core Device Monitor (device/online/offline/faulty counts, active alerts, selected device's tank level and total dispensed), and Apartment Performance (collected/recharge/deposit totals, group count, scope). Fixes a real gap: asking \"what is the revenue\" or \"how many active customers\" from the Overview page previously got \"I don't have that data\" even though those exact figures are shown right there on screen — now answered correctly (verified live: correctly read back ₹0 revenue / 5 active customers / ₹3,299 MRR from the actual Overview page's own numbers). Still 12 of ~20 modules unwired — same one-line context pattern extends coverage further." },
+  { v: "2.29.75", note: "ProWater AI is now LIVE — the Cloud Function proxy is deployed at https://asia-south1-backend-prowater.cloudfunctions.net/aiChat and verified answering real questions, including live-data-aware ones (tested against a simulated Earned Revenue screen context, correctly read the figures back). Also fixed a real deploy-time bug: `gemini-2.0-flash` (the model this shipped with in v2.29.74) had been deprecated/removed by Google since — the function now calls `gemini-flash-latest` instead, an alias Google keeps pointed at their current flash-tier model, specifically so this doesn't silently break again next time a dated model name is retired." },
+  { v: "2.29.74", note: "New: ProWater AI — a floating assistant (Sparkles icon, bottom-right) available on every screen once logged in. Answers questions via a Gemini (Generative Language API) call routed through a new Cloud Function proxy (`functions-aiChat/`, project root) — same shape as the existing weather-proxy/ Cloud Function (plain Google Cloud Function, 2nd gen, deployed via `gcloud functions deploy`, no Firebase CLI). The API key is a deploy-time flag (`--set-env-vars GEMINI_API_KEY=...`), never a line of code anywhere. Live-data awareness: modules publish a small KPI summary of what's currently on screen; wired into Earned Revenue, DP Transaction, and Reconciliation so far (more modules can adopt the same pattern later). Fallback handling: on any failure (network error, timeout, HTTP error, or the backend explicitly saying it couldn't answer), the widget shows an apologetic message and logs the question to `localStorage` (`pw_ai_unanswered`, capped at 200 entries) for later review, rather than pretending to answer. `AI_ENDPOINT` currently points at a URL that isn't deployed yet — update it once the Cloud Function is live." },
+  { v: "2.29.73", note: "Analytics > Earned Revenue: fixed a real correctness bug found during a logic audit. Per-invoice recognition only ever checked the invoice's PAID month and paid-month+1 for overlap with its validity window — so an invoice paid more than ~1 month after its own validity window had already lapsed (e.g. due 1 Jul, validity ends 31 Jul, not paid until 5 Aug) found ZERO overlap in both checks, and showed ₹0 Earned Revenue despite the cash being collected in full. Fixed: when the validity window ends before the paid month even starts, the WHOLE recharge is now recognised in the paid month instead (nothing left to spread forward once payment is that late — cash and revenue converge). Verified with a temporary seed invoice (due 1 Jul, paid 10 Aug, ₹1,000 recharge): now correctly shows Days in paid month = 31, Earned revenue = ₹1,000 (was 0/₹0 before the fix). This gap never affected the sibling `invoiceMonthlyBreakdown()` formula used on the All Customers card — that one always walks the invoice's own due-to-validity-end months regardless of how late payment lands. Also added a click-to-sort control on the Earned revenue column — it was the table's default sort key on load but had no header button, so once you sorted by any date column there was no way back to it without a refresh." },
+  { v: "2.29.72", note: "Customer > All Customers > Transactions: two additions. (1) In the \"Current paid transaction\" card's calculation detail, Earned revenue rows now show the actual day-range each amount covers (e.g. \"22 Jun – 30 Jun\", \"01 Jul – 21 Jul\") instead of a single date — makes it clear exactly which days each month's slice counts, not just when it was recognised. (2) Added a \"GST breakup\" card, shown BEFORE the revenue-recognition card, backing out Taxable value / CGST (2.5%) / SGST (2.5%) from the invoice's actual paid amount (assumes the standard flat 5% split — GST isn't a field the API returns, this reverse-calculates it; independently-rounded components can be ±₹1 off the total, same minor rounding gap present in the reference sheet this was modelled on)." },
+  { v: "2.29.71", note: "Customer > All Customers > Transactions: reworked the \"Current paid transaction — revenue recognition\" card — it was reading too big. Now a compact 5-row summary (Due date, Payment date, Recharge tenure, Earned revenue, Collected Revenue), each with its own icon, Collected Revenue showing \"Fully collected\" or \"₹X still outstanding\" underneath. The full month-by-month workings (previously always shown) now live behind a \"Show/Hide calculation\" expand-collapse toggle, closed by default — and that expanded detail was rebuilt as fixed-width flex rows instead of the shared full-bleed `<Table>`, which was stretching to the card's full width with no column constraints and leaving large blank gaps around the short date/amount values. Also moved the card BELOW the payments table (was above it) — transactions history first, revenue-recognition detail second." },
+  { v: "2.29.70", note: "Analytics > DP Transaction: three changes. (1) Removed the Transaction key and Transaction type columns from the table (still visible nowhere else — they were mostly redundant with the Type badge and added width without much reading value). (2) Added \"Performance by apartment\" — a row of KPI cards, one per apartment with any activity in the current filters, showing Recharge Collected + Deposit + transaction count, sorted highest-recharge first, so apartments can be compared at a glance instead of only seeing the fleet-wide total. (3) Start Date and End Date columns are now click-to-sort (same arrow-icon pattern as Paid date) — sort is now a single `{key, dir}` state shared across all three date columns instead of a Paid-date-only boolean." },
+  { v: "2.29.69", note: "IoT Core > Device Monitor: Pressure and Flow rate no longer rate WARNING/CRITICAL at any reading. These two are pump-driven, not water-quality metrics — 0 while the pump is off (nothing to read), and whatever the line reads once the pump kicks on, at any magnitude; confirmed with the person who placed the sensors that neither end is a real anomaly (a 655 bar spike is a normal artifact of how this sensor reads on pump start, same as the 0 while idle). `iotWqClass` now always returns \"green\" for `pressure`/`flowMLPM` — this single change cascades correctly to every screen that reads it: the RO Unit Sensors card (badge + AI summary, now reassuring instead of alarming), its gauges (fully green track, no amber zone), the Recent-readings table (no more red/amber highlighting on these two columns), and the Trend analysis \"Anomalies by metric\" tile (Pressure/Flow now always count 0). Water Quality (pH/TDS/Temp) is untouched — those remain real anomaly-eligible metrics. Also reworded the card's \"Ideal: 0–4 bar\" subtext to \"Pump off = 0, pump on = live reading — both normal\" for these two, since there's no longer an enforced ceiling to imply." },
   { v: "2.29.68", note: "Analytics > DP Transaction: added a Transaction Type filter (chips on the feed's own `transaction_type` field — APP / PAYMENT_LINK / etc — next to Payment Type). DISCOUNT-type rows are now excluded from this view entirely (table, KPIs, CSV) — they're a non-cash discount adjustment, not real recharge collected (confirmed live: every DISCOUNT row has `revenue_amount`/`deposit_amount`/`transaction_amount` all zero, so this doesn't change any KPI figure, just removes zero-value noise rows from the table)." },
   { v: "2.29.67", note: "Analytics > DP Transaction: added an admin-only \"Upload JSON\" control at the top right. Choosing a .json file validates it client-side (extension + that it actually parses); once valid, the control becomes a \"Run API\" button that POSTs the file as multipart/form-data (field `file`) to `POST /dp-transactions/add`. The raw response — success or failure — is shown verbatim in a popup (pretty-printed JSON body, HTTP status, and a plain-English error message extracted from `message`/`error`/`detail` on failure). A successful run also silently refreshes the table with the newly-imported data. Non-admins never see the control at all (`user.role === \"admin\"`, same convention as Credits)." },
   { v: "2.29.66", note: "Customer > All Customers > Transactions: added a \"Current paid transaction — revenue recognition\" breakdown card above the payments table, for the customer's most recent paid invoice. Shows Due date and Payment date, the Recharge tenure (start/end/days), then a month-by-month split of Earned revenue (accrual), Collected Revenue (cash-basis) and Outstanding revenue (receivable) — verified exactly against the user's reference spreadsheet (Sanjith/MJR: due 7/26, paid 8/1, ₹350 recharge → tenure 31 days, ₹68 earned in Jul + ₹282 in Aug, ₹0 collected in Jul + ₹350 in Aug, ₹350 outstanding as of Jul-end + ₹0 once paid). New `invoiceMonthlyBreakdown()` helper generalizes Earned Revenue's per-invoice month-split math to show EVERY touched month (including the accrual before actual payment, which Earned Revenue's own table never surfaces — that table only shows an invoice's paid-month slice)." },
@@ -1214,6 +1230,8 @@ function mapInvoice(iv) {
     interval:       p.interval_unit || p.billing_interval || p.interval || p.plan_interval || "",
     zohoId:         p.customer_id || p.zoho_customer_id || p.zoho_invoice_id || "",
     zohoCustomerId: p.customer_id || p.zoho_customer_id || "",
+    referenceNumber: p.reference_number || p.referenceNumber || "",
+    paymentMode:    p.payment_mode || p.paymentMode || "",
   };
 }
 
@@ -1914,6 +1932,7 @@ function ApiUsageDashboard() {
   const totalUsed = rows.reduce((s, r) => s + r.count, 0);
   const anyOver80 = rows.some(r => r.percent >= 80);
   const barColor = (pct) => pct >= 95 ? "#DC4141" : pct >= 80 ? "#986315" : "#08805A";
+
 
   return (
     <div className="fade-up">
@@ -3256,6 +3275,7 @@ const doRefresh = async () => {
       { id: "an_dptxn", label: "DP Transaction", icon: Landmark },
       ...(isModuleAdmin ? [{ id: "an_aop", label: "AOP", icon: Target }] : []),
       { id: "an_apartment", label: "Apartment Performance", icon: Boxes },
+      { id: "an_churn", label: "Renewal & Churn Risk", icon: AlertCircle },
       { id: "an_billing", label: "Billing", icon: Receipt },
       { id: "an_revenue", label: "Revenue", icon: TrendingUp },
       { id: "an_penetration", label: "Penetration Tracker", icon: Boxes },
@@ -3446,6 +3466,7 @@ const doRefresh = async () => {
             {tab === "an_dptxn" && <DPTransactions key={refreshKey} />}
             {tab === "an_aop" && isModuleAdmin && <AOP key={refreshKey} accessLevel={tabAccess} />}
             {tab === "an_apartment" && <ApartmentPerformance key={refreshKey} />}
+            {tab === "an_churn" && <ChurnRiskRadar key={refreshKey} />}
             {tab === "an_billing" && <BillingAnalytics key={refreshKey} />}
             {tab === "an_revenue" && <NetRevenue key={refreshKey} />}
             {tab === "an_penetration" && <PenetrationTracker key={refreshKey} />}
@@ -3543,6 +3564,7 @@ function Overview() {
     { label: "Free months granted", value: freeMonths + " mo", icon: Wallet, sub: "to referrers", hero: true },
   ];
 
+
   return (
     <div className="fade-up">
       <div style={grid4}>
@@ -3623,10 +3645,11 @@ function Referrers() {
     { label: "Status", get: r => r.status },
   ], filtered);
 
+
   return (
     <div className="fade-up">
       <div>
-     
+
       </div>
       <Toolbar q={q} setQ={setQ} placeholder="Search referrers, code, email…" count={filtered.length}
   right={<>
@@ -3720,6 +3743,7 @@ function Referees() {
     { label: "Date", get: e => e.date },
   ], filtered);
 
+
   return (
     <div className="fade-up">
       <Toolbar q={q} setQ={setQ} placeholder="Search referees, phone, society…" count={filtered.length}
@@ -3793,6 +3817,7 @@ function Credits() {
   const pending = rows.filter(c => c.status === "pending").length;
   const approvedMonths = rows.filter(c => c.status === "approved").reduce((s, c) => s + c.credits, 0);
   const pendingMonths = rows.filter(c => c.status === "pending").reduce((s, c) => s + c.credits, 0);
+
 
   return (
     <div className="fade-up">
@@ -4319,6 +4344,7 @@ function AnalyticsOverview({ isAdmin = false }) {
     <>There {activeReferrers === 1 ? "is" : "are"} <strong>{activeReferrers}</strong> active referrer{activeReferrers === 1 ? "" : "s"} and <strong>{ticketsOpen}</strong> open ticket{ticketsOpen === 1 ? "" : "s"}{nextForecast ? <>; next month's collection is forecast at ~<strong>{inr(nextForecast)}</strong></> : null}.</>,
   ].filter(Boolean);
 
+
   return (
     <div className="fade-up ov-sans">
       {/* Overview uses the app's sans (DM Sans) for headings + big numbers instead
@@ -4615,6 +4641,7 @@ function Analytics() {
   const totalReferees = scopedReferees.length;
   const rangeRewards = trendInRange.reduce((s, r) => s + r.rewards, 0);
 
+
   return (
     <div className="fade-up">
       <Card style={{ marginBottom: 18 }}>
@@ -4722,6 +4749,7 @@ function Backtrack() {
     return <span style={{ fontSize: 11, fontWeight: 600, color: c, background: bg, padding: "3px 8px", borderRadius: 7, textTransform: "capitalize" }}>{kind.replace("_", " ")}</span>;
   };
 
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "var(--slate)", background: "var(--mint-2)", padding: "11px 16px", borderRadius: 12, marginBottom: 16 }}>
@@ -4784,6 +4812,7 @@ function Logs() {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = "prowater-logs.csv"; a.click();
   };
+
 
   return (
     <div className="fade-up">
@@ -4853,6 +4882,7 @@ function Failures() {
   const open = failures.filter(f => !f.endedAt);
   const totalDowntime = failures.reduce((s, f) => s + (f.endedAt ? (f.downtimeMs || 0) : (Date.now() - new Date(f.startedAt).getTime())), 0);
   const sorted = [...failures].sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+
 
   return (
     <div className="fade-up">
@@ -5136,6 +5166,7 @@ function DeviceReplacement() {
   );
 
   const swaps = records.length;
+
 
   return (
     <div className="fade-up">
@@ -5440,6 +5471,7 @@ function ReleaseManager({ kind, isAdmin }) {
   const remove = async (rel) => { await releasesApi.remove(rel); setData(releasesApi.local()); };
   const lbl = { fontSize: 11.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6, display: "block" };
 
+
   return (
     <div className="fade-up">
       {isAdmin && (
@@ -5561,6 +5593,8 @@ function AboutModule() {
   const [q, setQ] = useState("");
   useEffect(() => { api.logView(user.username, "Viewed About"); }, []);
   const docs = MODULE_DOCS.filter(d => (d.label + " " + d.summary + " " + d.points.join(" ")).toLowerCase().includes(q.toLowerCase()));
+
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
@@ -5685,6 +5719,7 @@ function UsersAdmin({ accessLevel = "view" }) {
   if (!rows) return <Loading />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2600); };
+
 
   return (
     <div className="fade-up">
@@ -6129,6 +6164,7 @@ function SalesPipeline() {
     { label: "Total leads", value: deals.length, icon: Users, sub: "all stages" },
   ];
 
+
   return (
     <div className="fade-up">
       <div style={grid4}>
@@ -6229,6 +6265,7 @@ function SalesLeads({ isAdmin }) {
     { label: "Deposit", get: d => d.deposit }, { label: "To Collect", get: d => d.amountToCollect },
     { label: "Created", get: d => d.created },
   ], filtered);
+
 
   return (
     <div className="fade-up">
@@ -6372,6 +6409,7 @@ function SalesAnalytics() {
     [{ label: "Apartment", get: p => p.apt.name }, ...statuses.map(s => ({ label: s, get: p => p.counts[s] || 0 })), { label: "Total", get: p => p.total }],
     pivot);
 
+
   return (
     <div className="fade-up">
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
@@ -6478,6 +6516,7 @@ function TicketOverview() {
     return acc;
   }, {}));
   const PIE = CHART_PALETTE;
+
 
   return (
     <div className="fade-up">
@@ -6695,6 +6734,7 @@ function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns = [], h
     { label: "Created", get: t => t.created },
   ], filtered);
 
+
   return (
     <div className="fade-up">
       <Toolbar q={q} setQ={setQ} placeholder="Search ticket #, customer, society, purifier…" count={filtered.length}
@@ -6911,6 +6951,7 @@ function CustomerSocieties() {
     { label: "Society", get: g => g.society }, { label: "Customers", get: g => g.count }, { label: "Active", get: g => g.active },
     { label: "Own", get: g => g.own }, { label: "Normal", get: g => g.normal }, { label: "Hot & Cold", get: g => g.hotcold },
   ], filtered);
+
 
   return (
     <div className="fade-up">
@@ -7184,7 +7225,10 @@ function invoiceMonthlyBreakdown(dueDate, paidDate, recharge) {
     // date, so the payment date isn't part of it — fall back to the
     // month-end label used everywhere else, same as an unpaid month.
     const labelDate = (isPaidMonth && pd >= overlapStart && pd <= overlapEnd) ? pd : mEnd;
-    if (days > 0) earned.push({ date: labelDate, days, amount: (recharge * days) / tenureDays });
+    // rangeStart/rangeEnd = the actual span of days counted for this month's
+    // slice (e.g. 21 Jul – 31 Jul) — shown instead of a single date so it's
+    // clear exactly which days each amount covers, not just when it's "as of".
+    if (days > 0) earned.push({ date: labelDate, rangeStart: overlapStart, rangeEnd: overlapEnd, days, amount: (recharge * days) / tenureDays });
 
     if (cursor <= paidMonthStart) {
       if (isPaidMonth) { collected.push({ date: pd, amount: recharge }); outstanding.push({ date: pd, amount: 0 }); }
@@ -7203,38 +7247,119 @@ function invoiceMonthlyBreakdown(dueDate, paidDate, recharge) {
 // Renders invoiceMonthlyBreakdown() as a small 3-column sheet (label · date ·
 // value), styled after the reference spreadsheet the user shared — one
 // underlined section header per group, one row per line item.
+// Compact summary row for InvoiceBreakdownCard — an icon, a label (+ optional
+// sub-line), and a right-aligned headline value. Keeps the always-visible
+// part of the card small; the full month-by-month workings live behind the
+// "Calculation" expand/collapse below.
+function InvoiceSummaryRow({ icon: Icon, label, value, sub }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 18px", borderBottom: "1px solid var(--border)" }}>
+      <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 9, background: "var(--mint)", color: "var(--teal-d)", flexShrink: 0 }}><Icon size={16} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--f)" }}>{label}</div>
+        {sub && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 1 }}>{sub}</div>}
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)", whiteSpace: "nowrap", textAlign: "right" }}>{value}</div>
+    </div>
+  );
+}
+
+// GST is not a field the API returns anywhere on the invoice — this backs it
+// out of the paid total assuming the standard flat 5% split (2.5% CGST +
+// 2.5% SGST) confirmed against the user's own reference breakup sheet
+// (₹409 total → ₹390 taxable + ₹10 CGST + ₹10 SGST). Independently-rounded
+// components can be ±₹1 off the rounded total — same minor rounding gap
+// present in that reference sheet itself, not something to chase away.
+function gstBreakup(total) {
+  const t = Number(total) || 0;
+  const taxable = t / 1.05;
+  return { taxable, cgst: taxable * 0.025, sgst: taxable * 0.025, total: t };
+}
+
+function GstBreakupCard({ total }) {
+  if (!(total > 0)) return null;
+  const g = gstBreakup(total);
+  return (
+    <Card pad={false} title="GST breakup" sub={`On the paid amount of ${inr(Math.round(g.total))}`} style={{ marginTop: 16 }}>
+      <div style={{ paddingTop: 2 }}>
+        <InvoiceSummaryRow icon={Receipt} label="Taxable value" value={inr(Math.round(g.taxable))} />
+        <InvoiceSummaryRow icon={Landmark} label="CGST (2.5%)" value={inr(Math.round(g.cgst))} />
+        <InvoiceSummaryRow icon={MapPin} label="SGST (2.5%)" value={inr(Math.round(g.sgst))} />
+        <InvoiceSummaryRow icon={Wallet} label="Total invoice value" value={inr(Math.round(g.total))} />
+      </div>
+    </Card>
+  );
+}
+
 function InvoiceBreakdownCard({ inv, recharge }) {
+  const [open, setOpen] = useState(false); // "Calculation" detail — collapsed by default, this card is meant to read small
   const dd = inv.dueDate ? new Date(inv.dueDate) : null;
   const pd = new Date(inv.paidDate || inv.date);
   const b = (dd && !isNaN(dd.getTime())) ? invoiceMonthlyBreakdown(dd, pd, recharge) : null;
   if (!b) return null;
-  const sectionRow = (key, label) => (
-    <tr key={key}><td colSpan={3} style={{ ...td, textAlign: "left", fontWeight: 800, color: "var(--f)", textDecoration: "underline", paddingTop: 16 }}>{label}</td></tr>
+  const totalEarned = b.earned.reduce((s, r) => s + r.amount, 0);
+  const totalCollected = b.collected.reduce((s, r) => s + r.amount, 0);
+  const totalOutstanding = b.outstanding.reduce((s, r) => s + r.amount, 0);
+
+  // Fixed-width flex rows, NOT the shared full-bleed <Table> — that one
+  // stretches to 100% of the (wide) card with no column constraints, which
+  // left huge blank gaps either side of these short date/amount values.
+  // Everything here stays compact regardless of the card's outer width.
+  const DATE_W = 132, AMT_W = 84;
+  const fmtDayMon = (d) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+  const calcSection = (key, label) => (
+    <div key={key} style={{ padding: "12px 18px 4px", fontSize: 10.5, fontWeight: 800, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".05em" }}>{label}</div>
   );
-  const row = (key, label, date, value, bold) => (
-    <tr key={key} style={{ borderBottom: "1px solid var(--border)" }}>
-      <td style={{ ...td, textAlign: "left", fontWeight: bold ? 700 : 500 }}>{label}</td>
-      <td style={{ ...td, whiteSpace: "nowrap" }}>{date ? fmtDate(date) : "—"}</td>
-      <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{value}</td>
-    </tr>
+  const calcRow = (key, label, date, value, bold) => (
+    <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 18px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: bold ? 700 : 500, color: bold ? "var(--f)" : "var(--slate)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+      <div style={{ width: DATE_W, flexShrink: 0, fontSize: 12, color: "var(--muted)", textAlign: "right", whiteSpace: "nowrap" }}>{date ? fmtDate(date) : "—"}</div>
+      <div style={{ width: AMT_W, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "var(--f)", textAlign: "right" }}>{value}</div>
+    </div>
+  );
+  // Earned revenue rows show the actual day-range that amount covers (e.g.
+  // "21 Jul – 31 Jul") instead of a single date — makes it clear exactly
+  // which days each month's slice counts, not just "as of" when.
+  const calcRowRange = (key, label, rangeStart, rangeEnd, value) => (
+    <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 18px", borderBottom: "1px solid var(--border)" }}>
+      <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "var(--slate)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+      <div style={{ width: DATE_W, flexShrink: 0, fontSize: 12, color: "var(--muted)", textAlign: "right", whiteSpace: "nowrap" }}>{rangeStart && rangeEnd ? `${fmtDayMon(rangeStart)} – ${fmtDayMon(rangeEnd)}` : "—"}</div>
+      <div style={{ width: AMT_W, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "var(--f)", textAlign: "right" }}>{value}</div>
+    </div>
   );
   return (
-    <Card pad={false} title="Current paid transaction — revenue recognition"
-      sub={`Invoice ${inv.number || inv.id} · how ${inr(recharge)} of recharge splits across calendar months, from due date to the end of its tenure.`}
-      style={{ marginBottom: 16 }}>
-      <Table head={["", "Date", "Amount"]}>
-        {row("due", "Due date", dd, inr(recharge), true)}
-        {row("paid", "Payment date", pd, inr(recharge), true)}
-        {sectionRow("s1", "Recharge tenure")}
-        {row("tstart", "Start date", b.validityStart, "")}
-        {row("tend", "End date", b.validityEnd, `${b.tenureDays} days`)}
-        {sectionRow("s2", "Earned revenue")}
-        {b.earned.map((r, i) => row(`e${i}`, "Earned revenue", r.date, inr(Math.round(r.amount))))}
-        {sectionRow("s3", "Collected Revenue")}
-        {b.collected.map((r, i) => row(`c${i}`, "Collected Revenue", r.date, inr(Math.round(r.amount))))}
-        {sectionRow("s4", "Outstanding revenue")}
-        {b.outstanding.map((r, i) => row(`o${i}`, "Outstanding revenue", r.date, r.amount > 0 ? inr(Math.round(r.amount)) : "—"))}
-      </Table>
+    <Card pad={false} title="Current paid transaction — revenue recognition" sub={`Invoice ${inv.number || inv.id}`} style={{ marginTop: 16 }}>
+      <div style={{ paddingTop: 2 }}>
+        <InvoiceSummaryRow icon={CalendarDays} label="Due date" value={fmtDate(dd)} />
+        <InvoiceSummaryRow icon={CalendarClock} label="Payment date" value={fmtDate(pd)} />
+        <InvoiceSummaryRow icon={CalendarRange} label="Recharge tenure" value={`${b.tenureDays} days`} sub={`${fmtDate(b.validityStart)} – ${fmtDate(b.validityEnd)}`} />
+        <InvoiceSummaryRow icon={TrendingUp} label="Earned revenue" value={inr(Math.round(totalEarned))} />
+        <InvoiceSummaryRow icon={Wallet} label="Collected Revenue" value={inr(Math.round(totalCollected))}
+          sub={totalOutstanding > 0 ? `${inr(Math.round(totalOutstanding))} still outstanding` : "Fully collected"} />
+      </div>
+      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 18px", background: "var(--mint)", border: "none", borderTop: "1px solid var(--border)", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--slate)" }}>
+        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />} {open ? "Hide calculation" : "Show calculation"}
+      </button>
+      {open && (
+        <div style={{ paddingBottom: 4 }}>
+          <div style={{ display: "flex", gap: 10, padding: "10px 18px 4px" }}>
+            <div style={{ flex: 1 }} />
+            <div style={{ width: DATE_W, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textAlign: "right", textTransform: "uppercase" }}>Date</div>
+            <div style={{ width: AMT_W, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textAlign: "right", textTransform: "uppercase" }}>Amount</div>
+          </div>
+          {calcRow("due", "Due date", dd, inr(recharge), true)}
+          {calcRow("paid", "Payment date", pd, inr(recharge), true)}
+          {calcSection("s1", "Recharge tenure")}
+          {calcRow("tstart", "Start date", b.validityStart, "")}
+          {calcRow("tend", "End date", b.validityEnd, `${b.tenureDays} days`)}
+          {calcSection("s2", "Earned revenue")}
+          {b.earned.map((r, i) => calcRowRange(`e${i}`, "Earned revenue", r.rangeStart, r.rangeEnd, inr(Math.round(r.amount))))}
+          {calcSection("s3", "Collected Revenue")}
+          {b.collected.map((r, i) => calcRow(`c${i}`, "Collected Revenue", r.date, inr(Math.round(r.amount))))}
+          {calcSection("s4", "Outstanding revenue")}
+          {b.outstanding.map((r, i) => calcRow(`o${i}`, "Outstanding revenue", r.date, r.amount > 0 ? inr(Math.round(r.amount)) : "—"))}
+        </div>
+      )}
     </Card>
   );
 }
@@ -7349,6 +7474,26 @@ function AllCustomers() {
       const goodTds = tdsJobs.filter(t => Number(t.outputTds) < Number(t.inputTds)).length;
       techScore = clamp5(3.2 + (withTiming / opsTickets.length) * 1.1 + (tdsJobs.length ? (goodTds / tdsJobs.length) * 0.7 : 0.4) - complaintCount * 0.25);
     }
+    // Open (not closed/resolved) support tickets — same rule Ticketing itself uses.
+    const openTicketsCount = custTickets.filter(t => !zdIsClosed(t.status)).length;
+    const lastPayment = txns.find(t => t.status === "paid");
+    // ── Customer 360 timeline — every payment, ticket, referral and discount
+    // event for this customer, merged into one chronological feed so the whole
+    // relationship can be scanned without clicking between tabs.
+    const timelineEvents = [
+      ...txns.map(t => ({ type: "payment", date: t.date, title: `Invoice ${t.number || t.id}`, sub: t.plan || "", amount: t.total, status: t.status })),
+      ...custTickets.map(t => ({ type: "ticket", date: t.created, title: t.subject || t.ticketNo, sub: t.issueCategory || "", status: t.status })),
+      ...myReferees.map(e => ({ type: "referral", date: e.date, title: `Referred ${e.name || "—"}`, sub: e.society || "", status: e.status })),
+      ...custCreditNotes.map(cn => ({ type: "discount", date: cn.date, title: "Credit note issued", sub: "", amount: cn.amount })),
+    ].map(e => ({ ...e, _ts: new Date(e.date).getTime() }))
+      .filter(e => !isNaN(e._ts))
+      .sort((a, b) => b._ts - a._ts);
+    const timelineCfg = {
+      payment: { icon: Wallet, color: "#0A9D6E", label: "Payment" },
+      ticket: { icon: Ticket, color: "#986315", label: "Ticket" },
+      referral: { icon: GitBranch, color: "#2A86D6", label: "Referral" },
+      discount: { icon: Receipt, color: "#7D8A83", label: "Discount" },
+    };
     // Field severity for at-a-glance scanning — only amber (warning) / red (critical) stand out.
     const statusActive = String(sel.status || "").toLowerCase() === "active";
     const sevColor = (sev) => sev === "red" ? "#DC4141" : sev === "amber" ? "#a86e00" : "var(--f)";
@@ -7389,7 +7534,25 @@ function AllCustomers() {
           </div>
         </div>
 
+        {/* At-a-glance strip — visible on every tab, so the key facts never require a click. */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+          {[
+            { label: "Status", value: sel.status || "—", sev: statusActive ? null : "red", cap: true },
+            { label: "Customer score", value: `${customerScore.toFixed(1)}/5` },
+            { label: "LTV", value: inr(totalPaid), sev: totalPaid === 0 ? "red" : null },
+            { label: "Open tickets", value: openTicketsCount, sev: openTicketsCount >= 3 ? "red" : openTicketsCount >= 1 ? "amber" : null },
+            { label: "Last payment", value: lastPayment ? fmtDate(lastPayment.date) : "—" },
+            { label: "Referral code", value: referralCode },
+          ].map((g, i) => (
+            <div key={i} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "8px 14px", minWidth: 112 }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{g.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: g.sev === "red" ? "#DC4141" : g.sev === "amber" ? "#a86e00" : "var(--f)", textTransform: g.cap ? "capitalize" : "none" }}>{g.value}</div>
+            </div>
+          ))}
+        </div>
+
         <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
+          {tabBtn("timeline", "Timeline")}
           {tabBtn("profile", "Profile")}
           {tabBtn("transactions", `Transactions${txns.length ? ` (${txns.length})` : ""}`)}
           {tabBtn("tickets", `Tickets${custTickets.length ? ` (${custTickets.length})` : ""}`)}
@@ -7397,6 +7560,29 @@ function AllCustomers() {
           {tabBtn("referral", `Referral${referralsDone ? ` (${referralsDone})` : ""}`)}
         </div>
 
+        {subtab === "timeline" && (
+          <Card pad={false}>
+            {timelineEvents.length === 0 && <Empty msg="No activity recorded for this customer yet." />}
+            {timelineEvents.map((e, i) => {
+              const cfg = timelineCfg[e.type];
+              const Icon = cfg.icon;
+              return (
+                <div key={i} style={{ display: "flex", gap: 12, padding: "12px 16px", borderBottom: i < timelineEvents.length - 1 ? "1px solid var(--border)" : "none" }}>
+                  <div style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "#F6FAF8", color: cfg.color, flexShrink: 0 }}><Icon size={16} /></div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{e.title}</span>
+                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(new Date(e.date))}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                      {cfg.label}{e.sub ? ` · ${e.sub}` : ""}{e.amount != null ? ` · ${inr(e.amount)}` : ""}{e.status ? ` · ${e.status}` : ""}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+        )}
         {subtab === "profile" && (
           <>
             <Card>
@@ -7438,7 +7624,6 @@ function AllCustomers() {
               <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total paid</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{inr(totalPaid)}</div></div>
               <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Payments</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{txns.length}</div></div>
             </div>
-            {currentPaid && currentPaidRecharge > 0 && <InvoiceBreakdownCard inv={currentPaid} recharge={currentPaidRecharge} />}
             <Card pad={false}>
               <Table head={["Date", "Invoice", "Amount", "Plan", "Status"]} maxHeight="calc(100vh - 340px)">
                 {txns.map(t => (
@@ -7453,6 +7638,8 @@ function AllCustomers() {
               </Table>
               {txns.length === 0 && <Empty msg="No transactions found for this customer." />}
             </Card>
+            {currentPaid && <GstBreakupCard total={currentPaid.total} />}
+            {currentPaid && currentPaidRecharge > 0 && <InvoiceBreakdownCard inv={currentPaid} recharge={currentPaidRecharge} />}
           </>
         )}
         {subtab === "tickets" && <CustTicketMonths tickets={custTickets} />}
@@ -7484,6 +7671,7 @@ function AllCustomers() {
   }
 
   // ── Search list ────────────────────────────────────────────────────────────
+
   return (
     <div className="fade-up">
       <Toolbar q={q} setQ={setQ} placeholder="Search by Purifier ID, phone, name or email…" count={results.length} />
@@ -7582,6 +7770,7 @@ function Customers({ accessLevel = "view" }) {
     { label: "Plan Amount", get: c => planAmount(c) ?? "" },
     { label: "Status", get: c => c.status },
   ], filtered);
+
 
   return (
     <div className="fade-up">
@@ -7788,6 +7977,7 @@ function BillingOverview() {
     return acc;
   }, {}));
   const PIE = CHART_PALETTE.slice(0, 6);
+
 
   return (
     <div className="fade-up">
@@ -8544,6 +8734,7 @@ function Subscriptions() {
     { label: "Next billing", get: s => s.nextBilling },
   ], filtered);
 
+
   return (
     <div className="fade-up">
       <Toolbar q={q} setQ={setQ} placeholder="Search subscription, customer, plan…" count={filtered.length}
@@ -8629,6 +8820,7 @@ function Invoices() {
     { label: "Date", get: i => i.date },
     { label: "Due date", get: i => i.dueDate },
   ], filtered);
+
 
   return (
     <div className="fade-up">
@@ -8961,6 +9153,7 @@ function CreditsAnalytics() {
     { label: "Last given", get: r => r.lastGiven ? fmtDate(r.lastGiven) : "" },
   ], cnRows);
 
+
   return (
     <div className="fade-up">
       {creditNoteApi.usedSample && (
@@ -9112,6 +9305,7 @@ function TrackTechnician() {
     on_job: techs.filter(t => t.status === "on_job").length,
   };
 
+
   return (
     <div className="fade-up">
       <div style={grid4}>
@@ -9259,6 +9453,7 @@ function NetRevenue() {
     { label: mode === "day" ? "Date" : "Month", get: r => r.dateLabel },
     { label: "Revenue", get: r => r.revenue },
   ], daily);
+
 
   return (
     <div className="fade-up">
@@ -9540,6 +9735,7 @@ function PenetrationTracker({ subsData, custsData, societyFilter = null, asOf, e
   const thBase = { fontWeight: 700, fontSize: 12, padding: "10px 14px", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" };
   const tdNum = { padding: "10px 14px", textAlign: "right", fontSize: 13, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
   const stickyL = (bg, left, z) => ({ position: "sticky", left, zIndex: z, background: bg });
+
 
   return (
     <div className="fade-up">
@@ -9972,6 +10168,7 @@ useEffect(() => {
   const dueChipColor = (d) => d <= 3 ? "#DC4141" : d <= 7 ? "#986315" : "#08805A";
   const labelFmt = (v) => v >= 1000 ? `₹${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `₹${v}`;
 
+
   return (
     <div className="fade-up">
       {/* Plan + date-range filter */}
@@ -10226,6 +10423,7 @@ function Tracker() {
 
   if (!refs) return <Loading />;
 
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "var(--slate)", background: "var(--mint-2)", padding: "11px 16px", borderRadius: 12, marginBottom: 16 }}>
@@ -10453,6 +10651,7 @@ function MaintenanceSchedule() {
     { label: "Status", get: i => statusOf(i.days) },
   ], shown);
 
+
   return (
     <div className="fade-up">
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
@@ -10554,6 +10753,7 @@ function WaterQuality() {
     { label: "Last test", get: i => fmtDate(i.lastTest) },
     { label: "Compliance", get: i => i.status },
   ], shown);
+
 
   return (
     <div className="fade-up">
@@ -10665,6 +10865,7 @@ function AssetLifecycle() {
     { label: "Depreciation", get: x => x.depreciation },
     { label: "Book value", get: x => x.bookValue },
   ], shown);
+
 
   return (
     <div className="fade-up">
@@ -10779,6 +10980,7 @@ function DepositRefunds() {
     { label: "Deposit", get: r => r.dep },
     { label: "Status", get: r => r.state },
   ], shown);
+
 
   return (
     <div className="fade-up">
@@ -11078,6 +11280,7 @@ function AutoGSSociety({ accessLevel = "view" }) {
 
   const shown = societyFilter === "all" ? rows : rows.filter(r => r.society === societyFilter);
 
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--slate)", background: "var(--mint-2)", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
@@ -11266,6 +11469,7 @@ function IoTAlerts() {
     (!ql || `${x.c.name} ${x.c.purifier_id} ${x.c.society} ${x.alert.label}`.toLowerCase().includes(ql)));
 
   const chips = [["all", `All (${alerts.length})`], ["critical", `Critical (${critical})`], ["warning", `Warning (${warning})`]];
+
 
   return (
     <div className="fade-up">
@@ -11462,6 +11666,7 @@ function AppLogs() {
 
   const fmtLogin = (t) => { const d = new Date(t); return isNaN(d.getTime()) ? (t || "—") : fmtTime(d); };
   const trunc = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n) + "…" : (s || "—"); };
+
 
   return (
     <div className="fade-up">
@@ -11763,10 +11968,9 @@ function iotTank(tankLevel) {
   return { pct: step ? step.pct : 0, label: step ? step.label : "Empty", sensors, has: !!tankLevel };
 }
 // Ideal operating bands — not in the feed; standard potable-water ranges.
-// Pressure/flow bands are ASSUMED residential-RO operating ranges (not a spec
-// from the device vendor) — tune once real safe limits are confirmed. Both
-// legitimately read 0 while the unit is idle (no tap open), so 0 is "green",
-// not a dropout — unlike pH/TDS/temp, which are never ~0 for real water.
+// Pressure/flow are shown for CONTEXT only, not as a pass/fail band (see the
+// "confirmed not an anomaly" note on iotWqClass below) — [0,4]/[0,3] here are
+// just the typical reading while the pump runs, not an enforced ceiling.
 const IOT_WQ_IDEAL = { ph: [6.5, 8.5], tds: [50, 300], temp: [15, 25], pressure: [0, 4], flowMLPM: [0, 3] };
 const IOT_WQ_META = {
   ph:       { label: "pH Level",    unit: "",     icon: FlaskConical, dp: 1 },
@@ -11837,15 +12041,23 @@ function iotDispensedRange(items) {
 //   pH       green 6.5–8.5 · amber 6.0–6.4 / 8.6–9.0 · red <6.0 / >9.0
 //   TDS      green 50–300  · amber 301–500          · red <50 / >500   (mg/L)
 //   Temp     green 15–25   · amber 10–14.9 / 25.1–32 · red <10 / >32    (°C)
-//   Pressure green 0–4     · amber 4.01–6            · red <0 / >6     (bar, assumed)
-//   Flow     green 0–3     · amber 3.01–6            · red <0 / >6     (L/min, assumed)
+//
+// Pressure/flow are pump-driven, not water-quality metrics: 0 while the pump
+// is off (no tap open — the sensor simply has nothing to read), and whatever
+// the line reads once the pump kicks on, at any magnitude. Confirmed with
+// the person who placed these sensors: NEITHER end of that range is a real
+// anomaly — a 655 bar spike or a 0 reading are both just pump-cycling
+// artifacts of how this sensor is placed, not a fault. So unlike pH/TDS/
+// temp, pressure/flow never rate amber/red here — they're informational
+// only. If a real vendor spec for safe operating limits ever shows up,
+// reinstate a banded check for these two; don't just copy the old
+// >4/>3-bar-or-L/min thresholds back in, they were an assumption, not a spec.
 function iotWqClass(k, v) {
   if (v == null) return "na";
   if (k === "ph")       return (v < 6.0 || v > 9.0) ? "red" : (v < 6.5 || v > 8.5) ? "amber" : "green";
   if (k === "tds")      return (v < 50 || v > 500)  ? "red" : (v > 300)            ? "amber" : "green";
   if (k === "temp")     return (v < 10 || v > 32)   ? "red" : (v < 15 || v > 25)   ? "amber" : "green";
-  if (k === "pressure") return (v < 0 || v > 6)     ? "red" : (v > 4)              ? "amber" : "green";
-  if (k === "flowMLPM") return (v < 0 || v > 6)     ? "red" : (v > 3)              ? "amber" : "green";
+  if (k === "pressure" || k === "flowMLPM") return "green";
   return "na";
 }
 // Worst band touched by a min–max range (endpoints suffice for contiguous bands).
@@ -11859,8 +12071,9 @@ const IOT_WQ_NOTE = {
   ph:       { green: "balanced and safe", amber: "mildly off-neutral — minor scaling or taste change", red: "corrosive / unsafe — action required" },
   tds:      { green: "excellent mineral balance for drinking", amber: "moderately mineralised — may affect taste or leave deposits", red: "outside the safe range — possible contamination or over-purification" },
   temp:     { green: "optimal storage temperature", amber: "elevated — raises microbial-growth risk over time", red: "extreme — rapid microbial growth or a sensor / freeze fault" },
-  pressure: { green: "normal operating pressure (idle or dispensing)", amber: "elevated — check for a blocked line or a closed downstream valve", red: "abnormal — sensor fault or a dangerous over-pressure" },
-  flowMLPM: { green: "normal draw — idle or typical dispensing", amber: "unusually high flow — check for an open tap or a leak", red: "very high flow — possible burst line or sensor fault" },
+  // Always "green" now (iotWqClass never rates these two amber/red) — one note covers every reading.
+  pressure: { green: "pump off reads 0 bar, pump on reads the live line pressure — both normal" },
+  flowMLPM: { green: "pump off reads 0 L/min, pump on reads the live flow rate — both normal" },
 };
 const IOT_CARD = { background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
 // RAG badge palette for water-quality status.
@@ -12168,7 +12381,9 @@ function IoTWaterQualityCard({ range, keys = ["ph", "tds", "temp"], title = "Wat
             <span style={{ display: "grid", placeItems: "center", width: 28, height: 28, color: "#007d59" }}><meta.icon size={19} /></span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--f)" }}>{meta.label}</div>
-              <div style={{ fontSize: 10.5, color: "#8b9a95", marginTop: 3 }}>Ideal: {ideal[0]} – {ideal[1]}{meta.unit ? ` ${meta.unit}` : ""}</div>
+              <div style={{ fontSize: 10.5, color: "#8b9a95", marginTop: 3 }}>
+                {(k === "pressure" || k === "flowMLPM") ? "Pump off = 0, pump on = live reading — both normal" : `Ideal: ${ideal[0]} – ${ideal[1]}${meta.unit ? ` ${meta.unit}` : ""}`}
+              </div>
             </div>
             <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 750, color: "var(--f)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
               {r ? `${fmt(r.min, meta.dp)} – ${fmt(r.max, meta.dp)}` : "—"}{r && meta.unit ? ` ${meta.unit}` : ""}
@@ -12386,8 +12601,10 @@ const IOT_GAUGE = {
   tds:  { min: 0,  max: 600, dp: 0, band: (v) => iotWqClass("tds", v),  zones: [[0, 50, "red"], [50, 300, "green"], [300, 500, "amber"], [500, 600, "red"]], ticks: [0, 150, 300, 450, 600] },
   temp: { min: 5,  max: 40,  dp: 1, band: (v) => iotWqClass("temp", v), zones: [[5, 10, "cold"], [10, 15, "amber"], [15, 25, "green"], [25, 32, "amber"], [32, 40, "red"]], ticks: [5, 15, 25, 32], zoneLabels: [["Cold", 7.5], ["Normal", 20], ["Hot", 36]] },
   tank: { min: 0,  max: 100, dp: 0, band: (v) => iotTankBand(v),        zones: [[0, 25, "red"], [25, 50, "amber"], [50, 100, "green"]], ticks: [0, 25, 50, 75, 100], fill: true },
-  pressure: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("pressure", v), zones: [[0, 4, "green"], [4, 6, "amber"]], ticks: [0, 2, 4, 6] },
-  flowMLPM: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("flowMLPM", v), zones: [[0, 3, "green"], [3, 6, "amber"]], ticks: [0, 1.5, 3, 4.5, 6] },
+  // Fully green track — no amber zone. Pressure/flow are pump-driven, not a
+  // pass/fail quality metric; see iotWqClass for why neither end is a real anomaly.
+  pressure: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("pressure", v), zones: [[0, 6, "green"]], ticks: [0, 2, 4, 6] },
+  flowMLPM: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("flowMLPM", v), zones: [[0, 6, "green"]], ticks: [0, 1.5, 3, 4.5, 6] },
 };
 function IoTMetricGauge({ metricKey, label, unit, value, active, onClick }) {
   const g = IOT_GAUGE[metricKey];
@@ -12978,6 +13195,8 @@ function IoTAlertsPage() {
   const chip = (active, on, label, count) => (
     <button onClick={on} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}{count != null ? ` (${count})` : ""}</button>
   );
+
+
   return (
     <div className="fade-up ov-sans">
       <div style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Every anomaly detected across the fleet is captured and stored locally, so the log persists after the live window moves on — with severity, likely cause and the action to take.</div>
@@ -13293,6 +13512,7 @@ function IoTDevices() {
     out.push(total);
     return out;
   })();
+
 
   return (
     <div className="fade-up ov-sans">
@@ -13685,10 +13905,28 @@ function EarnedRevenue() {
     const tenureDays = (dueValid && nbValid) ? Math.round((nb - dd) / 86400000) + 1 : null;
     let daysInPaidMonth = 0;
     if (dueValid && nbValid && valid) {
-      let overlapStart = dd > monthStart ? dd : monthStart;
-      if (pd > overlapStart) overlapStart = pd;
-      const overlapEnd = nb < monthEnd ? nb : monthEnd;
-      daysInPaidMonth = overlapEnd >= overlapStart ? Math.round((overlapEnd - overlapStart) / 86400000) + 1 : 0;
+      if (nb < monthStart) {
+        // BUGFIX (found during a correctness audit): payment arrived after the
+        // tenure had ALREADY fully lapsed (validity end is before the paid
+        // month even starts) — e.g. due 1 Jul, validity ends 31 Jul, but not
+        // paid until 5 Aug. The overlap-with-paid-month check below would find
+        // zero overlap here, and the overlap-with-NEXT-month check (further
+        // down) finds zero too, since that's already lapsed as well — so the
+        // invoice's entire recharge would earn ₹0, forever, despite the cash
+        // having been collected in full. There's no future service period
+        // left to spread it across once it's this late, so cash and revenue
+        // converge: recognise the WHOLE recharge in the month it was actually
+        // paid, rather than losing it. (invoiceMonthlyBreakdown(), the sibling
+        // formula used on the All Customers card, doesn't have this gap — it
+        // always walks the invoice's own due-to-validity-end months regardless
+        // of how late payment lands, so it never loses one this way.)
+        daysInPaidMonth = tenureDays;
+      } else {
+        let overlapStart = dd > monthStart ? dd : monthStart;
+        if (pd > overlapStart) overlapStart = pd;
+        const overlapEnd = nb < monthEnd ? nb : monthEnd;
+        daysInPaidMonth = overlapEnd >= overlapStart ? Math.round((overlapEnd - overlapStart) / 86400000) + 1 : 0;
+      }
     }
     const earnedRevenue = tenureDays > 0 ? (recharge * daysInPaidMonth) / tenureDays : 0;
     // Spillover: when the validity window (End Date) reaches into the month
@@ -13706,7 +13944,7 @@ function EarnedRevenue() {
     }
     const nextMonthEarned = tenureDays > 0 ? (recharge * daysInNextMonth) / tenureDays : 0;
     const nextMonthLabel = (daysInNextMonth > 0 && nextMonthStart) ? nextMonthStart.toLocaleDateString("en-IN", { month: "short", year: "numeric" }) : null;
-    return { customer: i.customerName || "—", society: societyOf(i), plan, total, deposit, recharge, months,
+    return { invoiceId: i.id || "—", invoiceNumber: i.number || "—", referenceNumber: i.referenceNumber || "—", paymentMode: i.paymentMode || "—", customer: i.customerName || "—", society: societyOf(i), plan, total, deposit, recharge, months,
       payDay: pd, dueDay: dueValid ? dd : null, nextBillDay: nbValid ? nb : null, tenureDays, daysInPaidMonth, earnedRevenue,
       daysInNextMonth, nextMonthEarned, nextMonthLabel };
   });
@@ -13782,6 +14020,8 @@ function EarnedRevenue() {
   ];
 
   const exportCsv = () => exportToCsv(`prowater-earned-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
+    { label: "Invoice #", get: r => r.invoiceNumber }, { label: "Invoice ID", get: r => r.invoiceId },
+    { label: "Reference Number", get: r => r.referenceNumber }, { label: "Payment Mode", get: r => r.paymentMode },
     { label: "Customer", get: r => r.customer }, { label: "Apartment", get: r => r.society }, { label: "Plan", get: r => r.plan },
     { label: "Start Date (due date)", get: r => r.dueDay ? fmtDate(r.dueDay) : "" },
     { label: "Paid on", get: r => (r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "" },
@@ -13795,6 +14035,7 @@ function EarnedRevenue() {
     { label: "Days in next month", get: r => r.daysInNextMonth || "" },
     { label: "Earned revenue (next month)", get: r => r.nextMonthEarned ? r.nextMonthEarned.toFixed(2) : "" },
   ], tableRows);
+
 
   return (
     <div className="fade-up">
@@ -13825,8 +14066,8 @@ function EarnedRevenue() {
       </div>
       <div style={{ marginTop: 18 }}>
         <Toolbar q={search} setQ={setSearch} placeholder="Search customer or apartment…" count={tableRows.length} />
-        <Card pad={false} title={`Per-invoice recognition · ${rangeText}`} sub="Earned revenue = recharge × (validity days falling in the paid month) ÷ (validity end date − validity start date + 1). Validity start = due date; validity end = one calendar month later, minus a day (e.g. due 2 Jul → validity end 1 Aug) — so a tenure crossing a month boundary is split, and only its paid-month slice is recognised here. The last three columns show the spillover into the FOLLOWING month, when the validity window reaches that far. Yellow rows = a deposit was collected on this account.">
-          <Table head={["Customer", "Apartment",
+        <Card pad={false} title={`Per-invoice recognition · ${rangeText}`} sub="Earned revenue = recharge × (validity days falling in the paid month) ÷ (validity end date − validity start date + 1). Validity start = due date; validity end = one calendar month later, minus a day (e.g. due 2 Jul → validity end 1 Aug) — so a tenure crossing a month boundary is split, and only its paid-month slice is recognised here. The last three columns show the spillover into the FOLLOWING month, when the validity window reaches that far. If payment arrives after the validity window has already fully lapsed, the whole recharge is recognised in the paid month instead (nothing left to spread forward). Yellow rows = a deposit was collected on this account.">
+          <Table head={["Invoice #", "Reference Number", "Apartment",
             <button onClick={() => toggleSort("due")} title="Sort by start date"
               style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
               Start Date {sort.key === "due" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
@@ -13839,10 +14080,16 @@ function EarnedRevenue() {
               style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
               End Date {sort.key === "nextBilling" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
             </button>,
-            "Total paid", "Deposit", "Recharge", "Earned/month", "Tenure days", "Days in paid month", "Earned revenue", "Next month", "Days in next month", "Earned revenue (next month)"]} maxHeight="calc(100vh - 460px)">
+            "Total paid", "Deposit", "Recharge", "Earned/month", "Tenure days", "Days in paid month",
+            <button onClick={() => toggleSort("earned")} title="Sort by earned revenue"
+              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+              Earned revenue {sort.key === "earned" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+            </button>,
+            "Next month", "Days in next month", "Earned revenue (next month)"]} maxHeight="calc(100vh - 460px)">
             {tableRows.map((r, i) => (
               <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: r.deposit > 0 ? "#FBF0E0" : undefined }}>
-                <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{r.customer}</td>
+                <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap" }}>{r.invoiceNumber}</td>
+                <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap", color: "var(--muted)" }}>{r.referenceNumber}</td>
                 <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.society}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.dueDay ? fmtDate(r.dueDay) : "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{(r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "—"}</td>
@@ -13861,7 +14108,7 @@ function EarnedRevenue() {
             ))}
             {tableRows.length > 0 && (
               <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={5}>Total ({tableRows.length})</td>
+                <td style={{ ...ftd, textAlign: "center" }} colSpan={6}>Total ({tableRows.length})</td>
                 <td style={ftd}>{inr(visTotal.total)}</td>
                 <td style={ftd}>{inr(visTotal.deposit)}</td>
                 <td style={ftd}>{inr(visTotal.recharge)}</td>
@@ -14021,6 +14268,8 @@ function Reconciliation() {
     { label: "Days late", get: f => f.daysLate || "" },
   ], tableRows);
 
+  const reconPeriodLabel = rangeLabel(range);
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -14149,7 +14398,8 @@ function DPTransactions() {
   const [search, setSearch] = useState("");
   const [rowType, setRowType] = useState("TRANSACTION");    // payment-type filter — raw row_type value; "all" or a literal value like "TRANSACTION"
   const [txnType, setTxnType] = useState("all");            // transaction_type filter — "all" or a literal value like "APP" (DISCOUNT is hard-excluded below, not offered as a choice)
-  const [sortDir, setSortDir] = useState("desc");           // Paid date column sort
+  const [sort, setSort] = useState({ key: "paid", dir: "desc" }); // table sort — Paid date / Start Date / End Date
+  const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" });
   const [page, setPage] = useState(1);                      // table pagination — this feed can run to thousands of rows
   const DP_PER_PAGE = 50;
   const isAdmin = user.role === "admin";                    // Upload JSON / Run API is admin-only
@@ -14280,6 +14530,11 @@ function DPTransactions() {
 
   const depositCollected = inRange.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
   const rechargeCollected = inRange.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+  const totalCollected = depositCollected + rechargeCollected;
+  // Dynamic split — recomputed from whatever's actually in `inRange` right now,
+  // so it always tracks the current date/apartment/type filters, never hardcoded.
+  const depositSplitPct = totalCollected > 0 ? Math.round((depositCollected / totalCollected) * 100) : 0;
+  const rechargeSplitPct = totalCollected > 0 ? 100 - depositSplitPct : 0;
 
   // Previous-period comparison — same unit as the selected preset (month for
   // the default "This Month", quarter for "This Quarter", etc.), matching the
@@ -14288,21 +14543,64 @@ function DPTransactions() {
   const prevFiltered = rows.filter(r => aptOk(r) && rowTypeOk(r) && txnTypeOk(r) && r.Paid_Date && dateInRange(new Date(r.Paid_Date), rngPrev));
   const depositPrev = prevFiltered.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
   const rechargePrev = prevFiltered.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+  const totalPrev = depositPrev + rechargePrev;
 
   const stats = [
-    { label: "Deposit Collected", value: inr(Math.round(depositCollected)), icon: Landmark, sub: rangeLabel(range), hero: true, delta: momPct(depositCollected, depositPrev) },
-    { label: "Recharge Collected", value: inr(Math.round(rechargeCollected)), icon: Repeat, sub: rangeLabel(range), delta: momPct(rechargeCollected, rechargePrev) },
+    { label: "Deposit Collected", value: inr(Math.round(depositCollected)), icon: Landmark, sub: `${rangeLabel(range)} · ${depositSplitPct}% of collections`, hero: true, delta: momPct(depositCollected, depositPrev) },
+    { label: "Recharge Collected", value: inr(Math.round(rechargeCollected)), icon: Repeat, sub: `${rangeLabel(range)} · ${rechargeSplitPct}% of collections`, delta: momPct(rechargeCollected, rechargePrev) },
   ];
 
+  const sortField = { paid: "Paid_Date", start: "t.validity_start_date", end: "t.validity_end_date" }[sort.key];
   const searchQ = search.trim().toLowerCase();
   const tableRows = inRange
     .filter(r => !searchQ ||
       (r.phone || "").toLowerCase().includes(searchQ) ||
       (r.current_device || "").toLowerCase().includes(searchQ) ||
       (r.partner_name || "").toLowerCase().includes(searchQ))
-    .sort((a, b) => (new Date(a.Paid_Date) - new Date(b.Paid_Date)) * (sortDir === "asc" ? 1 : -1));
+    .sort((a, b) => {
+      const ta = a[sortField] ? new Date(a[sortField]).getTime() : 0;
+      const tb = b[sortField] ? new Date(b[sortField]).getTime() : 0;
+      return (ta - tb) * (sort.dir === "asc" ? 1 : -1);
+    });
   const grandDeposit = tableRows.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
   const grandRevenue = tableRows.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+
+  // Per-apartment performance — same date/apt/type filters as the aggregate
+  // KPI cards above, just broken out by partner_name so you can compare
+  // apartments at a glance instead of only seeing the fleet-wide total.
+  // Shows EVERY known apartment (all of `aptOptions`), not just the ones with
+  // activity in the current filters — an apartment with zero transactions
+  // this period still gets a ₹0 card instead of silently disappearing, so
+  // the card count always matches the Apartment filter's option count.
+  const aptStats = aptOptions.map(name => {
+    const aptRows = inRange.filter(r => r.partner_name === name);
+    const dep = aptRows.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
+    const rev = aptRows.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+    const tot = dep + rev;
+    // Dynamic per-apartment split — recomputed from this apartment's own
+    // dep/rev in the current filters, never a fixed/hardcoded ratio.
+    const depPct = tot > 0 ? Math.round((dep / tot) * 100) : 0;
+    const revPct = tot > 0 ? 100 - depPct : 0;
+    return { name, dep, rev, tot, depPct, revPct, count: aptRows.length };
+  }).sort((a, b) => b.rev - a.rev);
+  const aptActiveCount = aptStats.filter(a => a.count > 0).length;
+
+  // ── Business insights: what happened / ongoing / result / +/- / actions ──
+  // Deterministic rules over the live (already-filtered) DP transaction rows —
+  // no LLM involved, same pattern as Net Revenue / Sales Insights / Societies.
+  const dpMomPct = momPct(totalCollected, totalPrev);
+  const topApt = aptStats.find(a => a.count > 0);
+  const idleApts = aptStats.filter(a => a.count === 0);
+  const dpPos = [], dpNeg = [], dpActs = [];
+  if (dpMomPct != null && dpMomPct > 0) dpPos.push(`Collections up ${dpMomPct}% vs the previous period`);
+  if (topApt) dpPos.push(`Top apartment: ${topApt.name} — ${inr(Math.round(topApt.tot))}`);
+  if (dpMomPct != null && dpMomPct < 0) { dpNeg.push(`Collections down ${Math.abs(dpMomPct)}% vs the previous period`); dpActs.push("Collections dipped versus last period — check for missed recharges or a stalled collection drive."); }
+  if (idleApts.length > 0) { dpNeg.push(`${idleApts.length} of ${aptOptions.length} apartments had no collections this period (${idleApts.map(a => a.name).join(", ")})`); dpActs.push(`Follow up with ${idleApts.map(a => a.name).join(", ")} — no recharge or deposit activity recorded this period.`); }
+  if (totalCollected > 0 && depositSplitPct > 40) { dpNeg.push(`Deposits are ${depositSplitPct}% of collections`); dpActs.push("A large share is one-time refundable deposits — push recurring recharges for more durable revenue."); }
+  if (!dpNeg.length) dpActs.push("Collections look healthy across apartments — keep the recharge cadence going.");
+  const dpHappened = `${inr(Math.round(totalCollected))} collected in ${rangeLabel(range)}${dpMomPct != null ? ` — ${dpMomPct >= 0 ? "up" : "down"} ${Math.abs(dpMomPct)}% vs the previous period` : ""}.`;
+  const dpOngoing = `${inr(Math.round(rechargeCollected))} recharge (${rechargeSplitPct}%) + ${inr(Math.round(depositCollected))} deposit (${depositSplitPct}%) this period, across ${aptActiveCount} of ${aptOptions.length} apartments active.`;
+  const dpResult = `Recharge is ${rechargeSplitPct}% of collections here — the recurring, non-refundable share; deposits are one-time and eventually refundable.`;
 
   // Pagination — this feed can run into the thousands of rows; the Grand
   // Total footer still sums the FULL filtered set (tableRows), only the
@@ -14332,6 +14630,17 @@ function DPTransactions() {
     { label: "City", get: r => r.City || "" },
     { label: "Device status", get: r => r.device_status || "" },
   ], tableRows);
+
+  // Clickable column header — Paid date / Start Date / End Date all sort the
+  // same way (single active sort key, arrow shows current direction).
+  const sortHeader = (key, label) => (
+    <button key={key} onClick={() => toggleSort(key)} title={`Sort by ${label.toLowerCase()}`}
+      style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+      {label} {sort.key === key ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} style={{ opacity: .4 }} />}
+    </button>
+  );
+
+  const dpPeriodLabel = rangeLabel(range);
 
   return (
     <div className="fade-up">
@@ -14368,7 +14677,71 @@ function DPTransactions() {
           {uploadError}
         </div>
       )}
+
+      {/* Business insights — deterministic, not an LLM call; see AI summaries are deterministic. */}
+      <div style={{ marginBottom: 18 }}>
+        <Card title="Business insights" sub="What happened · what's ongoing · the result · and what to fix">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 }}>
+            {[{ t: "What happened", body: dpHappened, icon: "📈" }, { t: "What's ongoing", body: dpOngoing, icon: "⏳" }, { t: "Result", body: dpResult, icon: "🎯" }].map((b, i) => (
+              <div key={i} style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>{b.icon} {b.t}</div>
+                <div style={{ fontSize: 13, color: "var(--slate)", lineHeight: 1.5 }}>{b.body}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginTop: 12 }}>
+            <div style={{ background: "#EEF7F3", border: "1px solid #BFE6D6", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#0A7D53", marginBottom: 6 }}>Positive</div>
+              {dpPos.length ? dpPos.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#0A7D53", fontWeight: 800 }}>▲</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No standout positives yet.</div>}
+            </div>
+            <div style={{ background: "#FBF0F0", border: "1px solid #F0C9C9", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#DC4141", marginBottom: 6 }}>Negative</div>
+              {dpNeg.length ? dpNeg.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#DC4141", fontWeight: 800 }}>▼</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No red flags in this view.</div>}
+            </div>
+          </div>
+          <div style={{ marginTop: 12, background: "#fff", border: "1px dashed var(--brand)", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 6 }}>Turn − into + · recommended actions</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {dpActs.map((a, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 8 }}><span style={{ color: "var(--teal)", fontWeight: 800, flex: "0 0 auto" }}>{i + 1}.</span>{a}</div>)}
+            </div>
+          </div>
+        </Card>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+
+      {/* Deposit vs Recharge split — a single stacked bar, recomputed live from
+          whatever's in `inRange` right now (never a fixed/hardcoded ratio). */}
+      {totalCollected > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <Card title="Deposit vs Recharge split" sub={`${inr(Math.round(totalCollected))} total collected · ${rangeLabel(range)}`}>
+            <div style={{ display: "flex", height: 16, borderRadius: 999, overflow: "hidden", background: "var(--mint-2)" }}>
+              {depositSplitPct > 0 && <div style={{ width: `${depositSplitPct}%`, background: "#986315" }} title={`Deposit ${depositSplitPct}%`} />}
+              {rechargeSplitPct > 0 && <div style={{ width: `${rechargeSplitPct}%`, background: "#0A9D6E" }} title={`Recharge ${rechargeSplitPct}%`} />}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginTop: 10, fontSize: 12.5 }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--slate)" }}>
+                <span style={{ width: 9, height: 9, borderRadius: 999, background: "#986315", flexShrink: 0 }} /> Deposit {inr(Math.round(depositCollected))} · {depositSplitPct}%
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 7, color: "var(--slate)" }}>
+                <span style={{ width: 9, height: 9, borderRadius: 999, background: "#0A9D6E", flexShrink: 0 }} /> Recharge {inr(Math.round(rechargeCollected))} · {rechargeSplitPct}%
+              </span>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {aptStats.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", marginBottom: 10 }}>Performance by apartment · {rangeLabel(range)} · {aptActiveCount} of {aptStats.length} active</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+            {aptStats.map(a => (
+              <Stat key={a.name} label={a.name} value={inr(Math.round(a.rev))} icon={Boxes}
+                sub={a.count > 0 ? `Deposit ${inr(Math.round(a.dep))} (${a.depPct}%) · Recharge ${a.revPct}% · ${a.count} txn${a.count !== 1 ? "s" : ""}` : "No activity this period"} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 18 }}>
         <Toolbar q={search} setQ={setSearch} placeholder="Search phone, device or apartment…" count={tableRows.length}
@@ -14396,11 +14769,10 @@ function DPTransactions() {
           } />
         <Card pad={false} title={`Transactions · ${rangeLabel(range)}`} sub="Raw records from the DP Transactions feed — filtered by Paid_Date, apartment, payment type and transaction type. A collection event can appear as both a COLLECTION_SUMMARY and a TRANSACTION row; shown as TRANSACTION only by default. DISCOUNT transaction_type rows are excluded entirely — not real cash collected.">
           <Table head={[
-            <button key="paidSort" onClick={() => setSortDir(d => d === "asc" ? "desc" : "asc")} title="Sort by paid date"
-              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
-              Paid date {sortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-            </button>,
-            "Apartment", "Customer", "Phone", "Device", "Type", "Transaction key", "Transaction type", "Start Date", "End Date", "Validity", "Litres", "Plan", "Deposit", "Revenue"]} maxHeight="calc(100vh - 460px)">
+            sortHeader("paid", "Paid date"),
+            "Apartment", "Customer", "Phone", "Device", "Type",
+            sortHeader("start", "Start Date"), sortHeader("end", "End Date"),
+            "Validity", "Litres", "Plan", "Deposit", "Revenue"]} maxHeight="calc(100vh - 460px)">
             {pageRows.map((r, i) => (
               <tr key={r.id ? `${r.id}-${i}` : i} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
@@ -14411,10 +14783,6 @@ function DPTransactions() {
                 <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
                   <span style={{ display: "inline-block", whiteSpace: "nowrap", fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, color: r.row_type === "TRANSACTION" ? "#08805A" : "#2A86D6", background: r.row_type === "TRANSACTION" ? "#E2F3EE" : "#E5F0FA" }}>{r.row_type || "—"}</span>
                 </td>
-                <td style={{ ...td, fontSize: 11, textAlign: "center", fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                  {r.transaction_key ? <span title={r.transaction_key}>{r.transaction_key.replace(/^DPTX_/, "").slice(0, 8)}…</span> : "—"}
-                </td>
-                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.transaction_type || "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_start_date"] ? fmtDate(new Date(r["t.validity_start_date"])) : "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_end_date"] ? fmtDate(new Date(r["t.validity_end_date"])) : "—"}</td>
                 <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{validityOf(r) != null ? Number(validityOf(r)).toLocaleString("en-IN") : "—"}</td>
@@ -14426,12 +14794,12 @@ function DPTransactions() {
             ))}
             {tableRows.length > 0 && (
               <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={13}>Grand Total ({tableRows.length})</td>
+                <td style={{ ...ftd, textAlign: "center" }} colSpan={11}>Grand Total ({tableRows.length})</td>
                 <td style={ftd}>{inr(Math.round(grandDeposit))}</td>
                 <td style={ftd}>{inr(Math.round(grandRevenue))}</td>
               </tr>
             )}
-            {tableRows.length === 0 && <tr><td colSpan={15} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
+            {tableRows.length === 0 && <tr><td colSpan={13} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
           </Table>
           {tableRows.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 16px", flexWrap: "wrap" }}>
@@ -14568,6 +14936,7 @@ function AOP({ accessLevel = "view" }) {
     withPct.length ? <><strong>{metCount}</strong> of {withPct.length} month{withPct.length > 1 ? "s" : ""} with targets {metCount === 1 ? "has" : "have"} reached 100%.</> : null,
   ].filter(Boolean);
 
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -14668,6 +15037,184 @@ function AOP({ accessLevel = "view" }) {
   );
 }
 
+/* §7.5 — Renewal & Churn Risk Radar: flags customers whose subscription is
+   renewing soon, who have an overdue/failed invoice, or whose account is in
+   Zoho "dunning" (payment actively failing) — three real, already-live
+   signals joined onto one customer-level risk view. Deliberately does NOT
+   include an IoT "device gone quiet" signal — there is no existing join
+   between a customer's purifier_id and the real IoT device fleet (that
+   module only monitors a couple of apartment-level installations), so
+   fabricating one here would be misleading. All deterministic JS, no LLM —
+   same "Business insights" pattern as Net Revenue / DP Transaction. */
+function ChurnRiskRadar() {
+  const { user } = useAuth();
+  const [data, setData] = useState(null);
+  const [levelFilter, setLevelFilter] = useState("all"); // all | high | medium | low
+  const [search, setSearch] = useState("");
+  useEffect(() => {
+    api.logView(user.username, "Viewed Renewal & Churn Risk Radar");
+    Promise.all([customerApi.getCustomers(), billingApi.getSubscriptions(), billingApi.getInvoices()])
+      .then(([customers, subs, invs]) => setData({ customers, subs, invs }))
+      .catch(() => setData({ customers: [], subs: [], invs: [] }));
+  }, []);
+  if (!data) return <Loading />;
+  const { customers, subs, invs } = data;
+
+  const now = Date.now();
+  const MS_DAY = 86400000;
+  const RENEWAL_WINDOW_DAYS = 30;
+
+  // Join subs/invoices back to a customer via whatever key they share —
+  // same key set AllCustomers()/EarnedRevenue() already use for this join.
+  const keysOf = (c) => [c.id, c.zohoId, c.email].filter(Boolean).map(k => String(k).toLowerCase());
+  const belongs = (rec, keys) => [rec.zohoCustomerId, rec.customerNumber, rec.zohoId, rec.email]
+    .filter(Boolean).map(k => String(k).toLowerCase()).some(k => keys.includes(k));
+  // An invoice counts as overdue exactly the way BillingOverview/SubscriptionReconciliation already do.
+  const isOverdue = (i) => i.status === "failed" || (i.balance > 0 && (i.rawStatus || "").toLowerCase() === "overdue");
+
+  const withPur = customers.filter(c => c.purifier_id);
+  const rows = withPur.map(c => {
+    const keys = keysOf(c);
+    const custSubs = subs.filter(s => belongs(s, keys));
+    const custInvs = invs.filter(i => belongs(i, keys));
+    const overdueInvs = custInvs.filter(isOverdue);
+    const overdueAmt = overdueInvs.reduce((s, i) => s + (i.balance || i.total || 0), 0);
+    // Soonest upcoming renewal among this customer's active subscriptions.
+    const upcoming = custSubs
+      .filter(s => s.status !== "failed" && s.nextBilling)
+      .map(s => ({ ...s, _due: new Date(s.nextBilling) }))
+      .filter(s => !isNaN(s._due.getTime()))
+      .map(s => ({ ...s, _days: Math.ceil((s._due.getTime() - now) / MS_DAY) }))
+      .sort((a, b) => a._days - b._days)[0] || null;
+    const renewalDays = upcoming && upcoming._days >= 0 && upcoming._days <= RENEWAL_WINDOW_DAYS ? upcoming._days : null;
+    const isDunning = String(c.status || "").toLowerCase() === "dunning";
+
+    const reasons = [];
+    let score = 0;
+    if (isDunning) { reasons.push("Dunning — payment actively failing"); score += 3; }
+    if (overdueInvs.length > 0) { reasons.push(`${overdueInvs.length} overdue invoice${overdueInvs.length !== 1 ? "s" : ""} · ${inr(Math.round(overdueAmt))}`); score += 2; }
+    if (renewalDays != null) { reasons.push(`Renews in ${renewalDays}d`); score += renewalDays <= 7 ? 2 : 1; }
+
+    const level = score >= 4 ? "high" : score >= 2 ? "medium" : score >= 1 ? "low" : null;
+    return { c, reasons, score, level, overdueAmt, overdueCount: overdueInvs.length, renewalDays, isDunning };
+  }).filter(r => r.level);
+
+  const searchQ = search.trim().toLowerCase();
+  const filtered = rows
+    .filter(r => levelFilter === "all" || r.level === levelFilter)
+    .filter(r => !searchQ || (r.c.name + r.c.society + r.c.purifier_id + r.c.phone).toLowerCase().includes(searchQ))
+    .sort((a, b) => b.score - a.score);
+
+  const highCount = rows.filter(r => r.level === "high").length;
+  const mediumCount = rows.filter(r => r.level === "medium").length;
+  const renewalsDue = rows.filter(r => r.renewalDays != null).length;
+  const renewalsDue7 = rows.filter(r => r.renewalDays != null && r.renewalDays <= 7).length;
+  const overdueCustomers = rows.filter(r => r.overdueCount > 0).length;
+  const overdueTotal = rows.reduce((s, r) => s + r.overdueAmt, 0);
+  const dunningCount = rows.filter(r => r.isDunning).length;
+
+  // ── Business insights: deterministic, no LLM — same shape used elsewhere. ──
+  const crPos = [], crNeg = [], crActs = [];
+  if (rows.length === 0) crPos.push("No customers currently show a renewal, overdue, or dunning signal.");
+  if (highCount === 0 && rows.length > 0) crPos.push("No customer is currently at High risk.");
+  if (highCount > 0) { crNeg.push(`${highCount} customer${highCount !== 1 ? "s are" : " is"} at High risk right now`); crActs.push(`Prioritise the ${highCount} High-risk customer${highCount !== 1 ? "s" : ""} first — usually a combination of dunning + an overdue bill.`); }
+  if (dunningCount > 0) { crNeg.push(`${dunningCount} account${dunningCount !== 1 ? "s are" : " is"} in dunning (payment actively failing)`); crActs.push("Reach out to dunning accounts before Zoho gives up retrying the card."); }
+  if (overdueCustomers > 0) { crNeg.push(`${overdueCustomers} customer${overdueCustomers !== 1 ? "s have" : " has"} an overdue invoice, ${inr(Math.round(overdueTotal))} total`); crActs.push(`Chase the ${inr(Math.round(overdueTotal))} overdue across ${overdueCustomers} customer${overdueCustomers !== 1 ? "s" : ""}.`); }
+  if (renewalsDue7 > 0) { crNeg.push(`${renewalsDue7} renewal${renewalsDue7 !== 1 ? "s" : ""} due within 7 days`); crActs.push(`Confirm the ${renewalsDue7} renewal${renewalsDue7 !== 1 ? "s" : ""} due this week won't lapse.`); }
+  else if (renewalsDue > 0) crPos.push(`${renewalsDue} renewal${renewalsDue !== 1 ? "s" : ""} due in the next 30 days — none urgent (within 7 days) yet`);
+  if (!crActs.length) crActs.push("Nothing urgent — the base looks healthy on renewals, payments and dunning right now.");
+  const crHappened = `${rows.length} of ${withPur.length} customers show at least one risk signal — ${highCount} High, ${mediumCount} Medium, ${rows.length - highCount - mediumCount} Low.`;
+  const crOngoing = `${renewalsDue} renewal${renewalsDue !== 1 ? "s" : ""} due in the next ${RENEWAL_WINDOW_DAYS} days, ${overdueCustomers} customer${overdueCustomers !== 1 ? "s" : ""} overdue (${inr(Math.round(overdueTotal))}), ${dunningCount} in dunning.`;
+  const crResult = highCount > 0 ? `${highCount} customer${highCount !== 1 ? "s need" : " needs"} attention this week to avoid churn.` : "No customer needs urgent attention this week.";
+
+  const levelChip = (level) => {
+    const map = { high: ["#DC4141", "#FBE8E8", "High"], medium: ["#986315", "#FBF0E0", "Medium"], low: ["#7D8A83", "#ECEEED", "Low"] };
+    const [c, bg, lbl] = map[level] || map.low;
+    return <span style={{ fontSize: 11, fontWeight: 700, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
+  };
+
+  const exportCsv = () => exportToCsv("prowater-churn-risk.csv", [
+    { label: "Customer", get: r => r.c.name }, { label: "Purifier ID", get: r => r.c.purifier_id },
+    { label: "Society", get: r => r.c.society }, { label: "Phone", get: r => r.c.phone },
+    { label: "Risk level", get: r => r.level }, { label: "Reasons", get: r => r.reasons.join("; ") },
+    { label: "Renews in (days)", get: r => r.renewalDays ?? "" },
+    { label: "Overdue invoices", get: r => r.overdueCount }, { label: "Overdue amount", get: r => Math.round(r.overdueAmt) },
+    { label: "Dunning", get: r => r.isDunning ? "yes" : "no" },
+  ], filtered);
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom: 18 }}>
+        <Card title="Business insights" sub="What happened · what's ongoing · the result · and what to fix">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 12 }}>
+            {[{ t: "What happened", body: crHappened, icon: "📈" }, { t: "What's ongoing", body: crOngoing, icon: "⏳" }, { t: "Result", body: crResult, icon: "🎯" }].map((b, i) => (
+              <div key={i} style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>{b.icon} {b.t}</div>
+                <div style={{ fontSize: 13, color: "var(--slate)", lineHeight: 1.5 }}>{b.body}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12, marginTop: 12 }}>
+            <div style={{ background: "#EEF7F3", border: "1px solid #BFE6D6", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#0A7D53", marginBottom: 6 }}>Positive</div>
+              {crPos.length ? crPos.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#0A7D53", fontWeight: 800 }}>▲</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No standout positives yet.</div>}
+            </div>
+            <div style={{ background: "#FBF0F0", border: "1px solid #F0C9C9", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "#DC4141", marginBottom: 6 }}>Negative</div>
+              {crNeg.length ? crNeg.map((p, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 7, marginBottom: 2 }}><span style={{ color: "#DC4141", fontWeight: 800 }}>▼</span>{p}</div>) : <div style={{ fontSize: 12.5, color: "var(--muted)" }}>No red flags in this view.</div>}
+            </div>
+          </div>
+          <div style={{ marginTop: 12, background: "#fff", border: "1px dashed var(--brand)", borderRadius: 12, padding: "12px 14px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--teal)", marginBottom: 6 }}>Turn − into + · recommended actions</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {crActs.map((a, i) => <div key={i} style={{ fontSize: 12.5, color: "var(--f)", lineHeight: 1.5, display: "flex", gap: 8 }}><span style={{ color: "var(--teal)", fontWeight: 800, flex: "0 0 auto" }}>{i + 1}.</span>{a}</div>)}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+        <Stat label="High risk" value={highCount} icon={AlertCircle} sub="dunning + overdue combo" hero />
+        <Stat label="Medium risk" value={mediumCount} icon={Hourglass} sub="one active risk signal" />
+        <Stat label="Renewals due" value={renewalsDue} icon={CalendarClock} sub={`next ${RENEWAL_WINDOW_DAYS} days · ${renewalsDue7} within 7d`} />
+        <Stat label="Overdue" value={overdueCustomers} icon={AlertCircle} sub={`${inr(Math.round(overdueTotal))} total`} />
+        <Stat label="Dunning" value={dunningCount} icon={Ban} sub="payment actively failing" />
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Toolbar q={search} setQ={setSearch} placeholder="Search customer, society, purifier ID…" count={filtered.length}
+          right={
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              {[["all", `All (${rows.length})`], ["high", `High (${highCount})`], ["medium", `Medium (${mediumCount})`], ["low", `Low (${rows.length - highCount - mediumCount})`]].map(([id, label]) => (
+                <button key={id} onClick={() => setLevelFilter(id)} style={{
+                  padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer",
+                  border: "1.5px solid " + (levelFilter === id ? "var(--teal)" : "var(--border)"),
+                  background: levelFilter === id ? "var(--mint-2)" : "#fff",
+                  color: levelFilter === id ? "var(--teal-d)" : "var(--slate)"
+                }}>{label}</button>
+              ))}
+              <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: 6 }}><Download size={15} /> Export</button>
+            </div>
+          } />
+        <Card pad={false}>
+          <Table head={["Customer", "Society", "Purifier ID", "Risk", "Reasons"]} maxHeight="calc(100vh - 460px)">
+            {filtered.map((r, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{r.c.name || "—"}</td>
+                <td style={{ ...td, fontSize: 12 }}>{r.c.society || "—"}</td>
+                <td style={{ ...td, fontSize: 12 }}>{r.c.purifier_id}</td>
+                <td style={{ ...td, textAlign: "center" }}>{levelChip(r.level)}</td>
+                <td style={{ ...td, fontSize: 12.5 }}>{r.reasons.join(" · ")}</td>
+              </tr>
+            ))}
+          </Table>
+          {filtered.length === 0 && <Empty msg="No customers match this filter — nothing currently at risk." />}
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 /* §8 — Apartment Performance: paid invoices joined to customers, grouped by
    apartment (society) or purifier ID, with deposit/recharge split + MoM. */
 function ApartmentPerformance() {
@@ -14739,6 +15286,7 @@ function ApartmentPerformance() {
   const seg = (v, label) => (
     <button onClick={() => setMode(v)} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, border: "1.5px solid var(--border)", background: mode === v ? "var(--forest)" : "#fff", color: mode === v ? "#fff" : "var(--slate)", borderRadius: 10, cursor: "pointer" }}>{label}</button>
   );
+
 
   return (
     <div className="fade-up">
@@ -15180,6 +15728,7 @@ function TaskAdmin() {
     </div>
   );
 
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
@@ -15378,6 +15927,7 @@ function TaskPlanner({ initialView = "board" }) {
     <button onClick={() => setView(v)} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, border: "1.5px solid var(--border)", background: view === v ? "var(--forest)" : "#fff", color: view === v ? "#fff" : "var(--slate)", borderRadius: 10 }}>{label}</button>
   );
 
+
   return (
     <div className="fade-up">
       {/* toolbar */}
@@ -15542,6 +16092,7 @@ function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
     { label: "Not started", value: notStarted, icon: Hourglass, sub: "in the backlog" },
     { label: "Completion", value: pct + "%", icon: TrendingUp, sub: "across all scopes" },
   ];
+
 
   return (
     <div className="fade-up">
@@ -15877,6 +16428,7 @@ function SalesInsights() {
   ];
   const chartData = statusRows.slice(0, 10).map(r => ({ name: r.status, leads: r.count }));
 
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -16053,6 +16605,7 @@ function SalesErrorCorrection({ isAdmin }) {
     { label: "Created", get: d => d.created },
   ], filtered);
 
+
   return (
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#986315", background: "#FBF0E0", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
@@ -16118,6 +16671,7 @@ function ApartmentLeads() {
     { label: "Address", get: r => r.address }, { label: "Pincode", get: r => r.pincode },
     { label: "Flats", get: r => r.flats || "" }, { label: "Created", get: r => r.createdTime },
   ], sorted);
+
 
   return (
     <div className="fade-up">

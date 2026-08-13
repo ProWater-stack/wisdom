@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/App.jsx`; this
 > doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.68**.
+> **Reflects:** `APP_VERSION` **2.29.84**.
 
 ---
 
@@ -186,7 +186,11 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   count/active/device-mix (Own/Normal/Hot&Cold from the purifier-ID prefix), expandable per society.
   The Overview "Active Customers" figure and Top-Societies "Active" column come from this active-status logic.
 - **All Customers (v2.29.4):** search by Purifier ID / phone / name / email; clicking a customer opens a
-  full-page view with five sub-screens — **Profile** (a fields table incl. Referral code, **LTV** = sum of all
+  full-page view with an always-visible **"at a glance" strip (v2.29.82)** — Status, Customer score, LTV,
+  Open tickets, Last payment, Referral code, shown above the tab bar on every sub-screen, not just Profile
+  — and six sub-screens — **Timeline (v2.29.82)** — every payment, ticket, referral and discount/credit-note
+  event for this customer merged into one chronological feed (newest first), so the whole relationship can
+  be read without switching tabs — **Profile** (a fields table incl. Referral code, **LTV** = sum of all
   paid invoices, Security Deposit, Discounts w/ balance, Support tickets and Complaints, where only concerning
   values are highlighted amber/red; three 0-5 **scores** — Customer / Technician / Device — with conditional
   colours; and a **Spares-used** table. The old AI-summary card was removed in v2.29.11 — it only stitched
@@ -194,15 +198,29 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   into the Ticketing feed, counted **month-wise** — `Jan'26 · N` — each month expandable to its Issue-Category
   breakdown; Ops reuses the `Issue Category ≠ Complaint` filter), and **Referral** (referrals made / converted /
   pending, referral code, and the referee list — joined to the referral API by any shared key). All deterministic.
-  **Transactions (v2.29.66):** above the payments table, a "Current paid transaction — revenue recognition"
-  card for the customer's most recent paid invoice (`txns.find(t => t.status === "paid" ...)`, `txns` is
-  already newest-first) — Due date, Payment date, Recharge tenure (start/end/days), then a month-by-month
-  split of **Earned revenue** (accrual), **Collected Revenue** (cash-basis) and **Outstanding revenue**
-  (receivable). New `invoiceMonthlyBreakdown()` helper (generalizes Earned Revenue's per-invoice month-split
-  math to show EVERY touched month, including the accrual slice before actual payment — Earned Revenue's own
-  table never shows that, since it only surfaces an invoice's own paid-month slice). Verified exactly against
-  the user's reference spreadsheet: due 7/26, paid 8/1, ₹350 recharge → tenure 31 days, Earned ₹68 (Jul) + ₹282
-  (Aug), Collected ₹0 (Jul) + ₹350 (Aug), Outstanding ₹350 (as of Jul-end) + ₹0 (once paid).
+  **Transactions (v2.29.66, reworked v2.29.71):** below the payments table (moved below it in v2.29.71 —
+  was above), a "Current paid transaction — revenue recognition" card for the customer's most recent paid
+  invoice (`txns.find(t => t.status === "paid" ...)`, `txns` is already newest-first). New
+  `invoiceMonthlyBreakdown()` helper (generalizes Earned Revenue's per-invoice month-split math to show
+  EVERY touched month, including the accrual slice before actual payment — Earned Revenue's own table
+  never shows that, since it only surfaces an invoice's own paid-month slice). Verified exactly against
+  the user's reference spreadsheet: due 7/26, paid 8/1, ₹350 recharge → tenure 31 days, Earned ₹68 (Jul) +
+  ₹282 (Aug), Collected ₹0 (Jul) + ₹350 (Aug), Outstanding ₹350 (as of Jul-end) + ₹0 (once paid).
+  **v2.29.71** compacted the card — it read too big. Now a **5-row icon summary** (Due date
+  `CalendarDays`, Payment date `CalendarClock`, Recharge tenure `CalendarRange`, Earned revenue
+  `TrendingUp`, Collected Revenue `Wallet`), Collected Revenue showing "Fully collected" or "₹X still
+  outstanding" underneath instead of a separate Outstanding row. The full month-by-month workings
+  (previously always shown) now live behind a **"Show/Hide calculation"** expand-collapse toggle, closed
+  by default — rebuilt as fixed-width flex rows (a `DATE_W`/`AMT_W` pair of constants) instead of the
+  shared full-bleed `<Table>`, which stretched to the card's full width with no column constraints and
+  left large blank gaps around the short date/amount values.
+  **v2.29.72:** Earned revenue rows in the calculation detail now show the actual **day-range** each
+  amount covers (e.g. "22 Jun – 30 Jun", "01 Jul – 21 Jul") instead of a single date — makes clear
+  exactly which days each month's slice counts. Also added a **GST breakup** card, shown *before* the
+  revenue-recognition card, backing out Taxable value / CGST (2.5%) / SGST (2.5%) from the invoice's
+  actual paid amount (`gstBreakup()` — assumes the standard flat 5% split; GST isn't an API field, this
+  reverse-calculates it, modelled on a reference breakup sheet the user shared; independently-rounded
+  components can be ±₹1 off the total, same as that reference sheet).
 
 ### Billing & Subscription (`billing`)
 - **Purpose:** subscriptions, invoices, deposits, and **Billing Analytics**.
@@ -244,9 +262,10 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - **Trend analysis (v2.29.16):** the section was rebuilt around a proper **interactive Recharts time-series** (`ComposedChart`) for the selected device — real time on X, the metric on Y, the **ideal band shaded** (`ReferenceArea` + dashed `ReferenceLine`s), each **out-of-range reading as a red dot**, and a hover tooltip (timestamp · value · in-/out-of-range · ideal). The focus metric is switched via tabs (with per-metric anomaly counts) or by clicking a mini-wave. An **"Anomalies only"** toggle isolates the out-of-range points in the chart (line hidden) and filters the readings table. Four deterministic **analytical tiles** sit on top — **Sensor health** (Good/Check from `iotSensorHealth`: reporting-gap, dropout rate, staleness), **Water quality** (Good/Warning/Critical from the window's worst band), **Alerts created** (out-of-range event count from `iotAnomalyScan`) and **Anomalies by metric** (per-metric counts) — plus an **Anomaly history** list (each event's date/time, worst value, High/Low). All in-app, no LLM. *Planned next step: correlate anomalies with a weather API.*
 - **Pressure / flow / dispensed-litres (v2.29.43):** the RO-tank heartbeat (`waterQuality`) grew three fields — `pressure` (bar), `flowMLPM` (flow rate, L/min) and `totalDispensed` (lifetime dispensed litres, a monotonically-increasing counter). Wired in at full parity with pH/TDS/temp:
   - **RO Unit Sensors** card (separate from **Water Quality**, since pressure/flow describe the unit's plumbing, not potability) — `IoTWaterQualityCard` is now a generic component (`keys`/`title`/`subtitle`/`noun`/`extra` props) reused for both the potability card (`ph`/`tds`/`temp`) and this one (`pressure`/`flowMLPM`), so both share the same min–max range + GOOD/WARNING/CRITICAL band + AI-summary scaffolding. **Total dispensed** renders separately underneath (`IoTDispensedStat`) as a plain lifetime-total + this-window-delta stat — not banded, since a running counter has no "ideal range."
-  - Ideal bands are **assumed** residential-RO operating ranges, not a vendor spec (documented inline at `IOT_WQ_IDEAL`): pressure green 0–4 bar / amber 4–6 / red outside; flow green 0–3 L/min / amber 3–6 / red outside. Both legitimately read **0 while idle** (no tap open) — unlike pH/TDS/temp, 0 is *not* treated as a sensor dropout for these two (`IOT_WQ_DROP_ZERO`).
+  - ~~Ideal bands are assumed residential-RO operating ranges... pressure green 0–4 bar / amber 4–6 / red outside; flow green 0–3 L/min / amber 3–6 / red outside.~~ **Superseded in v2.29.69 — see below; pressure/flow no longer band amber/red at all.** Both legitimately read **0 while idle** (no tap open) — unlike pH/TDS/temp, 0 is *not* treated as a sensor dropout for these two (`IOT_WQ_DROP_ZERO`).
   - Pressure & flow also got their own **gauges** (`IOT_GAUGE`), and joined **Trend analysis** as selectable metric tabs/charts — `iotTrendMetrics()` and `iotAnomalyScan()` were generalized to loop over the full metric registry instead of a hardcoded `ph/tds/temp/tank` list, so any future metric added there needs no other call-site changes. **Recent readings** table and CSV export gained Pressure / Flow / Dispensed columns.
-  - Live-tested against the real device (`E05A1B9C2DD4`) via the local dev preview: it's currently reporting **655.34 bar**, correctly flagged CRITICAL by the new banding — almost certainly a sensor fault on the physical unit, worth a field check.
+  - Live-tested against the real device (`E05A1B9C2DD4`) via the local dev preview: it was reporting **655.34 bar**, flagged CRITICAL by the banding at the time — see v2.29.69 below, this turned out to be normal pump-cycling behaviour, not a fault.
+- **Pressure/flow are pump-driven, not water-quality metrics (v2.29.69):** per the person who placed the sensors, NEITHER end of the pressure/flow range is a real anomaly — 0 while the pump is off (nothing to read) and whatever the line reads once the pump kicks on, at any magnitude (a 655 bar spike on pump-start is a normal artifact of this sensor placement, confirmed against the real device above). `iotWqClass` now always returns `"green"` for `pressure`/`flowMLPM` — they never rate WARNING/CRITICAL. This one change cascades to every dependent screen: the RO Unit Sensors card (badge + reassuring AI summary), its gauges (fully green track, no amber zone), the Recent-readings table (no red/amber highlight on these columns), and the Trend analysis "Anomalies by metric" tile (Pressure/Flow always 0). Water Quality (pH/TDS/Temp) is untouched. The card's "Ideal: X–Y" subtext for these two now reads "Pump off = 0, pump on = live reading — both normal" instead, since there's no enforced ceiling to imply anymore.
 - **Loading state (v2.29.44):** fixed a load flash — the module used to drop its full-page spinner as soon as `/devices/status` (the roster) resolved, so the device list, tank graphic, gauges and Water Quality card briefly rendered with empty/zero data ("Awaiting sensor readings", 0% tank, `—` gauges) for a beat before the first `/devices/history` round-trip landed. A `historyLoaded` flag now gates the loading state on **both** requests completing at least once. Replaced the small generic spinner with a dedicated `IoTLoading` panel — bigger spinner, "Loading live device data…" copy, and an indeterminate progress bar — so the wait reads clearly as loading, not a blank/broken module.
 - **Dispensed average (v2.29.45):** the **Total Dispensed** stat (under RO Unit Sensors) gained an **Average / day** figure next to Total dispensed and This window. `iotDispensedRange` now also tracks each reading's timestamp and divides the window delta by its actual span (the history feed is a downsampled ~1–2 day window, not exactly 1 day), instead of the window delta appearing twice under different labels. Shows `—` until the window has at least 30 minutes of span, so it can't flash a wildly inflated estimate right after the page loads.
 - **Dispensed stat simplified (v2.29.46):** dropped **This window** from the Total Dispensed stat — showing the raw litres dispensed across whatever ~1–2 day span the history feed happened to have loaded read as an arbitrary, hard-to-explain number on its own. Now just two figures: **Total dispensed** (lifetime) and **Average dispensed** (per day, from `iotDispensedRange`'s `avgPerDay`).
@@ -286,8 +305,24 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 
 ### Analytics (`analytics`)
 Cross-module reporting. Sub-tabs: **Overview**, Referral, Sales, Earned Revenue, **Reconciliation**, **DP
-Transaction**, AOP (admin/devops), Apartment Performance, Billing, Revenue (Net Revenue), **Penetration
-Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.0.)
+Transaction**, AOP (admin/devops), Apartment Performance, **Renewal & Churn Risk**, Billing, Revenue (Net
+Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.0.)
+
+- **Renewal & Churn Risk (`ChurnRiskRadar`, `an_churn`, v2.29.82)** — flags customers at risk of churn by
+  joining three already-live signals onto one customer-level table: **subscription renewing within 30
+  days** (same `nextBilling`/days-out derivation Billing Analytics' "Renewals due" card already uses),
+  an **overdue/failed invoice** (`i.status === "failed" || (i.balance > 0 && i.rawStatus?.toLowerCase()
+  === "overdue")` — the exact condition Billing Overview/Subscription Reconciliation already use), and
+  the customer record's own **`status === "dunning"`** (Zoho's raw payment-actively-failing state, also
+  surfaced in Societies' retention insights). Each match adds to a score (dunning +3, overdue +2, renewal
+  due +1 or +2 if within 7 days) that buckets into **High/Medium/Low**. Deterministic "Business insights"
+  panel (same shape as Net Revenue/DP Transaction), 5 KPI cards, a level-filterable/searchable table, and
+  CSV export. **Deliberately excludes an IoT "device gone quiet" signal** — there is no existing field
+  joining a customer's `purifier_id` to a real IoT `deviceId` (the real IoT module only monitors two
+  apartment-level RO/junction-box installations, not individual customer purifiers), so adding one here
+  would have to be fabricated — flagged rather than built. Verified via temporary seed-data injection (a
+  test customer with dunning status + an overdue invoice + a renewal due in 7 days) — correctly scored
+  High with all three reasons listed, then the test data was removed.
 
 - **Overview (`AnalyticsOverview`, `an_overview`)** — a filtered command dashboard. Loads customers,
   subscriptions, invoices, leads, **referrers**, tickets, apartments. Two filters scope the page:
@@ -336,6 +371,17 @@ Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.
   - **Reordered & renamed (v2.29.54):** column order changed from Due Date / Next Billing / Paid on to **Start Date / Paid on / End Date** (Due Date → Start Date, Next Billing → End Date) — display and CSV labels only, the underlying `dueDay`/`nextBillDay` fields and `"due"`/`"nextBilling"` sort keys are unchanged.
   - **"Days in paid month" fix (v2.29.55):** when the due date and paid date fall in the **same calendar month** and the payment landed AFTER the due date (a late payment), the overlap window that feeds `daysInPaidMonth` now starts from whichever is later — the due date or the actual paid date — instead of always the due date. Example: Arun K Sinha, due 8 Aug, paid 10 Aug, end 7 Sept — was 24 days / ₹271 (counted from the due date, including 2 days before he'd actually paid); now 22 days / ₹248 (counted from the paid date). Doesn't affect invoices paid *before* their due date (the common case, still anchored on due date), or invoices whose due date and paid date fall in different months (the paid date was never the binding boundary there — see the Sanjith reference in v2.29.52, unaffected).
   - **Spillover month (v2.29.56):** three new columns — **Next month**, **Days in next month**, **Earned revenue (next month)** — show the slice of an invoice's validity window that lands in the calendar month AFTER its paid month (e.g. paid August, end 7 Sept → 21 days in September). Same `recharge × days ÷ tenureDays` math, no late-payment clip (the clip only matters for the paid month, since by the following month the payment has already landed). Shows "—" when the tenure doesn't reach into another month. Verified: paid-month + next-month earned sums to exactly the recharge for every sample row not affected by the v2.29.55 late-payment clip. Table footer and CSV both include the next-month total.
+  - **Very-late-payment bugfix (v2.29.73), found during a logic audit:** `daysInPaidMonth`/`daysInNextMonth` only ever checked the invoice's paid month and paid-month+1 for overlap with its validity window. If payment arrived more than ~1 month after the validity window had ALREADY lapsed (e.g. due 1 Jul, validity ends 31 Jul, not paid until 5 Aug), both overlaps came out to zero — the invoice showed **₹0 Earned Revenue despite the cash being collected in full**. Fixed: when `validityEnd < paidMonthStart`, the whole recharge is now recognised in the paid month instead (`daysInPaidMonth = tenureDays`) — there's no future service period left to spread it across once it's this late, so cash and revenue converge. Verified with a temporary seed invoice (due 1 Jul, paid 10 Aug, ₹1,000 recharge): Days in paid month 0→31, Earned revenue ₹0→₹1,000. This gap never affected `invoiceMonthlyBreakdown()` (the sibling formula on the All Customers > Transactions revenue-recognition card) — that one always walks the invoice's own due-to-validity-end months regardless of how late payment lands. Also added a click-to-sort control on the **Earned revenue** column (it was the table's default sort key on load but had no header button — once you sorted by a date column there was no way back to it without a refresh).
+  - **Invoice # / Invoice ID columns (v2.29.80):** the per-invoice table (and its CSV export) now starts
+    with **Invoice #** (the human-readable Zoho invoice number, e.g. `INV-000077`) and **Invoice ID**
+    (the internal record id, e.g. `INV-2006`) — lets a row be traced back to the exact source invoice.
+  - **Reference Number / Payment Mode columns (v2.29.83):** two more columns right after Invoice ID,
+    fed by new `reference_number`/`payment_mode` fields `GET /admin/get-all-invoices` started returning.
+    `mapInvoice()` now maps them (`i.referenceNumber`/`i.paymentMode`); shows "—" for any invoice that
+    predates the fields (older cached rows, sample/seed data). **v2.29.84:** removed **Invoice ID**,
+    **Payment Mode** and **Customer** from the visible table (16 columns now — Invoice #, Reference
+    Number, Apartment, dates, amounts…) — all three stay in the CSV export unchanged, this was purely a
+    display declutter, footer `colSpan` adjusted 9→6.
 
 - **Reconciliation (`Reconciliation`, `an_reconciliation`, v2.29.57–58)** — a dedicated tab (between Earned
   Revenue and AOP) fixing a real bug where "collected revenue" elsewhere in the app was effectively
@@ -406,9 +452,9 @@ Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.
   - **Table shows raw rows, unmerged** — each collection event appears **twice** in the feed: a
     `COLLECTION_SUMMARY` row (`Deposit`/`Recharge_received`/`collection_total` populated,
     `deposit_amount`/`revenue_amount` null) and a `TRANSACTION` row (the reverse), tagged with a colour
-    badge in a Type column. Columns (v2.29.65): Paid date, Apartment, Customer, Phone, Device, Type,
-    Transaction key, Transaction type, Start Date, End Date, Validity, Litres, Plan, Deposit, Revenue
-    (City removed from the table in v2.29.65 — still in the CSV export).
+    badge in a Type column. Columns (v2.29.70): Paid date, Apartment, Customer, Phone, Device, Type,
+    Start Date, End Date, Validity, Litres, Plan, Deposit, Revenue (City removed from the table in
+    v2.29.65, Transaction key/Transaction type removed in v2.29.70 — all three still in the CSV export).
   - **Search** covers `phone`, `current_device`, `partner_name`. CSV export includes a wider raw column
     set (adds Row type, Transaction amount, Device status).
   - Verified against the live feed (not sample data — this endpoint has no auth gate): August 2026 showed
@@ -462,6 +508,27 @@ Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.
     collected. Verified live that every `DISCOUNT` row has `revenue_amount`/`deposit_amount`/
     `transaction_amount` all zero, so this is purely about removing zero-value noise rows from the
     table — it doesn't change any KPI figure.
+  - **Column cleanup, apartment KPIs, more sortable columns (v2.29.70):** removed the **Transaction key**
+    and **Transaction type** columns from the table (mostly redundant with the Type badge; still in the
+    CSV export). Added **"Performance by apartment"** — a row of KPI cards, one per apartment with any
+    activity in the current filters (Recharge Collected, Deposit, transaction count), sorted
+    highest-recharge first, so apartments can be compared at a glance instead of only the fleet-wide
+    total. **Start Date** and **End Date** are now click-to-sort (same arrow-icon pattern as Paid date) —
+    a single `{key, dir}` sort state now covers all three date columns (only one can be the active sort
+    at a time), replacing the earlier Paid-date-only boolean.
+  - **All apartments shown, Business insights, dynamic split (v2.29.81):** fixed a real bug where
+    "Performance by apartment" silently dropped any apartment with zero transactions in the current
+    filters (`.filter(a => a.count > 0)`) — so if the Apartment picker listed 6 apartments but only 4 had
+    activity that period, only 4 cards showed, with no indication 2 were missing. Now **every apartment in
+    the filter's option list gets a card** (idle ones read "No activity this period"), and the section
+    header shows an explicit "N of M active" count. Added a deterministic **"Business insights"** panel
+    (same What happened / What's ongoing / Result / Positive / Negative / recommended-actions shape as Net
+    Revenue and Sales Insights — plain JS rules over the live filtered rows, no LLM) covering the
+    collection trend vs the previous period, the recharge/deposit mix, the top apartment, and which
+    apartments went idle. Both aggregate KPI cards (Deposit Collected, Recharge Collected) and each
+    per-apartment card now also show a **live Deposit-vs-Recharge split percentage** — recomputed from
+    whatever's actually in the current date/apartment/type filters (never a fixed ratio) — plus a new
+    stacked-bar **"Deposit vs Recharge split"** card showing the same split for the whole filtered set.
 
 ### Task Planner (`planner`)
 - **Purpose:** ClickUp-style Kanban for internal tasks (Scoping → … → Live).
@@ -506,6 +573,16 @@ Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.
 - **Purpose:** version history + per-module docs + API-usage list, and the release publishers.
 - **How:** renders `VERSION_HISTORY`, `MODULE_DOCS`, `API_USAGE`. **App Releases** / **Technician
   Releases** sub-tabs let admins publish release notes (see §7).
+
+### ProWater AI — REMOVED (v2.29.79)
+Built in v2.29.74, deployed live in v2.29.75, and extended to cover every module/sub-module plus a
+Home-page baseline by v2.29.78 — then removed entirely in v2.29.79 at the user's request ("remove
+the API and the ask ai feature i dont think so its working"). Removed: the floating chat widget
+(`ProWaterAI` component + its Sparkles button), every `setAIContext`/`getAIContext` call across all
+modules, the Home-page customer/invoice snapshot fetch that fed it, and the deployed Cloud Function
+backend (`gcloud functions delete aiChat`, region `asia-south1`, project `backend-prowater`). The
+function's source still lives in `functions-aiChat/` at the project root if this is ever revisited —
+nothing else in the dashboard depended on it, so removal was a clean, isolated change.
 
 ---
 
@@ -554,3 +631,5 @@ Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.
 - `POST /admin/notify-failure` backend route for API-failure emails.
 - Device Replacement **cross-device list**: confirm the collection the `/device-replacement/add`
   backend writes to (or add a GET) and point the read-back at it.
+- **ProWater AI was removed in v2.29.79** (see §6's "ProWater AI — REMOVED" entry) — no open items
+  here anymore; the Cloud Function is undeployed and the frontend widget is gone.
