@@ -1,7 +1,7 @@
 {
   "name": "prowater-dashboard",
   "private": true,
-  "homepage": "https://soroai.github.io/Wisdom2.0",
+  
   "version": "0.0.0",
   "type": "module",
   "scripts": {

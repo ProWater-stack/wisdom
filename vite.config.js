@@ -20,7 +20,7 @@ const REFERRAL_API = "https://api-7ca73ntgua-el.a.run.app";
 export default defineConfig({
 
   // REQUIRED FOR GITHUB PAGES
-  base: "/Wisdom2.0/",
+  base: "/wisdom/",
 
   plugins: [react()],
 
