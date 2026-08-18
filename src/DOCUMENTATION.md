@@ -4,20 +4,55 @@
 > module works, which APIs/logic/lookups it uses, and where data lives.
 >
 > **Maintenance (keep this current):** this file is updated **together with every code change**,
-> the same way `APP_VERSION` / `VERSION_HISTORY` are bumped in `src/App.jsx`. When you change a
-> module's behaviour, an API, a storage key, or a lookup — update the matching section here in the
-> same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/App.jsx`; this
-> doc describes the *current* design.
+> the same way `APP_VERSION` / `VERSION_HISTORY` are bumped in `src/shared/core.js`. When you change
+> a module's behaviour, an API, a storage key, or a lookup — update the matching section here in the
+> same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
+> this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.84**.
+> **Reflects:** `APP_VERSION` **2.29.117**.
 
 ---
 
 ## 1. Architecture & stack
 
-- **Single-page React app.** Almost the entire app is one file: **`src/App.jsx`** (~12k lines).
-  Entry: `src/main.jsx` → `src/index.css`. Small helpers in `src/lib/` (`apiUsageTracker.js`,
-  `notifyAdmin.js`).
+- **Single-page React app, split by module (as of v2.29.112).** The app used to be one ~17k-line
+  `src/App.jsx`; it's now 18 files so a developer can go straight to the file that owns a given
+  module or section instead of scrolling one giant file:
+  ```
+  src/
+    App.jsx                — ~1,300 lines: imports, MODULES/MODULE_GROUPS nav config, the root
+                             App()/Shell()/Home()/ComingSoon()/ServerDownModal() layout, and the
+                             tab-switch JSX that renders whichever module component is active. Pure
+                             "wiring" — the map of the app, not its logic.
+    shared/
+      core.js               — non-JSX engine room: the LS wrapper, generic API-cache engine
+                              (getCached/PERSIST_TTL/_memCache/_inflight), the Zoho paged-fetch
+                              engine, every *Api data layer (customerApi/billingApi/ticketApi/
+                              apartmentApi/creditNoteApi/appLogsApi/salesApi lives in modules/Sales
+                              instead — see note below), date-range utilities, formatters, auth/
+                              session state (Auth context/useAuth), and APP_VERSION/VERSION_HISTORY.
+      ui.jsx                 — generic JSX UI primitives shared across modules: Table/Card/Modal/
+                              Stat/Toolbar/Drawer/Field/Chip/Status/Person/Login/DateRangePicker/
+                              MultiSelectFilter/etc + the shared inline style-object constants
+                              (btnPrimary/btnGhost/td/grid4/axisTick/...).
+    modules/
+      Sales.jsx, Customer.jsx, Billing.jsx, ERP.jsx, FSM.jsx, IoT.jsx, Referral.jsx, Ticketing.jsx,
+      AutoScheduler.jsx, Analytics.jsx, TaskPlanner.jsx, Employee.jsx, DeviceReplacement.jsx,
+      LogsTracker.jsx, About.jsx — one file per module, containing that module's screens plus any
+      helper/data-layer code used only by that module.
+  ```
+  **Note on data-layer placement:** a handful of `*Api` objects and their mappers/seed data live in
+  `shared/core.js` rather than their "home" module's file, because an *earlier*-extracted module
+  needed them too (extraction went safest-first, smallest modules before biggest, so a later
+  module's data layer sometimes had to be hoisted early) — `apartmentApi`/`ticketApi` (needed by
+  Sales/AutoScheduler before Ticketing's own turn) and `billingApi`/`creditNoteApi`/
+  `depositForCustomer`/`mapSubscription`/`mapInvoice`/`mapSubmodule`/`termMonths` (needed by
+  Customer.jsx before Billing.jsx's own turn) are the two cases; each hoist site has a comment
+  explaining why. `salesApi`/`notHiddenLead` are the one exception in the other direction — they
+  live in `modules/Sales.jsx` and Analytics.jsx imports them from there, since Sales was extracted
+  first. When hunting for a data-layer function, check `shared/core.js` first, then the module file
+  whose name matches the domain.
+  Entry: `src/main.jsx` → `src/index.css`. Small helper in `src/lib/` (`apiUsageTracker.js`).
 - **Build/deploy:** Vite (`npm run build`). Base path **`/Wisdom2.0/`** (see `vite.config.js`).
   Deployed to **GitHub Pages** by GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`;
   build-time env comes from repo **secrets** (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_EMAIL`,
@@ -43,8 +78,19 @@ charts use it.
 - **Login** (`api.login`): Firebase Auth REST —
   `POST identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=VITE_FIREBASE_API_KEY`
   with email+password. On success the **idToken** is stored in `sessionStorage.pw_idToken`
-  (+ `pw_tokenExpiry`, ~55 min). `authHeaders()` attaches `Authorization: Bearer <idToken>` to every
-  backend call. Auto-logout fires when the token expires.
+  (+ `pw_tokenExpiry`, 60 min, + `pw_refreshToken`). `authHeaders()` attaches
+  `Authorization: Bearer <idToken>` to every backend call.
+- **Session lifetime (reworked v2.29.100):** the Firebase ID token itself only lives ~1h, but an
+  ACTIVE session no longer hard-stops there — `api.refreshIdToken()` silently renews it (via
+  `POST securetoken.googleapis.com/v1/token`, `grant_type=refresh_token`, using the stored
+  `pw_refreshToken`) a few minutes before it expires, as long as the user isn't already past the
+  real idle window. This is folded into the same periodic (30s) check that drives idle/day-rollover
+  logout (see §5/§11-adjacent session code in the App shell) — there is no longer a separate
+  fixed-timeout effect that logs out purely because 60 minutes passed since login. **The only real
+  logout triggers are:** 1h of true inactivity (any mouse/keyboard/scroll/touch resets the clock),
+  the calendar day rolling over, or a renewal genuinely failing (offline, or the refresh token itself
+  expired/revoked) AND the token then actually expiring — in that failure case a banner ("Trouble
+  renewing your session…") shows first, so it isn't a surprise.
 - **Identity & roles:** the verified email is matched to an **Employee** record (`pw_users`) which
   supplies `role` + per-module `access`. If no employee row matches, a default admin identity is
   created. The session user is persisted in `sessionStorage.pw_user`.
@@ -77,8 +123,9 @@ Bearer-authed with the login idToken. `API_ORIGIN` constant. Endpoints:
 | Method | Path | Used by |
 |---|---|---|
 | GET | `/admin/get-all-customers` | Customer, Analytics (Zoho Contacts) |
-| GET | `/admin/get-all-subscriptions` | Billing, Earned Revenue (Zoho Billing) |
-| GET | `/admin/get-all-invoices` | Billing, Analytics (Zoho Billing) |
+| GET | `/admin/get-all-subscriptions` | Billing, Earned Revenue (plan/term lookup) (Zoho Billing) |
+| GET | `/admin/get-all-invoices` | Billing, Analytics, Earned Revenue (row source) (Zoho Billing) |
+| GET | `/admin/get-all-submodules` | Earned Revenue's Start/End-date enrichment lookup (v2.29.104, by invoice_id → transaction_id) — response wraps rows in a top-level "subscriptions" key |
 | GET | `/admin/get-all-creditnotes` | Credit notes / discounts — Analytics > Credits + All Customers (joined by Zoho customer id) |
 | GET | `/admin/zoho/get-all-leads` | Sales, Analytics (Zoho CRM; `per_page=500`, server-cached) |
 | GET | `/admin/zoho/get-all-apartments/data` | Sales apartment leads; Overview flat counts |
@@ -88,7 +135,14 @@ Bearer-authed with the login idToken. `API_ORIGIN` constant. Endpoints:
 | GET/POST | `/api/gs-schedules` | Auto GS schedules (optional; local-first) |
 | POST | `/documents/add?email=<user>` | **Task Planner attachments** (multipart, field `documents`) |
 | POST | `/device-replacement/add` | **Device Replacement** save → Firebase |
-| POST | `/admin/notify-failure` | Email alert on API failure (backend route may be pending) |
+
+Same origin, but **unauthenticated** (no Bearer header sent) — separate cursor-paginated feeds, see [[dp-transaction-tab]] / [[dp-customers-tab]]:
+
+| Method | Path | Used by |
+|---|---|---|
+| GET | `/dp-transactions` | Analytics · DP Transaction (row source; `?cursor=` pagination) |
+| POST | `/dp-transactions/add` | DP Transaction's admin-only Upload JSON → Run API (multipart, field `file`) |
+| GET | `https://api.drinkprime.in/payments/payments/v2/collections` | Customer · All Customers, DP-stack Transactions sub-page (`?installationId={dp_installation_id}&page=0&size=10`, v2.29.113 — separate origin, CORS-open, direct browser fetch) |
 
 ### 3.2 Firebase — project `backend-prowater`
 - **Auth:** email/password (above).
@@ -126,9 +180,19 @@ Bearer-authed with the login idToken. `API_ORIGIN` constant. Endpoints:
 - **Society join (VLOOKUP):** subscriptions/invoices/tickets are joined to a **society** via the
   customer: `zohoCustomerId | zohoId | customerNumber → customer.society`. Unmatched → `"Unknown"`.
   Used across Billing, Analytics, Penetration Tracker, Top Societies.
-- **Money split:** `depositForPlan(plan, total)` splits a paid invoice into a **refundable deposit**
-  and a **recharge** (revenue). `recharge = total − deposit`. **MRR:** `monthlyOf(sub) = amount / termMonths(sub)`;
-  `termMonths` parses the term from the plan name/code (e.g. `…_6M` → 6).
+- **Money split (rebuilt v2.29.108):** `depositForCustomer(customer, plan, total)` splits a paid
+  invoice into a **refundable deposit** and a **recharge** (revenue): `recharge = total − deposit`.
+  Tries `APARTMENT_DEVICE_DEPOSITS[normSociety(customer.society)]` first — the REAL, fixed per-
+  apartment/per-device-type deposit amounts the business has given (currently MJR Clique Hydra and
+  Prabhavati Meghna Towers; more added as provided) — and only falls back to the generic amount-tiered
+  `depositForPlan(plan, total)` (>₹4,000→₹4,000 / >₹2,000→₹2,000 / >₹1,500→₹1,500, plus a lower
+  Prabhavati-plan-name tier) for apartments not yet in that table. Within a known apartment, the
+  device-type tier (from `deviceType(customer.purifier_id)`) only applies when the paid amount actually
+  **covers** it — a small recurring recharge invoice (deposit already collected earlier) correctly gets
+  ₹0 deposit, not the full tier — and if the device type can't be read (blank purifier ID), it falls
+  back to whichever of that apartment's own real tiers the amount covers, never the unrelated generic
+  bands. **MRR:** `monthlyOf(sub) = amount / termMonths(sub)`; `termMonths` parses the term from the
+  plan name/code (e.g. `…_6M` → 6).
 - **Dates:** `parseFlexDate()` parses many formats (ISO, `19-Jan-2026`, `19/01/2026`, epoch,
   `+0530`). Analytics uses month-index math (`year*12 + month`) for cohorts and MoM.
 
@@ -137,7 +201,8 @@ Bearer-authed with the login idToken. `API_ORIGIN` constant. Endpoints:
 ## 5. Storage keys
 
 **`sessionStorage`** (cleared on browser close): `pw_user` (logged-in identity), `pw_idToken`,
-`pw_tokenExpiry`.
+`pw_tokenExpiry`, `pw_refreshToken` (v2.29.100, silently renews the ID token), `pw_last_activity`,
+`pw_session_day`, `pw_active_module`.
 
 **`localStorage`:**
 
@@ -172,12 +237,59 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 `MODULE_DOCS`; sub-tabs are in `moduleTabs`. Below: purpose · how it works · APIs · key logic/lookups · storage.
 
 ### Sales (`sales`)
-- **Purpose:** Zoho CRM leads — pipeline, table, analytics, error correction, apartment leads.
+- **Purpose:** Zoho CRM leads — pipeline, table, analytics, trend analysis, error correction, apartment leads.
 - **How:** loads leads via `GET /admin/zoho/get-all-leads` (`per_page=500`, total-paginate; endpoint
   is server-cached and returns a `cached` flag). Kanban pipeline by stage; full leads table with a
   status filter; **Apartment × lead-status pivot** (join key: apartment name = lead "Society Name");
   **Error Correction** flags leads marked installed but missing money fields.
 - **Storage:** live API (+ per-browser cache).
+- **Trend Analysis (`sales_trend`, v2.29.92)** — a period-filterable read of the pipeline, sitting
+  between Sales Analytics and Error Correction. Reuses the same lead/stage data as Analytics > Sales
+  Insights (`SalesInsights`, see the Analytics section below), but scoped to a real date-range picker
+  (`DateRangePicker` — Today/This Week/This Month/This Quarter/This Year/Yesterday/Previous Week/Previous
+  Month/Previous Quarter/Previous Year/Custom) instead of just a society filter. Layout, top to bottom:
+  **(1) KPI cards** — Total leads / Converted (Won) / Conversion % / Lost — each with a period-over-period
+  delta. Total/Converted/Lost use a real % change (`momPct`); Conversion % shows a **percentage-points**
+  delta instead (e.g. "+3pts", not a misleading %-of-a-% change) since the metric is already a percentage.
+  **(2) A monthly leads-vs-conversion-% trend chart** (bar = leads, line = conversion %, trailing 8
+  calendar months, independent of the period picker — a month-on-month view needs several months
+  regardless of what single period is selected) — the **latest month visibly flashes**: its bar renders in
+  the brand green with a small pulsing dot above it, and its conversion-% line point pulses with an
+  expanding ring, both via the same SVG `<animate>` technique already used for IoT's weather-correlation
+  "likely taste issue" marker. **(3) An average-time-to-convert card.** **(4) The lead-conversion funnel**
+  (placed **last**, per an explicit ask — same funnel visual as Sales Insights, scoped to the selected
+  period). All deterministic — plain JS rules over the live filtered leads, no LLM. (The "Sales Director's
+  read" business-insight panel this tab originally shipped with was removed in v2.29.95 — see below.)
+- **Iterated per direct feedback (v2.29.93)**, each change proposed via a confirm-first question before
+  building: added an **Apartment/society multi-select filter** (cascades through KPIs, insights, chart,
+  funnel). The monthly trend chart went through several shapes (dual lines with click-to-drill-down → dual
+  bars) before landing on its current one: **three stacked bars per month — Interested / Not Interested /
+  Converted, summing to Total Leads** — plus the Conversion % line back on the secondary axis, data labels
+  on every segment, and a "Total N" label above each month's stack. "Interested" is the **literal Zoho raw
+  lead status text** (`rawStatus.toLowerCase() === "interested"` — distinct from the "demo" stage bucket
+  it maps into via `mapZohoLead`, identified here by its own raw text instead); "Not Interested" = Total −
+  Interested − Converted, so the three segments always sum to the full stack height. A **Rep leaderboard**
+  and an **Idle-leads follow-up table** were added, then removed again per a later ask. An **"Average time
+  to convert"** card (hero stat + Fastest/Slowest, computed from each WON lead's created→updated gap, with
+  a period-over-period delta in days) sits between the chart and the funnel. The funnel itself was briefly
+  rebuilt as an actual tapering funnel (CSS clip-path trapezoids) then reverted back to the original
+  horizontal-bar-list style per a follow-up — net unchanged from v2.29.92's shape.
+- **Stacked bars → grouped bars (v2.29.94):** the stacked-bar layout was squeezing data labels into small
+  segments (unreadable when a category's count was low). Switched to **grouped (side-by-side) bars** —
+  Total Leads / Interested / Not Interested / Converted each render as their own full-height bar per
+  month, so every label sits above its own bar with guaranteed room; the Conversion % line stays overlaid
+  on the secondary axis. Total Leads is now its own explicit bar (previously an implicit stack-height
+  total) — matches the literal 4-item hierarchy asked for. The "latest month" flash (brand-green fill +
+  pulsing dot) moved from the topmost stacked segment onto the Total Leads bar.
+- **"Sales Director's read" removed (v2.29.95)** per explicit request — the page now goes straight from the
+  KPI cards to the monthly trend chart. The whole computation block that only fed that panel (open/idle
+  lead tracking, the channel/society/rep grouping helpers, and the resulting insight strings) was removed
+  too, since nothing else in the tab depended on it.
+- **Funnel now shares the trend chart's hierarchy (v2.29.96)** — the conversion funnel's rows changed from
+  Total leads → Contacted+ → Demo+ → Proposal+ → Converted (Won) (a stage-bucket breakdown) to the SAME
+  Total Leads / Interested / Not Interested / Converted categories used in the chart above it, each still
+  shown with its count and its % of Total Leads. The now-unused stage-bucket helpers (`STAGE_ORDER`/
+  `rankOf`/`reached`) were removed along with the old breakdown.
 
 ### Customer (`customer`)
 - **Purpose:** Zoho Billing customer accounts, plans, credits.
@@ -185,7 +297,11 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   editable per role; grand-total row. **Societies** sub-tab groups customers by society with
   count/active/device-mix (Own/Normal/Hot&Cold from the purifier-ID prefix), expandable per society.
   The Overview "Active Customers" figure and Top-Societies "Active" column come from this active-status logic.
-- **All Customers (v2.29.4):** search by Purifier ID / phone / name / email; clicking a customer opens a
+- **All Customers (v2.29.4):** search by Purifier ID / phone / name / email; the results table also carries
+  a **Device Type** column (`DeviceTypeBadge`) and, in the toolbar, a **signup-date range** filter ("All
+  Time" plus the same Today/…/Custom presets used elsewhere, filtering on each customer's `since` date) and
+  **Society / Status** multi-select filters (`MultiSelectFilter`, v2.29.99 — same component/summary
+  convention as the Customers page's Society filter). Clicking a customer opens a
   full-page view with an always-visible **"at a glance" strip (v2.29.82)** — Status, Customer score, LTV,
   Open tickets, Last payment, Referral code, shown above the tab bar on every sub-screen, not just Profile
   — and six sub-screens — **Timeline (v2.29.82)** — every payment, ticket, referral and discount/credit-note
@@ -221,13 +337,48 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   actual paid amount (`gstBreakup()` — assumes the standard flat 5% split; GST isn't an API field, this
   reverse-calculates it, modelled on a reference breakup sheet the user shared; independently-rounded
   components can be ±₹1 off the total, same as that reference sheet).
+- **Customer Stack filter + DP-stack Transactions (v2.29.113, field mapping fixed v2.29.114/.115,
+  status row-highlighting + DP Customers tab removed v2.29.117):**
+  All Customers gained a **Customer Stack** multi-select filter (alongside Society/Status) and a
+  **Stack** column, both derived from a DP-origin customer's `customer_profile.is_dp_customer` (mapped
+  in `customerApi.getCustomers()` as `isDpCustomer`; `false` -> "Zoho", `true` -> "DP", tolerant of a
+  stringified `"true"`/`"1"` too). `dpInstallationId` is read from
+  `customer_profile.dp_details.dp_installation_id` — confirmed via a real record: `dp_details` is a
+  sub-object of `customer_profile` (sibling of `is_dp_customer`, not a sibling of it) carrying
+  `{ dp_customer_id, dp_installation_id, device_code, partner_name, device_status, balance_litres,
+  paid_liters, price, ... }`. A DP-stack customer has no real Zoho invoices, so opening one and
+  clicking **Transactions** reads live from the DrinkPrime collections API instead of the Zoho-invoice
+  table: `GET https://api.drinkprime.in/payments/payments/v2/collections?installationId={dpInstallationId}
+  &page=0&size=10` (confirmed CORS-open -- `access-control-allow-origin: *` -- so this is a direct
+  browser fetch, no backend proxy). Response shape: `{ body: { content: [{ collectionId, date,
+  totalPaid, totalLitres, validFrom, validTo, paymentUtilisedStatus, transactions: [{ transactionKey,
+  channel, type, status }] }] } }`; rendered as Date/Transaction Key (the collection's own
+  `transactions[0].transactionKey`, e.g. `DPTX_71cfc2a029044e12a3be6e9ffa352a97` — swapped in for the
+  internal numeric `collectionId` per follow-up, v2.29.116)/Amount/Litres/Valid Period/Payment Mode
+  (`transactions[0].channel`)/Status. Zoho-stack customers' Transactions sub-page (GST breakup,
+  revenue-recognition card) is unchanged. Two iterations to get the field paths right — v1
+  assumed both fields sat directly on `customer_profile`, v2.29.114 correctly found `is_dp_customer`
+  there but still missed `dp_installation_id`'s real nesting one level deeper — both fixes verified
+  against a real `customer_profile` block the user shared, via a live browser test that mocked
+  `get-all-customers` with that exact shape and ran it through the real mapper end-to-end.
+  **v2.29.117:** results table rows are colour-coded by status (checked in this order) — **Un-Installed**
+  (`deviceStatus`, from `customer_profile.dp_details.device_status`, DP-stack only) → yellow;
+  **Dunning** (`status`, Zoho's raw `subscription_status` pass-through) → red; **Inactive** (either
+  stack's own "inactive"/"in-active" status) → orange; anything else → no tint. The standalone
+  **DP Customers** tab (`DPCustomers`, `cust_dp`) was removed entirely — the Customer Stack filter
+  covers browsing DP-origin customers now, so the separate tab (its own `GET /dp-customers` feed, KPI
+  cards, and Upload JSON → Run API bulk import) was redundant; `fetchAllDpCustomers()`/its cache were
+  removed from `shared/core.js` too as now-dead code.
 
 ### Billing & Subscription (`billing`)
 - **Purpose:** subscriptions, invoices, deposits, and **Billing Analytics**.
 - **How:** `GET /admin/get-all-subscriptions` + `/admin/get-all-invoices`. Billing Analytics shows
   MRR/ARR, **MRR by plan** (active subs × `monthlyOf`), revenue by society, Week-over-Week &
   Month-over-Month (collected), renewals due, deposits/refunds. Deposit vs recharge split via
-  `depositForPlan`.
+  `depositForCustomer` (see §4).
+- **Invoices and Deposits & Refunds now also fetch customers (v2.29.108)** — previously invoices-only /
+  subscriptions-only — purely so the real per-apartment/device deposit table can apply; both join by
+  `customerNumber`/`zohoCustomerId`/`zohoId` the same way every other module does.
 
 ### ERP & Inventory (`erp`) — *local/seed*
 - Purifier asset register with book value; cost/depreciation totals. (Marked "soon".)
@@ -257,19 +408,68 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - **Weather + correlation (v2.29.17):** a **live-weather strip** at the top of the module (temp/humidity/condition at Prabhavati — Garvebhavi Palya, Bengaluru, coords hardcoded in `WEATHER_LOCATION`), and a **"Weather correlation"** card inside Trend analysis. Data comes from the **Google Weather API** (`history/hours:lookup`, past 24h) through a **Cloud Function proxy** (`weather-proxy/` folder — holds the key server-side, 60-min cache, demand-driven, ~10–24 calls/day); the newest history hour is the live reading (no `currentConditions` call). `weatherApi` (60-min client cache + tolerant mapper) reads the proxy at `WEATHER_PROXY_URL` — **now LIVE** (`https://asia-south1-backend-prowater.cloudfunctions.net/weather`, deployed v2.29.18); if that ever goes blank/unreachable the UI falls back to a clearly-labelled SAMPLE. The correlation card joins each reading to its nearest weather hour and shows **Pearson r** (`iotPearson`/`iotWeatherCorrelate`) for outdoor temp vs water temp / TDS / pH, plus a dual-axis outdoor-vs-water-temp chart. All in-app, no LLM.
 - **Tank refill animation (v2.29.37):** the RO tank pings its level ~every 10 min; `iotTankRefilling(chrono)` flags the tank as **actively refilling** when the level steps UP across the recent ~65-min window (latest reading > earliest in window). While refilling, the tank graphic shows a **pump** in the base gap (spinning impeller), a **pipe** running from the pump up the side and over into the neck, and **blue water flowing in animated waves** through the tubes into the tank, with a **"Refilling"** tag on top. Purely visual (CSS), driven by real level history, threaded `IoTDevices → IoTTankPanel → IoTTank`; honours `prefers-reduced-motion`.
 - **Warming vapour (v2.29.38, trigger widened v2.29.39):** `iotTempWarming(chrono)` flags the water as **warming** whenever the latest water temp (from the recent ~65-min window) is **above the ideal band (> 25 °C — the Warning/Hot zone)**, or when it's **trending up into that zone** (rising and ≥ 24 °C). *(v2.29.39 dropped the earlier "must be actively rising AND ≥ 26 °C" rule, which left a steady 26 °C tank showing no steam.)* While warming, **wisps of vapour rise off the water surface** inside the shell — positioned at `bottom:var(--level)` so they track the surface as it fills/drains — with an amber **"Warming"** tag. Same in-app, CSS-only pattern as the refill rig; honours `prefers-reduced-motion`.
-- **UI (v2.29.2):** the tank is a transparent see-through graphic (lid/neck/shell) with the water block filling to the live level % and moving wave layers; the **Online** KPI shows a live green ECG heartbeat and **Offline** a red flatline; a deterministic **AI summary** strip at the top reads the fleet (counts, tank level, water-quality status, alerts — no LLM); the RO-tank **Recent readings** table is paginated 10/page. Water-quality ranges drop non-positive sensor dropouts.
+- **UI (v2.29.2):** the tank is a transparent see-through graphic (lid/neck/shell) with the water block filling to the live level % and moving wave layers; the **Online** KPI shows a live green ECG heartbeat and **Offline** a red flatline; the RO-tank **Recent readings** table is paginated 10/page. Water-quality ranges drop non-positive sensor dropouts. (A fleet-wide AI-summary strip at the top existed briefly but was removed in v2.29.27; the in-card AI summary that later lived inside the Water Quality/RO Unit Sensors cards was removed in v2.29.97 — see below.)
 - **Recent readings ECG (v2.29.12 → v2.29.13):** above the table, one **ECG-style wave per metric** (pH / TDS / Temperature / Tank) drawn over the device's history feed. v2.29.13 upgraded the wave rendering — a faint monitor grid, shaded ideal band with dashed guides, a soft gradient area-fill, crisp non-scaling segment-coloured strokes (green/amber/red per segment) with a subtle glow, a haloed leading dot, and ~72-point bucket-averaging for smoothness — and moved the wave cards from the dark "monitor" look to clean **white / off-white** cards (light border + soft shadow, value coloured by band, deeper line colours tuned for legibility on white).
 - **Trend analysis (v2.29.16):** the section was rebuilt around a proper **interactive Recharts time-series** (`ComposedChart`) for the selected device — real time on X, the metric on Y, the **ideal band shaded** (`ReferenceArea` + dashed `ReferenceLine`s), each **out-of-range reading as a red dot**, and a hover tooltip (timestamp · value · in-/out-of-range · ideal). The focus metric is switched via tabs (with per-metric anomaly counts) or by clicking a mini-wave. An **"Anomalies only"** toggle isolates the out-of-range points in the chart (line hidden) and filters the readings table. Four deterministic **analytical tiles** sit on top — **Sensor health** (Good/Check from `iotSensorHealth`: reporting-gap, dropout rate, staleness), **Water quality** (Good/Warning/Critical from the window's worst band), **Alerts created** (out-of-range event count from `iotAnomalyScan`) and **Anomalies by metric** (per-metric counts) — plus an **Anomaly history** list (each event's date/time, worst value, High/Low). All in-app, no LLM. *Planned next step: correlate anomalies with a weather API.*
 - **Pressure / flow / dispensed-litres (v2.29.43):** the RO-tank heartbeat (`waterQuality`) grew three fields — `pressure` (bar), `flowMLPM` (flow rate, L/min) and `totalDispensed` (lifetime dispensed litres, a monotonically-increasing counter). Wired in at full parity with pH/TDS/temp:
-  - **RO Unit Sensors** card (separate from **Water Quality**, since pressure/flow describe the unit's plumbing, not potability) — `IoTWaterQualityCard` is now a generic component (`keys`/`title`/`subtitle`/`noun`/`extra` props) reused for both the potability card (`ph`/`tds`/`temp`) and this one (`pressure`/`flowMLPM`), so both share the same min–max range + GOOD/WARNING/CRITICAL band + AI-summary scaffolding. **Total dispensed** renders separately underneath (`IoTDispensedStat`) as a plain lifetime-total + this-window-delta stat — not banded, since a running counter has no "ideal range."
+  - **RO Unit Sensors** card (separate from **Water Quality**, since pressure/flow describe the unit's plumbing, not potability) — `IoTWaterQualityCard` is now a generic component (`keys`/`title`/`subtitle`/`noun`/`extra` props) reused for both the potability card (`ph`/`tds`/`temp`) and this one (`pressure`/`flowMLPM`), so both share the same min–max range + GOOD/WARNING/CRITICAL band scaffolding. **Total dispensed** renders separately underneath (`IoTDispensedStat`) as a plain lifetime-total + this-window-delta stat — not banded, since a running counter has no "ideal range."
   - ~~Ideal bands are assumed residential-RO operating ranges... pressure green 0–4 bar / amber 4–6 / red outside; flow green 0–3 L/min / amber 3–6 / red outside.~~ **Superseded in v2.29.69 — see below; pressure/flow no longer band amber/red at all.** Both legitimately read **0 while idle** (no tap open) — unlike pH/TDS/temp, 0 is *not* treated as a sensor dropout for these two (`IOT_WQ_DROP_ZERO`).
   - Pressure & flow also got their own **gauges** (`IOT_GAUGE`), and joined **Trend analysis** as selectable metric tabs/charts — `iotTrendMetrics()` and `iotAnomalyScan()` were generalized to loop over the full metric registry instead of a hardcoded `ph/tds/temp/tank` list, so any future metric added there needs no other call-site changes. **Recent readings** table and CSV export gained Pressure / Flow / Dispensed columns.
   - Live-tested against the real device (`E05A1B9C2DD4`) via the local dev preview: it was reporting **655.34 bar**, flagged CRITICAL by the banding at the time — see v2.29.69 below, this turned out to be normal pump-cycling behaviour, not a fault.
-- **Pressure/flow are pump-driven, not water-quality metrics (v2.29.69):** per the person who placed the sensors, NEITHER end of the pressure/flow range is a real anomaly — 0 while the pump is off (nothing to read) and whatever the line reads once the pump kicks on, at any magnitude (a 655 bar spike on pump-start is a normal artifact of this sensor placement, confirmed against the real device above). `iotWqClass` now always returns `"green"` for `pressure`/`flowMLPM` — they never rate WARNING/CRITICAL. This one change cascades to every dependent screen: the RO Unit Sensors card (badge + reassuring AI summary), its gauges (fully green track, no amber zone), the Recent-readings table (no red/amber highlight on these columns), and the Trend analysis "Anomalies by metric" tile (Pressure/Flow always 0). Water Quality (pH/TDS/Temp) is untouched. The card's "Ideal: X–Y" subtext for these two now reads "Pump off = 0, pump on = live reading — both normal" instead, since there's no enforced ceiling to imply anymore.
+- **Pressure/flow are pump-driven, not water-quality metrics (v2.29.69):** per the person who placed the sensors, NEITHER end of the pressure/flow range is a real anomaly — 0 while the pump is off (nothing to read) and whatever the line reads once the pump kicks on, at any magnitude (a 655 bar spike on pump-start is a normal artifact of this sensor placement, confirmed against the real device above). `iotWqClass` now always returns `"green"` for `pressure`/`flowMLPM` — they never rate WARNING/CRITICAL. This one change cascades to every dependent screen: the RO Unit Sensors card badge, its gauges (fully green track, no amber zone), the Recent-readings table (no red/amber highlight on these columns), and the Trend analysis "Anomalies by metric" tile (Pressure/Flow always 0). Water Quality (pH/TDS/Temp) is untouched. The card's "Ideal: X–Y" subtext for these two now reads "Pump off = 0, pump on = live reading — both normal" instead, since there's no enforced ceiling to imply anymore.
 - **Loading state (v2.29.44):** fixed a load flash — the module used to drop its full-page spinner as soon as `/devices/status` (the roster) resolved, so the device list, tank graphic, gauges and Water Quality card briefly rendered with empty/zero data ("Awaiting sensor readings", 0% tank, `—` gauges) for a beat before the first `/devices/history` round-trip landed. A `historyLoaded` flag now gates the loading state on **both** requests completing at least once. Replaced the small generic spinner with a dedicated `IoTLoading` panel — bigger spinner, "Loading live device data…" copy, and an indeterminate progress bar — so the wait reads clearly as loading, not a blank/broken module.
 - **Dispensed average (v2.29.45):** the **Total Dispensed** stat (under RO Unit Sensors) gained an **Average / day** figure next to Total dispensed and This window. `iotDispensedRange` now also tracks each reading's timestamp and divides the window delta by its actual span (the history feed is a downsampled ~1–2 day window, not exactly 1 day), instead of the window delta appearing twice under different labels. Shows `—` until the window has at least 30 minutes of span, so it can't flash a wildly inflated estimate right after the page loads.
 - **Dispensed stat simplified (v2.29.46):** dropped **This window** from the Total Dispensed stat — showing the raw litres dispensed across whatever ~1–2 day span the history feed happened to have loaded read as an arbitrary, hard-to-explain number on its own. Now just two figures: **Total dispensed** (lifetime) and **Average dispensed** (per day, from `iotDispensedRange`'s `avgPerDay`).
 - **Shared date-range filter (v2.29.47):** the Total Dispensed stat is now date-filterable with its own **Today / Yesterday / This Week / This Month / Last Month** chips, and that filter is **shared** with Trend analysis + Recent readings below (previously each owned a separate, page-local Today/Yesterday/Week filter) — `range` state moved up to `IoTDevices`, so picking a period in either place updates both. Two new options join the existing rolling-7-day "This Week": **This Month** and **Last Month**, real calendar months (`iotFilterByRange`, `IOT_RANGE_OPTIONS`, reusable `IoTRangeChips`). The Trend analysis history fetch widened from `&days=7` to `&days=62` (`hist7dByDevice` renamed `histRangeByDevice`) so "Last Month" has data to filter regardless of where in the current month "today" falls. Total dispensed now reads as the counter value as of the end of the selected period rather than always "right now"; the card shows "No dispensed-litres data for this period" instead of vanishing when a period has none (e.g. Last Month, before the device started reporting `pressure`/`flowMLPM`/`totalDispensed`).
+- **Dispense Summary promoted to its own card (v2.29.87):** after a user-provided visual mockup, audited the RO-tank view feature-by-feature against it — the mockup's ideas for the gauges, trend chart, anomaly history, weather correlation and Recent-readings filters were all already present here in a more capable form (real ideal-band zones/ticks, segment-coloured charts, Contamination/Tank/Dead-device filtering), so those were deliberately left as-is rather than downgraded to the mockup's simplified static versions. The one real gap: **Total dispensed** was a small stat (`IoTDispensedStat`) tucked inside the RO Unit Sensors card, sharing its own chip row. It's now its own standalone, full-width **`IoTDispenseSummaryCard`** — a prominent hero-style card (big "Total dispensed" headline number + unit, "as of {period}" sub-line, and "Average dispensed" right-aligned) sitting between the tank/water-quality 3-column row and the RO Unit Sensors card. No new chips on this card — the shared `range` state is still controlled from Trend analysis / Recent readings just below, so nothing is lost. Scope decisions made explicit with the user before this change: the fleet KPI row (Total/Online/Offline/With faults) and the live fault-alert/toast system stay (mockup just didn't include a snippet for them); the **junctionBox** device view (a different device type entirely — pressure/channels/consumption) is untouched, since the mockup only depicts the RO-tank layout; the Water Quality card keeps showing its real pH/TDS/Temp ranges with RAG bands rather than being rebuilt down to the mockup's plain placeholder list.
+- **Range chips restored to the Dispense Summary card (v2.29.88):** the user then shared a fuller version
+  of the same mockup, confirming the rest of the RO-tank view already matches closely (a live screenshot
+  they attached lined up with what's already shipping). One real correction it revealed: the mockup puts
+  the **Today/Yesterday/This Week/This Month/Last Month** range chips directly on the "Dispense Summary"
+  card (above the Total dispensed number) — v2.29.87 had dropped them from that card, assuming the copies
+  on Trend analysis/Recent readings were enough. Added them back to `IoTDispenseSummaryCard` (now takes a
+  `setRange` prop) — same shared `range` state as the other two locations, so changing the period from any
+  of the three updates all of them.
+- **Tank brand text — compared, then kept as ProWater (v2.29.89):** a direct side-by-side pixel comparison
+  between a live screenshot and the mockup found exactly one visual difference — the tank graphic's
+  moulded brand text reads "ProWater" (small droplet icon) where the mockup shows "SINTEX" over a tiny
+  tracked "WATER TANK" caption. Briefly swapped `.pw-tank-brand` to match the mockup exactly, then reverted
+  back to "ProWater" + the icon per a follow-up from the user — this dashboard keeps its own brand on the
+  tank graphic rather than the mockup's placeholder tank-manufacturer name. Everything else on the tank
+  (shell shape, cap, water fill, scale, float-switch list) was already a close match — no other changes.
+- **Real product photography replaces the CSS-drawn tank (v2.29.90):** the user supplied actual photos of
+  the physical ProWater tank at four fill states — Empty, 25%, 50%, 75% — saved to `Tank Photos/` at the
+  project root. Copied into `public/tank/` as web-optimised JPEGs (`sips`, resized to 700px + quality 82 —
+  ~90KB each, down from ~1.5MB source PNGs) and wired into `IoTTank` via a plain `pct → image` lookup
+  (`IOT_TANK_PHOTOS`). This works with **zero interpolation logic** because the tank's real feed is 4
+  physical float switches (`IOT_TANK_STEPS`), never a continuous analog reading — `iotTank()` only ever
+  returns exactly 0/25/50/75/100, so the component just shows the one real photo matching the current
+  switch state. The entire hand-drawn tank illustration (moulded shell, two animated wave layers, rising
+  bubbles, a refill pump-and-pipe rig, warming vapour wisps, the 100/75/50/25/0 tick-mark scale) was removed
+  along with all its now-dead CSS (`.pw-tank`, `.pw-tank-lid/-neck/-shell`, `.pw-water`, `.pw-wave*`,
+  `.pw-bubble`, `.pw-band*`, `.pw-tank-brand`, `.pw-tank-base`, the refill-rig and vapour classes/keyframes)
+  — the tick-mark scale in particular no longer has a meaningful pixel mapping onto a real photo, so it was
+  dropped rather than guessed at. The "Refilling"/"Warming" status pills are kept, now overlaid directly on
+  the photo as simple badges (no more animated pump/vapour graphics under them) — dropped a duplicate
+  "Warming" pill that briefly showed twice (the panel header already renders one). Two follow-up fixes
+  after the first look: **(1) enlarged the photo** — `.pw-tank-photo` grew from a 230px fixed width to a
+  fluid `width:100%; max-width:340px`, and the panel's `minHeight` grew 300→380 to fit it without cramping.
+  **(2) blended the photo's studio backdrop into the card** — the light-gray background was showing as a
+  visible box against the app's white card. Fixed with `mix-blend-mode:multiply` on the `<img>` (multiplies
+  near-white studio pixels against the white/near-white card background, which visually erases them) plus
+  a soft radial `mask-image` fading the very edge — no real background removal/alpha-cutout was needed.
+  **Known gap:** no real "tank full" (100%) photo was supplied yet — that state currently falls back to the
+  75% photo (flagged with a `TODO` comment in `IOT_TANK_PHOTOS`) until one is provided.
+- **Real background removal, replacing the blend/mask hack (v2.29.91):** the multiply+mask trick from
+  v2.29.90 left a faint gray vignette visible at the photo's corners — the studio backdrop wasn't quite
+  pure white, so `mix-blend-mode:multiply` alone couldn't fully erase it. Replaced with a real chroma-key
+  pass (Pillow): sample the true background colour from all 4 corners of each source photo, make pixels
+  close to it fully transparent with a soft distance-based ramp (for anti-aliased edges, not a hard cutout),
+  tight-crop the transparent margins, then palette-quantize to control file size. Produces genuine
+  alpha-transparent PNGs (~110–135KB each) that composite cleanly onto any card background — verified by
+  test-compositing over bright green and mint backgrounds before shipping, confirming no halo/artifact.
+  The CSS multiply/mask workaround is removed entirely (`.pw-tank-photo img` is back to a plain, unstyled
+  `<img>`); `IOT_TANK_PHOTOS` now points at `.png` files instead of `.jpg`.
 
 ### Referral (`referral`)
 - **Purpose:** referrers, referees, credits, rewards momentum.
@@ -308,16 +508,25 @@ Cross-module reporting. Sub-tabs: **Overview**, Referral, Sales, Earned Revenue,
 Transaction**, AOP (admin/devops), Apartment Performance, **Renewal & Churn Risk**, Billing, Revenue (Net
 Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.0.)
 
+- **Sales Insights (`SalesInsights`, `an_sales`, v2.29.25)** — reads the Zoho leads like a funnel: KPI
+  cards (Total leads / conversion rate / plan value in view), a **Leads by status** breakdown table, a
+  **Total plan value by society** table (click a row to filter the status breakdown above), and the
+  **lead-conversion funnel** (Total leads → Contacted+ → Demo+ → Proposal+ → Converted, drop-off % per
+  step). Society-filterable. All deterministic, no LLM. (The "Business insights" panel this tab originally
+  shipped with — What happened/What's ongoing/Result + Positive/Negative + recommended actions — was
+  removed dashboard-wide in v2.29.97, see the note at the top of the Analytics section changelog / the
+  App.jsx VERSION_HISTORY entry for the full list of removed panels.)
+
 - **Renewal & Churn Risk (`ChurnRiskRadar`, `an_churn`, v2.29.82)** — flags customers at risk of churn by
   joining three already-live signals onto one customer-level table: **subscription renewing within 30
   days** (same `nextBilling`/days-out derivation Billing Analytics' "Renewals due" card already uses),
   an **overdue/failed invoice** (`i.status === "failed" || (i.balance > 0 && i.rawStatus?.toLowerCase()
   === "overdue")` — the exact condition Billing Overview/Subscription Reconciliation already use), and
-  the customer record's own **`status === "dunning"`** (Zoho's raw payment-actively-failing state, also
-  surfaced in Societies' retention insights). Each match adds to a score (dunning +3, overdue +2, renewal
-  due +1 or +2 if within 7 days) that buckets into **High/Medium/Low**. Deterministic "Business insights"
-  panel (same shape as Net Revenue/DP Transaction), 5 KPI cards, a level-filterable/searchable table, and
-  CSV export. **Deliberately excludes an IoT "device gone quiet" signal** — there is no existing field
+  the customer record's own **`status === "dunning"`** (Zoho's raw payment-actively-failing state). Each
+  match adds to a score (dunning +3, overdue +2, renewal due +1 or +2 if within 7 days) that buckets into
+  **High/Medium/Low**, 5 KPI cards, a level-filterable/searchable table, and CSV export. (Originally also
+  had a "Business insights" panel — removed dashboard-wide in v2.29.97.) **Deliberately excludes an IoT
+  "device gone quiet" signal** — there is no existing field
   joining a customer's `purifier_id` to a real IoT `deviceId` (the real IoT module only monitors two
   apartment-level RO/junction-box installations, not individual customer purifiers), so adding one here
   would have to be fabricated — flagged rather than built. Verified via temporary seed-data injection (a
@@ -382,6 +591,106 @@ Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" 
     **Payment Mode** and **Customer** from the visible table (16 columns now — Invoice #, Reference
     Number, Apartment, dates, amounts…) — all three stay in the CSV export unchanged, this was purely a
     display declutter, footer `colSpan` adjusted 9→6.
+  - **Search now includes mobile number (v2.29.102):** the search box only matched customer name or
+    apartment/society — an invoice itself carries no phone field, so it's now joined in from the
+    customer record the same way apartment/society already is (`custOf(i)`, keyed off
+    `zohoCustomerId`/`zohoId`/`customerNumber`). Matching is digit-only on both sides, so
+    "8839452234" finds a stored "918839452234" regardless of a country code or formatting.
+  - **Row source briefly switched to `GET /admin/get-all-submodules` (v2.29.103), then REVERTED
+    (v2.29.104), per follow-up feedback:** v2.29.103 rebuilt this table to source one row per
+    `get-all-submodules` record (with a literal field mapping incl. the feed's own `transaction_id`
+    shown as "Invoice ID" and `reference_number` shown as "Transaction ID") joined back to a customer via
+    `subscription_id`. v2.29.104 reverted all of that — the table is back to one row per PAID
+    `get-all-invoices` record, with Reference Number/Payment Mode/Apartment/Customer restored and the
+    16-column layout from before v2.29.103.
+  - **Start/End date enrichment lookup (v2.29.104):** `get-all-submodules` is still fetched, but now
+    purely to supply real term dates. Each invoice's own `id` (`invoice_id`) is matched against a
+    submodule record's `id` (mapped from that feed's `transaction_id`) — `modByTxnId[i.id]` in
+    `EarnedRevenue()`. When a match exists, Start Date/End Date (and everything the earned-revenue
+    formula derives from them — `tenureDays`/`daysInPaidMonth`/spillover) use the feed's real
+    `current_term_starts_at`/`current_term_ends_at` instead of the old due-date-based approximation.
+    When no match exists, it falls back to the original computation (due date as start, "due date + 1
+    calendar month − 1 day" as end) exactly as before v2.29.103 — verified live with seed data: matched
+    invoices show real multi-month/year tenures (e.g. one shows a 365-day tenure vs the ~30 days the old
+    formula would have computed), the one unmatched invoice correctly falls back to the ~30-day
+    due-date-based figure. `billingApi.getSubscriptions()` was restored to this screen's fetch (needed
+    again for plan/term lookup).
+  - **Real-API gotcha found via a live Postman call (v2.29.104):** the submodules fetch was silently
+    extracting **zero rows** on the actual deployed endpoint — no console error, just a permanent
+    "Showing sample data" — because the live response wraps rows in a top-level **`"subscriptions"`**
+    key, not `"submodules"`/`"data"` as first assumed. Fixed the extraction to check `json.subscriptions`
+    first. **Caveat:** the full real response shape beyond `subscription_id`/`current_term_starts_at`/
+    `current_term_ends_at`/`amount`/`interval`/`status`/`plan_name`/`plan_code`/`first_name` (confirmed via
+    a partial screenshot) hasn't been independently verified — in particular whether a `transaction_id`
+    field genuinely exists on this feed for the invoice_id lookup to match against. If Start/End dates
+    look wrong or never differ from the due-date fallback once pointed at the live endpoint, check the
+    real field name for that link first.
+  - **Interval column (v2.29.105):** added right before Earned/month — the billing cadence ("1 month" /
+    "3 months" / "1 year") read from the SAME matched submodule record as Start/End date, off its own
+    `interval`/`interval_unit` fields (`mapSubmodule()` → `intervalCount`/`intervalUnit`). Singular/plural
+    handled directly ("1 month" not "1 months"). Reads "—" for any invoice with no submodule match, same
+    fallback behavior as Start/End date.
+  - **Lookup hardened with an invoice_number fallback (v2.29.106):** the invoice↔submodule match now
+    tries `invoice_id` ↔ `transaction_id` first (the original key), then falls back to matching on
+    `invoice_number` (both feeds carry it) if that doesn't find one — `modByTxnId`/`modByNumber` in
+    `EarnedRevenue()`. Prompted by Interval still showing blank on the live site after the field mapping
+    was confirmed correct against a real API record; the leading suspect is still the 3h `submodules`
+    localStorage cache serving rows mapped before this field existed (fix: click in-app Refresh, not a
+    browser reload), but this fallback also guards against `invoice_id` not literally equaling
+    `transaction_id` in the live data — something that can't be confirmed without comparing a real
+    invoice and its submodule match side by side.
+  - **Recognition formula rebuilt to a Paid-Date-anchored tenure (v2.29.107), per a worked spreadsheet
+    the user provided (verified to reproduce both their examples exactly — a 1-month recharge: paid 17
+    Aug, end 14 Sep, ₹450 → tenure 29 days, 15 days in Aug, ₹233 earned; and a 6-month recharge: paid 31
+    May, end 30 Nov, ₹594 → tenure 184 days, 1 day in May, ₹3 earned):**
+    - **Tenure now runs from the actual PAID DATE through End Date** (`tenureDays = endDate − paidDate +
+      1`) — previously it ran from Start Date/due date through End Date. Start Date is still shown as its
+      own column but no longer feeds the earning math at all.
+    - **This structurally removes the old late-payment-clip and already-lapsed-tenure special cases** —
+      since tenure starts at the payment itself by definition, the paid month can never be "before" or
+      "after" the tenure window; `daysInPaidMonth` is simply `min(endDate, monthEnd) − paidDate + 1`.
+    - **Removed:** Next month, Days in next month, Earned revenue (next month) — the old one-month-ahead
+      spillover view.
+    - **Added, right after Earned revenue:** **Remaining Month** and **Remaining Days** (how much of the
+      tenure is left from TODAY through End Date — 0 once the term has fully lapsed), and **Remaining
+      Days Earned Total Revenue** / **Remaining Month Earned Total Revenue** (that remainder projected
+      two ways: `recharge × remainingDays ÷ tenureDays` for an exact day-count proportion, and
+      `earnedPerMonth × remainingMonths` for a coarser flat-monthly-rate estimate). `remainingMonths` is
+      a count of calendar months from today's month through End Date's month, inclusive.
+    - **Table is now 18 columns, in this exact order:** Invoice # / Reference Number / Apartment / Start
+      Date / Paid on / End Date / Total paid / Deposit / Recharge / Interval / Earned/month / Tenure days
+      / Days in paid month / Earned revenue / Remaining Month / Remaining Days / Remaining Days Earned
+      Total Revenue / Remaining Month Earned Total Revenue. CSV export matches (Invoice ID/Customer/
+      Apartment/Plan stay CSV-only, same as before). **(Days in paid month later dropped from BOTH the
+      table and CSV in v2.29.111 — see below; 17 columns as of that version.)**
+  - **Tenure-day off-by-one fix (v2.29.109):** the paid date and end date were compared as raw parsed
+    timestamps, which can carry different times-of-day depending on the source string (a plain date vs. a
+    full datetime) — whenever the end date's time-of-day was more than 12 hours later than the paid
+    date's, `Math.round((end − paid) / 86400000)` rounded up and silently added a phantom day to Tenure
+    days, which then propagated into Days in paid month, Earned revenue, and both Remaining
+    Days/Months + their Earned Total Revenue columns. Fixed by normalizing every date feeding this calc
+    (paid date, submodule term start/end, the due-date fallback, and today's date) to midnight with the
+    existing `startOfDay()` helper before any day-count arithmetic runs. Verified with a standalone
+    reproduction: a paid date at midnight against an end date 32 days later but carrying a same-day-plus-
+    14-hours timestamp gave 33 tenure days before the fix, 32 (correct) after. Also removed the long
+    explanatory `sub=` text under the "Per-invoice recognition" table header — the card now shows just its
+    title.
+  - **Remaining Month overstatement fix + column trim (v2.29.111):** `remainingMonths` was counting how
+    many distinct calendar-month LABELS the span from today through End Date touched, not how many months
+    of the term were actually left — a 1-month recharge with e.g. 16 real days remaining, if that stretch
+    straddled a calendar-month boundary, counted as "2" months remaining and multiplied `earnedPerMonth ×
+    2`, fabricating a second month of projected revenue that was never paid for (reported live: a ₹350
+    1-month recharge showing ₹700 Remaining Month Earned Total Revenue). Fixed by capping `remainingMonths`
+    at the recharge's own interval length (`Math.min(months, ...)`) — a 1-month recharge can never show
+    more than 1 remaining month, a 6-month recharge never more than 6; long multi-month recharges, where
+    the calendar-month count genuinely does track real months left, are unaffected. Verified with a
+    standalone reproduction of the exact reported case: ₹700 → ₹350. Also removed the **Days in paid
+    month** column from both the table and CSV per follow-up — it's the numerator half of the Earned
+    revenue formula's internal working (`Earned revenue = Recharge × Days in paid month ÷ Tenure days`)
+    and reads as noise without Tenure days' context alongside it; still computed internally, just no
+    longer its own column, in both the on-screen table (now 17 columns) and the CSV export (which also
+    carries the CSV-only Invoice ID/Reference Number's sibling fields/Customer/Plan from the earlier
+    v2.29.84 trim).
 
 - **Reconciliation (`Reconciliation`, `an_reconciliation`, v2.29.57–58)** — a dedicated tab (between Earned
   Revenue and AOP) fixing a real bug where "collected revenue" elsewhere in the app was effectively
@@ -434,6 +743,18 @@ Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" 
     earlier") so the calculation is visible at a glance, not just the result. The tie-out line simplified
     from "Ties to independent outstanding-balance check" to **"Verified — matches the total of all unpaid
     invoices"**, and the advance-receipts memo reworded in plain English.
+  - **Visual redesign (v2.29.85)**, built to match a mockup the user provided — same underlying data/logic
+    throughout, purely presentational. The waterfall's four cells (Opening/New dues/Payments/Closing) are
+    now connected by **+/−/= operator badges**, with a "Reconciled"/"Check needed" pill next to the title
+    and the tie-out check moved into its own **Verification** panel (was a plain text line below the
+    cells). A new **"Period overview"** card sits beside the waterfall — a 3-bar Due/Collected/Receivable
+    snapshot for just the selected period (the pre-existing multi-month trend chart is untouched, further
+    down the page). The invoices table gained per-customer **avatar-initial badges**, **dot-style status
+    badges**, a combined search + status-tabs toolbar (pill-group, not individually-bordered chips), and
+    real **pagination** (15/page, Previous/Next, "Showing X of Y") — previously every filtered row
+    rendered at once in one scrolling list. The **Days late** column was dropped from the visible table
+    (folded into the Late badge instead, e.g. "Late · 3d") to match the mockup's column set — it's
+    unchanged in the CSV export.
 
 - **DP Transaction (`DPTransactions`, `an_dptxn`, v2.29.60)** — a dedicated tab (between Reconciliation
   and AOP) reading a brand-new, unauthenticated feed: `GET
@@ -529,6 +850,30 @@ Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" 
     per-apartment card now also show a **live Deposit-vs-Recharge split percentage** — recomputed from
     whatever's actually in the current date/apartment/type filters (never a fixed ratio) — plus a new
     stacked-bar **"Deposit vs Recharge split"** card showing the same split for the whole filtered set.
+  - **Visual redesign to match a provided mockup (v2.29.86):** purely presentational — no data/logic
+    changed, same treatment as the v2.29.85 Reconciliation redesign (this codebase has no Tailwind, so the
+    mockup was read as a layout/visual spec only and rebuilt with inline styles + the `:root` CSS vars).
+    The KPI row now has **3 cards** (Total Collected, Recharge Collected, Deposit Collected — was 2, no
+    "Total" card before) and moved **above** Business insights (was below). Business insights was rebuilt
+    into a box-card layout — 3 top boxes (What happened / Collection mix / Top performer), a "Needs
+    attention" box listing idle apartments, and a dashed "Recommended action" box — with a "Period
+    performance" pill (up/down arrow + MoM %) in the card header. "Deposit vs Recharge split" became
+    **"Collection composition"** — a thinner split bar plus two side-by-side amber/green detail boxes —
+    now paired in a **2-column grid** with a rebuilt "Apartment performance": ranked cards with a numbered
+    badge (green-filled for #1), a progress bar sized to that apartment's share of the top total, a
+    txn-count + deposit/recharge footer line, and a distinct "No activity" pill for idle apartments
+    (replaces the earlier generic `Stat`-component grid). In the Transactions table: Payment/Transaction
+    Type filters switched from grouped bordered buttons to individually-bordered pill chips; the Type badge
+    gained a leading status dot; Device became a small mono-font badge chip; Validity/Litres/Deposit/
+    Revenue columns right-aligned; a "N records" badge was added beside the table title; and the
+    admin-only Upload JSON button became a solid filled button (was ghost-style, matching Export) to
+    visually separate it in the button hierarchy.
+  - **"Business insights" panel removed (v2.29.97)** — the box-card panel described above (Period
+    performance pill, What happened/Collection mix/Top performer, Needs attention, Recommended action) was
+    removed dashboard-wide per explicit request; the tab now goes straight from the KPI row to Collection
+    composition / Apartment performance. The computation feeding it (`dpMomPct`, `topApt`, `idleApts`,
+    `dpPos`/`dpNeg`/`dpActs`, `dpHappened`/`dpOngoing`/`dpResult`) was removed too — nothing else in the
+    tab depended on it.
 
 ### Task Planner (`planner`)
 - **Purpose:** ClickUp-style Kanban for internal tasks (Scoping → … → Live).
@@ -566,8 +911,36 @@ Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" 
 - **Purpose:** audit trail + API-failure monitor.
 - **How:** every action calls `pushLog` (`pw_logs`), stamped with app version, actor, IP/ISP/geo
   (`pw_session` via `ipapi`/`ipify`/`bigdatacloud`). Clear-log + CSV export. **Failures** tab records
-  API outages (`pw_failures`), shows a "Server Down" popup, and can email alerts
-  (`POST /admin/notify-failure`). `LOGS_EPOCH`/`pw_logs_epoch` can wipe history once on next load.
+  API outages (`pw_failures`) and shows a "Server Down" popup. `LOGS_EPOCH`/`pw_logs_epoch` can wipe
+  history once on next load.
+- **Email-on-failure REMOVED (v2.29.110):** the failure tracker used to also best-effort POST to
+  `/admin/notify-failure` on every new outage (and a sibling `notifyAdminEmail()` helper posted the same
+  route on an external-API usage threshold) — that backend route was never actually built (the code's own
+  comment said so: "needs a backend route... may not exist yet"), so it fired a 404 on every single
+  failure event, forever, visible as constant noise in the backend's own Cloud Run logs. Removed
+  entirely: `notifyFailureEmail()`/`notifyAdminEmail()` and their call sites, the now-fully-unused
+  `src/lib/notifyAdmin.js` helper file, the "Alert recipients" stat + explanatory line on the Failures
+  tab, and the API_USAGE/docs table rows referencing the route. Outage TRACKING itself (`pw_failures`,
+  the Failures tab, the Server Down popup) is unaffected — only the dead email-attempt was removed.
+- **Server-unavailable popup is gated per SUB-TAB, not per module (v2.29.98):** `MODULE_SOURCES` maps
+  each top-level module to the heavy Zoho lists it depends on (`customers`/`subscriptions`/`invoices`/
+  `leads`) — but Analytics alone has 12 sub-tabs with wildly different real dependencies (DP Transaction
+  reads its own separate unauthenticated feed; App Logs reads Firestore; Credits reads its own
+  credit-notes API), so gating the whole module on all four sources together used to lock a user out of
+  every Analytics sub-tab whenever just one of the four went down — including sub-tabs that never touch
+  that source. A new `TAB_SOURCES` map gives the real per-tab dependency list (read straight off each
+  component's own fetch calls); the blocking-popup check now looks up the **active tab** first and only
+  falls back to the module-level list for a tab not explicitly mapped. Billing & Subscription's sub-tabs
+  were split the same way (Subscriptions → `subscriptions` only, Invoices → `invoices` only — previously
+  both for every tab); Sales and Customer sub-tabs were already uniform (one shared source each) so
+  nothing changed there. A dead endpoint now only blocks the specific section that actually needs it.
+- **Server-unavailable popup is DISMISSIBLE, not a hard block (v2.29.101):** even scoped to the right
+  section, the popup used to have only one way out — "Close Module", which left the whole module. It now
+  has a **"Continue anyway"** button (`ServerDownModal`'s `onDismiss`) that just hides the popup and lets
+  the user go straight into the section — same sample/cached data + inline "Showing sample data" banner
+  as always — while "Close Module" (`onCloseModule`) stays as a second option. The dismissal is
+  per-tab-visit state in `Shell` (`dismissedDown`), reset whenever the active tab changes, so switching
+  tabs — or a genuinely new source going down — re-arms the popup rather than suppressing it forever.
 
 ### About (`about`)
 - **Purpose:** version history + per-module docs + API-usage list, and the release publishers.
@@ -604,8 +977,9 @@ nothing else in the dashboard depended on it, so removal was a clean, isolated c
 ## 8. Conventions
 
 - **Version bump:** on every shipped change, bump `APP_VERSION` + prepend a `VERSION_HISTORY` entry in
-  `src/App.jsx` (also update `MODULE_DOCS` / `API_USAGE` if a module's behaviour or an endpoint
-  changed). The version shows in the sidebar/home/login footers, the Logs Tracker banner, and About.
+  `src/shared/core.js` (also update `MODULE_DOCS` / `API_USAGE` in `src/modules/About.jsx` if a
+  module's behaviour or an endpoint changed). The version shows in the sidebar/home/login footers,
+  the Logs Tracker banner, and About.
 - **This doc:** update the relevant §6 module section (and §3/§5 if APIs/storage changed) in the same
   change. Keep the "Reflects APP_VERSION" line at the top current.
 
@@ -614,7 +988,8 @@ nothing else in the dashboard depended on it, so removal was a clean, isolated c
 ## 9. Deploy
 
 1. Get the change into the `soroai/Wisdom2.0` repo's **`main`** branch (this working copy may be a
-   standalone folder, not a git clone — copy `src/App.jsx` / this file into the repo, commit, push).
+   standalone folder, not a git clone — copy the changed `src/` files / this file into the repo,
+   commit, push).
 2. GitHub Actions (`deploy.yml`) builds with the repo secrets and publishes to GitHub Pages.
 3. Verify the live app's version footer shows the new `APP_VERSION`.
 
@@ -628,7 +1003,6 @@ nothing else in the dashboard depended on it, so removal was a clean, isolated c
   `match /{coll}/{doc} { allow read, write: if request.auth != null; }` (or per-collection).
 - **Server-side caching** of the Zoho list endpoints (customers/subscriptions/invoices) to stop
   org-wide rate-limits — see `BACKEND_CACHE_SPEC.md`.
-- `POST /admin/notify-failure` backend route for API-failure emails.
 - Device Replacement **cross-device list**: confirm the collection the `/device-replacement/add`
   backend writes to (or add a GET) and point the read-back at it.
 - **ProWater AI was removed in v2.29.79** (see §6's "ProWater AI — REMOVED" entry) — no open items

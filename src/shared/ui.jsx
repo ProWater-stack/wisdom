@@ -1,0 +1,682 @@
+/* ============================================================================
+   shared/ui.jsx — generic JSX UI primitives used across every module: Table,
+   Card, Modal, Stat, Toolbar, Drawer, Field, Chip, Status, Person, date-range
+   pickers, Login/ForgotPassword, chart-label helpers, and the shared inline
+   style-object constants. Extracted verbatim from App.jsx (v2.30 split).
+   ============================================================================ */
+
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import {
+  AlertCircle, ArrowUpDown, ArrowUpRight, Camera, CheckCircle2, Eye, EyeOff,
+  Filter, Image as ImageIcon, Search, X,
+  Briefcase, Receipt, Boxes, Wrench, GitBranch, BarChart3, UserCog,
+  ScrollText, Ticket, UserRound, Cpu, Landmark, CalendarClock, Repeat, Info,
+  LayoutGrid,
+} from "lucide-react";
+import {
+  APP_VERSION, DATE_PRESETS, DEVICE_TYPE_STYLE, EMAIL_DOMAIN, api, deviceType,
+  pluralise, useAuth,
+} from "./core";
+
+export const CHART_PALETTE = ["#0A9D6E", "#2A86D6", "#986315", "#DC4141", "#0B6F52", "#7D8A83", "#A9B3AC"];
+export const PIE_LABEL_OFFSET = 14;
+export const renderPieLabel = ({ cx, cy, midAngle, outerRadius, value, percent }) => {
+  if (!value) return null;
+  const rad = Math.PI / 180;
+  const r = outerRadius + PIE_LABEL_OFFSET;
+  const x = cx + r * Math.cos(-midAngle * rad);
+  const y = cy + r * Math.sin(-midAngle * rad);
+  return (
+    <text x={x} y={y} textAnchor={x > cx ? "start" : "end"} dominantBaseline="central"
+      style={{ fontSize: 11, fontWeight: 700, fill: "var(--f)" }}>
+      {value.toLocaleString("en-IN")} · {Math.round(percent * 100)}%
+    </text>
+  );
+};
+export const pieLabelLine = { stroke: "var(--faint)", strokeWidth: 1 };
+export function DateRangePicker({ value, onChange }) {
+  return (
+    <>
+      <select value={value.preset} onChange={e => onChange({ ...value, preset: e.target.value })} style={selectStyle}>
+        {DATE_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+      </select>
+      {value.preset === "custom" && (
+        <>
+          <input type="date" value={value.from || ""} max={value.to || undefined}
+            onChange={e => onChange({ ...value, from: e.target.value })} style={selectStyle} />
+          <span style={{ fontSize: 12.5, color: "var(--muted)" }}>to</span>
+          <input type="date" value={value.to || ""} min={value.from || undefined}
+            onChange={e => onChange({ ...value, to: e.target.value })} style={selectStyle} />
+        </>
+      )}
+    </>
+  );
+}
+export function MultiSelectFilter({ label, options, value, onChange, plural: pluralProp, width = 240 }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", away);
+    return () => document.removeEventListener("mousedown", away);
+  }, [open]);
+
+  const plural = pluralProp || pluralise(label);
+  const all = value === null;
+  const sel = all ? options : value;
+  const has = (o) => sel.includes(o);
+  const toggle = (o) => {
+    const next = has(o) ? sel.filter(x => x !== o) : [...sel, o];
+    onChange(next.length === options.length ? null : next); // back to "all" → null
+  };
+  const out = options.filter(o => !has(o));
+  const summary = all ? `All ${plural} (${options.length})`
+    : sel.length === 0 ? `No ${label.toLowerCase()} selected`
+    : out.length <= 2 ? `Excluding ${out.join(", ")}`
+    : `${sel.length} of ${options.length} ${plural}`;
+  const shown = options.filter(o => o.toLowerCase().includes(q.toLowerCase()));
+
+  return (
+    <div ref={box} style={{ position: "relative" }}>
+      <button onClick={() => setOpen(o => !o)} title={summary}
+        style={{ ...selectStyle, display: "inline-flex", alignItems: "center", gap: 7, maxWidth: width, textAlign: "left", fontWeight: 500 }}>
+        <Filter size={14} style={{ flexShrink: 0, color: all ? "var(--muted)" : "var(--teal)" }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, width, background: "#fff",
+          border: "1.5px solid var(--border)", borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,.12)", padding: 10 }}>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={`Search ${plural}…`}
+            style={{ ...inp, padding: "7px 10px", fontSize: 13, marginBottom: 8 }} />
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button onClick={() => onChange(null)} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>Select all</button>
+            <button onClick={() => onChange([])} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>Clear</button>
+          </div>
+          <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            {shown.length === 0 && <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "6px 4px" }}>No matches</div>}
+            {shown.map(o => (
+              <label key={o} style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 4px", cursor: "pointer", fontSize: 13, color: "var(--f)" }}>
+                <input type="checkbox" checked={has(o)} onChange={() => toggle(o)} style={{ width: 15, height: 15, accentColor: "var(--teal)", flexShrink: 0 }} />
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={o}>{o}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+export function Drop() {
+  return (
+    <div style={{ width: 32, height: 32, borderRadius: 9, background: "var(--grad-btn)", display: "grid", placeItems: "center", boxShadow: "0 6px 14px -6px rgba(168,217,64,.6)" }}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 2c4 5 7 8.5 7 12a7 7 0 1 1-14 0c0-3.5 3-7 7-12Z" fill="#fff" /></svg>
+    </div>
+  );
+}
+export function Stat({ label, value, icon: Icon, sub, hero, delta }) {
+  // Optional MoM delta badge: green ▲ for up, red ▼ for down (lightened on hero).
+  const hasDelta = delta != null && Number.isFinite(delta);
+  const up = hasDelta && delta > 0, down = hasDelta && delta < 0;
+  const deltaColor = hero
+    ? (up ? "#0A9D6E" : down ? "#F5BFBF" : "#B5E2D4")
+    : (up ? "#08805A" : down ? "#DC4141" : "#7D8A83");
+  return (
+    <div style={{
+      background: hero ? "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)" : "#fff",
+      color: hero ? "#E2F3EE" : "inherit", border: hero ? "none" : "1px solid var(--border)",
+      borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden"
+    }}>
+      {hero && <div style={{ position: "absolute", right: -20, top: -20, width: 90, height: 90, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.4),transparent 70%)" }} />}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <span className="eyebrow" style={{ color: hero ? "var(--lime)" : "var(--muted)" }}>{label}</span>
+        <Icon size={18} color={hero ? "var(--lime)" : "var(--teal)"} />
+      </div>
+      <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: hero ? "#fff" : "var(--f)", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 12, color: hero ? "#B5E2D4" : "var(--muted)" }}>{sub}</div>
+        {hasDelta && <span style={{ fontSize: 11.5, fontWeight: 700, color: deltaColor, whiteSpace: "nowrap" }}>
+          {up ? "▲" : down ? "▼" : "—"} {up ? "+" : ""}{delta}%
+        </span>}
+      </div>
+    </div>
+  );
+}
+export function Card({ title, sub, children, pad = true, style }) {
+  return (
+    <div className="pw-card" style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden", ...style }}>
+      {title && <div style={{ padding: "16px 18px 8px" }}>
+        <h3 style={{ fontSize: 17 }}>{title}</h3>
+        {sub && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{sub}</div>}
+      </div>}
+      <div style={{ padding: pad ? (title ? "0 18px 18px" : 18) : 0 }}>{children}</div>
+    </div>
+  );
+}
+export function PhotoUploader({ username, current, onClose, onSaved }) {
+  const [mode, setMode] = useState("choose"); // choose | camera
+  const [preview, setPreview] = useState(current || null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const fileRef = useRef(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  useEffect(() => () => stopCamera(), []); // cleanup on unmount
+
+  const stopCamera = () => {
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+  };
+
+  const onFile = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { setErr("Please choose an image file."); return; }
+    const reader = new FileReader();
+    reader.onload = () => setPreview(reader.result);
+    reader.onerror = () => setErr("Could not read that file.");
+    reader.readAsDataURL(f);
+  };
+
+  // Downscale to keep storage small.
+  const resizeToDataUrl = (source, w = 256) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = w / img.width;
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = Math.round(img.height * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.85));
+    };
+    img.src = source;
+  });
+
+  const startCamera = async () => {
+    setErr(""); setMode("camera");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      streamRef.current = stream;
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
+    } catch { setErr("Couldn't access the camera. Check browser permissions, or use Choose file."); setMode("choose"); }
+  };
+
+  const capture = () => {
+    const v = videoRef.current; if (!v) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 256; canvas.height = Math.round((v.videoHeight / v.videoWidth) * 256) || 256;
+    canvas.getContext("2d").drawImage(v, 0, 0, canvas.width, canvas.height);
+    setPreview(canvas.toDataURL("image/jpeg", 0.85));
+    stopCamera(); setMode("choose");
+  };
+
+  const save = async () => {
+    if (!preview) { setErr("Add a photo first."); return; }
+    setBusy(true);
+    try {
+      const finalUrl = await resizeToDataUrl(preview, 256);
+      await api.savePhoto(username, finalUrl);
+      onSaved(finalUrl);
+    } catch { setErr("Could not save the photo."); setBusy(false); }
+  };
+
+  return (
+    <div onClick={() => { stopCamera(); onClose(); }} style={{ position: "fixed", inset: 0, background: "rgba(13,40,24,.45)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 60, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} className="fade-up" style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 420, padding: 28, boxShadow: "0 24px 60px rgba(13,40,24,.3)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+          <h3 style={{ fontSize: 20 }}>Profile photo</h3>
+          <button onClick={() => { stopCamera(); onClose(); }} style={{ color: "var(--muted)" }}><X size={20} /></button>
+        </div>
+
+        {mode === "camera" ? (
+          <div>
+            <video ref={videoRef} style={{ width: "100%", borderRadius: 12, background: "#0A1A12", aspectRatio: "1", objectFit: "cover" }} muted playsInline />
+            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <button onClick={capture} style={{ ...btnPrimary, flex: 1 }}><Camera size={16} /> Capture</button>
+              <button onClick={() => { stopCamera(); setMode("choose"); }} style={{ ...btnGhost, flex: 1 }}>Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{ display: "grid", placeItems: "center", marginBottom: 16 }}>
+              <div style={{ width: 120, height: 120, borderRadius: 999, overflow: "hidden", background: "var(--mint-2)", display: "grid", placeItems: "center", border: "2px solid var(--border)" }}>
+                {preview ? <img src={preview} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <Camera size={34} color="var(--muted)" />}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
+              <button onClick={startCamera} style={{ ...btnGhost, flex: 1 }}><Camera size={16} /> Take photo</button>
+              <button onClick={() => fileRef.current?.click()} style={{ ...btnGhost, flex: 1 }}><ImageIcon size={16} /> Choose file</button>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display: "none" }} />
+            {err && <div style={{ color: "#DC4141", fontSize: 13, margin: "6px 0", display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
+            <button onClick={save} disabled={busy || !preview} style={{ ...btnPrimary, width: "100%", marginTop: 8, opacity: (busy || !preview) ? .6 : 1 }}>{busy ? "Saving…" : "Save photo"}</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+export function DeviceTypeBadge({ purifierId }) {
+  const t = deviceType(purifierId);
+  if (!t) return <span style={{ color: "var(--muted)" }}>—</span>;
+  const [c, bg] = DEVICE_TYPE_STYLE[t] || ["#7D8A83", "#ECEEED"];
+  return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{t}</span>;
+}
+export function SortHeader({ label, k, sort, onSort }) {
+  const active = sort.key === k;
+  return (
+    <button onClick={() => onSort(k)} title="Sort"
+      style={{ display: "inline-flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", fontWeight: 700, padding: 0 }}>
+      {label}
+      {active
+        ? <span style={{ fontSize: 10, color: "var(--teal)" }}>{sort.dir === "asc" ? "▲" : "▼"}</span>
+        : <ArrowUpDown size={12} style={{ opacity: .4 }} />}
+    </button>
+  );
+}
+export function Login() {
+  const { setUser } = useAuth();
+  // Pre-fill the ID if "Remember me" was ticked last time. We never store the
+  // password — the browser's own (OS-encrypted) password manager handles that.
+  const rememberedId = (() => { try { return localStorage.getItem("pw_rememberId") || ""; } catch { return ""; } })();
+  const [username, setUsername] = useState(rememberedId);
+  const [usernames, setUsernames] = useState([]);
+  const [pw, setPw] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [forgot, setForgot] = useState(false); // open the reset modal
+  const [remember, setRemember] = useState(Boolean(rememberedId));
+
+  useEffect(() => { api.getUsernames().then(setUsernames); }, []);
+
+  const submit = async (e) => {
+    if (e) e.preventDefault();
+    if (!username.trim()) { setErr("Enter your ID."); return; }
+    setErr(""); setBusy(true);
+    try {
+      const u = await api.login(username.trim(), pw);
+      try {
+        if (remember) localStorage.setItem("pw_rememberId", username.trim());
+        else localStorage.removeItem("pw_rememberId");
+      } catch { /* storage unavailable — ignore */ }
+      setUser(u);
+    }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", display: "grid", gridTemplateColumns: "1.1fr 1fr" }} className="login-grid">
+      <style>{`@media(max-width:880px){.login-grid{grid-template-columns:1fr!important}.login-aside{display:none!important}}`}</style>
+      {/* brand side */}
+      <aside className="login-aside" style={{
+background: "linear-gradient(135deg, var(--shell-2), var(--shell) 55%, var(--shell-0))",
+        backgroundSize: "200% 200%", animation: "pw-drift 14s ease-in-out infinite",
+        color: "#B5E2D4", padding: "56px 56px", display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden", minHeight: "100vh"
+      }}>
+        {/* Always-running ambient layers */}
+        <div style={{ position: "absolute", inset: 0, background: "radial-gradient(60% 40% at 90% 90%, rgba(168,217,64,.25), transparent)", animation: "pw-glow 5s ease-in-out infinite" }} />
+        <div style={{ position: "absolute", top: "12%", right: "8%", width: 300, height: 300, borderRadius: 999, background: "radial-gradient(circle, rgba(168,217,64,.28), transparent 70%)", animation: "pw-float-a 11s ease-in-out infinite", filter: "blur(8px)" }} />
+        <div style={{ position: "absolute", bottom: "6%", left: "-6%", width: 360, height: 360, borderRadius: 999, background: "radial-gradient(circle, rgba(22,84,92,.5), transparent 70%)", animation: "pw-float-b 14s ease-in-out infinite", filter: "blur(8px)" }} />
+        <div style={{ position: "absolute", top: "40%", left: "50%", width: 200, height: 200, borderRadius: 999, background: "radial-gradient(circle, rgba(168,217,64,.22), transparent 70%)", animation: "pw-float-c 9s ease-in-out infinite", filter: "blur(6px)" }} />
+        {/* Rising particles */}
+        {[0, 1, 2, 3, 4, 5].map(i => (
+          <div key={i} style={{
+            position: "absolute", bottom: 0, left: `${10 + i * 15}%`,
+            width: 6 + (i % 3) * 3, height: 6 + (i % 3) * 3, borderRadius: 999,
+            background: "rgba(168,217,64,.6)",
+            animation: `pw-particle ${8 + i * 2}s linear infinite`, animationDelay: `${i * 1.5}s`
+          }} />
+        ))}
+        {/* Expanding ring pulses */}
+        <div style={{ position: "absolute", top: "50%", left: "50%", width: 140, height: 140, marginLeft: -70, marginTop: -70, borderRadius: 999, border: "1.5px solid rgba(168,217,64,.5)", animation: "pw-ring 4s ease-out infinite" }} />
+        <div style={{ position: "absolute", top: "50%", left: "50%", width: 140, height: 140, marginLeft: -70, marginTop: -70, borderRadius: 999, border: "1.5px solid rgba(168,217,64,.5)", animation: "pw-ring 4s ease-out infinite", animationDelay: "2s" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 12, position: "absolute", top: 56, left: 56, animation: "pw-pulse 4s ease-in-out infinite", zIndex: 2 }}>
+          <Drop />
+          <span style={{ fontWeight: 700, letterSpacing: ".02em" }}>ProWater</span>
+        </div>
+        <div className="pw-stagger" style={{ position: "relative", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1 }}>
+          <p className="eyebrow" style={{ color: "var(--lime)", textAlign: "center" }}>Unified Operations Platform</p>
+          <h1 style={{ color: "#fff", fontSize: "clamp(40px,5vw,64px)", lineHeight: 1.04, margin: "12px 0 18px", fontWeight: 900, textAlign: "center" }}>
+            One platform.<br />Every <span style={{ background: "linear-gradient(90deg, var(--lime-d), #B5E2D4, var(--lime-d))", backgroundSize: "200% auto", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent", animation: "pw-shimmer 3s linear infinite" }}>operation.</span>
+          </h1>
+          <p style={{ maxWidth: 440, lineHeight: 1.7, color: "#B5E2D4", textAlign: "center" }}>
+            Sales, billing, inventory, field service and referrals — managed together in ProWater Internal Systems, connected live to your business data.
+          </p>
+        </div>
+        <p style={{ fontSize: 12, color: "#7D8A83", position: "absolute", bottom: 56, left: 56, zIndex: 1 }}>© {new Date().getFullYear()} ProWater Internal Systems · v{APP_VERSION}</p>
+      </aside>
+
+      {/* form side */}
+<main style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "40px 24px", minHeight: "100vh", background: "var(--mint)" }}>        <form className="pw-stagger" onSubmit={submit} style={{ width: "100%", maxWidth: 460 }}>
+          <div>
+            <p className="eyebrow">Welcome back</p>
+            <h2 style={{ fontSize: 34, margin: "6px 0 4px" }}>Sign in</h2>
+            <p style={{ fontSize: 14, marginBottom: 28 }}>Enter your credentials to access the dashboard.</p>
+          </div>
+
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 160px" }}>
+              <Field label="User ID">
+                <input name="username" value={username} onChange={e => setUsername(e.target.value)}
+                  placeholder="Enter your ID" autoComplete="username" style={inp} />
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 160px" }}>
+              <Field label="Password">
+                <div style={{ position: "relative" }}>
+                  <input name="password" type={show ? "text" : "password"} value={pw} onChange={e => setPw(e.target.value)}
+                    placeholder="••••••••" autoComplete="current-password" style={inp} />
+                  <button type="button" onClick={() => setShow(s => !s)} aria-label="toggle password"
+                    style={{ position: "absolute", right: 10, top: 10, color: "var(--muted)" }}>
+                    {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </Field>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 2 }}>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--slate)", cursor: "pointer", userSelect: "none" }}>
+              <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
+                style={{ width: 16, height: 16, accentColor: "var(--teal)", cursor: "pointer" }} />
+              Remember me
+            </label>
+            <button type="button" onClick={() => setForgot(true)} style={{ fontSize: 12.5, color: "var(--teal)", fontWeight: 600 }}>Forgot password?</button>
+          </div>
+
+          <button type="submit" disabled={busy} style={{ ...btnPrimary, width: "auto", alignSelf: "flex-start", padding: "10px 28px", marginTop: 10, opacity: busy ? .7 : 1 }}>
+            {busy ? "Signing in…" : "Sign in"} <ArrowUpRight size={18} />
+          </button>
+
+          <p style={{ marginTop: 18, fontSize: 12.5, color: "var(--muted)", textAlign: "center" }}>
+            Need an account? Ask an admin to create one.
+          </p>
+        </form>
+        {err && <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", color: "#DC4141", fontSize: 13, marginTop: 14, animation: "pw-fade .3s ease" }}>
+          <AlertCircle size={16} />{err}</div>}
+      </main>
+      {forgot && <ForgotPassword usernames={usernames} onClose={() => setForgot(false)} />}
+    </div>
+  );
+}
+export function ForgotPassword({ usernames, onClose }) {
+  const [step, setStep] = useState(1); // 1=email, 2=otp+newpw, 3=done
+  const [username, setUsername] = useState("");
+  const [sentOtp, setSentOtp] = useState(""); // shown on-screen since email is simulated
+  const [otp, setOtp] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const sendCode = async () => {
+    if (!username) { setErr("Select your email."); return; }
+    setErr(""); setBusy(true);
+    try { const code = await api.requestOtp(username); setSentOtp(code); setStep(2); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+  const doReset = async () => {
+    if (otp.length !== 4) { setErr("Enter the 4-digit code."); return; }
+    if (newPw.length < 6) { setErr("New password must be at least 6 characters."); return; }
+    setErr(""); setBusy(true);
+    try { await api.resetPasswordWithOtp(username, otp, newPw); setStep(3); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(13,40,24,.45)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 60, padding: 20 }}>
+      <div onClick={e => e.stopPropagation()} className="fade-up" style={{ background: "#fff", borderRadius: 18, width: "100%", maxWidth: 420, padding: 28, boxShadow: "0 24px 60px rgba(13,40,24,.3)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <h3 style={{ fontSize: 22 }}>Reset password</h3>
+          <button onClick={onClose} style={{ color: "var(--muted)" }}><X size={20} /></button>
+        </div>
+
+        {step === 1 && <>
+          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>Enter your login ID and we'll send a 4-digit verification code to your registered email.</p>
+          <Field label="Email">
+            <div style={{ display: "flex" }}>
+              <input value={username} onChange={e => setUsername(e.target.value.replace(/[@\s]/g, ""))}
+                onKeyDown={e => e.key === "Enter" && sendCode()} placeholder="your-id"
+                style={{ ...inp, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }} />
+              <span style={{ display: "flex", alignItems: "center", padding: "0 12px", background: "var(--mint-2)", border: "1px solid var(--border)", borderLeft: "none", borderTopRightRadius: 11, borderBottomRightRadius: 11, color: "var(--slate)", fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap" }}>{EMAIL_DOMAIN}</span>
+            </div>
+          </Field>
+          {err && <div style={{ color: "#DC4141", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
+          <button onClick={sendCode} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Sending…" : "Send code"}</button>
+        </>}
+
+        {step === 2 && <>
+          <div style={{ fontSize: 13, background: "var(--mint-2)", borderRadius: 10, padding: "10px 12px", marginBottom: 16, color: "var(--forest)" }}>
+            A code was sent to <strong>{username}{EMAIL_DOMAIN}</strong>.<br />
+            <span style={{ color: "var(--muted)" }}>Demo mode — your code is</span> <strong style={{ letterSpacing: 2, fontSize: 16 }}>{sentOtp}</strong>
+          </div>
+          <Field label="4-digit code">
+            <input value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="0000" inputMode="numeric"
+              style={{ ...inp, letterSpacing: 8, fontSize: 18, textAlign: "center", fontWeight: 700 }} />
+          </Field>
+          <Field label="New password">
+            <input type="text" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters" style={inp} />
+          </Field>
+          {err && <div style={{ color: "#DC4141", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
+          <button onClick={doReset} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Resetting…" : "Reset password"}</button>
+          <button onClick={() => { setStep(1); setOtp(""); setErr(""); }} style={{ width: "100%", marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>Use a different email</button>
+        </>}
+
+        {step === 3 && <div style={{ textAlign: "center", padding: "10px 0" }}>
+          <div style={{ display: "inline-flex", width: 52, height: 52, borderRadius: 999, background: "#E2F3EE", color: "#08805A", alignItems: "center", justifyContent: "center", marginBottom: 12 }}><CheckCircle2 size={26} /></div>
+          <h4 style={{ fontSize: 18, marginBottom: 6 }}>Password updated</h4>
+          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>You can now sign in with your new password.</p>
+          <button onClick={onClose} style={{ ...btnPrimary, width: "100%" }}>Back to sign in</button>
+        </div>}
+      </div>
+    </div>
+  );
+}
+export function Table({ head, children, maxHeight }) {
+  return (
+    <div className="scroll-thin" style={{ overflowX: "auto", overflowY: maxHeight ? "auto" : "visible", maxHeight: maxHeight || "none" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+        <thead>
+          <tr>{head.map((h, i) => <th key={i} style={{ textAlign: "center", padding: "13px 16px", fontSize: 11, letterSpacing: ".07em", textTransform: "uppercase", color: "#0A1A12", fontWeight: 700, borderBottom: "2px solid #ECEEED", background: "#E2F0EA", whiteSpace: "nowrap", verticalAlign: "middle", position: maxHeight ? "sticky" : "static", top: 0, zIndex: 1 }}>{h}</th>)}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+export function Toolbar({ q, setQ, placeholder, count, right }) {
+  return (
+    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
+        <Search size={16} style={{ position: "absolute", left: 12, top: 11, color: "var(--muted)" }} />
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
+          style={{ ...inp, paddingLeft: 36, margin: 0 }} />
+      </div>
+      {right}
+      {count != null && <span style={{ fontSize: 12.5, color: "var(--muted)", marginLeft: "auto" }}>{count} result{count !== 1 ? "s" : ""}</span>}
+    </div>
+  );
+}
+export function Person({ name, email }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "center", textAlign: "center" }}>
+      <div style={{ width: 32, height: 32, borderRadius: 999, background: "var(--mint-2)", color: "var(--teal)", display: "grid", placeItems: "center", fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
+        {name.split(" ").map(s => s[0]).slice(0, 2).join("")}
+      </div>
+      <div style={{ lineHeight: 1.25, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--f)" }}>{name}</div>
+        <div style={{ fontSize: 11.5, color: "var(--muted)", wordBreak: "break-word" }}>{email}</div>
+      </div>
+    </div>
+  );
+}
+export function Chip({ children }) {
+  return <span style={{ fontSize: 12, fontFamily: "ui-monospace,monospace", background: "var(--mint-2)", color: "var(--teal-d)", padding: "3px 8px", borderRadius: 7, fontWeight: 600 }}>{children}</span>;
+}
+export function Status({ s }) {
+  const map = {
+    active: ["#08805A", "#E2F3EE"], paid: ["#08805A", "#E2F3EE"], approved: ["#08805A", "#E2F3EE"], converted: ["#08805A", "#E2F3EE"],
+    pending: ["#986315", "#FBF0E0"], paused: ["#986315", "#FBF0E0"],
+    failed: ["#DC4141", "#FBE8E8"], rejected: ["#DC4141", "#FBE8E8"], disabled: ["#7D8A83", "#ECEEED"],
+  };
+  const [c, bg] = map[s] || ["#7D8A83", "#ECEEED"];
+  return <span style={{ fontSize: 11.5, fontWeight: 600, color: c, background: bg, padding: "3px 9px", borderRadius: 999, textTransform: "capitalize" }}>{s}</span>;
+}
+export function LogChip({ type }) {
+  const palette = {
+    login_success: ["#08805A", "#E2F3EE"], login_failed: ["#DC4141", "#FBE8E8"],
+    logout: ["#7D8A83", "#ECEEED"], user_created: ["#0B6F52", "#E2F3EE"],
+    password_reset: ["#986315", "#FBF0E0"], user_deleted: ["#DC4141", "#FBE8E8"],
+    user_toggled: ["#0B6F52", "#E2F3EE"],
+    api_failure: ["#DC4141", "#FBE8E8"], api_recovery: ["#08805A", "#E2F3EE"], logs_cleared: ["#986315", "#FBF0E0"],
+    credit_approved: ["#08805A", "#E2F3EE"], credit_rejected: ["#DC4141", "#FBE8E8"],
+    credit_manual: ["#0B6F52", "#E2F3EE"],
+    reverted: ["#986315", "#FBF0E0"],
+  };
+  const [c, bg] = palette[type] || ["#7D8A83", "#ECEEED"];
+  return <span style={{ fontSize: 11, fontWeight: 600, color: c, background: bg, padding: "3px 8px", borderRadius: 7 }}>{type.replace(/_/g, " ")}</span>;
+}
+export function DefRow({ k, v }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+      <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{k}</span>
+      <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--f)", textAlign: "right" }}>{v == null || v === "" ? "—" : v}</span>
+    </div>
+  );
+}
+export function Field({ label, children }) {
+  return (
+    <label style={{ display: "block", marginBottom: 14, textAlign: "left" }}>
+      <span style={{ display: "block", fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 600, marginBottom: 6, textAlign: "left" }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+export function Drawer({ title, sub, children, onClose }) {
+  return createPortal(
+    <div onClick={onClose} style={{ ...overlay, zIndex: 1000 }}>
+      <div onClick={e => e.stopPropagation()} className="scroll-thin" style={{
+        marginLeft: "auto", width: "min(440px,100%)", height: "100%", background: "#fff", padding: 26, overflowY: "auto",
+        boxShadow: "var(--shadow-lg)", animation: "slideIn .25s ease both"
+      }}>
+        <style>{`@keyframes slideIn{from{transform:translateX(20px);opacity:.6}to{transform:none;opacity:1}}`}</style>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
+          <div><p className="eyebrow">{sub}</p><h2 style={{ fontSize: 24 }}>{title}</h2></div>
+          <button onClick={onClose} style={iconBtn}><X size={18} /></button>
+        </div>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+export function Modal({ title, sub, children, onClose }) {
+  return createPortal(
+    <div onClick={onClose} style={{ ...overlay, alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}>
+      <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(440px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 26, boxShadow: "var(--shadow-lg)", maxHeight: "calc(100vh - 80px)", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, gap: 12 }}>
+          <div>{sub && <p className="eyebrow">{sub}</p>}<h2 style={{ fontSize: 22 }}>{title}</h2></div>
+          <button onClick={onClose} style={{ ...iconBtn, flexShrink: 0 }}><X size={18} /></button>
+        </div>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+export const TT = ({ active, payload, label, prefix = "" }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: "var(--forest)", color: "#fff", padding: "9px 12px", borderRadius: 9, fontSize: 12, boxShadow: "var(--shadow-lg)" }}>
+      {label && <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, textTransform: "capitalize" }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: p.color }} />
+          {p.name}: <strong>{prefix}{p.value.toLocaleString("en-IN")}</strong>
+        </div>
+      ))}
+    </div>
+  );
+};
+export const WowMomTT = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  const p = payload[0]?.payload || {};
+  const pct = p.pct;
+  const pctColor = pct == null ? "#fff" : pct > 0 ? "#0A9D6E" : pct < 0 ? "#F5BFBF" : "#fff";
+  return (
+    <div style={{ background: "var(--forest)", color: "#fff", padding: "9px 12px", borderRadius: 9, fontSize: 12, boxShadow: "var(--shadow-lg)" }}>
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
+      <div>Collected: <strong>₹{(p.collected || 0).toLocaleString("en-IN")}</strong></div>
+      {pct != null && <div style={{ color: pctColor, marginTop: 2 }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : "—"} {pct > 0 ? "+" : ""}{pct}% vs prev</div>}
+    </div>
+  );
+};
+export const Loading = () => <div style={{ display: "grid", placeItems: "center", padding: 80, color: "var(--muted)" }}>
+  <div style={{ width: 32, height: 32, border: "3px solid var(--border)", borderTopColor: "var(--teal)", borderRadius: 999, animation: "spin 1s linear infinite" }} />
+  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+</div>;
+export const Empty = ({ msg }) => <div style={{ padding: "28px", textAlign: "center", color: "var(--muted)", fontSize: 13.5 }}>{msg}</div>;
+export const ApiError = ({ msg }) => (
+  <div style={{ padding: "40px 28px", textAlign: "center", color: "var(--slate)" }}>
+    <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 48, height: 48, borderRadius: 999, background: "#FBE8E8", color: "#DC4141", marginBottom: 12 }}>
+      <AlertCircle size={24} />
+    </div>
+    <h3 style={{ fontSize: 18, marginBottom: 6 }}>Couldn't load data</h3>
+    <p style={{ fontSize: 13.5, color: "var(--muted)", maxWidth: 420, margin: "0 auto 16px" }}>{msg}</p>
+    <button onClick={() => window.location.reload()} style={btnGhost}>Retry</button>
+  </div>
+);
+export const inp = { width: "100%", padding: "10px 12px", border: "1.5px solid var(--border)", borderRadius: 11, fontSize: 14, color: "var(--f)", background: "#fff", outline: "none", marginBottom: 0, fontFamily: "'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif" };
+export const selectStyle = { ...inp, width: "auto", padding: "9px 12px", cursor: "pointer" };
+export const btnPrimary = { display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 12, background: "var(--grad-btn)", color: "#fff", fontWeight: 600, fontSize: 14, boxShadow: "0 8px 18px -8px rgba(22,84,92,.6)", justifyContent: "center" };
+export const btnGhost = { display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", borderRadius: 11, border: "1.5px solid var(--border)", background: "#fff", color: "var(--slate)", fontWeight: 600, fontSize: 13 };
+export const iconBtn = { display: "inline-flex", padding: 7, borderRadius: 9, color: "var(--slate)", background: "var(--mint)", marginLeft: 5 };
+export const td = { padding: "12px 16px", fontSize: 13.5, color: "var(--slate)", borderBottom: "1px solid var(--border)", whiteSpace: "normal", wordBreak: "break-word", textAlign: "center", verticalAlign: "middle" };
+export const ftd = { ...td, position: "sticky", bottom: 0, background: "var(--mint-2)", fontWeight: 700, borderTop: "2px solid var(--border)" };
+export const trStyle = { borderBottom: "1px solid var(--border)", cursor: "pointer" };
+export const grid4 = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16 };
+export const axisTick = { fontSize: 11, fill: "#A9B3AC" };
+export const overlay = { position: "fixed", inset: 0, background: "rgba(13,40,24,.46)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", display: "flex", zIndex: 50 };
+export const toastStyle = { position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", background: "var(--forest)", color: "#fff", padding: "11px 18px", borderRadius: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, boxShadow: "var(--shadow-lg)", zIndex: 60 };
+
+// Reconstructed (see shared/core.js's note on keyLc/rangeFilter — same v2.30
+// module-split incident, same recovery method: exact usage-site analysis).
+// A plain from/to date-input filter bar (distinct from the preset-based
+// DateRangePicker above) — `range` is a raw {from, to} string pair from two
+// <input type="date">s, `onChange` replaces the whole object, `right` is an
+// optional trailing content slot (search result counts, export buttons, etc).
+export function DateRangeFilter({ range, onChange, right }) {
+  return (
+    <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+      <input type="date" value={range.from || ""} onChange={e => onChange({ ...range, from: e.target.value })} style={inp} />
+      <span style={{ color: "var(--muted)", fontSize: 12.5 }}>to</span>
+      <input type="date" value={range.to || ""} onChange={e => onChange({ ...range, to: e.target.value })} style={inp} />
+      {(range.from || range.to) && <button onClick={() => onChange({ from: "", to: "" })} style={btnGhost}>Clear</button>}
+      {right}
+    </div>
+  );
+}
+
+// Editable inline table cell (or plain text when not editable) — shared by
+// Auto Scheduler's society editor and Analytics' PenetrationTracker flat-count
+// override.
+export function GsTextCell({ value, editable, onCommit, type = "text", width = 120, placeholder = "" }) {
+  const [v, setV] = useState(value ?? "");
+  useEffect(() => { setV(value ?? ""); }, [value]);
+  if (!editable) return (value === "" || value == null) ? "—" : String(value);
+  return (
+    <input type={type} value={v} placeholder={placeholder} min={type === "number" ? "0" : undefined}
+      onChange={e => setV(e.target.value)}
+      onBlur={() => { if (String(v) !== String(value ?? "")) onCommit(v); }}
+      style={{ ...inp, width, padding: "6px 8px", fontSize: 12.5, marginBottom: 0, textAlign: "center" }} />
+  );
+}
+
+// Module id -> icon component, for anywhere a module needs to render its own
+// nav icon generically (e.g. About's module-docs cards).
+export const MODULE_ICONS = { Briefcase, Receipt, Boxes, Wrench, GitBranch, BarChart3, UserCog, ScrollText, Ticket, UserRound, Cpu, Landmark, CalendarClock, Repeat, Info, LayoutGrid };
