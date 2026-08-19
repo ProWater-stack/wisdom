@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.117**.
+> **Reflects:** `APP_VERSION` **2.29.136**.
 
 ---
 
@@ -142,7 +142,8 @@ Same origin, but **unauthenticated** (no Bearer header sent) — separate cursor
 |---|---|---|
 | GET | `/dp-transactions` | Analytics · DP Transaction (row source; `?cursor=` pagination) |
 | POST | `/dp-transactions/add` | DP Transaction's admin-only Upload JSON → Run API (multipart, field `file`) |
-| GET | `https://api.drinkprime.in/payments/payments/v2/collections` | Customer · All Customers, DP-stack Transactions sub-page (`?installationId={dp_installation_id}&page=0&size=10`, v2.29.113 — separate origin, CORS-open, direct browser fetch) |
+| GET | `https://api.drinkprime.in/payments/payments/payments/v1` | Customer · All Customers, DP-stack Transactions sub-page (`?loader=true&page=1&pageSize=100&deviceCode={purifier_id}&installationID={dp_installation_id}`, v2.29.134 — replaced the old v2/collections endpoint; separate origin, CORS-open, direct browser fetch) |
+| GET | `https://api.drinkprime.in/sponsor/device/details/syncs` | Customer · All Customers, DP-stack Sync History sub-page (`?pageSize=10&page=1&orderDir=desc&orderBy=id&deviceCode={purifier_id}`, v2.29.127 — separate origin, CORS-open, direct browser fetch) |
 
 ### 3.2 Firebase — project `backend-prowater`
 - **Auth:** email/password (above).
@@ -180,19 +181,42 @@ Same origin, but **unauthenticated** (no Bearer header sent) — separate cursor
 - **Society join (VLOOKUP):** subscriptions/invoices/tickets are joined to a **society** via the
   customer: `zohoCustomerId | zohoId | customerNumber → customer.society`. Unmatched → `"Unknown"`.
   Used across Billing, Analytics, Penetration Tracker, Top Societies.
-- **Money split (rebuilt v2.29.108):** `depositForCustomer(customer, plan, total)` splits a paid
-  invoice into a **refundable deposit** and a **recharge** (revenue): `recharge = total − deposit`.
-  Tries `APARTMENT_DEVICE_DEPOSITS[normSociety(customer.society)]` first — the REAL, fixed per-
-  apartment/per-device-type deposit amounts the business has given (currently MJR Clique Hydra and
-  Prabhavati Meghna Towers; more added as provided) — and only falls back to the generic amount-tiered
-  `depositForPlan(plan, total)` (>₹4,000→₹4,000 / >₹2,000→₹2,000 / >₹1,500→₹1,500, plus a lower
-  Prabhavati-plan-name tier) for apartments not yet in that table. Within a known apartment, the
-  device-type tier (from `deviceType(customer.purifier_id)`) only applies when the paid amount actually
-  **covers** it — a small recurring recharge invoice (deposit already collected earlier) correctly gets
-  ₹0 deposit, not the full tier — and if the device type can't be read (blank purifier ID), it falls
-  back to whichever of that apartment's own real tiers the amount covers, never the unrelated generic
-  bands. **MRR:** `monthlyOf(sub) = amount / termMonths(sub)`; `termMonths` parses the term from the
-  plan name/code (e.g. `…_6M` → 6).
+- **Master Plan Catalog (`PLAN_CATALOG` + `planInfo(planCode)`, v2.29.133):** a 64-entry lookup, given
+  directly by the business as an exhaustive real plan_code dump — every plan's **Device Type** (Normal /
+  Hot & Cold / Test), **Filter Type** (UV / Mineral / Copper / Alkaline / Uncategorised / Test), and
+  exact **Setup Fee / Price / Total / billing cadence** (`billEvery` + `billingInterval`; `total` is
+  always `setupFee + price` in the source data, kept as its own field rather than re-derived). Keyed
+  **only** by `plan_code` — `plan_name` is provably ambiguous (e.g. "PREMIUM" is Normal Device with
+  Setup Fee ₹0 for `PREMIUM_1M_499` etc. but Hot & Cold with Setup Fee ₹4,000 for the `PREMIUM_*_SD`
+  variants — same name, different code, different real device and deposit). `mapSubscription()` and
+  `mapInvoice()` both carry `planDeviceType`/`planFilterType` (`mapInvoice` also gained `planCode`,
+  which it didn't read at all before v2.29.132). A `plan_code` not in the table returns nulls/blanks —
+  deliberately distinct from a plan the business has explicitly tagged "Uncategorised" in their own
+  source spreadsheet, which is a real classification, not a gap. Superseded v2.29.132's
+  `PLAN_CLASSIFICATION`; `classifyPlan(planCode)` is kept as a thin device/filter-only wrapper over
+  `planInfo()` for its existing call sites (same signature/behaviour). Browsable at Billing &
+  Subscription > **Plans** (read-only reference table, static local data — no API fetch).
+- **Money split (rebuilt v2.29.108, re-prioritized v2.29.133):** `depositForCustomer(customer, plan,
+  total, planCode)` splits a paid invoice into a **refundable deposit** and a **recharge** (revenue):
+  `recharge = total − deposit`. Priority order, highest first: **(1)**
+  `PLAN_CATALOG[planCode].setupFee` — exact real per-plan data, not a tier guess, so it wins whenever
+  the plan_code is recognised, INCLUDING over the apartment/device-type table below. Confirmed against
+  real discrepancies in the business's own two data sources: several MJR-prefixed plans (`MJR_6M_UV`
+  etc.) carry Setup Fee ₹0 in the plan catalog even though MJR Clique Hydra's apartment-tier table
+  below says Normal/Hot & Cold should be ₹1,500/₹3,000; Prabhavati's `ELT_PRABHAVATI_SD` plans carry
+  Setup Fee ₹3,000 vs. the apartment table's ₹4,000 for Hot & Cold — the plan catalog is the more
+  specific, more current source and wins. **(2)**
+  `APARTMENT_DEVICE_DEPOSITS[normSociety(customer.society)]` — the REAL, fixed per-apartment/per-
+  device-type deposit amounts (currently MJR Clique Hydra and Prabhavati Meghna Towers), used only when
+  the plan_code isn't in the catalog (e.g. a very old invoice). **(3)** `depositForPlan(plan, total)` —
+  the generic amount-tiered guess, last resort. At every level, a tier only applies when the paid
+  amount actually **covers** it — a small recurring recharge invoice (deposit already collected
+  earlier) correctly gets ₹0 deposit, not the full tier. Within the apartment table specifically, if
+  the device type can't be read (blank purifier ID), it falls back to whichever of that apartment's own
+  real tiers the amount covers, never the unrelated generic bands. All 13 real call sites (Analytics,
+  Billing, Customer profile) now pass `planCode` as the 4th argument. **MRR:** `monthlyOf(sub) = amount
+  / termMonths(sub)`; `termMonths` parses the term from the plan name/code (e.g. `…_6M` → 6) — not yet
+  cross-checked against the catalog's own `billEvery`/`billingInterval`, tracked separately.
 - **Dates:** `parseFlexDate()` parses many formats (ISO, `19-Jan-2026`, `19/01/2026`, epoch,
   `+0530`). Analytics uses month-index math (`year*12 + month`) for cohorts and MoM.
 
@@ -237,29 +261,106 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 `MODULE_DOCS`; sub-tabs are in `moduleTabs`. Below: purpose · how it works · APIs · key logic/lookups · storage.
 
 ### Sales (`sales`)
-- **Purpose:** Zoho CRM leads — pipeline, table, analytics, trend analysis, error correction, apartment leads.
+- **Purpose:** Zoho CRM leads — table, trend analysis, error correction, apartment leads.
 - **How:** loads leads via `GET /admin/zoho/get-all-leads` (`per_page=500`, total-paginate; endpoint
-  is server-cached and returns a `cached` flag). Kanban pipeline by stage; full leads table with a
-  status filter; **Apartment × lead-status pivot** (join key: apartment name = lead "Society Name");
+  is server-cached and returns a `cached` flag). Full leads table with status/society filters;
+  **Apartment × lead-status pivot** (join key: apartment name = lead "Society Name");
   **Error Correction** flags leads marked installed but missing money fields.
 - **Storage:** live API (+ per-browser cache).
+- **Leads & Deals / Apartment Leads always showed 0 results — fixed at the root (v2.29.119):** both
+  screens' date-range filter (`DateRangeFilter` + `rangeFilter`/`dateInRange`) silently excluded every
+  row, both at the default (no dates picked) state and with real dates picked. Root cause was in the
+  shared `dateInRange()` helper: `DateRangeFilter`'s plain `<input type="date">` stores `from`/`to` as
+  raw `"YYYY-MM-DD"` strings, but `dateInRange` compared them to a `Date` via `>=`/`<=` — a relational
+  comparison against a string coerces it with `Number()`, which is `NaN` for a real date string (always
+  false) and `0` for `""` (empty/default — also always false, since any real timestamp is `> 0`). Fixed
+  in `shared/core.js`: `dateInRange()` now parses a string bound properly (floors "from" to start-of-day,
+  ceils "to" to end-of-day so the picked end date is inclusive) and treats an empty/null bound as
+  unbounded; `Date`-object bounds (from `resolveRange()`) are untouched. This is a shared helper, so the
+  fix also resolved the same silent-zero bug on Analytics > App Logs (not separately reported, found and
+  fixed in the same pass). Separately, `SEED_DEALS` (Sales' sample-data fallback) was missing a `created`
+  field entirely — only `updated` was ever set — so sample leads still failed the date filter even with
+  `dateInRange` fixed; each entry now carries a matching `created` timestamp.
+- **Sales Analytics tab removed (v2.29.119)** per explicit request — the screen (`SalesAnalytics`), its
+  nav entry, `MODULE_SECTIONS`/`TAB_SOURCES` entries, and its `App.jsx` tab-switch render were all
+  deleted. (Analytics > Sales Insights, a separate cross-module report under the Analytics module,
+  is unaffected.)
+- **Pipeline tab removed (v2.29.129)** per explicit request — the screen (`SalesPipeline`, the Kanban
+  board grouping leads by stage), its nav entry, `MODULE_SECTIONS`/`TAB_SOURCES` entries, and its
+  `App.jsx` tab-switch render were all deleted; the now-unused `LEAD_STATUS_COLOR` export and a
+  handful of icon/UI imports (`Stat`, `grid4`, `TrendingUp`, `Users` from lucide/shared-ui — nothing
+  else in the file used them) were removed too. Sales' remaining tabs: Leads & Deals, Apartment Leads,
+  Trend Analysis, Error Correction — **Leads & Deals is now the default tab** when opening the module.
+- **Leads & Deals (`SalesLeads`) rebuilt in v2.29.124** per a fuller user-supplied mockup. **(1) KPI
+  cards** simplified from one card per distinct raw Lead Status to exactly 3 — a dark "Total Leads"
+  card, "Converted" (`stage === "won"`), and a grouped **"Not Interested"** bucket covering every
+  non-won lead — replacing the old dynamic per-status grid, which grew noisy as more raw statuses
+  appeared in the live data. The Not Interested card's caption lists whichever raw statuses actually
+  make up that bucket in the current date window (e.g. "Includes RNR, Not Interested, Connect Later,
+  Lost, Wrong No"), computed live from the filtered leads — never a hardcoded list. Cards are
+  display-only now (no longer click-to-filter). **(2) The status filter dropdown** was simplified to
+  match: All statuses / Converted / Not Interested (was one option per raw status), filtering on lead
+  stage rather than exact raw-status text. **(3) Search/date-range/Export** restyled to the mockup
+  (inset search icon, pill select, compact date-range pill) — same real state underneath; the shared
+  `Toolbar`/`DateRangeFilter` wrapper components were swapped for bespoke styling since they're simple
+  enough to safely reimplement (unlike the calendar-popover `DateRangePicker`/`MultiSelectFilter` kept
+  as-is elsewhere in this app). **(4) Table** restyled (rounded card, tinted sticky header, two-tone
+  pill status badges — green for Converted, red for everything else); the **Tenure** column was dropped
+  from the on-screen table (not in the mockup — still included in the CSV export, unchanged). Move To
+  column still `isAdmin`-gated as before.
+  **v2.29.129, per follow-up:** split a dedicated **Interested** KPI card (blue, literal Zoho raw
+  status "Interested") out of what used to be folded into the Not Interested bucket — Not Interested
+  is now a catch-all for every non-won, non-Interested lead only (its caption's raw-status list and %
+  shrink accordingly). The status filter dropdown gained a matching "Interested" option. Also added a
+  **Society** filter (`MultiSelectFilter`, options from the full unscoped lead set, same convention as
+  Trend Analysis's Apartment filter) alongside the existing search/status/date-range controls.
 - **Trend Analysis (`sales_trend`, v2.29.92)** — a period-filterable read of the pipeline, sitting
-  between Sales Analytics and Error Correction. Reuses the same lead/stage data as Analytics > Sales
+  after Apartment Leads. Reuses the same lead/stage data as Analytics > Sales
   Insights (`SalesInsights`, see the Analytics section below), but scoped to a real date-range picker
   (`DateRangePicker` — Today/This Week/This Month/This Quarter/This Year/Yesterday/Previous Week/Previous
   Month/Previous Quarter/Previous Year/Custom) instead of just a society filter. Layout, top to bottom:
-  **(1) KPI cards** — Total leads / Converted (Won) / Conversion % / Lost — each with a period-over-period
-  delta. Total/Converted/Lost use a real % change (`momPct`); Conversion % shows a **percentage-points**
-  delta instead (e.g. "+3pts", not a misleading %-of-a-% change) since the metric is already a percentage.
-  **(2) A monthly leads-vs-conversion-% trend chart** (bar = leads, line = conversion %, trailing 8
-  calendar months, independent of the period picker — a month-on-month view needs several months
-  regardless of what single period is selected) — the **latest month visibly flashes**: its bar renders in
-  the brand green with a small pulsing dot above it, and its conversion-% line point pulses with an
-  expanding ring, both via the same SVG `<animate>` technique already used for IoT's weather-correlation
-  "likely taste issue" marker. **(3) An average-time-to-convert card.** **(4) The lead-conversion funnel**
-  (placed **last**, per an explicit ask — same funnel visual as Sales Insights, scoped to the selected
-  period). All deterministic — plain JS rules over the live filtered leads, no LLM. (The "Sales Director's
-  read" business-insight panel this tab originally shipped with was removed in v2.29.95 — see below.)
+  **(1) KPI cards** — **Total Leads / Interested / Converted / Conversion Rate**, each with a
+  period-over-period delta except Interested (see below). Total/Converted use a real % change
+  (`momPct`); Conversion Rate shows a **percentage-points** delta instead (e.g. "+3pts", not a
+  misleading %-of-a-% change) since the metric is already a percentage. Styled as a featured dark
+  "Total Leads" card plus light glass cards, each with a circular icon badge and a coloured delta
+  pill (**v2.29.121**, per a user-supplied Apple-style mockup, replacing the old shared `Stat`
+  component). **Recomposed in v2.29.123** (per a fuller mockup covering the whole screen): the old
+  **Lost Leads** card was dropped, replaced by a new **Interested** card — this period's
+  Interested-status lead count, with a blue **"% share of Total Leads"** badge instead of a
+  period-over-period delta (a composition stat, not a trend).
+  **(2) A monthly leads-vs-conversion-% trend section** ("Leads vs. Conversion Breakdown", retitled
+  from "…Rate" in v2.29.123), trailing 8 calendar months, independent of the period picker — a
+  month-on-month view needs several months regardless of what single period is selected. Redesigned
+  in **v2.29.120** (per a user-supplied HTML mockup) from a Recharts grouped-bar+line chart to a plain
+  glass card: a KPI strip (N-month total leads, average/peak/latest-month conversion %) above one row
+  per month, each with its own Interested/Not Interested/Converted proportional stacked bar and a
+  conversion-% figure; the **latest month is picked out** in a highlighted card with a pulsing "Live"
+  badge (a CSS `@keyframes` ping). Colours are the mockup's own Apple-system palette (blue #007AFF/
+  orange #FF9500/green #34C759/purple #AF52DE for conversion %) — kept as given. All figures computed
+  live from the trailing-8-month data; nothing hardcoded.
+  **(3) Lead Conversion Funnel + Forecast & Trends, side by side** (2-col grid, collapsing to one
+  column under 1024px — **v2.29.123**, replacing the funnel's previous full-width-alone layout). The
+  funnel itself is unchanged content — same Total Leads/Interested/Not Interested/Converted hierarchy
+  (redesigned to a glassmorphic card in **v2.29.122**, per a user-supplied mockup), a green-tinted
+  "close rate" callout with a Target icon, computed live from `funnel`/`totalN`/`wonN`/`convPct`.
+  **Forecast & Trends is new in v2.29.123** — a dual-axis Recharts `ComposedChart` (Lead Volume on the
+  left axis, Conversion Rate % on the right), projecting the next 4 months as a **dashed** continuation
+  of the solid actual-months line. The projection is a plain **flat average of the last up to 3 real
+  months'** leads/conversion %, rolled forward month-by-month from the true latest real month present
+  in the data — never the mockup's own hardcoded example figures — and is labelled honestly in a
+  caption as an average, not dressed up as a real forecasting model. The **average-time-to-convert
+  card** this tab previously carried (added alongside the v2.29.120 redesign) was **removed in
+  v2.29.123** per follow-up request, along with its now-dead calc (`daysToConvert`/`convTimes`/
+  `avgConvertDays`/`fastestConvertDays`/`slowestConvertDays`/`convertDeltaDays`).
+  All of the above is deterministic — plain JS rules over the live filtered leads, no LLM. (The
+  "Sales Director's read" business-insight panel this tab originally shipped with was removed in
+  v2.29.95 — see below.)
+- **modules/Sales.jsx integrity note (v2.29.123):** the file was found with lines 346–941 holding raw
+  `<!DOCTYPE html>`…`</html>` markup in place of the entire `SalesTrendAnalysis` function — overwritten
+  outside this app's own edit history (the file would not parse or build in that state). Rebuilt from
+  scratch per the fuller mockup described above; verified via a Babel parse, an ESLint no-undef/
+  no-redeclare sweep, and a clean `npm run build` before resuming feature work.
 - **Iterated per direct feedback (v2.29.93)**, each change proposed via a confirm-first question before
   building: added an **Apartment/society multi-select filter** (cascades through KPIs, insights, chart,
   funnel). The monthly trend chart went through several shapes (dual lines with click-to-drill-down → dual
@@ -297,6 +398,23 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   editable per role; grand-total row. **Societies** sub-tab groups customers by society with
   count/active/device-mix (Own/Normal/Hot&Cold from the purifier-ID prefix), expandable per society.
   The Overview "Active Customers" figure and Top-Societies "Active" column come from this active-status logic.
+- **Societies rebuilt (v2.29.130)** per explicit request. **(1) Per-metric expand:** each society row's
+  numbers are individually clickable — Customers expands everyone in that society; Active/Own/Normal/
+  Hot & Cold/**Churned** expand only that slice. Clicking the same number again collapses; clicking a
+  *different* number while a society is already open dynamically switches the slice shown, no need to
+  collapse first (state is a `Map<society, sliceKey>`, not a `Set`). **(2) New Churned column:** a
+  customer counts as churned if either their device is Un-Installed (DP-stack `deviceStatus`) or their
+  `status` is Inactive (either stack) — the exact same signals/normalisation (`normSt`, strip
+  whitespace/hyphens/underscores, substring-match "uninstall") All Customers' row-highlighting already
+  uses. Dunning does **not** count as churned — it's a payment-status warning, not device churn.
+  **(3) Society and Device Type filters** (`MultiSelectFilter`) above the table. Device Type narrows
+  the customer population *before* grouping — selecting "Own Device" only, for example, recomputes
+  every society's numbers as if Normal/Hot & Cold customers didn't exist, and a society with none of
+  the selected type(s) drops out of the table entirely. **(4) Default-hidden societies:** the Society
+  filter's unset (`null`) state excludes **"— No society —"** and **"Apartment (Testing)"** — pick
+  either explicitly from the dropdown to override the default and see it. The KPI cards (Societies /
+  Customers / Avg per society / Largest society) now read off this same filtered, default-excluding
+  population instead of the raw unfiltered universe, so they stay consistent with the table.
 - **All Customers (v2.29.4):** search by Purifier ID / phone / name / email; the results table also carries
   a **Device Type** column (`DeviceTypeBadge`) and, in the toolbar, a **signup-date range** filter ("All
   Time" plus the same Today/…/Custom presets used elsewhere, filtering on each customer's `since` date) and
@@ -348,15 +466,36 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   `{ dp_customer_id, dp_installation_id, device_code, partner_name, device_status, balance_litres,
   paid_liters, price, ... }`. A DP-stack customer has no real Zoho invoices, so opening one and
   clicking **Transactions** reads live from the DrinkPrime collections API instead of the Zoho-invoice
-  table: `GET https://api.drinkprime.in/payments/payments/v2/collections?installationId={dpInstallationId}
-  &page=0&size=10` (confirmed CORS-open -- `access-control-allow-origin: *` -- so this is a direct
-  browser fetch, no backend proxy). Response shape: `{ body: { content: [{ collectionId, date,
-  totalPaid, totalLitres, validFrom, validTo, paymentUtilisedStatus, transactions: [{ transactionKey,
-  channel, type, status }] }] } }`; rendered as Date/Transaction Key (the collection's own
-  `transactions[0].transactionKey`, e.g. `DPTX_71cfc2a029044e12a3be6e9ffa352a97` — swapped in for the
-  internal numeric `collectionId` per follow-up, v2.29.116)/Amount/Litres/Valid Period/Payment Mode
-  (`transactions[0].channel`)/Status. Zoho-stack customers' Transactions sub-page (GST breakup,
-  revenue-recognition card) is unchanged. Two iterations to get the field paths right — v1
+  table. **Swapped APIs again in v2.29.134** (per explicit request) from the old v2/collections
+  endpoint to `GET https://api.drinkprime.in/payments/payments/payments/v1?loader=true&page=1
+  &pageSize=100&deviceCode={purifier_id}&installationID={dpInstallationId}` — needs BOTH the Purifier
+  ID and Installation ID, both already on hand from get-all-customers (confirmed CORS-open, direct
+  browser fetch, no backend proxy). Response shape: `{ body: [{ amount, litres, status, timeStamp,
+  paymentType, valStart, valEnd, txnId, mode, deviceId, paymentRef? }] }` — a flat array (the old
+  endpoint's response was `{ body: { content: [...] } }`, differently nested). Rendered as Date
+  (`fmtTime(timeStamp)`, real time-of-day, not just the date)/Transaction Key (`txnId`, e.g.
+  `DPTX_71cfc2a029044e12a3be6e9ffa352a97`)/Amount/Litres/Valid Period (`valStart` → `valEnd`)/Payment
+  Mode (`mode`)/Status. The LTV calc (v2.29.126) and the Total Paid summary card both sum `c.amount`
+  now (were `c.totalPaid` on the old endpoint). **Known real-data quirk, caught via live testing:** a
+  setup-fee row and its paired first-recharge row can share the exact same `txnId` — confirmed on two
+  different real customers — so the table row's React key includes the row index alongside `txnId`,
+  not `txnId` alone (which threw a duplicate-key warning otherwise).
+- **Fixed Last Payment always blank for DP customers (v2.29.135)** — same root cause as v2.29.126's
+  LTV bug: `lastPayment` was computed only from `txns.find(t => t.status === "paid")` (Zoho invoices),
+  always empty for a DP-stack customer. Now, for DP customers, last payment = the most recent
+  DrinkPrime transaction by `timeStamp` (via `reduce` over `dpTxns`, not assumed array order).
+  Verified live against a real customer — correctly shows the real most-recent transaction date.
+- **Fixed Start Date/End Date on the Zoho-stack "Payment & Invoice History" table (v2.29.136)** —
+  both columns always showed the same value as the invoice's own Date column. This join already
+  existed and was already reading from get-all-submodules by design, but keyed/read the RAW
+  snake_case field names (`invoice_number`/`transaction_id`/`current_term_starts_at`/
+  `current_term_ends_at`) directly — `submodules` here is already `mapSubmodule()`-mapped
+  (`billingApi.getSubmodules()`), whose real field names are camelCase (`.number`/`.id`/`.termStart`/
+  `.termEnd`), so none of the snake_case reads ever matched and the join silently fell through to the
+  invoice's own single `date` for both columns every time. Now reads `.number`/`.id`/`.termStart`/
+  `.termEnd` — the same join Analytics > Earned Revenue already uses correctly for this exact feed.
+  Zoho-stack customers' Transactions sub-page (GST breakup,
+  revenue-recognition card) is otherwise unchanged. Two iterations to get the field paths right — v1
   assumed both fields sat directly on `customer_profile`, v2.29.114 correctly found `is_dp_customer`
   there but still missed `dp_installation_id`'s real nesting one level deeper — both fixes verified
   against a real `customer_profile` block the user shared, via a live browser test that mocked
@@ -369,6 +508,48 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   covers browsing DP-origin customers now, so the separate tab (its own `GET /dp-customers` feed, KPI
   cards, and Upload JSON → Run API bulk import) was redundant; `fetchAllDpCustomers()`/its cache were
   removed from `shared/core.js` too as now-dead code.
+- **Status filter defaults to a fixed set on load (v2.29.128):** `statusFilter` now initializes to
+  `["Active", "In-Active", "active", "dunning"]` instead of "all" — per explicit request. These are
+  the literal casing variants as given, not normalized: real `status` values are inconsistent across
+  sources (Zoho's own raw pass-through vs. a DP device-status string sharing the same field), so this
+  matches exactly those four literal strings rather than a case-insensitive rule. Still a real
+  `MultiSelectFilter` selection — widen it back to "all" from the dropdown same as any other filter.
+- **Sync History: dropped 4 columns, added a computed one (v2.29.128):** Flow Rate/Input TDS/Output
+  TDS/Temperature removed from the table per follow-up; added **Balance Litres** = Total Litres −
+  Consumed Litres, computed client-side per row (not a field the sync API itself returns).
+- **Sync History sub-page for DP customers (v2.29.127):** a new tab alongside Timeline/Profile/
+  Transactions/Tickets/Ops/Referral, shown only when `sel.isDpCustomer`. Reads
+  `GET https://api.drinkprime.in/sponsor/device/details/syncs?pageSize=10&page=1&orderDir=desc
+  &orderBy=id&deviceCode={purifier_id}` — the customer's own Purifier ID doubles as the DrinkPrime
+  `deviceCode`, no new field needed; confirmed CORS-open like the other DrinkPrime endpoints already
+  used here. Real response shape: `{ body: { total_elements, total_pages, results: [{ deviceCode,
+  totalLitres, consumedLitres, paidUpto, status, inputTDS, outputTDS, temperature, coordinates,
+  syncDate, networkId, flowRate }] } }`. Shows a 4-card summary (Total Syncs from `total_elements`,
+  Latest Sync, Consumed Litres, Network — all from the newest row) above a 9-column table (Sync Time/
+  Network/Consumed Litres/Total Litres/Flow Rate/Input TDS/Output TDS/Temperature/Paid Upto) and a
+  "Showing latest 10 of N total syncs" caption — no pagination UI, exactly the one call specified.
+  `status`'s meaning isn't documented anywhere available, so it's deliberately left out of the table
+  rather than guessing a red/green interpretation. The fetch is **lazy** — only fires once the tab is
+  opened, unlike the v2.29.126 DP-collections fetch (nothing on the "at a glance" strip depends on
+  this data, so there's no reason to call a third-party API for every DP customer opened). Verified
+  against the real API with a real device code (`CRL354E8A2`, 87 total syncs) via a live browser test.
+- **Fixed DP-stack LTV always showing ₹0 (v2.29.126):** `totalPaid` — which feeds LTV in both the
+  "at a glance" strip and the Profile tab, plus the Customer score — was computed only from Zoho
+  invoices (`txns`). A DP-stack customer has no real Zoho invoices, so `txns` is always empty for
+  them, and LTV was always ₹0 no matter how much they'd actually paid via DrinkPrime. For DP
+  customers, `totalPaid` now sums their DrinkPrime collections' `totalPaid` (the same `dpTxns` feed
+  the Transactions sub-screen already shows) instead of the Zoho invoice total. Also changed the
+  DP-collections fetch (`useEffect` gated on `sel`/`sel.isDpCustomer`/`sel.dpInstallationId`) to fire
+  as soon as a DP customer is opened on **any** subtab — it was previously gated to `subtab ===
+  "transactions"`, so LTV stayed wrong until the user happened to click into Transactions first.
+  Zoho-stack customers are unaffected — their `totalPaid`/LTV path is unchanged.
+- **Fixed hover-zoom on data tables (v2.29.125):** the shared `Card` component (`shared/ui.jsx`) always
+  applied a global `.pw-card` class that lifts + `scale(1.012)`s any card on hover (`App.jsx`) — a nice
+  touch for small dashboard tiles, but a jarring jitter on a card that's mostly one big scrollable data
+  table. Added a `hover` prop to `Card` (default `true`, unchanged everywhere else) and set it `false`
+  on every `Card` wrapping a `<Table>` in this module — the main All Customers results table, plus
+  Referrals, Zoho Invoices, DP-stack Transactions, and the Ticket-history month list in a customer's
+  profile view. Those cards now render static on hover; no other screen's cards are affected.
 
 ### Billing & Subscription (`billing`)
 - **Purpose:** subscriptions, invoices, deposits, and **Billing Analytics**.
@@ -379,6 +560,12 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - **Invoices and Deposits & Refunds now also fetch customers (v2.29.108)** — previously invoices-only /
   subscriptions-only — purely so the real per-apartment/device deposit table can apply; both join by
   `customerNumber`/`zohoCustomerId`/`zohoId` the same way every other module does.
+- **Plans tab (`Plans`, `bill_plans`, v2.29.133)** — a read-only reference table of the full
+  `PLAN_CATALOG` (see §4): all 64 real plans with Plan Name/Code, Device Type, Filter Type, Setup Fee,
+  Price, Total, and billing cadence. KPI cards (Total Plans, Normal Device count, Hot & Cold count,
+  Setup-Fee-₹0 count), Device Type + Filter Type multi-select filters, search, every column sortable,
+  CSV export, grand-total footer. Static local data — no API fetch, no `TAB_SOURCES` entry (nothing to
+  go down). Edit the catalog in code (`shared/core.js`), not from this screen.
 
 ### ERP & Inventory (`erp`) — *local/seed*
 - Purifier asset register with book value; cost/depreciation totals. (Marked "soon".)
@@ -418,6 +605,13 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   - Live-tested against the real device (`E05A1B9C2DD4`) via the local dev preview: it was reporting **655.34 bar**, flagged CRITICAL by the banding at the time — see v2.29.69 below, this turned out to be normal pump-cycling behaviour, not a fault.
 - **Pressure/flow are pump-driven, not water-quality metrics (v2.29.69):** per the person who placed the sensors, NEITHER end of the pressure/flow range is a real anomaly — 0 while the pump is off (nothing to read) and whatever the line reads once the pump kicks on, at any magnitude (a 655 bar spike on pump-start is a normal artifact of this sensor placement, confirmed against the real device above). `iotWqClass` now always returns `"green"` for `pressure`/`flowMLPM` — they never rate WARNING/CRITICAL. This one change cascades to every dependent screen: the RO Unit Sensors card badge, its gauges (fully green track, no amber zone), the Recent-readings table (no red/amber highlight on these columns), and the Trend analysis "Anomalies by metric" tile (Pressure/Flow always 0). Water Quality (pH/TDS/Temp) is untouched. The card's "Ideal: X–Y" subtext for these two now reads "Pump off = 0, pump on = live reading — both normal" instead, since there's no enforced ceiling to imply anymore.
 - **Loading state (v2.29.44):** fixed a load flash — the module used to drop its full-page spinner as soon as `/devices/status` (the roster) resolved, so the device list, tank graphic, gauges and Water Quality card briefly rendered with empty/zero data ("Awaiting sensor readings", 0% tank, `—` gauges) for a beat before the first `/devices/history` round-trip landed. A `historyLoaded` flag now gates the loading state on **both** requests completing at least once. Replaced the small generic spinner with a dedicated `IoTLoading` panel — bigger spinner, "Loading live device data…" copy, and an indeterminate progress bar — so the wait reads clearly as loading, not a blank/broken module.
+- **pH/TDS moving average (v2.29.118):** on the Water Quality card, pH and TDS now display a moving
+  average of the 10 most recent valid readings ("avg of last N") instead of the window's min–max
+  range — `iotWqRange()` computes `movingAvg`/`movingAvgN` from the 10 newest values (same
+  dropout-zero filtering as min/max). The GOOD/WARNING/CRITICAL badge is unchanged — still evaluated
+  off the full window's min/max, so a brief real spike still gets flagged even though the headline
+  number is now smoothed. Temperature (same card) and Pressure/Flow rate (RO Unit Sensors card,
+  same component) are untouched — still min–max.
 - **Dispensed average (v2.29.45):** the **Total Dispensed** stat (under RO Unit Sensors) gained an **Average / day** figure next to Total dispensed and This window. `iotDispensedRange` now also tracks each reading's timestamp and divides the window delta by its actual span (the history feed is a downsampled ~1–2 day window, not exactly 1 day), instead of the window delta appearing twice under different labels. Shows `—` until the window has at least 30 minutes of span, so it can't flash a wildly inflated estimate right after the page loads.
 - **Dispensed stat simplified (v2.29.46):** dropped **This window** from the Total Dispensed stat — showing the raw litres dispensed across whatever ~1–2 day span the history feed happened to have loaded read as an arbitrary, hard-to-explain number on its own. Now just two figures: **Total dispensed** (lifetime) and **Average dispensed** (per day, from `iotDispensedRange`'s `avgPerDay`).
 - **Shared date-range filter (v2.29.47):** the Total Dispensed stat is now date-filterable with its own **Today / Yesterday / This Week / This Month / Last Month** chips, and that filter is **shared** with Trend analysis + Recent readings below (previously each owned a separate, page-local Today/Yesterday/Week filter) — `range` state moved up to `IoTDevices`, so picking a period in either place updates both. Two new options join the existing rolling-7-day "This Week": **This Month** and **Last Month**, real calendar months (`iotFilterByRange`, `IOT_RANGE_OPTIONS`, reusable `IoTRangeChips`). The Trend analysis history fetch widened from `&days=7` to `&days=62` (`hist7dByDevice` renamed `histRangeByDevice`) so "Last Month" has data to filter regardless of where in the current month "today" falls. Total dispensed now reads as the counter value as of the end of the selected period rather than always "right now"; the card shows "No dispensed-litres data for this period" instead of vanishing when a period has none (e.g. Last Month, before the device started reporting `pressure`/`flowMLPM`/`totalDispensed`).
@@ -662,7 +856,8 @@ Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" 
       / Days in paid month / Earned revenue / Remaining Month / Remaining Days / Remaining Days Earned
       Total Revenue / Remaining Month Earned Total Revenue. CSV export matches (Invoice ID/Customer/
       Apartment/Plan stay CSV-only, same as before). **(Days in paid month later dropped from BOTH the
-      table and CSV in v2.29.111 — see below; 17 columns as of that version.)**
+      table and CSV in v2.29.111 — see below; 17 columns as of that version. Customer added back to the
+      on-screen table in v2.29.131 — see below; 18 columns as of that version.)**
   - **Tenure-day off-by-one fix (v2.29.109):** the paid date and end date were compared as raw parsed
     timestamps, which can carry different times-of-day depending on the source string (a plain date vs. a
     full datetime) — whenever the end date's time-of-day was more than 12 hours later than the paid
@@ -691,6 +886,14 @@ Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" 
     longer its own column, in both the on-screen table (now 17 columns) and the CSV export (which also
     carries the CSV-only Invoice ID/Reference Number's sibling fields/Customer/Plan from the earlier
     v2.29.84 trim).
+  - **Customer column restored (v2.29.131):** added back to the on-screen table, between Reference
+    Number and Apartment — the value (`r.customer`, from the invoice's `customerName`) was already
+    computed and exported to CSV since the v2.29.84 trim, just not rendered on screen. 18 columns as
+    of this version. Footer total row's `colSpan` bumped 6→7 to stay aligned with the extra column.
+    (The same request also reported the deposit figures as wrong; the current `depositForCustomer()`
+    logic was re-verified live and is unchanged from v2.29.108 — see "Apartment/device security
+    deposits" — pending the user restating the specific correction, since no record of it exists in
+    this session's history.)
 
 - **Reconciliation (`Reconciliation`, `an_reconciliation`, v2.29.57–58)** — a dedicated tab (between Earned
   Revenue and AOP) fixing a real bug where "collected revenue" elsewhere in the app was effectively

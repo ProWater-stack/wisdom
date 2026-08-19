@@ -20,7 +20,7 @@ import {
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, DefRow, Drawer, TT,
-  grid4, axisTick, td, trStyle, selectStyle, btnGhost,
+  grid4, axisTick, td, trStyle, selectStyle, btnGhost, btnPrimary,
   CHART_PALETTE, renderPieLabel, pieLabelLine, toastStyle,
 } from "../shared/ui";
 
@@ -64,40 +64,86 @@ export function TicketOverview() {
   }, {}));
   const PIE = CHART_PALETTE;
 
-
   return (
-    <div className="fade-up">
-      {ticketApi.usedSample && <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#986315", background: "#FBF0E0", border: "1px solid #F6DEBC", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
-        <AlertCircle size={15} /> Showing sample data — the Zoho Desk endpoint is unreachable. Once connected, this reflects real tickets.
+    <div className="fade-up ov-sans">
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+
+      {ticketApi.usedSample && <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#986315", background: "rgba(152,99,21,0.08)", border: "1px solid rgba(152,99,21,0.18)", padding: "12px 16px", borderRadius: 14, marginBottom: 16 }}>
+        <AlertCircle size={16} color="#986315" /> Showing sample data — the Zoho Desk endpoint is unreachable. Once connected, this reflects real tickets.
       </div>}
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+
+      {/* KPI Row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{
+            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            backdropFilter: s.hero ? "none" : "blur(20px)",
+            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
+            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 18,
+            padding: "18px 20px",
+            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+                {s.label}
+              </span>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              </div>
+            </div>
+            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+              {s.value}
+            </div>
+            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B" }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
         <style>{`@media(max-width:820px){.an-grid{grid-template-columns:1fr!important}}`}</style>
-        <Card title="Tickets by status" sub="Where things stand">
+        
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Tickets by Status</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Where things stand</div>
+          </div>
           <ResponsiveContainer width="100%" height={290}>
             <PieChart>
               <Pie data={byStatus} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
                 {byStatus.map((e, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
               </Pie>
-              <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+              <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12.5, color: "#1D1D1F" }} />
             </PieChart>
           </ResponsiveContainer>
-        </Card>
-        <Card title="Tickets by issue type" sub="What customers contact about">
+        </div>
+
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Tickets by Issue Type</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>What customers contact about</div>
+          </div>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={byCategory} layout="vertical" margin={{ left: 30, right: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
-              <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={100} />
-              <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="amount" name="tickets" radius={[0, 6, 6, 0]} fill="#986315" maxBarSize={36} isAnimationActive={false} />
+              <defs>
+                <linearGradient id="tkIssueGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="#0A9D6E" stopOpacity={0.7} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
+              <XAxis type="number" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="plan" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={100} />
+              <Tooltip content={<TT />} cursor={{ fill: "rgba(8,128,90,.06)" }} />
+              <Bar dataKey="amount" name="tickets" radius={[0, 6, 6, 0]} fill="url(#tkIssueGrad)" maxBarSize={36} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
       </div>
     </div>
   );
 }
+
 export function OpsKpis({ tickets }) {
   const durs = tickets.map(jobDurationMin).filter(v => v != null);
   const totalMin = durs.reduce((a, b) => a + b, 0);
@@ -113,12 +159,41 @@ export function OpsKpis({ tickets }) {
     { label: "Avg job duration", value: fmtDuration(avgMin), icon: Hourglass, sub: "per job" },
     ...(avgRed != null ? [{ label: "Avg TDS reduction", value: avgRed + "%", icon: Droplets, sub: "input → output" }] : []),
   ];
-  return <div style={{ ...grid4, marginBottom: 18 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 18 }}>
+      {stats.map((s, i) => (
+        <div key={i} style={{
+          background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+          backdropFilter: s.hero ? "none" : "blur(20px)",
+          WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
+          border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+          borderRadius: 18,
+          padding: "18px 20px",
+          boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+              {s.label}
+            </span>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+              <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+            </div>
+          </div>
+          <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+            {s.value}
+          </div>
+          <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B" }}>{s.sub}</div>
+        </div>
+      ))}
+    </div>
+  );
 }
+
 export function OpsSparesTable({ tickets }) {
   const withParts = tickets.filter(t => parsePartsUsed(t.partsUsed).length);
-  const byIssue = {};      // issue -> { jobs, total, parts: {name:count} }
-  const overall = {};      // part -> count
+  const byIssue = {};
+  const overall = {};
   for (const t of withParts) {
     const issue = t.issueCategory || "—";
     const parts = parsePartsUsed(t.partsUsed);
@@ -130,23 +205,39 @@ export function OpsSparesTable({ tickets }) {
   const topSpares = (parts) => Object.entries(parts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `${n} ×${c}`).join(", ");
 
   return (
-    <Card title="Spares used by issue type" sub="Parts_Used correlated with Issue Category" style={{ marginTop: 18 }}>
-      {rows.length === 0 ? <Empty msg="No spares (Parts_Used) recorded for the tickets in view." /> : <>
-        <Table head={["Issue Type", "Jobs w/ spares", "Total spares", "Avg / job", "Top spares"]}>
-          {rows.map(r => (
-            <tr key={r.issue} style={{ borderBottom: "1px solid var(--border)" }}>
-              <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{r.issue}</td>
-              <td style={td}>{r.jobs}</td>
-              <td style={td}>{r.total}</td>
-              <td style={td}>{(r.total / r.jobs).toFixed(1)}</td>
-              <td style={{ ...td, textAlign: "left" }}>{topSpares(r.parts)}</td>
-            </tr>
-          ))}
-        </Table>
-      </>}
-    </Card>
+    <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden", marginTop: 18 }}>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Spares Used by Issue Type</div>
+        <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>Parts_Used correlated with Issue Category</div>
+      </div>
+      {rows.length === 0 ? <Empty msg="No spares (Parts_Used) recorded for the tickets in view." /> : (
+        <div className="scroll-thin" style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                {["Issue Type", "Jobs w/ Spares", "Total Spares", "Avg / Job", "Top Spares"].map((h, idx) => (
+                  <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: idx === 4 ? "left" : "left", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.issue} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                  <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{r.issue}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.jobs}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.total}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{(r.total / r.jobs).toFixed(1)}</td>
+                  <td style={{ padding: "14px 18px", textAlign: "left", color: "#475569" }}>{topSpares(r.parts)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
+
 export function OpsTdsTable({ tickets }) {
   const wq = tickets.filter(t => /water\s*quality/i.test(String(t.issueCategory || "")) && (tdsNum(t.inputTds) != null || tdsNum(t.outputTds) != null));
   const rows = wq.map(t => {
@@ -156,24 +247,40 @@ export function OpsTdsTable({ tickets }) {
   });
 
   return (
-    <Card title="Water Quality — Input vs Output TDS" sub={'Issue Category "Water Quality"'} style={{ marginTop: 18 }}>
-      {rows.length === 0 ? <Empty msg="No Water Quality tickets with TDS readings in view." /> : <>
-        <Table head={["Ticket", "Society", "Purifier ID", "Input TDS", "Output TDS", "Reduction"]}>
-          {rows.map(r => (
-            <tr key={r.id} style={{ borderBottom: "1px solid var(--border)" }}>
-              <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{r.ticketNo}</td>
-              <td style={td}>{r.society}</td>
-              <td style={td}>{r.purifierId}</td>
-              <td style={td}>{r.i ?? "—"}</td>
-              <td style={td}>{r.o ?? "—"}</td>
-              <td style={td}>{r.red != null ? <span style={{ fontWeight: 700, color: r.red >= 60 ? "var(--teal)" : r.red >= 40 ? "#986315" : "#DC4141" }}>{r.red}%</span> : "—"}</td>
-            </tr>
-          ))}
-        </Table>
-      </>}
-    </Card>
+    <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden", marginTop: 18 }}>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Water Quality — Input vs Output TDS</div>
+        <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>Issue Category "Water Quality"</div>
+      </div>
+      {rows.length === 0 ? <Empty msg="No Water Quality tickets with TDS readings in view." /> : (
+        <div className="scroll-thin" style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                {["Ticket", "Society", "Purifier ID", "Input TDS", "Output TDS", "Reduction"].map(h => (
+                  <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                  <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{r.ticketNo}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.society}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.purifierId}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.i ?? "—"}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.o ?? "—"}</td>
+                  <td style={{ padding: "14px 18px" }}>{r.red != null ? <span style={{ fontWeight: 700, color: r.red >= 60 ? "#08805A" : r.red >= 40 ? "#986315" : "#DC4141" }}>{r.red}%</span> : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   );
 }
+
 export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns = [], hidePriorityFilter = false, dateFilterField, topContent, bottomContent }) {
   const showCustomer = !hideColumns.includes("customer");
   const showSociety = !hideColumns.includes("society");
@@ -184,11 +291,10 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("all");
   const [priority, setPriority] = useState("all");
-  const [dateVal, setDateVal] = useState("");   // Ops date filter (by Job Start Time date, IST)
+  const [dateVal, setDateVal] = useState("");
   const [sel, setSel] = useState(null);
   const [toast, setToast] = useState("");
 
-  // preFilter scopes the whole view (e.g. Ops Tickets = Issue Category ≠ Complaint).
   const refresh = () => ticketApi.getTickets().then(list => setTickets(preFilter ? list.filter(preFilter) : list)).catch(() => setTickets([]));
   useEffect(() => { api.logView(user.username, "Viewed Tickets"); refresh(); }, []);
   if (!tickets) return <Loading />;
@@ -196,7 +302,6 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2200); };
   const move = async (id, s) => { await ticketApi.updateStatus(user.username, id, s); await refresh(); setSel(p => p ? { ...p, status: s } : p); flash("Ticket updated"); };
 
-  // Status options = Zoho Desk defaults ∪ whatever the data actually uses.
   const statusOptions = [...ZD_DEFAULT_STATUSES, ...tickets.map(t => t.status)].filter((v, i, a) => v && a.indexOf(v) === i);
 
   const filtered = tickets
@@ -218,9 +323,10 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
     { label: "Created", get: t => t.created },
   ], filtered);
 
-
   return (
-    <div className="fade-up">
+    <div className="fade-up ov-sans">
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+
       <Toolbar q={q} setQ={setQ} placeholder="Search ticket #, customer, society, purifier…" count={filtered.length}
         right={<>
           {dateFilterField && <input type="date" value={dateVal} onChange={e => setDateVal(e.target.value)} title="Filter by ticket created date" style={selectStyle} />}
@@ -235,28 +341,40 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
             <option value="all">All statuses</option>
             {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
+          <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>
         </>} />
       {topContent && topContent(filtered)}
-      <Card pad={false}>
-        <Table head={["Ticket", ...(showCustomer ? ["Customer"] : []), ...(showSociety ? ["Society"] : []), "Purifier ID", "Issue Category", ...extraColumns.map(c => c.label), ...(showPriority ? ["Priority"] : []), ...(showStatus ? ["Status"] : []), "Created", ""]} maxHeight="calc(100vh - 300px)">
-          {filtered.map(t => (
-            <tr key={t.id} style={trStyle} onClick={() => setSel(t)}>
-              <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{t.ticketNo}</td>
-              {showCustomer && <td style={td}>{t.customer}</td>}
-              {showSociety && <td style={td}>{t.society}</td>}
-              <td style={td}>{t.purifierId}</td>
-              <td style={td}>{t.issueCategory || "—"}</td>
-              {extraColumns.map((c, i) => <td key={i} style={{ ...td, fontSize: 12.5, whiteSpace: "nowrap" }}>{c.render ? c.render(t) : (c.get(t) ?? "—")}</td>)}
-              {showPriority && <td style={td}><TicketBadge value={t.priority} kind="priority" /></td>}
-              {showStatus && <td style={td}><TicketBadge value={t.status} kind="status" /></td>}
-              <td style={{ ...td, fontSize: 12, color: "var(--muted)" }}>{fmtTime(t.created)}</td>
-              <td style={{ ...td, textAlign: "center" }}><ChevronRight size={16} color="var(--muted)" /></td>
-            </tr>
-          ))}
-        </Table>
+
+      <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+        <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 300px)" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                {["Ticket", ...(showCustomer ? ["Customer"] : []), ...(showSociety ? ["Society"] : []), "Purifier ID", "Issue Category", ...extraColumns.map(c => c.label), ...(showPriority ? ["Priority"] : []), ...(showStatus ? ["Status"] : []), "Created", ""].map((h, idx) => (
+                  <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(t => (
+                <tr key={t.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", cursor: "pointer" }} onClick={() => setSel(t)}>
+                  <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{t.ticketNo}</td>
+                  {showCustomer && <td style={{ padding: "14px 18px", color: "#475569" }}>{t.customer}</td>}
+                  {showSociety && <td style={{ padding: "14px 18px", color: "#475569" }}>{t.society}</td>}
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{t.purifierId}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{t.issueCategory || "—"}</td>
+                  {extraColumns.map((c, i) => <td key={i} style={{ padding: "14px 18px", fontSize: 12.5, whiteSpace: "nowrap", color: "#475569" }}>{c.render ? c.render(t) : (c.get(t) ?? "—")}</td>)}
+                  {showPriority && <td style={{ padding: "14px 18px" }}><TicketBadge value={t.priority} kind="priority" /></td>}
+                  {showStatus && <td style={{ padding: "14px 18px" }}><TicketBadge value={t.status} kind="status" /></td>}
+                  <td style={{ padding: "14px 18px", fontSize: 12, color: "#86868B" }}>{fmtTime(t.created)}</td>
+                  <td style={{ padding: "14px 18px", textAlign: "center" }}><ChevronRight size={16} color="#86868B" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {filtered.length === 0 && <Empty msg="No tickets match your filters." />}
-      </Card>
+      </div>
       {bottomContent && bottomContent(filtered)}
 
       {sel && <Drawer onClose={() => setSel(null)} title={sel.subject} sub={sel.ticketNo}>
@@ -276,13 +394,13 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
         <DefRow k="Issue Category" v={sel.issueCategory} />
         <DefRow k="Society Name" v={sel.society} />
         <DefRow k="Address" v={/^https?:\/\//.test(sel.address || "")
-          ? <a href={sel.address} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal)", wordBreak: "break-all" }}>{sel.address}</a>
+          ? <a href={sel.address} target="_blank" rel="noopener noreferrer" style={{ color: "#08805A", wordBreak: "break-all" }}>{sel.address}</a>
           : sel.address} />
         <DefRow k="Job Start Time" v={fmtIST(sel.jobStartTime)} />
         <DefRow k="Job End Time" v={fmtIST(sel.jobEndTime)} />
         <DefRow k="Work Start Location" v={(sel.workStartLat != null && sel.workStartLat !== "" && sel.workStartLng != null && sel.workStartLng !== "")
           ? <a href={`https://www.google.com/maps?q=${sel.workStartLat},${sel.workStartLng}`} target="_blank" rel="noopener noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9, border: "1.5px solid var(--teal)", background: "var(--mint-2)", color: "var(--teal-d)", fontWeight: 600, fontSize: 12.5, textDecoration: "none", whiteSpace: "nowrap" }}>
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 9, border: "1.5px solid #08805A", background: "rgba(8,128,90,0.08)", color: "#08805A", fontWeight: 600, fontSize: 12.5, textDecoration: "none", whiteSpace: "nowrap" }}>
               <MapPin size={14} /> Open in maps
             </a>
           : null} />
@@ -292,14 +410,14 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
         <DefRow k="Parts_Used" v={sel.partsUsed} />
         {isAdmin && (
           <div style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em", color: "var(--muted)", fontWeight: 600, marginBottom: 8 }}>Update status</div>
+            <div style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B", fontWeight: 600, marginBottom: 8 }}>Update status</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {statusOptions.map(s => { const color = zdStatusColor(s); return (
                 <button key={s} onClick={() => move(sel.id, s)} style={{
                   padding: "7px 13px", borderRadius: 9, fontSize: 12.5, fontWeight: 600,
-                  border: `1.5px solid ${sel.status === s ? color : "var(--border)"}`,
+                  border: `1.5px solid ${sel.status === s ? color : "rgba(0,0,0,0.12)"}`,
                   background: sel.status === s ? color : "#fff",
-                  color: sel.status === s ? "#fff" : "var(--slate)",
+                  color: sel.status === s ? "#fff" : "#1D1D1F",
                 }}>{s}</button>
               ); })}
             </div>

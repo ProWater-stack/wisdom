@@ -144,9 +144,12 @@ export function Stat({ label, value, icon: Icon, sub, hero, delta }) {
     </div>
   );
 }
-export function Card({ title, sub, children, pad = true, style }) {
+export function Card({ title, sub, children, pad = true, hover = true, style }) {
+  // `hover` (default true) toggles the global .pw-card hover lift+zoom (App.jsx)
+  // — set false for cards that are mostly a big scrollable data table, where
+  // that zoom-on-hover reads as an unwanted jitter rather than a nice lift.
   return (
-    <div className="pw-card" style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden", ...style }}>
+    <div className={hover ? "pw-card" : undefined} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", overflow: "hidden", ...style }}>
       {title && <div style={{ padding: "16px 18px 8px" }}>
         <h3 style={{ fontSize: 17 }}>{title}</h3>
         {sub && <div style={{ fontSize: 12.5, color: "var(--muted)", marginTop: 2 }}>{sub}</div>}

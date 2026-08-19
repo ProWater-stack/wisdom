@@ -27,13 +27,13 @@ import {
 // `adminOnly` sections only exist when the user has admin/devops on the module.
 export const MODULE_SECTIONS = {
   referral:      [{ id: "overview", label: "Overview" }, { id: "referrers", label: "Referrers" }, { id: "referees", label: "Referees" }, { id: "credits", label: "Credits" }, { id: "tracker", label: "Tracker" }, { id: "analytics", label: "Analytics" }, { id: "backtrack", label: "Backtrack", adminOnly: true }],
-  sales:         [{ id: "sales_overview", label: "Pipeline" }, { id: "sales_leads", label: "Leads & Deals" }, { id: "sales_apartments", label: "Apartment Leads" }, { id: "sales_analytics", label: "Sales Analytics" }, { id: "sales_trend", label: "Trend Analysis" }, { id: "sales_errors", label: "Error Correction" }],
+  sales:         [{ id: "sales_leads", label: "Leads & Deals" }, { id: "sales_apartments", label: "Apartment Leads" }, { id: "sales_trend", label: "Trend Analysis" }, { id: "sales_errors", label: "Error Correction" }],
   planner:       [{ id: "plan_board", label: "Task Board" }, { id: "plan_weekly", label: "Weekly View" }, { id: "plan_admin", label: "Modify Tasks", adminOnly: true }],
   analytics:     [{ id: "an_overview", label: "Overview" }, { id: "analytics", label: "Referral" }, { id: "an_sales", label: "Sales" }, { id: "an_earned", label: "Earned Revenue" }, { id: "an_reconciliation", label: "Reconciliation" }, { id: "an_dptxn", label: "DP Transaction" }, { id: "an_aop", label: "AOP", adminOnly: true }, { id: "an_apartment", label: "Apartment Performance" }, { id: "an_churn", label: "Renewal & Churn Risk" }, { id: "an_billing", label: "Billing" }, { id: "an_revenue", label: "Revenue" }, { id: "an_penetration", label: "Penetration Tracker" }, { id: "an_credits", label: "Credits" }, { id: "an_applogs", label: "App Logs" }],
   employee:      [{ id: "emp_users", label: "Users" }],
   ticketing:     [{ id: "tk_overview", label: "Overview" }, { id: "tk_tickets", label: "Tickets" }, { id: "tk_ops", label: "Ops Tickets" }],
   customer:      [{ id: "cust_list", label: "Customers" }, { id: "cust_all", label: "All Customers" }, { id: "cust_societies", label: "Societies" }],
-  billing:       [{ id: "bill_overview", label: "Overview" }, { id: "bill_subs", label: "Subscriptions" }, { id: "bill_invoices", label: "Invoices" }, { id: "bill_deposits", label: "Deposits & Refunds" }],
+  billing:       [{ id: "bill_overview", label: "Overview" }, { id: "bill_subs", label: "Subscriptions" }, { id: "bill_invoices", label: "Invoices" }, { id: "bill_deposits", label: "Deposits & Refunds" }, { id: "bill_plans", label: "Plans" }],
   fsm:           [{ id: "fsm_track", label: "Track Technician" }, { id: "fsm_amc", label: "AMC / Maintenance" }, { id: "fsm_quality", label: "Water Quality" }],
   erp:           [{ id: "erp_assets", label: "Asset Lifecycle" }],
   autoscheduler: [{ id: "as_society", label: "Auto GS - Society" }, { id: "as_iot", label: "IoT Alerts" }],

@@ -16,7 +16,7 @@ import {
   useAuth, api, customerApi, billingApi, creditNoteApi, ticketApi,
   depositForCustomer, CUSTOMER_FIELDS,
   API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate,
-  exportToCsv, fmtDate, fmtPhone, inr, deviceType,
+  exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, isRealSociety,
   parsePartsUsed, jobDurationMin, zdIsClosed,
 } from "../shared/core";
 import {
@@ -49,16 +49,45 @@ export function CustomerSocieties() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState({ key: "count", dir: "desc" });
   const toggleSort = (k) => setSort(s => s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: k === "society" ? "asc" : "desc" });
-  const [expanded, setExpanded] = useState(() => new Set());
-  const toggleExpand = (k) => setExpanded(prev => { const n = new Set(prev); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  // v2.29.130: society/device-type structural filters (MultiSelectFilter,
+  // null = default view). societyFilter's default (null) excludes blanks and
+  // the testing apartment via the shared isRealSociety() (v2.29.137) — pick
+  // either explicitly in the filter to see it.
+  const [societyFilter, setSocietyFilter] = useState(null);
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState(null);
+  const NONE = "— No society —";
+  // Per-society expand state: society -> which metric's customers to show
+  // ("all"|"active"|"own"|"normal"|"hotcold"|"churned"). Clicking the same
+  // number again collapses; clicking a different number for an already-open
+  // society switches the slice shown, dynamically, per the requested UX.
+  const [expanded, setExpanded] = useState(() => new Map());
+  const setExpandFilter = (society, key) => setExpanded(prev => {
+    const n = new Map(prev);
+    if (n.get(society) === key) n.delete(society); else n.set(society, key);
+    return n;
+  });
   useEffect(() => { api.logView(user.username, "Viewed Societies"); Promise.all([customerApi.getCustomers(), billingApi.getInvoices().catch(() => [])]).then(([c, i]) => { setRows(c); setInvs(i || []); }).catch(() => setRows([])); }, []);
   if (!rows) return <Loading />;
 
-  const NONE = "— No society —";
+  // Churned (v2.29.130) — either signal counts: device Un-Installed
+  // (DP-stack `deviceStatus`) or status Inactive (either stack), same
+  // normalisation/logic All Customers' row-highlighting already uses.
+  const normSt = (s) => String(s || "").toLowerCase().replace(/[\s_-]+/g, "");
+  const isChurned = (c) => {
+    const dev = normSt(c.deviceStatus);
+    const st = normSt(c.status);
+    return dev.includes("uninstall") || st === "inactive" || dev === "inactive";
+  };
+
+  // Device Type filter narrows the population BEFORE grouping — selecting
+  // "Own Device" only, for example, recomputes every society's numbers as if
+  // only Own-device customers existed.
+  const dtScoped = deviceTypeFilter === null ? rows : rows.filter(c => deviceTypeFilter.includes(deviceType(c.purifier_id)));
+
   const groups = {};
-  rows.forEach(c => {
+  dtScoped.forEach(c => {
     const soc = (c.society && String(c.society).trim() && c.society !== "—") ? String(c.society).trim() : NONE;
-    const g = groups[soc] || (groups[soc] = { society: soc, count: 0, active: 0, inactive: 0, dunning: 0, own: 0, normal: 0, hotcold: 0, customers: [] });
+    const g = groups[soc] || (groups[soc] = { society: soc, count: 0, active: 0, inactive: 0, dunning: 0, own: 0, normal: 0, hotcold: 0, churned: 0, customers: [] });
     g.customers.push(c);
     g.count++;
     const st = String(c.status || "").toLowerCase();
@@ -69,112 +98,204 @@ export function CustomerSocieties() {
     if (dt === "Own Device") g.own++;
     else if (dt === "Normal Device") g.normal++;
     else if (dt === "Hot & Cold") g.hotcold++;
+    if (isChurned(c)) g.churned++;
   });
   const all = Object.values(groups);
-  const namedSocieties = all.filter(g => g.society !== NONE).length;
-  const biggest = all.filter(g => g.society !== NONE).reduce((b, g) => g.count > (b?.count || 0) ? g : b, null);
 
-  const filtered = all.filter(g => g.society.toLowerCase().includes(q.toLowerCase()));
+  // Society filter — explicit selection is used as-is; the unset (null)
+  // default hides the "no society" bucket and the testing apartment.
+  const societyOptions = all.map(g => g.society).sort();
+  const visible = all.filter(g => societyFilter === null ? isRealSociety(g.society) : societyFilter.includes(g.society));
+
+  const namedSocieties = visible.filter(g => g.society !== NONE).length;
+  const biggest = visible.filter(g => g.society !== NONE).reduce((b, g) => g.count > (b?.count || 0) ? g : b, null);
+  const totalCustomers = visible.reduce((s, g) => s + g.count, 0);
+
+  const filtered = visible.filter(g => g.society.toLowerCase().includes(q.toLowerCase()));
   const dir = sort.dir === "asc" ? 1 : -1;
   filtered.sort((a, b) => sort.key === "society" ? a.society.localeCompare(b.society) * dir : (a[sort.key] - b[sort.key]) * dir);
-  const tot = filtered.reduce((a, g) => ({ count: a.count + g.count, active: a.active + g.active, own: a.own + g.own, normal: a.normal + g.normal, hotcold: a.hotcold + g.hotcold }), { count: 0, active: 0, own: 0, normal: 0, hotcold: 0 });
+  const tot = filtered.reduce((a, g) => ({ count: a.count + g.count, active: a.active + g.active, own: a.own + g.own, normal: a.normal + g.normal, hotcold: a.hotcold + g.hotcold, churned: a.churned + g.churned }), { count: 0, active: 0, own: 0, normal: 0, hotcold: 0, churned: 0 });
 
   const stats = [
     { label: "Societies", value: namedSocieties, icon: Boxes, sub: "with at least one customer", hero: true },
-    { label: "Customers", value: rows.length.toLocaleString("en-IN"), icon: UserRound, sub: "across all societies" },
-    { label: "Avg / society", value: namedSocieties ? Math.round(rows.filter(c => c.society && c.society !== "—").length / namedSocieties) : 0, icon: TrendingUp, sub: "customers per society" },
+    { label: "Customers", value: totalCustomers.toLocaleString("en-IN"), icon: UserRound, sub: "across visible societies" },
+    { label: "Avg / society", value: namedSocieties ? Math.round(visible.filter(g => g.society !== NONE).reduce((s, g) => s + g.count, 0) / namedSocieties) : 0, icon: TrendingUp, sub: "customers per society" },
     { label: "Largest society", value: biggest ? biggest.count : 0, icon: Award, sub: biggest ? biggest.society : "—" },
   ];
 
   const exportCsv = () => exportToCsv("prowater-societies.csv", [
     { label: "Society", get: g => g.society }, { label: "Customers", get: g => g.count }, { label: "Active", get: g => g.active },
     { label: "Own", get: g => g.own }, { label: "Normal", get: g => g.normal }, { label: "Hot & Cold", get: g => g.hotcold },
+    { label: "Churned", get: g => g.churned },
   ], filtered);
 
+  // Which slice of a society's customers to show in its expand panel.
+  const sliceOf = (g, key) => {
+    switch (key) {
+      case "active": return g.customers.filter(c => normSt(c.status) === "active");
+      case "own": return g.customers.filter(c => deviceType(c.purifier_id) === "Own Device");
+      case "normal": return g.customers.filter(c => deviceType(c.purifier_id) === "Normal Device");
+      case "hotcold": return g.customers.filter(c => deviceType(c.purifier_id) === "Hot & Cold");
+      case "churned": return g.customers.filter(isChurned);
+      default: return g.customers;
+    }
+  };
+  const sliceLabel = { all: "All customers", active: "Active customers", own: "Own Device customers", normal: "Normal Device customers", hotcold: "Hot & Cold customers", churned: "Churned customers" };
+
+  const numCell = (value, key, g, color) => (
+    <td style={{ padding: "14px 18px" }}>
+      <span onClick={(e) => { e.stopPropagation(); setExpandFilter(g.society, key); }}
+        title={`Click to see ${sliceLabel[key].toLowerCase()}`}
+        className="soc-num-link"
+        style={{ fontWeight: key === "all" ? 700 : 600, color: color || "#475569", cursor: "pointer" }}>
+        {value || (key === "all" ? 0 : "—")}
+      </span>
+    </td>
+  );
 
   return (
-    <div className="fade-up">
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+    <div className="fade-up ov-sans">
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}
+        .soc-num-link:hover{text-decoration:underline}`}</style>
+
+      {/* ── KPI cards ──────────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{
+            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            backdropFilter: s.hero ? "none" : "blur(20px)",
+            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
+            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 18,
+            padding: "18px 20px",
+            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+                {s.label}
+              </span>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              </div>
+            </div>
+            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+              {s.value}
+            </div>
+            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B" }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Societies list & expand table ─────────────────────────────────── */}
       <div style={{ marginTop: 16 }}>
         <Toolbar q={q} setQ={setQ} placeholder="Search society…" count={filtered.length}
-          right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />
-        <Card pad={false}>
-          <Table head={[
-            <SortHeader key="s" label="Society" k="society" sort={sort} onSort={toggleSort} />,
-            <SortHeader key="c" label="Customers" k="count" sort={sort} onSort={toggleSort} />,
-            <SortHeader key="a" label="Active" k="active" sort={sort} onSort={toggleSort} />,
-            "Own", "Normal", "Hot & Cold"]} maxHeight="calc(100vh - 340px)">
-            {filtered.map((g, i) => { const open = expanded.has(g.society); return (
-              <React.Fragment key={i}>
-                <tr onClick={() => toggleExpand(g.society)} title="Click to see customers" style={{ borderBottom: "1px solid var(--border)", cursor: "pointer", background: open ? "var(--mint)" : undefined }}>
-                  <td style={{ ...td, fontWeight: 600, color: g.society === NONE ? "var(--muted)" : "var(--f)" }}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, justifyContent: "center" }}>
-                      <ChevronRight size={15} style={{ color: "var(--muted)", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
-                      {g.society}
-                    </span>
-                  </td>
-                  <td style={{ ...td, fontWeight: 700 }}>{g.count}</td>
-                  <td style={{ ...td, color: "var(--forest)", fontWeight: 600 }}>{g.active}</td>
-                  <td style={td}>{g.own || "—"}</td>
-                  <td style={td}>{g.normal || "—"}</td>
-                  <td style={td}>{g.hotcold || "—"}</td>
+          right={<>
+            <MultiSelectFilter label="Society" options={societyOptions} value={societyFilter} onChange={setSocietyFilter} width={220} />
+            <MultiSelectFilter label="Device Type" options={["Own Device", "Normal Device", "Hot & Cold"]} value={deviceTypeFilter} onChange={setDeviceTypeFilter} width={200} />
+            <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>
+          </>} />
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {[
+                    <SortHeader key="s" label="Society" k="society" sort={sort} onSort={toggleSort} />,
+                    <SortHeader key="c" label="Customers" k="count" sort={sort} onSort={toggleSort} />,
+                    <SortHeader key="a" label="Active" k="active" sort={sort} onSort={toggleSort} />,
+                    "Own", "Normal", "Hot & Cold",
+                    <SortHeader key="ch" label="Churned" k="churned" sort={sort} onSort={toggleSort} />,
+                  ].map((h, idx) => (
+                    <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
                 </tr>
-                {open && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: 0, background: "var(--mint)", borderBottom: "1px solid var(--border)" }}>
-                      <div style={{ overflowX: "auto", padding: "6px 14px 14px" }}>
-                        <table style={{ borderCollapse: "collapse", width: "100%", background: "#fff", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
-                          <thead>
-                            <tr style={{ background: "var(--mint-2)" }}>
-                              {["Customer ID", "Name", "Purifier ID", "Device", "Phone", "Plan", "Status"].map(h => (
-                                <th key={h} style={{ textAlign: "center", fontSize: 11.5, fontWeight: 700, color: "var(--muted)", padding: "8px 12px", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" }}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {g.customers.map((c, ci) => {
-                              const st = String(c.status || "").toLowerCase();
-                              const rowBg = st === "inactive" ? "#FBE8E8" : st === "dunning" ? "#FBF0E0" : undefined;
-                              const stColor = st === "inactive" ? "#DC4141" : st === "dunning" ? "#986315" : st === "active" ? "#08805A" : "var(--muted)";
-                              const cell = { fontSize: 12.5, padding: "8px 12px", whiteSpace: "nowrap", textAlign: "center" };
-                              return (
-                              <tr key={ci} style={{ borderTop: ci ? "1px solid #ECEEED" : "none", background: rowBg }}>
-                                <td style={{ ...cell, color: "var(--slate)" }}>{c.id || "—"}</td>
-                                <td style={{ ...cell, fontSize: 13, fontWeight: 600, color: "var(--f)" }}>{c.name || "—"}</td>
-                                <td style={cell}>{c.purifier_id || "—"}</td>
-                                <td style={cell}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
-                                <td style={cell}>{fmtPhone(c.phone)}</td>
-                                <td style={cell}>{c.plan || "—"}</td>
-                                <td style={cell}><span style={{ fontSize: 11.5, fontWeight: 700, color: stColor, textTransform: "capitalize" }}>{c.status || "—"}</span></td>
-                              </tr>
-                              );
-                            })}
-                            <tr style={{ background: "var(--mint-2)", borderTop: "2px solid var(--border)" }}>
-                              <td colSpan={7} style={{ fontSize: 12, fontWeight: 700, color: "var(--f)", padding: "9px 12px", textAlign: "center" }}>
-                                Subtotal · {g.count} customer{g.count !== 1 ? "s" : ""} · {g.active} active{g.inactive ? ` · ${g.inactive} inactive` : ""}{g.dunning ? ` · ${g.dunning} dunning` : ""}
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </td>
+              </thead>
+              <tbody>
+                {filtered.map((g, i) => { const filterKey = expanded.get(g.society); const open = filterKey != null; const subCustomers = open ? sliceOf(g, filterKey) : []; return (
+                  <React.Fragment key={i}>
+                    <tr style={{ borderBottom: "1px solid rgba(0,0,0,.04)", background: open ? "rgba(8,128,90,0.06)" : undefined }}>
+                      <td onClick={() => setExpandFilter(g.society, "all")} title="Click to see all customers" style={{ padding: "14px 18px", fontWeight: 600, color: g.society === NONE ? "#86868b" : "#0d2119", cursor: "pointer" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                          <ChevronRight size={15} style={{ color: "#08805A", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
+                          {g.society}
+                        </span>
+                      </td>
+                      {numCell(g.count, "all", g, "#1D1D1F")}
+                      {numCell(g.active, "active", g, "#08805A")}
+                      {numCell(g.own, "own", g)}
+                      {numCell(g.normal, "normal", g)}
+                      {numCell(g.hotcold, "hotcold", g)}
+                      {numCell(g.churned, "churned", g, g.churned ? "#DC4141" : "#475569")}
+                    </tr>
+                    {open && (
+                      <tr>
+                        <td colSpan={7} style={{ padding: 0, background: "rgba(8,128,90,0.03)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                          <div style={{ overflowX: "auto", padding: "10px 18px 18px" }}>
+                            <div style={{ fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", padding: "8px 2px 2px" }}>
+                              {sliceLabel[filterKey]} ({subCustomers.length})
+                            </div>
+                            <table style={{ borderCollapse: "collapse", width: "100%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 14, overflow: "hidden" }}>
+                              <thead>
+                                <tr style={{ background: "rgba(243,248,236,.92)" }}>
+                                  {["Customer ID", "Name", "Purifier ID", "Device", "Phone", "Plan", "Status"].map(h => (
+                                    <th key={h} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", padding: "10px 14px", whiteSpace: "nowrap", borderBottom: "1px solid rgba(0,0,0,.06)" }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {subCustomers.map((c, ci) => {
+                                  const st = String(c.status || "").toLowerCase();
+                                  const rowBg = st === "inactive" ? "rgba(220,38,38,0.04)" : st === "dunning" ? "rgba(152,99,21,0.04)" : undefined;
+                                  const stColor = st === "inactive" ? "#DC4141" : st === "dunning" ? "#986315" : st === "active" ? "#08805A" : "#86868B";
+                                  const cell = { fontSize: 12.5, padding: "10px 14px", whiteSpace: "nowrap", textAlign: "center" };
+                                  return (
+                                  <tr key={ci} style={{ borderTop: ci ? "1px solid rgba(0,0,0,.04)" : "none", background: rowBg }}>
+                                    <td style={{ ...cell, color: "#86868B" }}>{c.id || "—"}</td>
+                                    <td style={{ ...cell, fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{c.name || "—"}</td>
+                                    <td style={cell}>{c.purifier_id || "—"}</td>
+                                    <td style={cell}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
+                                    <td style={cell}>{fmtPhone(c.phone)}</td>
+                                    <td style={cell}>{c.plan || "—"}</td>
+                                    <td style={cell}>
+                                      <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, color: stColor, background: st === "active" ? "rgba(8,128,90,0.12)" : st === "inactive" ? "rgba(220,38,38,0.12)" : "rgba(152,99,21,0.12)", textTransform: "capitalize" }}>
+                                        {c.status || "—"}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                  );
+                                })}
+                                {subCustomers.length === 0 && (
+                                  <tr><td colSpan={7} style={{ padding: "16px 14px", textAlign: "center", fontSize: 12.5, color: "#86868B" }}>No {sliceLabel[filterKey].toLowerCase()} in this society.</td></tr>
+                                )}
+                                <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(0,0,0,.06)" }}>
+                                  <td colSpan={7} style={{ fontSize: 12, fontWeight: 700, color: "#0d2119", padding: "10px 14px", textAlign: "center" }}>
+                                    Society total · {g.count} customer{g.count !== 1 ? "s" : ""} · {g.active} active{g.inactive ? ` · ${g.inactive} inactive` : ""}{g.dunning ? ` · ${g.dunning} dunning` : ""}{g.churned ? ` · ${g.churned} churned` : ""}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ); })}
+                {filtered.length > 0 && (
+                  <tr style={{ background: "rgba(243,248,236,.5)" }}>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>Total ({filtered.length})</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.count}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#08805A" }}>{tot.active}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.own}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.normal}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.hotcold}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: tot.churned ? "#DC4141" : "#0d2119" }}>{tot.churned}</td>
                   </tr>
                 )}
-              </React.Fragment>
-            ); })}
-            {filtered.length > 0 && (
-              <tr>
-                <td style={ftd}>Total ({filtered.length})</td>
-                <td style={ftd}>{tot.count}</td>
-                <td style={ftd}>{tot.active}</td>
-                <td style={ftd}>{tot.own}</td>
-                <td style={ftd}>{tot.normal}</td>
-                <td style={ftd}>{tot.hotcold}</td>
-              </tr>
-            )}
-          </Table>
+              </tbody>
+            </table>
+          </div>
           {filtered.length === 0 && <Empty msg="No societies to show." />}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -222,7 +343,7 @@ export function CustTicketMonths({ tickets, ops }) {
         <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Months with activity</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{buckets.length}</div></div>
       </div>
       <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Click a month to expand its issue-type (Issue Category) breakdown.</div>
-      <Card pad={false}>
+      <Card pad={false} hover={false}>
         <Table head={["Month", ops ? "Ops jobs" : "Tickets"]} maxHeight="calc(100vh - 360px)">
           {buckets.map(b => {
             const isOpen = !!open[b.key];
@@ -390,15 +511,40 @@ export function gstBreakup(total) {
 export function GstBreakupCard({ total }) {
   if (!(total > 0)) return null;
   const g = gstBreakup(total);
+  const taxPct = Math.round((g.taxable / g.total) * 1000) / 10;
+  const gstPct = Math.round((100 - taxPct) * 10) / 10;
+
   return (
-    <Card pad={false} title="GST breakup" sub={`On the paid amount of ${inr(Math.round(g.total))}`} style={{ marginTop: 16 }}>
-      <div style={{ paddingTop: 2 }}>
-        <InvoiceSummaryRow icon={Receipt} label="Taxable value" value={inr(Math.round(g.taxable))} />
-        <InvoiceSummaryRow icon={Landmark} label="CGST (2.5%)" value={inr(Math.round(g.cgst))} />
-        <InvoiceSummaryRow icon={MapPin} label="SGST (2.5%)" value={inr(Math.round(g.sgst))} />
-        <InvoiceSummaryRow icon={Wallet} label="Total invoice value" value={inr(Math.round(g.total))} />
+    <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F", margin: 0 }}>GST Breakup</h3>
+            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Paid amount: {inr(Math.round(g.total))}</div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>5% GST Standard</span>
+        </div>
+
+        {/* Visual Ratio Bar */}
+        <div style={{ margin: "14px 0 16px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, color: "#86868B", marginBottom: 6 }}>
+            <span>Taxable ({taxPct}%)</span>
+            <span>Tax ({gstPct}%)</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,0.06)", overflow: "hidden", display: "flex" }}>
+            <div style={{ width: `${taxPct}%`, background: "#08805A", borderRadius: "999px 0 0 999px" }} />
+            <div style={{ width: `${gstPct}%`, background: "#F59E0B", borderRadius: "0 999px 999px 0" }} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <InvoiceSummaryRow icon={Receipt} label="Taxable value" value={inr(Math.round(g.taxable))} />
+          <InvoiceSummaryRow icon={Landmark} label="CGST (2.5%)" value={inr(Math.round(g.cgst))} />
+          <InvoiceSummaryRow icon={MapPin} label="SGST (2.5%)" value={inr(Math.round(g.sgst))} />
+          <InvoiceSummaryRow icon={Wallet} label="Total invoice value" value={inr(Math.round(g.total))} />
+        </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -412,10 +558,6 @@ export function InvoiceBreakdownCard({ inv, recharge }) {
   const totalCollected = b.collected.reduce((s, r) => s + r.amount, 0);
   const totalOutstanding = b.outstanding.reduce((s, r) => s + r.amount, 0);
 
-  // Fixed-width flex rows, NOT the shared full-bleed <Table> — that one
-  // stretches to 100% of the (wide) card with no column constraints, which
-  // left huge blank gaps either side of these short date/amount values.
-  // Everything here stays compact regardless of the card's outer width.
   const DATE_W = 132, AMT_W = 84;
   const fmtDayMon = (d) => d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
   const calcSection = (key, label) => (
@@ -428,9 +570,6 @@ export function InvoiceBreakdownCard({ inv, recharge }) {
       <div style={{ width: AMT_W, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "var(--f)", textAlign: "right" }}>{value}</div>
     </div>
   );
-  // Earned revenue rows show the actual day-range that amount covers (e.g.
-  // "21 Jul – 31 Jul") instead of a single date — makes it clear exactly
-  // which days each month's slice counts, not just "as of" when.
   const calcRowRange = (key, label, rangeStart, rangeEnd, value) => (
     <div key={key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 18px", borderBottom: "1px solid var(--border)" }}>
       <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "var(--slate)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
@@ -439,39 +578,52 @@ export function InvoiceBreakdownCard({ inv, recharge }) {
     </div>
   );
   return (
-    <Card pad={false} title="Current paid transaction — revenue recognition" sub={`Invoice ${inv.number || inv.id}`} style={{ marginTop: 16 }}>
-      <div style={{ paddingTop: 2 }}>
-        <InvoiceSummaryRow icon={CalendarDays} label="Due date" value={fmtDate(dd)} />
-        <InvoiceSummaryRow icon={CalendarClock} label="Payment date" value={fmtDate(pd)} />
-        <InvoiceSummaryRow icon={CalendarRange} label="Recharge tenure" value={`${b.tenureDays} days`} sub={`${fmtDate(b.validityStart)} – ${fmtDate(b.validityEnd)}`} />
-        <InvoiceSummaryRow icon={TrendingUp} label="Earned revenue" value={inr(Math.round(totalEarned))} />
-        <InvoiceSummaryRow icon={Wallet} label="Collected Revenue" value={inr(Math.round(totalCollected))}
-          sub={totalOutstanding > 0 ? `${inr(Math.round(totalOutstanding))} still outstanding` : "Fully collected"} />
-      </div>
-      <button onClick={() => setOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 18px", background: "var(--mint)", border: "none", borderTop: "1px solid var(--border)", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--slate)" }}>
-        {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />} {open ? "Hide calculation" : "Show calculation"}
-      </button>
-      {open && (
-        <div style={{ paddingBottom: 4 }}>
-          <div style={{ display: "flex", gap: 10, padding: "10px 18px 4px" }}>
-            <div style={{ flex: 1 }} />
-            <div style={{ width: DATE_W, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textAlign: "right", textTransform: "uppercase" }}>Date</div>
-            <div style={{ width: AMT_W, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "var(--muted)", textAlign: "right", textTransform: "uppercase" }}>Amount</div>
+    <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F", margin: 0 }}>Current Paid Transaction</h3>
+            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Revenue recognition · Invoice {inv.number || inv.id}</div>
           </div>
-          {calcRow("due", "Due date", dd, inr(recharge), true)}
-          {calcRow("paid", "Payment date", pd, inr(recharge), true)}
-          {calcSection("s1", "Recharge tenure")}
-          {calcRow("tstart", "Start date", b.validityStart, "")}
-          {calcRow("tend", "End date", b.validityEnd, `${b.tenureDays} days`)}
-          {calcSection("s2", "Earned revenue")}
-          {b.earned.map((r, i) => calcRowRange(`e${i}`, "Earned revenue", r.rangeStart, r.rangeEnd, inr(Math.round(r.amount))))}
-          {calcSection("s3", "Collected Revenue")}
-          {b.collected.map((r, i) => calcRow(`c${i}`, "Collected Revenue", r.date, inr(Math.round(r.amount))))}
-          {calcSection("s4", "Outstanding revenue")}
-          {b.outstanding.map((r, i) => calcRow(`o${i}`, "Outstanding revenue", r.date, r.amount > 0 ? inr(Math.round(r.amount)) : "—"))}
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>{b.tenureDays} Days Tenure</span>
         </div>
-      )}
-    </Card>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <InvoiceSummaryRow icon={CalendarDays} label="Due date" value={fmtDate(dd)} />
+          <InvoiceSummaryRow icon={CalendarClock} label="Payment date" value={fmtDate(pd)} />
+          <InvoiceSummaryRow icon={CalendarRange} label="Recharge tenure" value={`${b.tenureDays} days`} sub={`${fmtDate(b.validityStart)} – ${fmtDate(b.validityEnd)}`} />
+          <InvoiceSummaryRow icon={TrendingUp} label="Earned revenue" value={inr(Math.round(totalEarned))} />
+          <InvoiceSummaryRow icon={Wallet} label="Collected Revenue" value={inr(Math.round(totalCollected))}
+            sub={totalOutstanding > 0 ? `${inr(Math.round(totalOutstanding))} still outstanding` : "Fully collected"} />
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <button onClick={() => setOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 18px", background: "rgba(8,128,90,0.08)", borderRadius: 12, border: "1px solid rgba(8,128,90,0.15)", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "#08805A" }}>
+          {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />} {open ? "Hide calculation" : "Show calculation"}
+        </button>
+        {open && (
+          <div style={{ marginTop: 10, background: "rgba(243,248,236,0.5)", borderRadius: 14, border: "1px solid rgba(8,128,90,0.12)", paddingBottom: 6, maxHeight: 280, overflowY: "auto" }}>
+            <div style={{ display: "flex", gap: 10, padding: "10px 18px 4px" }}>
+              <div style={{ flex: 1 }} />
+              <div style={{ width: DATE_W, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "#86868B", textAlign: "right", textTransform: "uppercase" }}>Date</div>
+              <div style={{ width: AMT_W, flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "#86868B", textAlign: "right", textTransform: "uppercase" }}>Amount</div>
+            </div>
+            {calcRow("due", "Due date", dd, inr(recharge), true)}
+            {calcRow("paid", "Payment date", pd, inr(recharge), true)}
+            {calcSection("s1", "Recharge tenure")}
+            {calcRow("tstart", "Start date", b.validityStart, "")}
+            {calcRow("tend", "End date", b.validityEnd, `${b.tenureDays} days`)}
+            {calcSection("s2", "Earned revenue")}
+            {b.earned.map((r, i) => calcRowRange(`e${i}`, "Earned revenue", r.rangeStart, r.rangeEnd, inr(Math.round(r.amount))))}
+            {calcSection("s3", "Collected Revenue")}
+            {b.collected.map((r, i) => calcRow(`c${i}`, "Collected Revenue", r.date, inr(Math.round(r.amount))))}
+            {calcSection("s4", "Outstanding revenue")}
+            {b.outstanding.map((r, i) => calcRow(`o${i}`, "Outstanding revenue", r.date, r.amount > 0 ? inr(Math.round(r.amount)) : "—"))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -484,7 +636,12 @@ export function AllCustomers() {
   // Search-list filters (v2.29.99): Society/Status multi-select + a signup-date
   // range — "All Time" by default so the directory isn't silently narrowed on load.
   const [societyFilter, setSocietyFilter] = useState(null); // null = all
-  const [statusFilter, setStatusFilter] = useState(null);   // null = all
+  // Status defaults to this specific set on load (v2.29.128, per explicit
+  // request) rather than "all" — the literal casing variants below are as
+  // given (real `status` values are inconsistent across sources: Zoho's own
+  // raw pass-through vs. a DP device-status string), not normalized. Still a
+  // real filter the user can widen back to "all" from the dropdown.
+  const [statusFilter, setStatusFilter] = useState(["Active", "In-Active", "active", "dunning"]);
   const [stackFilter, setStackFilter] = useState(null);     // null = all; "Zoho" | "DP" (v2.29.113)
   const [dateSel, setDateSel] = useState({ preset: "all", from: "", to: "" });
   // DP customers' Transactions sub-page (v2.29.113): reads the DrinkPrime
@@ -493,6 +650,14 @@ export function AllCustomers() {
   const [dpTxns, setDpTxns] = useState(null); // null = not loaded yet, [] = loaded (empty or error)
   const [dpTxnsLoading, setDpTxnsLoading] = useState(false);
   const [dpTxnsErr, setDpTxnsErr] = useState(false);
+  // DP customers' Sync History sub-page (v2.29.127): reads the DrinkPrime
+  // device-sync API directly (deviceCode = this customer's Purifier ID —
+  // already on hand from get-all-customers, no extra field needed). Latest
+  // 10 syncs, newest first, exactly the one call the API needs.
+  const [syncHistory, setSyncHistory] = useState(null); // null = not loaded yet, [] = loaded (empty or error)
+  const [syncHistoryTotal, setSyncHistoryTotal] = useState(0);
+  const [syncHistoryLoading, setSyncHistoryLoading] = useState(false);
+  const [syncHistoryErr, setSyncHistoryErr] = useState(false);
   useEffect(() => {
     api.logView(user.username, "Viewed All Customers");
     Promise.all([
@@ -503,20 +668,43 @@ export function AllCustomers() {
       api.getReferrers().catch(() => []),
       api.getReferees().catch(() => []),
       creditNoteApi.getCreditNotes().catch(() => []),
-    ]).then(([customers, subs, invs, tickets, referrers, referees, creditNotes]) => setData({ customers, subs, invs, tickets, referrers, referees, creditNotes }))
-      .catch(() => setData({ customers: [], subs: [], invs: [], tickets: [], referrers: [], referees: [], creditNotes: [] }));
+      billingApi.getSubmodules().catch(() => []),
+    ]).then(([customers, subs, invs, tickets, referrers, referees, creditNotes, submodules]) => setData({ customers, subs, invs, tickets, referrers, referees, creditNotes, submodules }))
+      .catch(() => setData({ customers: [], subs: [], invs: [], tickets: [], referrers: [], referees: [], creditNotes: [], submodules: [] }));
   }, []);
   useEffect(() => {
-    if (!sel || !sel.isDpCustomer || !sel.dpInstallationId || subtab !== "transactions") return;
+    // Fetches as soon as a DP customer is opened, regardless of which subtab
+    // is active — not just when Transactions is clicked. The "at a glance"
+    // LTV strip is visible on every subtab and (v2.29.126) is sourced from
+    // this data for DP customers, so it needs to be loaded up front rather
+    // than lazily on first Transactions visit.
+    // v2.29.134: swapped to the payments/v1 endpoint per explicit request —
+    // needs BOTH Purifier ID (deviceCode) and Installation ID, both already
+    // on hand from get-all-customers. Response body is a flat array (not
+    // {content:[...]} like the old v2 collections endpoint).
+    if (!sel || !sel.isDpCustomer || !sel.dpInstallationId || !sel.purifier_id) { setDpTxns(null); return; }
     setDpTxns(null); setDpTxnsLoading(true); setDpTxnsErr(false);
-    fetch(`https://api.drinkprime.in/payments/payments/v2/collections?installationId=${encodeURIComponent(sel.dpInstallationId)}&page=0&size=10`)
-      .then(r => { if (!r.ok) throw new Error(`Collections API ${r.status}`); return r.json(); })
-      .then(json => setDpTxns(Array.isArray(json?.body?.content) ? json.body.content : []))
+    fetch(`https://api.drinkprime.in/payments/payments/payments/v1?loader=true&page=1&pageSize=100&deviceCode=${encodeURIComponent(sel.purifier_id)}&installationID=${encodeURIComponent(sel.dpInstallationId)}`)
+      .then(r => { if (!r.ok) throw new Error(`Payments API ${r.status}`); return r.json(); })
+      .then(json => setDpTxns(Array.isArray(json?.body) ? json.body : []))
       .catch(() => { setDpTxns([]); setDpTxnsErr(true); })
       .finally(() => setDpTxnsLoading(false));
+  }, [sel]);
+  useEffect(() => {
+    // Lazy — only fetches once the Sync History subtab is actually opened
+    // (unlike dpTxns above, nothing on the always-visible "at a glance" strip
+    // depends on this, so there's no need to call a third-party API eagerly
+    // for every DP customer opened).
+    if (!sel || !sel.isDpCustomer || !sel.purifier_id || subtab !== "sync_history") return;
+    setSyncHistory(null); setSyncHistoryLoading(true); setSyncHistoryErr(false);
+    fetch(`https://api.drinkprime.in/sponsor/device/details/syncs?pageSize=10&page=1&orderDir=desc&orderBy=id&deviceCode=${encodeURIComponent(sel.purifier_id)}`)
+      .then(r => { if (!r.ok) throw new Error(`Sync History API ${r.status}`); return r.json(); })
+      .then(json => { setSyncHistory(Array.isArray(json?.body?.results) ? json.body.results : []); setSyncHistoryTotal(json?.body?.total_elements || 0); })
+      .catch(() => { setSyncHistory([]); setSyncHistoryTotal(0); setSyncHistoryErr(true); })
+      .finally(() => setSyncHistoryLoading(false));
   }, [sel, subtab]);
   if (!data) return <Loading />;
-  const { customers, subs, invs, tickets, referrers, referees, creditNotes } = data;
+  const { customers, subs, invs, tickets, referrers, referees, creditNotes, submodules } = data;
 
   const keysOf = (c) => [c.id, c.zohoId, c.email].filter(Boolean).map(k => String(k).toLowerCase());
   const belongs = (rec, keys) => [rec.zohoCustomerId, rec.customerNumber, rec.zohoId, rec.email]
@@ -550,7 +738,7 @@ export function AllCustomers() {
   const matchesDate = (c) => { if (!dateRange) return true; const d = parseFlexDate(c.since); return !!d && dateInRange(d, dateRange); };
 
   const filtered = withPur.filter(c =>
-    (societyFilter === null || societyFilter.includes(c.society)) &&
+    (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
     (statusFilter === null || statusFilter.includes(c.status)) &&
     (stackFilter === null || stackFilter.includes(stackOf(c))) &&
     matchesDate(c));
@@ -573,13 +761,22 @@ export function AllCustomers() {
     const installed = custSubs.map(s => s.activatedAt || s.createdAt).filter(Boolean)
       .map(d => new Date(d)).filter(d => !isNaN(d.getTime())).sort((a, b) => a - b)[0] || null;
     const txns = invs.filter(i => belongs(i, keys)).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
-    const totalPaid = txns.filter(t => t.status === "paid").reduce((s, t) => s + (t.total || 0), 0);
+    // A DP-stack customer has no real Zoho invoices, so `txns` is always empty
+    // for them — LTV (and everything derived from it below) was always ₹0 as
+    // a result. For DP customers, total paid = sum of their DrinkPrime
+    // payments (`dpTxns`, same feed the Transactions sub-screen already
+    // shows) instead of the Zoho invoice total. `c.amount` per the
+    // payments/v1 response shape (v2.29.134 — was `c.totalPaid` on the old
+    // v2/collections endpoint).
+    const totalPaid = sel.isDpCustomer
+      ? (dpTxns || []).reduce((s, c) => s + (c.amount || 0), 0)
+      : txns.filter(t => t.status === "paid").reduce((s, t) => s + (t.total || 0), 0);
     const planName = custSubs[0]?.plan || sel.plan;
     // Current paid transaction — the most recent paid invoice (txns is
     // already sorted newest-first) — feeds the revenue-recognition breakdown
     // card at the top of the Transactions sub-screen.
     const currentPaid = txns.find(t => t.status === "paid" && (t.total || 0) > 0 && t.dueDate);
-    const currentPaidRecharge = currentPaid ? Math.max(0, (currentPaid.total || 0) - depositForCustomer(sel, currentPaid.plan || planName, currentPaid.total || 0)) : 0;
+    const currentPaidRecharge = currentPaid ? Math.max(0, (currentPaid.total || 0) - depositForCustomer(sel, currentPaid.plan || planName, currentPaid.total || 0, currentPaid.planCode)) : 0;
     // Ticket lookup by Purifier ID. Ops = the same filter the Ticketing > Ops tab uses (Issue Category ≠ Complaint).
     const purl = String(sel.purifier_id || "").trim().toLowerCase();
     const custTickets = purl ? tickets.filter(t => String(t.purifierId || "").trim().toLowerCase() === purl) : [];
@@ -601,7 +798,7 @@ export function AllCustomers() {
     const discountCount = custCreditNotes.length;
     const discountPct = totalPaid > 0 ? Math.round((discountTotal / totalPaid) * 100) : 0;
     // Refundable security deposit — the one-time tiered deposit on the largest paid invoice.
-    const securityDeposit = txns.reduce((mx, t) => t.status === "paid" ? Math.max(mx, depositForCustomer(sel, planName, t.total)) : mx, 0);
+    const securityDeposit = txns.reduce((mx, t) => t.status === "paid" ? Math.max(mx, depositForCustomer(sel, planName, t.total, t.planCode)) : mx, 0);
     const paidCount = txns.filter(t => t.status === "paid").length;
     const complaintCount = custTickets.filter(t => String(t.issueCategory || "").trim().toLowerCase() === "complaint").length;
     // Spares used on this purifier's ops jobs (also drives the device score).
@@ -636,7 +833,18 @@ export function AllCustomers() {
     }
     // Open (not closed/resolved) support tickets — same rule Ticketing itself uses.
     const openTicketsCount = custTickets.filter(t => !zdIsClosed(t.status)).length;
-    const lastPayment = txns.find(t => t.status === "paid");
+    // A DP-stack customer has no real Zoho invoices, so `txns` is always empty
+    // for them — Last Payment was always blank as a result (same root cause
+    // as v2.29.126's LTV bug). For DP customers, last payment = the most
+    // recent DrinkPrime transaction by timeStamp (found via reduce, not
+    // assumed array order, even though the live API happens to return them
+    // newest-first already).
+    const lastDpPayment = sel.isDpCustomer && dpTxns && dpTxns.length
+      ? dpTxns.reduce((latest, c) => (!latest || new Date(c.timeStamp) > new Date(latest.timeStamp)) ? c : latest, null)
+      : null;
+    const lastPayment = sel.isDpCustomer
+      ? (lastDpPayment ? { date: lastDpPayment.timeStamp } : null)
+      : txns.find(t => t.status === "paid");
     // ── Customer 360 timeline — every payment, ticket, referral and discount
     // event for this customer, merged into one chronological feed so the whole
     // relationship can be scanned without clicking between tabs.
@@ -659,43 +867,54 @@ export function AllCustomers() {
     const sevColor = (sev) => sev === "red" ? "#DC4141" : sev === "amber" ? "#a86e00" : "var(--f)";
     // Render a field value, highlighted amber/red when concerning (plain otherwise).
     const cell = (text, sev) => <span style={{ color: sevColor(sev), fontWeight: sev ? 800 : undefined }}>{text}</span>;
-    const tabBtn = (k, label) => (
+    const tabBtn = (k, label, count) => (
       <button key={k} onClick={() => setSubtab(k)} style={{
-        padding: "10px 16px", fontSize: 13.5, fontWeight: 700, background: "none",
-        color: subtab === k ? "var(--brand)" : "var(--muted)",
-        borderBottom: subtab === k ? "2px solid var(--brand)" : "2px solid transparent", marginBottom: -1,
-      }}>{label}</button>
+        padding: "8px 16px", fontSize: 13, fontWeight: 700, border: "none",
+        background: subtab === k ? "#08805A" : "rgba(0,0,0,0.05)",
+        color: subtab === k ? "#ffffff" : "#86868B",
+        borderRadius: 999, transition: "all .15s ease", cursor: "pointer",
+        display: "inline-flex", alignItems: "center", gap: 6,
+      }}>
+        {label}
+        {count != null && count > 0 && (
+          <span style={{ fontSize: 10.5, fontWeight: 800, padding: "1px 7px", borderRadius: 999, background: subtab === k ? "rgba(255,255,255,0.25)" : "rgba(8,128,90,0.12)", color: subtab === k ? "#fff" : "#08805A" }}>{count}</span>
+        )}
+      </button>
     );
+
     // Score card with conditional colour formatting (green ≥4, amber ≥2.5, red < 2.5, grey = no data).
     const scoreCard = (label, score, Icon, hint) => {
       const na = score == null;
-      const col = na ? "#8b9a95" : score >= 4 ? "#08805A" : score >= 2.5 ? "#a86e00" : "#DC4141";
-      const bg = na ? "#eef1ef" : score >= 4 ? "#E4F4EE" : score >= 2.5 ? "#FBF0E0" : "#FBE4E4";
+      const col = na ? "#86868B" : score >= 4 ? "#08805A" : score >= 2.5 ? "#986315" : "#DC4141";
+      const bg = na ? "rgba(0,0,0,0.04)" : score >= 4 ? "rgba(8,128,90,0.12)" : score >= 2.5 ? "rgba(152,99,21,0.12)" : "rgba(220,65,65,0.12)";
       const word = na ? "No data" : score >= 4 ? "Good" : score >= 2.5 ? "Fair" : "Poor";
       return (
-        <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)", padding: 16, display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ display: "grid", placeItems: "center", width: 50, height: 50, borderRadius: 14, background: bg, color: col, flexShrink: 0 }}><Icon size={23} /></div>
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 18, display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "grid", placeItems: "center", width: 48, height: 48, borderRadius: 14, background: bg, color: col, flexShrink: 0 }}><Icon size={22} /></div>
           <div style={{ minWidth: 0 }}>
-            <div className="eyebrow" style={{ color: "var(--muted)" }}>{label}</div>
-            <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 28, color: col, lineHeight: 1.05, margin: "1px 0" }}>{na ? "—" : score.toFixed(1)}<span style={{ fontSize: 15, color: "var(--muted)", fontWeight: 600 }}> / 5</span></div>
-            <div style={{ fontSize: 11.5, color: col, fontWeight: 700 }}>{word}{hint ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {hint}</span> : null}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>{label}</div>
+            <div className="serif" style={{ fontWeight: 700, fontSize: 26, color: col, lineHeight: 1.1, margin: "2px 0" }}>{na ? "—" : score.toFixed(1)}<span style={{ fontSize: 14, color: "#86868B", fontWeight: 600 }}> / 5</span></div>
+            <div style={{ fontSize: 11.5, color: col, fontWeight: 700 }}>{word}{hint ? <span style={{ color: "#86868B", fontWeight: 400 }}> · {hint}</span> : null}</div>
           </div>
         </div>
       );
     };
 
     return (
-      <div className="fade-up">
+      <div className="fade-up ov-sans">
+        <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+
+        {/* Back header */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-          <button onClick={() => setSel(null)} style={{ ...btnGhost, padding: "8px 12px" }}><ChevronLeft size={16} /> All Customers</button>
+          <button onClick={() => setSel(null)} style={{ ...btnGhost, padding: "8px 14px", borderRadius: 999, background: "rgba(0,0,0,0.04)", border: "none", color: "#1D1D1F", fontWeight: 600 }}><ChevronLeft size={16} /> All Customers</button>
           <div>
-            <div className="eyebrow">Purifier {sel.purifier_id}</div>
-            <div style={{ fontSize: 21, fontWeight: 700, color: "var(--f)" }}>{sel.name || sel.purifier_id}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Purifier {sel.purifier_id}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F" }}>{sel.name || sel.purifier_id}</div>
           </div>
         </div>
 
-        {/* At-a-glance strip — visible on every tab, so the key facts never require a click. */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+        {/* At-a-glance strip — HIG glassmorphic cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 18 }}>
           {[
             { label: "Status", value: sel.status || "—", sev: statusActive ? null : "red", cap: true },
             { label: "Customer score", value: `${customerScore.toFixed(1)}/5` },
@@ -704,48 +923,69 @@ export function AllCustomers() {
             { label: "Last payment", value: lastPayment ? fmtDate(lastPayment.date) : "—" },
             { label: "Referral code", value: referralCode },
           ].map((g, i) => (
-            <div key={i} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "8px 14px", minWidth: 112 }}>
-              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)" }}>{g.label}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: g.sev === "red" ? "#DC4141" : g.sev === "amber" ? "#a86e00" : "var(--f)", textTransform: g.cap ? "capitalize" : "none" }}>{g.value}</div>
+            <div key={i} style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 16, padding: "12px 14px", boxShadow: "0 4px 14px rgba(0,0,0,0.03)" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", color: "#86868B" }}>{g.label}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: g.sev === "red" ? "#DC4141" : g.sev === "amber" ? "#986315" : "#1D1D1F", textTransform: g.cap ? "capitalize" : "none", marginTop: 2 }}>{g.value}</div>
             </div>
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
+        {/* Sub-page Navigation Bar (Segmented Controls) */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
           {tabBtn("timeline", "Timeline")}
           {tabBtn("profile", "Profile")}
-          {tabBtn("transactions", `Transactions${(sel.isDpCustomer ? (dpTxns || []).length : txns.length) ? ` (${sel.isDpCustomer ? (dpTxns || []).length : txns.length})` : ""}`)}
-          {tabBtn("tickets", `Tickets${custTickets.length ? ` (${custTickets.length})` : ""}`)}
-          {tabBtn("ops", `Ops${opsTickets.length ? ` (${opsTickets.length})` : ""}`)}
-          {tabBtn("referral", `Referral${referralsDone ? ` (${referralsDone})` : ""}`)}
+          {tabBtn("transactions", "Transactions", sel.isDpCustomer ? (dpTxns || []).length : txns.length)}
+          {tabBtn("tickets", "Tickets", custTickets.length)}
+          {tabBtn("ops", "Ops", opsTickets.length)}
+          {tabBtn("referral", "Referral", referralsDone)}
+          {sel.isDpCustomer && tabBtn("sync_history", "Sync History", syncHistoryTotal)}
         </div>
 
+        {/* ── Subtab 1: Timeline ─────────────────────────────────────────── */}
         {subtab === "timeline" && (
-          <Card pad={false}>
+          <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Customer Activity Timeline</div>
+              <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Complete chronological interaction history</div>
+            </div>
             {timelineEvents.length === 0 && <Empty msg="No activity recorded for this customer yet." />}
-            {timelineEvents.map((e, i) => {
-              const cfg = timelineCfg[e.type];
-              const Icon = cfg.icon;
-              return (
-                <div key={i} style={{ display: "flex", gap: 12, padding: "12px 16px", borderBottom: i < timelineEvents.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  <div style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "#F6FAF8", color: cfg.color, flexShrink: 0 }}><Icon size={16} /></div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>{e.title}</span>
-                      <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{fmtDate(new Date(e.date))}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-                      {cfg.label}{e.sub ? ` · ${e.sub}` : ""}{e.amount != null ? ` · ${inr(e.amount)}` : ""}{e.status ? ` · ${e.status}` : ""}
+            <div style={{ position: "relative", borderLeft: "2px solid rgba(8,128,90,0.15)", marginLeft: 16, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+              {timelineEvents.map((e, i) => {
+                const cfg = timelineCfg[e.type];
+                const Icon = cfg.icon;
+                return (
+                  <div key={i} style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: -27, top: 2, width: 12, height: 12, borderRadius: 999, background: cfg.color, border: "2px solid #fff", boxShadow: "0 0 0 2px rgba(0,0,0,0.06)" }} />
+                    <div style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 14, padding: "12px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: "#1D1D1F" }}>{e.title}</span>
+                        <span style={{ fontSize: 12, color: "#86868B", whiteSpace: "nowrap" }}>{fmtDate(new Date(e.date))}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, background: `${cfg.color}15`, padding: "2px 8px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Icon size={12} />
+                          {cfg.label}
+                        </span>
+                        {e.sub && <span style={{ fontSize: 12, color: "#86868B" }}>{e.sub}</span>}
+                        {e.amount != null && <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>· {inr(e.amount)}</span>}
+                        {e.status && <span style={{ fontSize: 11.5, color: "#86868B" }}>· {e.status}</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </Card>
+                );
+              })}
+            </div>
+          </div>
         )}
+
+        {/* ── Subtab 2: Profile ──────────────────────────────────────────── */}
         {subtab === "profile" && (
           <>
-            <Card>
+            <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22, marginBottom: 18 }}>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Customer Profile & Attributes</div>
+                <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Core parameters, account values, and installed device details</div>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: "0 40px" }}>
                 <div>
                   <DefRow k="Purifier ID" v={sel.purifier_id} />
@@ -764,49 +1004,74 @@ export function AllCustomers() {
                   <DefRow k="Installed date" v={installed ? fmtDate(installed) : "—"} />
                   <DefRow k="LTV (lifetime value)" v={cell(inr(totalPaid), totalPaid === 0 ? "red" : null)} />
                   <DefRow k="Security Deposit" v={inr(securityDeposit)} />
-                  <DefRow k="Discounts (credit notes)" v={<>{cell(inr(discountTotal), discountPct >= 30 ? "red" : discountPct >= 20 ? "amber" : null)}{discountCount ? <span style={{ color: "var(--muted)", fontWeight: 400 }}> · {discountCount} note{discountCount !== 1 ? "s" : ""}{discountBalance > 0 ? ` · ${inr(discountBalance)} balance` : ""}</span> : null}</>} />
+                  <DefRow k="Discounts (credit notes)" v={<>{cell(inr(discountTotal), discountPct >= 30 ? "red" : discountPct >= 20 ? "amber" : null)}{discountCount ? <span style={{ color: "#86868B", fontWeight: 400 }}> · {discountCount} note{discountCount !== 1 ? "s" : ""}{discountBalance > 0 ? ` · ${inr(discountBalance)} balance` : ""}</span> : null}</>} />
                   <DefRow k="Complaints" v={cell(complaintCount, complaintCount >= 2 ? "red" : complaintCount >= 1 ? "amber" : null)} />
                 </div>
               </div>
-            </Card>
-            {/* scores — 0-5 with conditional colour formatting */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 14, marginTop: 14 }}>
+            </div>
+
+            {/* Score Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 16, marginBottom: 18 }}>
               {scoreCard("Customer score", customerScore, Award)}
               {scoreCard("Technician score", techScore, Wrench, opsTickets.length ? `${opsTickets.length} ops job${opsTickets.length !== 1 ? "s" : ""}` : "no jobs")}
               {scoreCard("Device score", deviceScore, Cpu, `${complaintCount} complaint${complaintCount !== 1 ? "s" : ""} · ${totalSpares} spare${totalSpares !== 1 ? "s" : ""}`)}
             </div>
+
             <CustSparesAnalysis tickets={opsTickets} />
           </>
         )}
+
+        {/* ── Subtab 3: Transactions ─────────────────────────────────────── */}
         {subtab === "transactions" && (
           sel.isDpCustomer ? (
-            // DP-stack customer: no real Zoho invoices, so Transactions reads
-            // the DrinkPrime collections API directly by dp_installation_id.
             <>
-              <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
-                <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total paid</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{inr((dpTxns || []).reduce((s, c) => s + (c.totalPaid || 0), 0))}</div></div>
-                <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Collections</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{(dpTxns || []).length}</div></div>
-                <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Installation ID</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{sel.dpInstallationId}</div></div>
+              {/* Summary Strip */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginBottom: 18 }}>
+                <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Total Paid</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", marginTop: 4 }}>{inr((dpTxns || []).reduce((s, c) => s + (c.amount || 0), 0))}</div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Collections Count</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 4 }}>{(dpTxns || []).length}</div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Installation ID</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F", marginTop: 6 }}>{sel.dpInstallationId}</div>
+                </div>
               </div>
-              <Card pad={false}>
+
+              {/* Transactions Table Container */}
+              <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden" }}>
+                <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.4)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Payment &amp; Collections History</div>
+                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>DrinkPrime installation collection history</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>
+                    {(dpTxns || []).length} Collections
+                  </span>
+                </div>
                 {dpTxnsLoading && <Loading />}
                 {!dpTxnsLoading && (
                   <>
                     <Table head={["Date", "Transaction Key", "Amount", "Litres", "Valid Period", "Payment Mode", "Status"]} maxHeight="calc(100vh - 340px)">
-                      {(dpTxns || []).map(c => {
-                        const tx = (c.transactions && c.transactions[0]) || {};
-                        const paid = String(c.paymentUtilisedStatus || tx.status || "").toUpperCase();
-                        const ok = paid === "COMPLETED" || paid === "SUCCESS";
+                      {(dpTxns || []).map((c, ci) => {
+                        const paid = String(c.status || "").toUpperCase();
+                        const ok = paid === "SUCCESS" || paid === "COMPLETED";
+                        // Index in the key, not just txnId — confirmed live that a
+                        // setup-fee row and its paired first-recharge row can share
+                        // the exact same txnId (real data, not a mock artifact).
                         return (
-                          <tr key={c.collectionId} style={{ borderBottom: "1px solid var(--border)" }}>
-                            <td style={td}>{fmtDate(c.date)}</td>
-                            <td style={td}>{tx.transactionKey || "—"}</td>
-                            <td style={{ ...td, fontWeight: 700, color: "var(--f)" }}>{inr(c.totalPaid)}</td>
-                            <td style={td}>{c.totalLitres ?? "—"}</td>
-                            <td style={td}>{fmtDate(c.validFrom)} → {fmtDate(c.validTo)}</td>
-                            <td style={td}>{tx.channel || tx.type || "—"}</td>
+                          <tr key={`${c.txnId || "row"}-${ci}`} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+                            <td style={td}>{c.timeStamp ? fmtTime(c.timeStamp) : "—"}</td>
+                            <td style={td}>{c.txnId || "—"}</td>
+                            <td style={{ ...td, fontWeight: 700, color: "#1D1D1F" }}>{inr(c.amount)}</td>
+                            <td style={td}>{c.litres ?? "—"}</td>
+                            <td style={td}>{fmtDate(c.valStart)} → {fmtDate(c.valEnd)}</td>
+                            <td style={td}>{c.mode || c.paymentType || "—"}</td>
                             <td style={td}>
-                              <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: ok ? "var(--green-t)" : "var(--danger-t)", color: ok ? "var(--green)" : "var(--danger)", textTransform: "capitalize" }}>{(paid || "—").toLowerCase()}</span>
+                              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: ok ? "rgba(8,128,90,0.12)" : "rgba(220,65,65,0.12)", color: ok ? "#08805A" : "#DC4141", textTransform: "capitalize" }}>{(paid || "—").toLowerCase()}</span>
                             </td>
                           </tr>
                         );
@@ -817,47 +1082,134 @@ export function AllCustomers() {
                     )}
                   </>
                 )}
-              </Card>
+              </div>
             </>
           ) : (
             <>
-              <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
-                <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total paid</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{inr(totalPaid)}</div></div>
-                <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Payments</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{txns.length}</div></div>
+              {/* Summary Strip */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginBottom: 18 }}>
+                <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Total Lifetime Paid</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", marginTop: 4 }}>{inr(totalPaid)}</div>
+                </div>
+                <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Total Invoices</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 4 }}>{txns.length}</div>
+                </div>
               </div>
-              <Card pad={false}>
-                <Table head={["Date", "Invoice", "Amount", "Plan", "Status"]} maxHeight="calc(100vh - 340px)">
-                  {txns.map(t => (
-                    <tr key={t.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                      <td style={td}>{fmtDate(t.date)}</td>
-                      <td style={td}>{t.number || t.id}</td>
-                      <td style={{ ...td, fontWeight: 700, color: "var(--f)" }}>{inr(t.total)}</td>
-                      <td style={td}>{t.plan || "—"}</td>
-                      <td style={td}>{stChip(t.status)}</td>
-                    </tr>
-                  ))}
+
+              {/* Transactions Table Container */}
+              <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden", marginBottom: 18 }}>
+                <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.4)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Payment &amp; Invoice History</div>
+                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>All billed transactions and payment statuses</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>
+                    {txns.length} Invoices
+                  </span>
+                </div>
+                <Table head={["Date", "Invoice", "Amount", "Start Date", "End Date", "Status"]} maxHeight="calc(100vh - 340px)">
+                  {(() => {
+                    // Start/End Date come from get-all-submodules (v2.29.136,
+                    // per explicit request) — current_term_starts_at/
+                    // current_term_ends_at, joined by invoice_number
+                    // (primary) or transaction_id (fallback), same two-key
+                    // pattern Analytics > Earned Revenue already uses for
+                    // this exact feed. NOTE: `submodules` here is already run
+                    // through mapSubmodule() (billingApi.getSubmodules()), so
+                    // its real field names are camelCase — .number (was
+                    // invoice_number), .id (was transaction_id), .termStart/
+                    // .termEnd (was current_term_starts_at/_ends_at) — NOT
+                    // the raw snake_case names the API itself returns. The
+                    // previous version of this join read the raw snake_case
+                    // names directly, which never matched the mapped object
+                    // and silently always fell through to the invoice's own
+                    // single `date` for both Start AND End Date.
+                    const submodulesByKey = (submodules || []).reduce((acc, s) => {
+                      const invNum = String(s.number || "").trim().toLowerCase();
+                      const txnId = String(s.id || "").trim().toLowerCase();
+                      if (invNum) acc[invNum] = s;
+                      if (txnId) acc[txnId] = s;
+                      return acc;
+                    }, {});
+
+                    return txns.map(t => {
+                      const invKey = String(t.number || "").trim().toLowerCase();
+                      const txnKey = String(t.id || "").trim().toLowerCase();
+                      const subMatch = submodulesByKey[invKey] || submodulesByKey[txnKey];
+
+                      const startDate = subMatch?.termStart || t.date;
+                      let endDate = subMatch?.termEnd || t.dueDate;
+
+                      if (!endDate && startDate) {
+                        const dt = new Date(startDate);
+                        if (!isNaN(dt.getTime())) {
+                          dt.setMonth(dt.getMonth() + 1);
+                          dt.setDate(dt.getDate() - 1);
+                          endDate = dt;
+                        }
+                      }
+                      return (
+                        <tr key={t.id} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+                          <td style={td}>{fmtDate(t.date)}</td>
+                          <td style={td}>{t.number || t.id}</td>
+                          <td style={{ ...td, fontWeight: 700, color: "#1D1D1F" }}>{inr(t.total)}</td>
+                          <td style={td}>{startDate ? fmtDate(startDate) : "—"}</td>
+                          <td style={td}>{endDate ? fmtDate(endDate) : "—"}</td>
+                          <td style={td}>{stChip(t.status)}</td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </Table>
                 {txns.length === 0 && <Empty msg="No transactions found for this customer." />}
-              </Card>
-              {currentPaid && <GstBreakupCard total={currentPaid.total} />}
-              {currentPaid && currentPaidRecharge > 0 && <InvoiceBreakdownCard inv={currentPaid} recharge={currentPaidRecharge} />}
+              </div>
+
+              {/* 2-Column Grid: GST Breakup + Revenue Recognition */}
+              {(currentPaid || (currentPaid && currentPaidRecharge > 0)) && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
+                  {currentPaid && <GstBreakupCard total={currentPaid.total} />}
+                  {currentPaid && currentPaidRecharge > 0 && <InvoiceBreakdownCard inv={currentPaid} recharge={currentPaidRecharge} />}
+                </div>
+              )}
             </>
           )
         )}
+
+        {/* ── Subtab 4 & 5: Tickets & Ops ────────────────────────────────── */}
         {subtab === "tickets" && <CustTicketMonths tickets={custTickets} />}
         {subtab === "ops" && <CustTicketMonths tickets={opsTickets} ops />}
+
+        {/* ── Subtab 6: Referral ─────────────────────────────────────────── */}
         {subtab === "referral" && (
           <>
-            <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
-              {[["Referrals made", referralsDone], ["Converted", refConverted], ["Pending", refPending], ["Free months earned", custRef?.freeMonthsEarned ?? 0], ["Referral code", referralCode]].map(([label, value]) => (
-                <div key={label}><div style={{ fontSize: 12, color: "var(--muted)" }}>{label}</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{value}</div></div>
-              ))}
+            {/* Hero KPI Grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 14, marginBottom: 18 }}>
+              <div style={{ background: "linear-gradient(135deg, #08805A 0%, #065B3C 100%)", borderRadius: 16, padding: 16, color: "#fff", boxShadow: "0 8px 20px rgba(8,128,90,0.25)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Referrals Made</div>
+                <div className="serif" style={{ fontSize: 26, fontWeight: 700, marginTop: 4 }}>{referralsDone}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Converted</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#08805A", marginTop: 4 }}>{refConverted}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Pending</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#986315", marginTop: 4 }}>{refPending}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Free Months Earned</div>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#08805A", marginTop: 4 }}>{custRef?.freeMonthsEarned ?? 0}</div>
+              </div>
             </div>
-            <Card pad={false}>
+
+            {/* Referred Customer Table */}
+            <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden" }}>
               <Table head={["Referred customer", "Society", "Status", "Referred on"]} maxHeight="calc(100vh - 340px)">
                 {myReferees.map(e => (
-                  <tr key={e.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                    <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{e.name || "—"}</td>
+                  <tr key={e.id} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+                    <td style={{ ...td, fontWeight: 600, color: "#1D1D1F" }}>{e.name || "—"}</td>
                     <td style={td}>{e.society || "—"}</td>
                     <td style={td}>{stChip(e.status)}</td>
                     <td style={td}>{e.date ? fmtDate(e.date) : "—"}</td>
@@ -865,7 +1217,62 @@ export function AllCustomers() {
                 ))}
               </Table>
               {myReferees.length === 0 && <Empty msg={referralsDone ? "Referral count recorded, but no referee details are available." : "This customer has not referred anyone yet."} />}
-            </Card>
+            </div>
+          </>
+        )}
+
+        {/* ── Subtab 7: Sync History (DP customers only) ────────────────────
+            v2.29.127 — device-sync log from DrinkPrime, keyed by this
+            customer's Purifier ID (deviceCode). Latest 10 syncs, newest
+            first, straight from the one API call this needs. */}
+        {subtab === "sync_history" && sel.isDpCustomer && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginBottom: 18 }}>
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Total Syncs</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", marginTop: 4 }}>{syncHistoryTotal || (syncHistory || []).length}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Latest Sync</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#08805A", marginTop: 6 }}>{(syncHistory && syncHistory[0]) ? fmtTime(syncHistory[0].syncDate) : "—"}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Consumed Litres</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", marginTop: 4 }}>{(syncHistory && syncHistory[0]) ? syncHistory[0].consumedLitres ?? "—" : "—"}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Network</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F", marginTop: 6 }}>{(syncHistory && syncHistory[0]?.networkId) || "—"}</div>
+              </div>
+            </div>
+
+            <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden" }}>
+              {syncHistoryLoading && <Loading />}
+              {!syncHistoryLoading && (
+                <>
+                  <Table head={["Sync Time", "Network", "Consumed Litres", "Total Litres", "Balance Litres", "Paid Upto"]} maxHeight="calc(100vh - 340px)">
+                    {(syncHistory || []).map((s, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+                        <td style={{ ...td, fontWeight: 600, color: "#1D1D1F", whiteSpace: "nowrap" }}>{fmtTime(s.syncDate)}</td>
+                        <td style={td}>{s.networkId || "—"}</td>
+                        <td style={td}>{s.consumedLitres ?? "—"}</td>
+                        <td style={td}>{s.totalLitres ?? "—"}</td>
+                        <td style={{ ...td, fontWeight: 600, color: "#08805A" }}>{(s.totalLitres != null && s.consumedLitres != null) ? (s.totalLitres - s.consumedLitres) : "—"}</td>
+                        <td style={td}>{s.paidUpto ? fmtDate(s.paidUpto) : "—"}</td>
+                      </tr>
+                    ))}
+                  </Table>
+                  {(!syncHistory || syncHistory.length === 0) && (
+                    <Empty msg={syncHistoryErr ? "Could not load sync history for this device." : "No sync history found for this device."} />
+                  )}
+                </>
+              )}
+            </div>
+            {!syncHistoryLoading && syncHistory && syncHistory.length > 0 && (
+              <div style={{ fontSize: 12, color: "#86868B", marginTop: 10, textAlign: "right" }}>
+                Showing latest {syncHistory.length} of {syncHistoryTotal || syncHistory.length} total syncs.
+              </div>
+            )}
           </>
         )}
       </div>
@@ -897,7 +1304,7 @@ export function AllCustomers() {
             <MultiSelectFilter label="Customer Stack" options={stackOptions} value={stackFilter} onChange={setStackFilter} />
           </div>
         } />
-      <Card pad={false}>
+      <Card pad={false} hover={false}>
         <Table head={["Purifier ID", "Customer", "Society", "Plan", "Device Type", "Stack", "Status", ""]} maxHeight="calc(100vh - 260px)">
           {results.map(c => (
             <tr key={c.id} style={{ ...trStyle, ...rowTint(c) }} onClick={() => openCustomer(c)}>
@@ -975,7 +1382,7 @@ export function Customers({ accessLevel = "view" }) {
   const growthPct = newPrev === 0 ? (newThis > 0 ? 100 : 0) : Math.round((newThis - newPrev) / newPrev * 100);
 
   const filtered = rows.filter(c =>
-    (societyFilter === null || societyFilter.includes(c.society)) &&
+    (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
     (c.name + c.email + c.phone + c.id + c.society + (c.purifier_id || "") + deviceType(c.purifier_id)).toLowerCase().includes(q.toLowerCase()));
 
   // Sortable by Customer ID (natural order) and Plan Amount (numeric).
@@ -1003,84 +1410,135 @@ export function Customers({ accessLevel = "view" }) {
 
 
   return (
-    <div className="fade-up">
-      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--slate)", background: "var(--mint-2)", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
-        <AlertCircle size={15} />
+    <div className="fade-up ov-sans">
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#0d2119", background: "rgba(8,128,90,0.08)", border: "1px solid rgba(8,128,90,0.18)", padding: "12px 16px", borderRadius: 14, marginBottom: 16 }}>
+        <AlertCircle size={16} color="#08805A" />
         {canEditAnything
           ? <span>You can edit customer accounts ({accessLevel}). Plan & billing changes are Admin-only. Every change is logged.</span>
           : <span>View-only access — you can browse customer accounts but not edit them.</span>}
       </div>
-      {/* Active-customers KPI card with month-on-month sign-up growth */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(230px,1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={{ background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#E2F3EE", borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", right: -20, top: -20, width: 90, height: 90, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.4),transparent 70%)" }} />
+
+      {/* Active-customers KPI cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
+        <div style={{ background: "linear-gradient(135deg, #08805A 0%, #065B3C 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <span className="eyebrow" style={{ color: "var(--lime)" }}>Active Customers</span>
-            <UserRound size={18} color="var(--lime)" />
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Active Customers</span>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "grid", placeItems: "center" }}>
+              <UserRound size={17} color="#ffffff" />
+            </div>
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "8px 0 2px" }}>
-            <span style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "#fff", lineHeight: 1 }}>{activeCount.toLocaleString("en-IN")}</span>
-            <span style={{ fontSize: 12, color: "#B5E2D4" }}>of {rows.length.toLocaleString("en-IN")} total</span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
+            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#fff", lineHeight: 1.1 }}>{activeCount.toLocaleString("en-IN")}</span>
+            <span style={{ fontSize: 12, color: "#E2F3EE" }}>of {rows.length.toLocaleString("en-IN")} total</span>
           </div>
           {hasSignupDates ? (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, marginTop: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 4 }}>
               <span style={{ fontWeight: 700, color: growthPct >= 0 ? "#B5E2D4" : "#F5BFBF", display: "inline-flex", alignItems: "center", gap: 3 }}>
                 {growthPct >= 0 ? "▲" : "▼"} {growthPct >= 0 ? "+" : ""}{growthPct}%
               </span>
-              <span style={{ color: "#B5E2D4" }}>new sign-ups vs last month ({newThis} vs {newPrev})</span>
+              <span style={{ color: "#E2F3EE" }}>new sign-ups vs last month</span>
             </div>
           ) : (
-            <div style={{ fontSize: 11.5, color: "#B5E2D4", marginTop: 4 }}>No dated sign-ups to compare month-on-month.</div>
+            <div style={{ fontSize: 11.5, color: "#E2F3EE", marginTop: 4 }}>No dated sign-ups to compare month-on-month.</div>
           )}
         </div>
-        <Stat label="Inactive Customers" value={inactiveCount.toLocaleString("en-IN")} icon={Ban} sub={`of ${rows.length.toLocaleString("en-IN")} total`} />
-        <Stat label="Own Device" value={ownCount.toLocaleString("en-IN")} icon={Cpu} sub="OWN- purifiers" />
-        <Stat label="Normal Device" value={normalCount.toLocaleString("en-IN")} icon={Droplets} sub="standard units" />
-        <Stat label="Hot & Cold Device" value={hotColdCount.toLocaleString("en-IN")} icon={Sun} sub="HAC- purifiers" />
+
+        {[
+          { label: "Inactive Customers", value: inactiveCount.toLocaleString("en-IN"), icon: Ban, sub: `of ${rows.length.toLocaleString("en-IN")} total` },
+          { label: "Own Device", value: ownCount.toLocaleString("en-IN"), icon: Cpu, sub: "OWN- purifiers" },
+          { label: "Normal Device", value: normalCount.toLocaleString("en-IN"), icon: Droplets, sub: "standard units" },
+          { label: "Hot & Cold Device", value: hotColdCount.toLocaleString("en-IN"), icon: Sun, sub: "HAC- purifiers" },
+        ].map((s, i) => (
+          <div key={i} style={{
+            background: "rgba(255, 255, 255, 0.85)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 18,
+            padding: "18px 20px",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
+                {s.label}
+              </span>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color="#08805A" />
+              </div>
+            </div>
+            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+              {s.value}
+            </div>
+            <div style={{ fontSize: 12, color: "#86868B" }}>{s.sub}</div>
+          </div>
+        ))}
       </div>
 
       <Toolbar q={q} setQ={setQ} placeholder="Search customer, email, phone, ID…" count={filtered.length}
         right={
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <MultiSelectFilter label="Society" options={societies} value={societyFilter} onChange={setSocietyFilter} />
-            <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
+            <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>
           </div>
         } />
-      <Card pad={false}>
-        <Table head={[
-          <SortHeader key="id" label="Customer ID" k="id" sort={sort} onSort={toggleSort} />,
-          "Purifier ID", "Device Type", "Name", "Phone", "Society",
-          <SortHeader key="amt" label="Plan Amount" k="amount" sort={sort} onSort={toggleSort} />,
-          "Status", ""]} maxHeight="calc(100vh - 340px)">
-          {sorted.map(c => {
-            const amt = planAmount(c);
-            return (
-            <tr key={c.id} style={trStyle} onClick={() => setSel(c)}>
-              <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{c.id}</td>
-              <td style={td}>{c.purifier_id ? <Chip>{c.purifier_id}</Chip> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
-              <td style={td}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
-              <td style={{ ...td, textAlign: "center" }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--f)" }}>{c.name}</div>
-                <div style={{ fontSize: 11.5, color: "var(--muted)", wordBreak: "break-word" }}>{c.email}</div>
-              </td>
-              <td style={td}>{fmtPhone(c.phone)}</td>
-              <td style={td}>{c.society || "—"}</td>
-              <td style={{ ...td, fontWeight: 600 }}>{amt != null ? inr(amt) : "—"}</td>
-              <td style={td}><Status s={c.status} /></td>
-              <td style={{ ...td, textAlign: "center" }}><ChevronRight size={16} color="var(--muted)" /></td>
-            </tr>
-            );
-          })}
-          {filtered.length > 0 && (
-            <tr>
-              <td style={{ ...ftd, textAlign: "center" }} colSpan={6}>Total ({filtered.length})</td>
-              <td style={ftd}>{inr(filtered.reduce((s, c) => s + (planAmount(c) || 0), 0))}</td>
-              <td style={ftd}></td><td style={ftd}></td>
-            </tr>
-          )}
-        </Table>
+
+      <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+        <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                {[
+                  <SortHeader key="id" label="Customer ID" k="id" sort={sort} onSort={toggleSort} />,
+                  "Purifier ID", "Device Type", "Name", "Phone", "Society",
+                  <SortHeader key="amt" label="Plan Amount" k="amount" sort={sort} onSort={toggleSort} />,
+                  "Status", ""
+                ].map((h, idx) => (
+                  <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(c => {
+                const amt = planAmount(c);
+                const st = String(c.status || "").toLowerCase();
+                const stColor = st === "inactive" ? "#DC4141" : st === "dunning" ? "#986315" : st === "active" ? "#08805A" : "#86868B";
+                const stBg = st === "active" ? "rgba(8,128,90,0.12)" : st === "inactive" ? "rgba(220,38,38,0.12)" : "rgba(152,99,21,0.12)";
+                return (
+                <tr key={c.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", cursor: "pointer" }} onClick={() => setSel(c)}>
+                  <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{c.id}</td>
+                  <td style={{ padding: "14px 18px" }}>{c.purifier_id ? <Chip>{c.purifier_id}</Chip> : <span style={{ color: "#86868B" }}>—</span>}</td>
+                  <td style={{ padding: "14px 18px" }}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
+                  <td style={{ padding: "14px 18px" }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#1D1D1F" }}>{c.name}</div>
+                    <div style={{ fontSize: 11.5, color: "#86868B", wordBreak: "break-word" }}>{c.email}</div>
+                  </td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{fmtPhone(c.phone)}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569" }}>{c.society || "—"}</td>
+                  <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805A" }}>{amt != null ? inr(amt) : "—"}</td>
+                  <td style={{ padding: "14px 18px" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, color: stColor, background: stBg, textTransform: "capitalize" }}>
+                      {c.status || "—"}
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px 18px", textAlign: "center" }}><ChevronRight size={16} color="#86868B" /></td>
+                </tr>
+                );
+              })}
+              {filtered.length > 0 && (
+                <tr style={{ background: "rgba(243,248,236,.5)" }}>
+                  <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }} colSpan={6}>Total ({filtered.length})</td>
+                  <td style={{ padding: "14px 18px", fontWeight: 800, color: "#08805A" }}>{inr(filtered.reduce((s, c) => s + (planAmount(c) || 0), 0))}</td>
+                  <td style={{ padding: "14px 18px" }}></td>
+                  <td style={{ padding: "14px 18px" }}></td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
         {filtered.length === 0 && <Empty msg="No customers match your search." />}
-      </Card>
+      </div>
 
       {sel && <CustomerDrawer customer={sel} amount={planAmount(sel)} accessLevel={accessLevel} actor={user.username}
         onClose={() => setSel(null)}

@@ -201,7 +201,29 @@ export const yoyRange = (r) => ({
   from: new Date(r.from.getFullYear() - 1, r.from.getMonth(), r.from.getDate()),
   to:   endOfDay(new Date(r.to.getFullYear() - 1, r.to.getMonth(), r.to.getDate())),
 });
-export const dateInRange = (d, r) => !!d && d >= r.from && d <= r.to;
+// Tolerant of both real Date bounds (from resolveRange()) and raw "YYYY-MM-DD"
+// strings (from DateRangeFilter's plain <input type="date">) — fixed v2.29.119:
+// comparing a Date to a date-string via >=/<= coerces the string with Number(),
+// which is NaN for a real date string and 0 for "" (empty/unbounded), so every
+// comparison against r.to silently failed and every DateRangeFilter-driven
+// screen (Sales > Leads & Deals/Apartment Leads, Analytics > App Logs/Billing's
+// custom range) always showed 0 rows, at the default state AND with real dates
+// picked. Falsy from/to (empty string, null, undefined) now means "no bound on
+// that side" instead of "impossible".
+export const dateInRange = (d, r) => {
+  if (!d) return false;
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt.getTime())) return false;
+  // A raw "YYYY-MM-DD" string bound (DateRangeFilter's <input type="date">) has
+  // no time-of-day — floor it to the start of that day, and ceil the "to" side
+  // to the end of that day, so the picked end date is inclusive of everything
+  // on it. Already-Date bounds (from resolveRange()) are trusted as-is.
+  const from = !r?.from ? null : r.from instanceof Date ? r.from : startOfDay(new Date(r.from));
+  const to = !r?.to ? null : r.to instanceof Date ? r.to : endOfDay(new Date(r.to));
+  if (from && dt < from) return false;
+  if (to && dt > to) return false;
+  return true;
+};
 export const dmy = (d) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 export const rangeLabel = (r) => `${dmy(r.from)} – ${dmy(r.to)}`;
 export const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -473,8 +495,8 @@ export const MODULE_SOURCES = {
 };
 export const TAB_SOURCES = {
   // Sales — every sub-tab reads the leads feed only.
-  sales_overview: ["leads"], sales_leads: ["leads"], sales_apartments: ["leads"],
-  sales_analytics: ["leads"], sales_trend: ["leads"], sales_errors: ["leads"],
+  sales_leads: ["leads"], sales_apartments: ["leads"],
+  sales_trend: ["leads"], sales_errors: ["leads"],
   // Customer — every sub-tab reads the customers feed only.
   cust_list: ["customers"], cust_all: ["customers"], cust_societies: ["customers"],
   // Billing & Subscription — differs per tab.
@@ -697,9 +719,28 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.117";
-export const VERSION_DATE = "2026-08-18";
+export const APP_VERSION = "2.29.136";
+export const VERSION_DATE = "2026-08-19";
 export const VERSION_HISTORY = [
+  { v: "2.29.136", note: "Fixed Customer > All Customers, Zoho-stack Transactions sub-page (\"Payment & Invoice History\"): Start Date and End Date always showed the same value as the invoice's own Date column — reported live (all three columns read \"15 Aug 2026\"). Root cause: this join already existed and was already reading from get-all-submodules by design, but keyed/read the RAW snake_case API field names (`invoice_number`, `transaction_id`, `current_term_starts_at`, `current_term_ends_at`) directly against `submodules` — which is actually already run through `mapSubmodule()` (`billingApi.getSubmodules()`), whose real output field names are camelCase (`.number`, `.id`, `.termStart`, `.termEnd`). None of the snake_case reads ever matched, so the join silently always fell through to the invoice's own single `date` for both Start and End. Now reads `.number`/`.id`/`.termStart`/`.termEnd` — the same join Analytics > Earned Revenue already uses correctly for this exact feed. Verified live with the user's own real submodule example (invoice_number INV-000700, current_term_starts_at 2026-08-19, current_term_ends_at 2026-09-19) — now shows the correct 19 Aug 2026 → 19 Sept 2026, not two copies of the invoice date." },
+  { v: "2.29.135", note: "Fixed Customer > All Customers \"at a glance\" strip: Last Payment always showed blank for DP-stack customers — same root cause as v2.29.126's LTV bug. `lastPayment` was computed only from `txns.find(t => t.status === \"paid\")` (Zoho invoices), which is always empty for a DP customer (no real Zoho invoices exist for them). Now, for DP customers, last payment = the most recent DrinkPrime transaction by `timeStamp` (found via reduce over `dpTxns`, not assumed array order). Verified live against a real customer (Ananya LN, PUM594BC47) — Last Payment now correctly shows 09 Aug 2026, matching her most recent real transaction. Also directly re-confirmed via a live API call that the v2.29.134 payments/v1 endpoint change is correct and complete (21/21 real transactions returned and rendered) — a report of only 3 showing was traced to a stale cached build on the reporting end (its version footer read v2.29.133, one version behind this fix), not a code issue." },
+  { v: "2.29.134", note: "Customer > All Customers > Transactions (DP-stack): swapped the DrinkPrime API per explicit request from the old v2/collections endpoint (`installationId` only, `page=0&size=10`) to `GET https://api.drinkprime.in/payments/payments/payments/v1?loader=true&page=1&pageSize=100&deviceCode={purifier_id}&installationID={dp_installation_id}` — now needs BOTH Purifier ID and Installation ID, both already on hand from get-all-customers. Response shape is different too: `body` is a flat array (was `body.content`), with different field names per record (amount/litres/status/timeStamp/paymentType/valStart/valEnd/txnId/mode/deviceId, occasionally paymentRef) replacing the old nested collectionId/transactions[0]/totalPaid/totalLitres/validFrom/validTo/paymentUtilisedStatus shape. Updated every read site: the table (Date now shows the real time via fmtTime, not just date), the Total Paid/Collections Count summary cards, and the LTV calc that reads this same feed (v2.29.126) — all switched from `c.totalPaid` to `c.amount`. Also fixed a real bug caught via live testing against real data: a setup-fee row and its paired first-recharge row can share the exact same `txnId` (confirmed on 2 different real customers), which broke React's list key and threw a duplicate-key warning — the table row key now includes the row index alongside txnId. Verified live against two real customers end-to-end (27 transactions, 21 transactions) — every row, the total, and LTV all matched the raw API response exactly, no console warnings." },
+  { v: "2.29.133", note: "Two changes, per explicit request and a business-provided plan dump (64 real plans: Plan Name/Code/Device Type/Filter Type/Setup Fee/Price/Total/Bill Every/Billing Interval). (1) New Billing & Subscription > Plans tab — a read-only reference table of the full catalog (KPI cards, Device Type + Filter Type filters, search, sortable columns, CSV export, grand-total footer). Static local data, no API fetch. (2) depositForCustomer(cust, plan, amount, planCode) gained a 4th argument and a new top-priority lookup: PLAN_CATALOG[planCode].setupFee, checked BEFORE the apartment/device-type table from v2.29.108. This is exact real per-plan data, not a tier guess, so it wins even over the apartment table when the plan_code is recognised — confirmed via real discrepancies in the business's own data: several MJR-prefixed plans (MJR_6M_UV etc.) carry Setup Fee ₹0 despite MJR Clique Hydra's apartment-tier table saying Normal/Hot & Cold should be ₹1,500/₹3,000; Prabhavati's ELT_PRABHAVATI_SD plans carry Setup Fee ₹3,000 vs. the apartment table's ₹4,000 for Hot & Cold. The apartment-tier table and the generic heuristic are both kept, now purely as fallbacks for plan_codes the catalog doesn't recognise (e.g. very old invoices) — verified live that an unrecognised plan_code at a known apartment still gets the old apartment-tier answer unchanged. Updated all 13 call sites across Analytics.jsx/Billing.jsx/Customer.jsx to pass planCode. classifyPlan()/PLAN_CLASSIFICATION from v2.29.132 are superseded by planInfo()/PLAN_CATALOG (classifyPlan() kept as a thin device/filter-only wrapper for its existing v2.29.132 call sites, same signature)." },
+  { v: "2.29.132", note: "New PLAN_CLASSIFICATION lookup (64 real plan_code entries, given directly by the business as an exhaustive spreadsheet) + classifyPlan(planCode) — tags every plan with a real Device Type (Normal/Hot & Cold/Test) and Filter Type (UV/Mineral/Copper/Alkaline/Uncategorised/Test), keyed ONLY by plan_code (plan_name is provably ambiguous — e.g. \"PREMIUM\" maps to Normal Device for PREMIUM_1M_499 etc. but Hot & Cold for the PREMIUM_*_SD variants, same name, different code, different real device). mapSubscription() and mapInvoice() now both carry planDeviceType/planFilterType (mapInvoice also gained planCode, which it didn't read at all before). An unrecognised plan_code returns blank strings, deliberately distinct from a plan the business has explicitly tagged \"Uncategorised\" in the source spreadsheet. Not yet wired into any screen's UI or into the deposit-tier logic (depositForCustomer still keys off the purifier-ID-based deviceType()) — verified standalone (8/8 test cases incl. the PREMIUM ambiguous-name case) pending user direction on where to apply it." },
+  { v: "2.29.131", note: "Analytics > Earned Revenue: added a Customer column back to the on-screen Per-Invoice Recognition table (between Reference Number and Apartment) — the data (`r.customer`, from the invoice's `customerName`) was already computed and exported to CSV since v2.29.84, just not rendered on screen. Footer total row's colSpan bumped 6→7 to stay aligned. Verified live with a mocked invoice — customer name now shows correctly in the table. Re: the deposit-logic report in the same request — I don't have a record of a deposit-logic correction from a prior session; asked the user to restate it (see chat) rather than guess at a live financial figure. Current `depositForCustomer()` logic re-verified live and unchanged from v2.29.108: only MJR Clique Hydra and Prabhavati Meghna Towers have real per-device-type tiers, every other apartment falls back to the generic amount-tiered heuristic (`depositForPlan`)." },
+  { v: "2.29.130", note: "Customer > Societies (`CustomerSocieties`) rebuilt per explicit request. (1) Each society row's numbers are now individually clickable — click Customers to expand all of that society's customers, Active/Own/Normal/Hot & Cold/Churned to expand only that slice; clicking the same number again collapses, clicking a different number for an already-open society dynamically switches the slice shown (no need to collapse first) — verified live for Active→Churned switching and collapse-on-repeat-click. (2) Added a new Churned column/metric: a customer counts as churned if either their device is Un-Installed (DP-stack `deviceStatus`) or their `status` is Inactive (either stack) — the same signals/normalisation All Customers' row-highlighting already uses, reused here rather than reinvented; Dunning does NOT count as churned (it's a payment-status warning, not device churn). (3) Added a Society filter and a Device Type filter (both `MultiSelectFilter`) above the table — Device Type narrows the underlying customer population *before* grouping, so selecting e.g. \"Own Device\" recomputes every society's numbers, and shrinking/hiding societies that have none of the selected type, as if only that device type existed. (4) The Society filter's unset (default) state now excludes \"— No society —\" and \"Apartment (Testing)\" — picking either explicitly from the dropdown overrides the default and shows it. The KPI cards (Societies/Customers/Avg per society/Largest society) now reflect this same filtered, default-excluding population instead of the raw unfiltered universe, so they stay consistent with what the table shows. All verified live with a 9-customer mock spanning both hidden buckets, mixed statuses/device types, and a DP Un-Installed customer." },
+  { v: "2.29.129", note: "Three changes to the Sales module, per explicit request. (1) Removed the Pipeline tab (`SalesPipeline`, the Kanban board grouping leads by stage) entirely — nav entry, `MODULE_SECTIONS`/`TAB_SOURCES` entries, `App.jsx` tab-switch render, and the component itself, plus the now-unused `LEAD_STATUS_COLOR` export and `Stat`/`grid4`/`TrendingUp`/`Users` imports (nothing else in modules/Sales.jsx used them). Leads & Deals is now the default tab when the module opens. (2) Leads & Deals: split a dedicated \"Interested\" KPI card (blue, literal Zoho raw status \"Interested\") out of what used to be folded into the \"Not Interested\" bucket — Not Interested is now a catch-all for every non-won, non-Interested lead only, so its count/%/caption all shrink accordingly (verified: Interested + Converted + Not Interested always sums to Total Leads). The status filter dropdown gained a matching \"Interested\" option. (3) Leads & Deals: added a Society filter (`MultiSelectFilter`, options from the full unscoped lead set — same convention as Trend Analysis's Apartment filter) alongside the existing search/status/date-range controls." },
+  { v: "2.29.128", note: "Two changes to Customer > All Customers, per explicit request. (1) The Status filter now defaults to [\"Active\", \"In-Active\", \"active\", \"dunning\"] on load (was \"all\") — the literal casing variants given, since real `status` values are inconsistent across sources (Zoho's own raw pass-through vs. a DP device-status string) and this isn't normalized before filtering; still a real MultiSelectFilter the user can widen back to \"all\" themselves. (2) Sync History's table dropped the Flow Rate/Input TDS/Output TDS/Temperature columns and gained a computed Balance Litres column (Total Litres − Consumed Litres, done client-side — not a field the API itself returns)." },
+  { v: "2.29.127", note: "Customer > All Customers: new Sync History sub-page for DP-stack customers, alongside Timeline/Profile/Transactions/Tickets/Ops/Referral (tab only shown when `sel.isDpCustomer`). Reads GET https://api.drinkprime.in/sponsor/device/details/syncs?pageSize=10&page=1&orderDir=desc&orderBy=id&deviceCode={purifier_id} — the customer's own Purifier ID doubles as the DrinkPrime deviceCode, no new field needed (per explicit instruction, confirmed CORS-open the same as the other DrinkPrime endpoints already used here). Response shape confirmed live: {body:{total_elements,total_pages,results:[{deviceCode,totalLitres,consumedLitres,paidUpto,status,inputTDS,outputTDS,temperature,coordinates,syncDate,networkId,flowRate}]}}. Shows a 4-card summary (Total Syncs from total_elements, Latest Sync, Consumed Litres, Network — all from the newest row) above a 9-column table (Sync Time/Network/Consumed Litres/Total Litres/Flow Rate/Input TDS/Output TDS/Temperature/Paid Upto) and a \"Showing latest 10 of N total syncs\" caption — no pagination UI, exactly the one call the API needs, per spec. `status`'s meaning isn't documented anywhere available, so it's deliberately left out of the table rather than guessing a red/green interpretation. Fetch is lazy — only fires once the Sync History tab is opened (unlike the v2.29.126 DP-collections fetch, nothing on the always-visible \"at a glance\" strip depends on this, so there's no reason to call a third-party API for every DP customer opened). Verified against the real API with a real device code (CRL354E8A2, 87 total syncs) via a live browser test." },
+  { v: "2.29.126", note: "Fixed Customer > All Customers: DP-stack customers always showed LTV as ₹0 (highlighted red), even with real DrinkPrime collections on file. Root cause: `totalPaid` (which feeds LTV in both the \"at a glance\" strip and the Profile tab, plus the Customer score) was computed only from Zoho invoices (`txns`) — a DP-stack customer has no real Zoho invoices, so `txns` is always empty for them, and totalPaid/LTV was always ₹0 regardless of how much they'd actually paid via DrinkPrime. Now, for DP customers, totalPaid = the sum of their DrinkPrime collections' `totalPaid` (the same `dpTxns` feed the Transactions sub-screen already shows) instead of the Zoho invoice total. Also changed the DP-collections fetch to fire as soon as a DP customer is opened (any subtab), not only after clicking into Transactions — the LTV strip is visible on every subtab, so it needs this data loaded up front rather than lazily. Verified against a real customer's data: 2 DrinkPrime collections (₹375 + ₹125) now correctly show LTV ₹500 immediately on open, instead of ₹0. Zoho-stack customers are unaffected — their totalPaid/LTV path is unchanged." },
+  { v: "2.29.125", note: "Fixed Customer > All Customers: hovering the results table (and its other data tables — Referrals, Zoho Invoices, DP-stack Transactions, Ticket-history months) triggered a jarring zoom, reported as \"don't zoom in the table.\" Root cause: the shared Card component (shared/ui.jsx) always applies a global .pw-card CSS class that lifts + scales(1.012) any card on hover (App.jsx) — a nice touch for small dashboard tiles, but jittery on a big scrollable data-table card. Added a `hover` prop to Card (default true, unchanged everywhere else) and set it false on every Card wrapping a `<Table>` in Customer.jsx (the main results table, Referrals, Zoho Invoices, DP-stack Transactions, and the Ticket-history month list) — those cards now render as plain static cards with no hover transform. No other screen's cards are affected." },
+  { v: "2.29.124", note: "Sales > Leads & Deals: rebuilt per a fuller user-supplied mockup. (1) KPI cards simplified from one card per distinct raw Lead Status to exactly 3 — Total Leads (dark featured card), Converted, and a grouped \"Not Interested\" bucket covering every non-won lead — replacing the old dynamic per-status grid, which grew noisy as more raw statuses appeared. The Not Interested card's caption lists whichever raw statuses actually make up that bucket in the current date window (e.g. \"Includes RNR, Not Interested, Connect Later, Lost, Wrong No\"), computed live from the real filtered leads, never a hardcoded list. Cards are now display-only (no longer click-to-filter). (2) The status filter dropdown was simplified to match — All statuses / Converted / Not Interested (was one option per raw status) — filtering on lead stage (won vs. not) rather than exact raw status text. (3) Search input, date-range pair, and Export button restyled to match the mockup (inset search icon, pill select, compact date pill) — same real state/handlers underneath (q/setQ, range/setRange, exportCsv), the shared Toolbar/DateRangeFilter wrapper components swapped for bespoke styling since they're simple enough to reimplement directly (unlike the calendar-popover DateRangePicker/multi-select components kept as-is elsewhere in this app). (4) Table restyled to match (rounded card, tinted sticky header, two-tone pill status badges — green for Converted, red for everything else) and the Tenure column dropped from the on-screen table (not in the mockup; still included in the CSV export, which is unchanged). Move To column still isAdmin-gated as before." },
+  { v: "2.29.123", note: "Sales > Trend Analysis: rebuilt against a fuller user-supplied mockup covering the whole screen. Note: modules/Sales.jsx got directly overwritten outside this session (lines 346–941 held raw HTML/`<!DOCTYPE>`…`</html>` markup in place of the SalesTrendAnalysis function — the file would not have parsed or built) before this fix; the function has been rebuilt from scratch, verified via Babel parse + ESLint no-undef/no-redeclare + a clean `npm run build`. Changes vs. the prior v2.29.120–.122 design: (1) KPI grid recomposed to Total Leads / Interested / Converted / Conversion Rate — Lost Leads dropped; new Interested card shows this period's Interested-status lead count with a blue \"% share of Total Leads\" badge (a composition stat, not a period-over-period delta like the other three cards). (2) Month-over-month card retitled \"Leads vs. Conversion Breakdown\" (was \"…Rate\"), otherwise unchanged. (3) Lead Conversion Funnel now sits side-by-side with a new \"Forecast & Trends\" card (2-col grid, collapsing to 1 col under 1024px) instead of full-width alone. (4) New Forecast & Trends card: a dual-axis line chart (Lead Volume left axis, Conversion Rate % right axis, Recharts ComposedChart) projecting the next 4 months as a dashed continuation of the solid actual-months line. The projection is a plain flat average of the last up to 3 real months' leads/conversion%, rolled forward from the true latest real month in the data (not the mockup's own hardcoded example numbers, e.g. it did NOT copy the mockup's 252/119/54/9→45/60/65/70 figures) — labelled honestly in a caption as an average, not dressed up as a real forecast model. \"Average time to convert\" card (not present in the mockup) removed per follow-up — along with its now-dead calc (daysToConvert/convTimes/avgConvertDays/fastestConvertDays/slowestConvertDays/convertDeltaDays) and the now-unused Clock icon import. Recharts imports swapped from the now-unused BarChart/PieChart/Pie/Cell to ComposedChart/Line/XAxis/YAxis/CartesianGrid/Tooltip/ResponsiveContainer (Legend kept); lucide-react's unused Ban icon replaced with ThumbsUp for the new Interested card." },
+  { v: "2.29.122", note: "Sales > Trend Analysis: redesigned the Lead Conversion Funnel card per a user-supplied Apple-style mockup — same glassmorphic look as the KPI cards/trend section above it (v2.29.120/.121), replacing the previous plain `<Card>` wrapper. Each stage's horizontal bar uses the mockup's own colours (grey/blue/orange/green for Total Leads/Interested/Not Interested/Converted) and the summary callout is now a green-tinted \"achieved a close rate\" box with a Target icon, instead of the old mint-background one-liner. All figures (stage counts, percentages, the close-rate sentence) are still computed live from the same `funnel`/`totalN`/`wonN`/`convPct` values the old funnel used; nothing hardcoded from the mockup. Removed `convCardColor` (the old funnel's threshold-based red/amber/green text colour), now dead — the new callout uses a fixed green per the mockup." },
+  { v: "2.29.121", note: "Sales > Trend Analysis: redesigned the Total Leads/Converted/Conversion %/Lost KPI cards per a user-supplied Apple-style mockup — a featured dark \"Total Leads\" card plus three light glass cards, each with a circular icon badge and a coloured delta pill instead of the previous plain Stat/hand-rolled cards. \"Lost\" treats a decrease as favourable (green pill) since fewer lost leads is good, unlike Total Leads/Converted/Conversion % where a decrease is unfavourable (red) — the old cards didn't have this distinction since Stat always coloured a decrease red. All values/deltas still computed live (momPct for Total/Converted/Lost, the existing points-delta for Conversion %); nothing hardcoded from the mockup's example numbers." },
+  { v: "2.29.120", note: "Sales > Trend Analysis: replaced the \"Leads vs conversion % — month on month\" Recharts grouped-bar+line chart with a redesigned glass card (per a user-supplied HTML mockup) — a KPI summary strip (N-month total leads, average/peak/latest-month conversion %) above one row per month, each showing its own Interested/Not Interested/Converted proportional stacked bar and a conversion-% figure, with the latest month picked out in a highlighted, pulsing-badge card. Colours are the mockup's own Apple-system palette (blue/orange/green/purple), not the app's usual one — kept as specified. All numbers are still computed live from the same trend data the old chart used, nothing hardcoded. Removed the now-dead Recharts bar-shape helpers (plainBarShape/totalBarShape/interestedShape/notInterestedShape/convertedShape) and the resulting unused recharts/ui imports (Bar/CartesianGrid/ComposedChart/LabelList/Line/ResponsiveContainer/Tooltip/XAxis/YAxis, TT, axisTick) — none of the rest of Sales.jsx used them." },
+  { v: "2.29.119", note: "Fixed Sales > Leads & Deals and Apartment Leads always showing 0 results, reported as \"is the API not working?\" — it wasn't the API. Root cause was in shared dateInRange(): DateRangeFilter's plain <input type=\"date\"> stores from/to as raw \"YYYY-MM-DD\" strings, but dateInRange compared them to a Date via >=/<=, which coerces the string with Number() — NaN for a real picked date (always false) and 0 for \"\" (empty/default, also always false since any real timestamp is > 0). So every DateRangeFilter-driven screen showed 0 rows both at the default (no dates picked) state AND with real dates picked. dateInRange now parses string bounds properly (floor \"from\" to start-of-day, ceil \"to\" to end-of-day so the picked end date is inclusive) and treats an empty/null bound as unbounded; Date-object bounds (from resolveRange()) are untouched. Fixes every affected screen at the root: Sales > Leads & Deals, Sales > Apartment Leads, and Analytics > App Logs (same bug, not separately reported but confirmed broken and now fixed too). Also fixed SEED_DEALS (the sample-data fallback for Sales) missing a `created` field entirely — only `updated` was ever set, so even with dateInRange fixed, sample leads still failed the date filter; each entry now carries a matching `created` timestamp. Sales Analytics tab removed entirely per follow-up request (screen, nav entry, MODULE_SECTIONS, TAB_SOURCES, and its App.jsx wiring)." },
+  { v: "2.29.118", note: "IoT Core > Device Monitor > Water Quality card: pH and TDS now show a moving average of the 10 most recent readings (\"avg of last 10\") instead of the min–max range across the whole window — a single, less noisy number. `iotWqRange()` computes it from the 10 newest valid readings (dropping sensor-dropout zeros, same as min/max already did); the WARNING/CRITICAL badge is unchanged, still evaluated off the full window's min/max so a brief real spike still gets flagged even though the headline number is now smoothed. Temperature, Pressure and Flow rate (same card, RO Unit Sensors card) are untouched — still min–max." },
   { v: "2.29.117", note: "Two changes to Customer > All Customers, now that the Customer Stack filter (v2.29.113) covers what the standalone DP Customers tab used to. (1) Removed the DP Customers tab entirely — its own dedicated GET /dp-customers feed, KPI cards, Upload JSON → Run API bulk import, and all its wiring (nav entry, tab-switch render, MODULE_SECTIONS entry, TAB_SOURCES entry); fetchAllDpCustomers/_dpCustCache in shared/core.js removed too as now-dead code (no other call sites). (2) Results table rows are now colour-coded by status — Un-Installed (customer_profile.dp_details.device_status, DP-stack) → yellow, Dunning (Zoho subscription status, passed through as-is) → red, Inactive (either stack) → orange — so an at-risk or non-functional customer stands out without opening the filter or clicking in. Also added `deviceStatus` to the customer mapping (customer_profile.dp_details.device_status) to drive the Un-Installed/Inactive-device signal." },
   { v: "2.29.116", note: "Customer > All Customers, DP-stack Transactions table: swapped the Collection ID column for Transaction Key (the collection's own transactions[0].transactionKey, e.g. \"DPTX_71cfc2a029044e12a3be6e9ffa352a97\") per follow-up — more useful for tracing a specific payment than the internal numeric collectionId, which is no longer shown." },
   { v: "2.29.115", note: "Fixed v2.29.114's dp_installation_id still coming back empty for real DP customers, even after is_dp_customer started reading correctly. Root cause, confirmed via a real customer_profile the user shared for \"harshakumar mc MC\": dp_installation_id is NOT a sibling of is_dp_customer as assumed — it's nested one level deeper, inside a customer_profile.dp_details sub-object (`{ dp_customer_id, dp_installation_id, device_code, partner_name, device_status, balance_litres, ... }`), while is_dp_customer itself sits directly on customer_profile. The mapper now reads dp_installation_id from customer_profile.dp_details.dp_installation_id (falling back to a few other plausible locations for resilience). Verified against the exact real payload the user pasted — Installation ID now shows 260237 and the DrinkPrime collections API call fires and returns real data, confirmed via a live browser test that mocked get-all-customers with that exact shape and ran it through the real mapper end-to-end." },
@@ -1881,6 +1922,101 @@ export const SEED_SUBMODULES = [
   { id: "INV-2006", number: "INV-000077", termStart: "2026-03-19", termEnd: "2027-03-18", paidDate: "2026-03-12", total: 12000, transactionRef: "TXN-77001", accountName: "HDFC Bank ****7890", intervalCount: 1, intervalUnit: "years" },
 ];
 
+// Master Plan Catalog (v2.29.133), given directly by the business as an
+// exhaustive real plan_code dump — 64 real plans with their Device Type,
+// Filter Type, and exact Setup Fee / Price / Total / billing cadence.
+// Supersedes v2.29.132's PLAN_CLASSIFICATION (device/filter only); kept the
+// same keying rule — plan_code ONLY, never plan_name, since name is provably
+// ambiguous (e.g. "PREMIUM" is Normal Device on PREMIUM_1M_499 but Hot & Cold
+// on the PREMIUM_*_SD variants — same name, different code, different real
+// device AND a different real Setup Fee: ₹0 vs ₹4,000). A plan_code not in
+// this table means a genuinely new/unseen plan — classifyPlan()/planInfo()
+// return blanks for it, deliberately distinct from a plan the business has
+// explicitly tagged "Uncategorised" (a real value several rows below carry
+// on purpose, e.g. pro_essential). `total` is always `setupFee + price` in
+// the source data — kept as its own field rather than re-derived, so a
+// future edit to one doesn't silently desync from a hand-verified total.
+export const PLAN_CATALOG = {
+  prowater_uv_monthly:           { name: "ProWater UV",              deviceType: "Normal",     filterType: "UV",            setupFee: 1500, price: 250,  total: 1750, billEvery: 1,  billingInterval: "months" },
+  prowater_mineral_monthly:      { name: "ProWater Mineral",         deviceType: "Normal",     filterType: "Mineral",       setupFee: 1500, price: 350,  total: 1850, billEvery: 1,  billingInterval: "months" },
+  prowater_mineral_hot_monthly:  { name: "ProWater Mineral Hot",     deviceType: "Hot & Cold", filterType: "Mineral",       setupFee: 3000, price: 350,  total: 3350, billEvery: 1,  billingInterval: "months" },
+  prowater_copper_monthly:       { name: "ProWater Copper",          deviceType: "Normal",     filterType: "Copper",        setupFee: 1500, price: 450,  total: 1950, billEvery: 1,  billingInterval: "months" },
+  prowater_copper_hot_monthly:   { name: "ProWater Copper Hot",      deviceType: "Hot & Cold", filterType: "Copper",        setupFee: 3000, price: 450,  total: 3450, billEvery: 1,  billingInterval: "months" },
+  prowater_alkaline_monthly:     { name: "ProWater Alkaline",        deviceType: "Normal",     filterType: "Alkaline",      setupFee: 1500, price: 500,  total: 2000, billEvery: 1,  billingInterval: "months" },
+  prowater_alkaline_hot_monthly: { name: "ProWater Alkaline Hot",    deviceType: "Hot & Cold", filterType: "Alkaline",      setupFee: 3000, price: 500,  total: 3500, billEvery: 1,  billingInterval: "months" },
+  Feb18Plan:                     { name: "Test Plan (Dev)",          deviceType: "Test",       filterType: "Test",          setupFee: 0,    price: 0,    total: 0,    billEvery: 1,  billingInterval: "weeks" },
+  pro_essential:                 { name: "ProWater Essential",       deviceType: "Normal",     filterType: "Uncategorised", setupFee: 1500, price: 299,  total: 1799, billEvery: 1,  billingInterval: "months" },
+  pro_advance:                   { name: "ProWater Advance",         deviceType: "Normal",     filterType: "Uncategorised", setupFee: 2000, price: 399,  total: 2399, billEvery: 1,  billingInterval: "months" },
+  pro_elite:                     { name: "ProWater Elite",           deviceType: "Hot & Cold", filterType: "Uncategorised", setupFee: 4000, price: 499,  total: 4499, billEvery: 1,  billingInterval: "months" },
+  ro_uv_ajk:                     { name: "RO+UV (AJK)",              deviceType: "Normal",     filterType: "UV",            setupFee: 1500, price: 299,  total: 1799, billEvery: 1,  billingInterval: "months" },
+  ro_uv_ajk_6:                   { name: "RO+UV (AJK_6)",            deviceType: "Normal",     filterType: "UV",            setupFee: 1500, price: 1494, total: 2994, billEvery: 6,  billingInterval: "months" },
+  ro_uv_mineral_ajk:             { name: "RO+UV+Mineral (AJK)",      deviceType: "Normal",     filterType: "Mineral",       setupFee: 2000, price: 349,  total: 2349, billEvery: 1,  billingInterval: "months" },
+  ro_uv_min_ajk_6:               { name: "RO+UV+Mineral (AJK_6)",    deviceType: "Normal",     filterType: "Mineral",       setupFee: 2000, price: 1794, total: 3794, billEvery: 6,  billingInterval: "months" },
+  ro_uv_min_ajk_h:               { name: "RO+UV+Mineral (AJK_H)",    deviceType: "Hot & Cold", filterType: "Mineral",       setupFee: 4000, price: 399,  total: 4399, billEvery: 1,  billingInterval: "months" },
+  ro_uv_min_ajk_h_6:             { name: "RO+UV+Mineral (AJK_H_6)",  deviceType: "Hot & Cold", filterType: "Mineral",       setupFee: 4000, price: 2094, total: 6094, billEvery: 6,  billingInterval: "months" },
+  ro_uv_cop_ajk:                 { name: "RO+UV+Copper (AJK)",       deviceType: "Normal",     filterType: "Copper",        setupFee: 2000, price: 449,  total: 2449, billEvery: 1,  billingInterval: "months" },
+  ro_uv_cop_ajk_h_6:             { name: "RO+UV+Copper (AJK_H_6)",   deviceType: "Hot & Cold", filterType: "Copper",        setupFee: 4000, price: 2694, total: 6694, billEvery: 6,  billingInterval: "months" },
+  ro_uv_cop_ajk_6:               { name: "RO+UV+Copper (AJK_6)",     deviceType: "Normal",     filterType: "Copper",        setupFee: 2000, price: 2394, total: 4394, billEvery: 6,  billingInterval: "months" },
+  ro_uv_alk_ajk:                 { name: "RO+UV+Alkaline (AJK)",     deviceType: "Normal",     filterType: "Alkaline",      setupFee: 2000, price: 499,  total: 2499, billEvery: 1,  billingInterval: "months" },
+  ro_uv_alk_ajk_6:               { name: "RO+UV+Alkaline (AJK)",     deviceType: "Normal",     filterType: "Alkaline",      setupFee: 2000, price: 2694, total: 4694, billEvery: 6,  billingInterval: "months" },
+  ro_uv_alk_ajk_h_6:             { name: "RO+UV+Alkaline (AJK_H)",   deviceType: "Hot & Cold", filterType: "Alkaline",      setupFee: 4000, price: 549,  total: 4549, billEvery: 1,  billingInterval: "months" },
+  ro_uv_ajk_h_6:                 { name: "RO+UV+Alkaline (AJK_H_6)", deviceType: "Hot & Cold", filterType: "Alkaline",      setupFee: 4000, price: 2994, total: 6994, billEvery: 6,  billingInterval: "months" },
+  ro_uv_cop_h:                   { name: "RO+UV+Copper (AJK_H)",     deviceType: "Hot & Cold", filterType: "Copper",        setupFee: 4000, price: 499,  total: 4499, billEvery: 1,  billingInterval: "months" },
+  ro_uv_ajk_p:                   { name: "RO+UV (AJK) - P",          deviceType: "Normal",     filterType: "UV",            setupFee: 0,    price: 299,  total: 299,  billEvery: 1,  billingInterval: "months" },
+  MJR_3M:                        { name: "MJR_3M_UV",                deviceType: "Normal",     filterType: "UV",            setupFee: 0,    price: 750,  total: 750,  billEvery: 3,  billingInterval: "months" },
+  MJR_6M:                        { name: "MJR_6M_UV",                deviceType: "Normal",     filterType: "UV",            setupFee: 0,    price: 1500, total: 1500, billEvery: 6,  billingInterval: "months" },
+  MJR_12M:                       { name: "MJR_12M_UV",               deviceType: "Normal",     filterType: "UV",            setupFee: 0,    price: 3000, total: 3000, billEvery: 12, billingInterval: "months" },
+  MJR_3M_NORMAL:                 { name: "MJR_3M_NOR_MIN",           deviceType: "Normal",     filterType: "Mineral",       setupFee: 0,    price: 1023, total: 1023, billEvery: 3,  billingInterval: "months" },
+  MJR_6M_NORMAL:                 { name: "MJR_6M_NOR_MIN",           deviceType: "Normal",     filterType: "Mineral",       setupFee: 0,    price: 1998, total: 1998, billEvery: 6,  billingInterval: "months" },
+  MJR_12M_NORMAL:                { name: "MJR_12M_NOR_MIN",          deviceType: "Normal",     filterType: "Mineral",       setupFee: 0,    price: 3780, total: 3780, billEvery: 12, billingInterval: "months" },
+  MJR_3M_NOR_CU:                 { name: "MJR_3M_NOR_CU",            deviceType: "Normal",     filterType: "Copper",        setupFee: 0,    price: 1317, total: 1317, billEvery: 3,  billingInterval: "months" },
+  MJR_6M_NOR_CU:                 { name: "MJR_6M_NOR_CU",            deviceType: "Normal",     filterType: "Copper",        setupFee: 0,    price: 2568, total: 2568, billEvery: 6,  billingInterval: "months" },
+  MJR_12M_NOR_CU:                { name: "MJR_12M_NOR_CU",           deviceType: "Normal",     filterType: "Copper",        setupFee: 0,    price: 4860, total: 4860, billEvery: 12, billingInterval: "months" },
+  BASIC_1M_299:                  { name: "BASIC",                    deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 299,  total: 299,  billEvery: 1,  billingInterval: "months" },
+  BASIC_3M_299:                  { name: "BASIC",                    deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 897,  total: 897,  billEvery: 3,  billingInterval: "months" },
+  BASIC_6M_299:                  { name: "BASIC",                    deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 1794, total: 1794, billEvery: 6,  billingInterval: "months" },
+  BASIC_12M_299:                 { name: "BASIC",                    deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 3588, total: 3588, billEvery: 12, billingInterval: "months" },
+  STANDARD_1M_399:               { name: "STANDARD",                 deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 399,  total: 399,  billEvery: 1,  billingInterval: "months" },
+  STANDARD_3M_399:               { name: "STANDARD",                 deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 1138, total: 1138, billEvery: 3,  billingInterval: "months" },
+  STANDARD_6M_399:               { name: "STANDARD",                 deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 2160, total: 2160, billEvery: 6,  billingInterval: "months" },
+  STANDARD_12M_399:              { name: "STANDARD",                 deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 3877, total: 3877, billEvery: 12, billingInterval: "months" },
+  PREMIUM_1M_499:                { name: "PREMIUM",                  deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 499,  total: 499,  billEvery: 1,  billingInterval: "months" },
+  PREMIUM_3M_499:                { name: "PREMIUM",                  deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 1424, total: 1424, billEvery: 3,  billingInterval: "months" },
+  PREMIUM_6M_499:                { name: "PREMIUM",                  deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 2702, total: 2702, billEvery: 6,  billingInterval: "months" },
+  PREMIUM_12M_499:               { name: "PREMIUM",                  deviceType: "Normal",     filterType: "Uncategorised", setupFee: 0,    price: 4849, total: 4849, billEvery: 12, billingInterval: "months" },
+  MJR_UV_1M_250:                 { name: "MJR_UV_MONTHLY",           deviceType: "Normal",     filterType: "UV",            setupFee: 0,    price: 250,  total: 250,  billEvery: 1,  billingInterval: "months" },
+  MJR_MIN_1M_350:                { name: "MJR_MIN_MONTHLY",          deviceType: "Normal",     filterType: "Mineral",       setupFee: 0,    price: 350,  total: 350,  billEvery: 1,  billingInterval: "months" },
+  MJR_COP_1M_450:                { name: "MJR_COP_MONTHLY",          deviceType: "Normal",     filterType: "Copper",        setupFee: 0,    price: 450,  total: 450,  billEvery: 1,  billingInterval: "months" },
+  MJR_ALK_1M_500:                { name: "MJR_ALK_MONTHLY",          deviceType: "Normal",     filterType: "Alkaline",      setupFee: 0,    price: 500,  total: 500,  billEvery: 1,  billingInterval: "months" },
+  test1:                         { name: "Test Plan - Dev 2",        deviceType: "Test",       filterType: "Test",          setupFee: 0,    price: 1,    total: 1,    billEvery: 1,  billingInterval: "months" },
+  ESS_PRA_299_1M_SD:             { name: "ESS_PRABHAVATI_SD",        deviceType: "Normal",     filterType: "Uncategorised", setupFee: 1500, price: 299,  total: 1799, billEvery: 1,  billingInterval: "months" },
+  ADV_PRA_299_1M_SD:             { name: "ADV_PRABHAVATI_SD",        deviceType: "Normal",     filterType: "Uncategorised", setupFee: 2000, price: 399,  total: 2399, billEvery: 1,  billingInterval: "months" },
+  ELT_PRA_299_1M_SD:             { name: "ELT_PRABHAVATI_SD",        deviceType: "Hot & Cold", filterType: "Uncategorised", setupFee: 3000, price: 499,  total: 3499, billEvery: 1,  billingInterval: "months" },
+  ESS_PRA_299_6M_SD:             { name: "ESS_PRABHAVATI_SD_6M",     deviceType: "Normal",     filterType: "Uncategorised", setupFee: 1500, price: 1704, total: 3204, billEvery: 6,  billingInterval: "months" },
+  ADV_PRA_299_6M_SD:             { name: "ADV_PRABHAVATI_SD_6M",     deviceType: "Normal",     filterType: "Uncategorised", setupFee: 2000, price: 594,  total: 2594, billEvery: 6,  billingInterval: "months" },
+  ELT_PRA_299_6M_SD:             { name: "ELT_PRABHAVATI_SD_6M",     deviceType: "Hot & Cold", filterType: "Uncategorised", setupFee: 3000, price: 1194, total: 4194, billEvery: 6,  billingInterval: "months" },
+  BASIC_1M_299_SD:               { name: "BASIC",                    deviceType: "Normal",     filterType: "Uncategorised", setupFee: 1500, price: 299,  total: 1799, billEvery: 1,  billingInterval: "months" },
+  BASIC_12M_299_SD:              { name: "BASIC",                    deviceType: "Normal",     filterType: "Uncategorised", setupFee: 1500, price: 3588, total: 5088, billEvery: 12, billingInterval: "months" },
+  STANDARD_1M_399_SD:            { name: "STANDARD",                 deviceType: "Normal",     filterType: "Uncategorised", setupFee: 2000, price: 399,  total: 2399, billEvery: 1,  billingInterval: "months" },
+  STANDARD_12M_399_SD:           { name: "STANDARD",                 deviceType: "Normal",     filterType: "Uncategorised", setupFee: 2000, price: 3877, total: 5877, billEvery: 12, billingInterval: "months" },
+  PREMIUM_1M_499_SD:             { name: "PREMIUM",                  deviceType: "Hot & Cold", filterType: "Uncategorised", setupFee: 4000, price: 499,  total: 4499, billEvery: 1,  billingInterval: "months" },
+  PREMIUM_12M_499_SD:            { name: "PREMIUM",                  deviceType: "Hot & Cold", filterType: "Uncategorised", setupFee: 4000, price: 4849, total: 8849, billEvery: 12, billingInterval: "months" },
+};
+// Looks up a plan_code against PLAN_CATALOG. Returns nulls/blanks for a
+// plan_code this table has never seen — deliberately distinct from a real
+// "Uncategorised" business classification (a value several rows above carry
+// on purpose).
+export function planInfo(planCode) {
+  return PLAN_CATALOG[String(planCode || "").trim()] || null;
+}
+// Device Type / Filter Type only (kept for the mapSubscription/mapInvoice
+// call sites added in v2.29.132 — same signature/behaviour, now backed by
+// the richer PLAN_CATALOG).
+export function classifyPlan(planCode) {
+  const p = planInfo(planCode);
+  return p ? { deviceType: p.deviceType, filterType: p.filterType } : { deviceType: "", filterType: "" };
+}
+
 export function mapSubscription(s) {
   const p = s.subscription_profile || s.subscription || s;
   return {
@@ -1891,6 +2027,10 @@ export function mapSubscription(s) {
     phone:          p.phone || p.customer_phone || "",
     plan:           p.plan_name || p.plan?.name || p.plan || "",
     planCode:       p.plan_code || p.plan?.plan_code || "",
+    // Device Type / Filter Type (v2.29.132) — tagged from the plan_code via
+    // the real business lookup, not the purifier ID; see PLAN_CLASSIFICATION.
+    planDeviceType: classifyPlan(p.plan_code || p.plan?.plan_code).deviceType,
+    planFilterType: classifyPlan(p.plan_code || p.plan?.plan_code).filterType,
     amount:         Number(p.amount ?? p.recurring_amount ?? p.sub_total ?? 0) || 0,
     interval:       p.interval_unit || p.billing_interval || p.interval || "",
     intervalCount:  Number(p.interval) || null,   // Zoho: numeric term count (e.g. 6) paired with interval_unit
@@ -1924,6 +2064,11 @@ export function mapInvoice(iv) {
     lastModified:   p.last_modified_time || p.modified_time || "",   // 👈 ADD THIS LINE
     dueDate:        p.due_date || p.due_at || "",
     plan:           p.plan_name || p.plan || "",
+    planCode:       p.plan_code || p.plan?.plan_code || "",
+    // Device Type / Filter Type (v2.29.132) — same plan_code lookup as
+    // mapSubscription(); see PLAN_CLASSIFICATION.
+    planDeviceType: classifyPlan(p.plan_code || p.plan?.plan_code).deviceType,
+    planFilterType: classifyPlan(p.plan_code || p.plan?.plan_code).filterType,
     interval:       p.interval_unit || p.billing_interval || p.interval || p.plan_interval || "",
     zohoId:         p.customer_id || p.zoho_customer_id || p.zoho_invoice_id || "",
     zohoCustomerId: p.customer_id || p.zoho_customer_id || "",
@@ -2001,27 +2146,59 @@ export const normSociety = (s) => String(s || "")
   .replace(/\s+/g, " ")
   .trim()
   .toLowerCase();
+// Whether a raw society/apartment name counts as "real" for a filter's
+// DEFAULT (unset) state — CRM-wide (v2.29.137, per explicit request): every
+// Society/Apartment filter should exclude the known non-real "Apartment
+// (Testing)" entry and blank/unknown society values by default. Catches the
+// several different blank-placeholder strings different screens already
+// substitute in place of a truly empty value (Unknown / — No society — / —),
+// not just an actual empty string. Explicitly selecting one of these from a
+// filter dropdown still overrides this and shows it — this only governs the
+// unset/"all" default, exactly like every other default-exclusion filter in
+// this app (e.g. Customer > Societies' own society filter, v2.29.130).
+const BLANK_SOCIETY_LABELS = new Set(["", "—", "unknown", "— no society —", "n/a", "na"]);
+export const isRealSociety = (name) => {
+  const s = String(name ?? "").trim();
+  if (!s) return false;
+  const low = s.toLowerCase();
+  if (BLANK_SOCIETY_LABELS.has(low)) return false;
+  if (low === "apartment (testing)") return false;
+  return true;
+};
 // The one function every deposit calculation should call from now on
-// (v2.29.108, corrected same day after a real bug report). `cust` is the
-// customer record (for `.society`/`.purifier_id`) — pass null/undefined when
-// unavailable, it just falls back cleanly.
+// (v2.29.108, corrected same day after a real bug report; v2.29.133 added a
+// `planCode` 4th argument — pass it whenever the invoice/subscription has
+// one, it's now the FIRST thing checked). `cust` is the customer record (for
+// `.society`/`.purifier_id`) — pass null/undefined when unavailable, it just
+// falls back cleanly.
 //
-// A FIXED per-device deposit can't just be deducted from every invoice for a
-// known apartment — a customer's recurring MONTHLY RECHARGE invoices are pure
+// Priority order, highest first:
+//  1. PLAN_CATALOG[planCode].setupFee — exact real per-plan Setup Fee, given
+//     directly by the business (v2.29.133). This is exact data, not a tier
+//     guess, so it wins whenever the plan_code is recognised — INCLUDING over
+//     the apartment/device-type table below. Confirmed against real
+//     discrepancies: several MJR-prefixed plans (MJR_3M_UV etc.) carry
+//     Setup Fee ₹0 in this catalog even though MJR Clique Hydra's own
+//     apartment-tier table (below) says Normal/Hot & Cold should be
+//     ₹1,500/₹3,000 — the plan catalog is the more specific, more current
+//     source and takes precedence for any plan_code it recognises.
+//  2. APARTMENT_DEVICE_DEPOSITS[society] — real per-apartment/device-type
+//     tiers, for plan_codes NOT in the catalog (e.g. very old invoices).
+//  3. depositForPlan() — the generic amount-tiered guess, last resort.
+//
+// A FIXED deposit can't just be deducted from every invoice for a known
+// plan/apartment — a customer's recurring MONTHLY RECHARGE invoices are pure
 // recharge, no deposit component (the deposit was only collected once, on an
 // earlier invoice); deducting ₹1,500 from a ₹450 monthly recharge is wrong.
-// So: only apply the device-type tier when the amount actually COVERS it.
-// And if the device type can't be read reliably (empty/unknown purifier ID)
-// but the apartment IS known, don't fall through to the generic, UNRELATED
-// amount bands (depositFor's 1500/2000/4000 ladder) — those aren't this
-// apartment's real numbers and can misfire (e.g. producing ₹2,000 on a
-// ₹3,350 MJR payment when the real answer is ₹3,000). Instead pick the
-// largest of THIS apartment's own real tiers that the amount actually
-// covers — so a ₹3,350 payment still resolves to the real ₹3,000 Hot & Cold
-// deposit even when the purifier ID didn't join. Only truly unknown
-// apartments fall back to the generic heuristic.
-export function depositForCustomer(cust, plan, amount) {
+// So: only apply a tier when the amount actually COVERS it (same rule at
+// every priority level, including the plan catalog's own Setup Fee).
+export function depositForCustomer(cust, plan, amount, planCode) {
   const a = Number(amount) || 0;
+  const p = planInfo(planCode);
+  if (p) {
+    const fee = p.setupFee || 0;
+    return (fee > 0 && a >= fee) ? fee : 0;
+  }
   const table = APARTMENT_DEVICE_DEPOSITS[normSociety(cust?.society)];
   if (table) {
     const dt = deviceType(cust?.purifier_id);

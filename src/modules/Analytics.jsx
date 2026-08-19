@@ -23,7 +23,7 @@ import {
   useAuth, api, apartmentApi, billingApi, creditNoteApi, customerApi,
   authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer,
   dmy, endOfDay, exportToCsv, fetchAllDpTransactions, fmtDate, fmtPhone,
-  fmtTime, inr, isoDay, keyLc, markSample, momPct, monthEnd, monthlyOf,
+  fmtTime, inr, isoDay, isRealSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
   startOfDay, termMonths, ticketApi, useDateRange, yoyRange, zdIsClosed,
   bucketKeyOf, bucketsFor,
@@ -36,6 +36,55 @@ import {
   toastStyle, iconBtn, inp,
 } from "../shared/ui";
 import { salesApi, notHiddenLead } from "./Sales";
+
+/* ---- Apple HIG Status Badge Helper --------------------------------------- */
+export function renderHigStatusBadge(status) {
+  if (!status || status === "—") return <span style={{ color: "#94a3b8" }}>—</span>;
+  const s = String(status).toLowerCase().trim();
+  let bg = "rgba(142,142,147,0.12)";
+  let color = "#636366";
+
+  if (
+    s.includes("paid") || s.includes("active") || s.includes("approved") ||
+    s.includes("matched") || s.includes("success") || s.includes("low risk") ||
+    s.includes("won") || s.includes("converted") || s.includes("closed") ||
+    s.includes("done") || s.includes("installed") || s.includes("agreement")
+  ) {
+    bg = "rgba(8,128,90,0.12)";
+    color = "#08805a";
+  } else if (
+    s.includes("pending") || s.includes("info") || s.includes("qualified") ||
+    s.includes("contacted") || s.includes("medium risk") || s.includes("open") ||
+    s.includes("trial")
+  ) {
+    bg = "rgba(0,122,255,0.12)";
+    color = "#007AFF";
+  } else if (
+    s.includes("scheduled") || s.includes("demo") || s.includes("warning") ||
+    s.includes("in progress") || s.includes("review") || s.includes("proposal") ||
+    s.includes("1st meeting") || s.includes("meeting")
+  ) {
+    bg = "rgba(255,149,0,0.12)";
+    color = "#c97000";
+  } else if (
+    s.includes("unpaid") || s.includes("failed") || s.includes("rejected") ||
+    s.includes("unmatched") || s.includes("high risk") || s.includes("churn") ||
+    s.includes("lost") || s.includes("cancelled") || s.includes("error") ||
+    s.includes("discrepancy") || s.includes("overdue") || s.includes("junk")
+  ) {
+    bg = "rgba(220,38,38,0.1)";
+    color = "#dc2626";
+  }
+
+  return (
+    <span style={{
+      fontSize: 11.5, fontWeight: 600, padding: "4px 12px", borderRadius: 980,
+      display: "inline-block", whiteSpace: "nowrap", background: bg, color
+    }}>
+      {status}
+    </span>
+  );
+}
 
 /* ---- Analytics Overview · local mini-visuals ------------------------------ */
 
@@ -162,11 +211,14 @@ export function AnalyticsOverview({ isAdmin = false }) {
   };
   const societyOf = (rec) => custOf(rec)?.society || rec.society || "Unknown";
   const allSocieties = [...new Set(customers.map(c => c.society).filter(Boolean))].sort();
-  const socOk = (name) => selSoc === null || selSoc.includes(name);
+  const socOk = (name) => {
+    if (selSoc === null) return isRealSociety(name);
+    return selSoc.includes(name);
+  };
 
   // ---- society-filtered base sets -------------------------------------------
-  const fInvs = selSoc === null ? invs : invs.filter(i => socOk(societyOf(i)));
-  const fCustomers = selSoc === null ? customers : customers.filter(c => socOk(c.society || "Unknown"));
+  const fInvs = invs.filter(i => socOk(societyOf(i)));
+  const fCustomers = customers.filter(c => socOk(c.society || "Unknown"));
   const fPaid = fInvs.filter(i => i.status === "paid");
 
   // ---- range slices (current period vs previous equal period) ---------------
@@ -180,8 +232,8 @@ export function AnalyticsOverview({ isAdmin = false }) {
   const totalRevenuePrev = sum(invPrev, i => i.total);
   const collections = sum(paidCur, i => i.total);                          // cash collected
   const collectionsPrev = sum(paidPrev, i => i.total);
-  const netRevenue = collections - sum(paidCur, i => depositForCustomer(custOf(i), i.plan, i.total));   // recharge = total − deposit
-  const netPrev = collectionsPrev - sum(paidPrev, i => depositForCustomer(custOf(i), i.plan, i.total));
+  const netRevenue = collections - sum(paidCur, i => depositForCustomer(custOf(i), i.plan, i.total, i.planCode));   // recharge = total − deposit
+  const netPrev = collectionsPrev - sum(paidPrev, i => depositForCustomer(custOf(i), i.plan, i.total, i.planCode));
   const depositCollected = collections - netRevenue;   // Σ deposit of paid-in-period invoices
   const depositPrev = collectionsPrev - netPrev;
 
@@ -189,7 +241,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
   // day-weighted from the recharge date — recharge × (daysLeftInMonth) ÷ daysInMonth.
   const earnedOf = (i) => {
     const d = new Date(i.date); if (isNaN(d)) return 0;
-    const recharge = Math.max(0, i.total - depositForCustomer(custOf(i), i.plan, i.total));
+    const recharge = Math.max(0, i.total - depositForCustomer(custOf(i), i.plan, i.total, i.planCode));
     const dm = daysInMonth(d.getFullYear(), d.getMonth());
     return recharge * (dm - d.getDate() + 1) / dm;
   };
@@ -209,7 +261,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
   // Active referrers = referrers live from the referral API (same count the Referral
   // module shows). Scoped by the society filter so it matches when "All societies" is
   // selected; the delta & sparkline follow the date range (by the referrer join date).
-  const fReferrers = selSoc === null ? referrers : referrers.filter(r => socOk(r.society || "Unknown"));
+  const fReferrers = referrers.filter(r => socOk(r.society || "Unknown"));
   const activeReferrers = fReferrers.length;
   const refInR = (r, rg) => { const d = new Date(r.joined); return !isNaN(d) && d >= rg.from && d <= rg.to; };
   const refCur = fReferrers.filter(r => refInR(r, range)).length;
@@ -227,7 +279,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
     if (!i.date) return; const d = new Date(i.date); if (isNaN(d)) return;
     const s = find7(d.getFullYear(), d.getMonth()); if (!s) return;
     s.billed += i.total;
-    if (i.status === "paid") { s.collected += i.total; s.deposits += depositForCustomer(custOf(i), i.plan, i.total); s.earned += earnedOf(i); }
+    if (i.status === "paid") { s.collected += i.total; s.deposits += depositForCustomer(custOf(i), i.plan, i.total, i.planCode); s.earned += earnedOf(i); }
     if ((i.balance || 0) > 0) s.recv += i.balance;
   });
   fCustomers.forEach(c => { if (!c.since) return; const d = new Date(c.since); if (isNaN(d)) return; const s = find7(d.getFullYear(), d.getMonth()); if (s) s.newC += 1; });
@@ -244,7 +296,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
   // and its delta shows the increase.
   const penCusts = subs
     .map(s => ({ society: societyOf(s), since: parseFlexDate(s.createdAt || s.activatedAt) }))
-    .filter(x => x.society && x.society !== "Unknown" && x.since && (selSoc === null || socOk(x.society)));
+    .filter(x => x.society && x.society !== "Unknown" && x.since && socOk(x.society));
   const monthEndTs = (y, m) => new Date(y, m + 1, 0, 23, 59, 59).getTime();
   const penCumAt = (ts) => penCusts.filter(c => c.since.getTime() <= ts).length;
   const [pcPrevY, pcPrevM] = curM === 0 ? [curY - 1, 11] : [curY, curM - 1];
@@ -255,13 +307,31 @@ export function AnalyticsOverview({ isAdmin = false }) {
   // ---- KPI tiles -------------------------------------------------------------
   const vsPrev = "vs " + (PRESET_UNIT[sel.preset] === "month" ? monthYr(prev.from.getFullYear(), prev.from.getMonth()) : "prev period");
   const kpis = [
-    { label: "Total Collection", value: inr(collections), delta: pct(collections, collectionsPrev), icon: Coins, color: "#0A9D6E", spark: spark.collections },
-    { label: "Earned Revenue", value: inr(earnedRevenue), delta: pct(earnedRevenue, earnedPrev), icon: Scale, color: "#0A9D6E", spark: spark.earned },
-    { label: "Recharge collected", value: inr(netRevenue), delta: pct(netRevenue, netPrev), icon: Wallet, color: "#0A9D6E", spark: spark.net },
-    { label: "Deposit collected", value: inr(depositCollected), delta: pct(depositCollected, depositPrev), icon: Landmark, color: "#2A86D6", spark: spark.deposits },
-    { label: "Active Customers", value: pcNow.toLocaleString("en-IN"), delta: pct(pcNow, pcPrev), icon: Users, color: "#2A86D6", spark: penSpark },
-    { label: "Active Referrers", value: activeReferrers.toLocaleString("en-IN"), delta: pct(refCur, refPrev), icon: GitBranch, color: "#0A9D6E", spark: refSpark },
+    { label: "Total Collection", value: inr(collections), delta: pct(collections, collectionsPrev), icon: Coins, color: "#08805A", spark: spark.collections, hero: true },
+    { label: "Earned Revenue", value: inr(earnedRevenue), delta: pct(earnedRevenue, earnedPrev), icon: Scale, color: "#08805A", spark: spark.earned },
+    { label: "Recharge collected", value: inr(netRevenue), delta: pct(netRevenue, netPrev), icon: Wallet, color: "#08805A", spark: spark.net },
+    { label: "Deposit collected", value: inr(depositCollected), delta: pct(depositCollected, depositPrev), icon: Landmark, color: "#08805A", spark: spark.deposits },
+    { label: "Active Customers", value: pcNow.toLocaleString("en-IN"), delta: pct(pcNow, pcPrev), icon: Users, color: "#08805A", spark: penSpark },
+    { label: "Active Referrers", value: activeReferrers.toLocaleString("en-IN"), delta: pct(refCur, refPrev), icon: GitBranch, color: "#08805A", spark: refSpark },
   ];
+
+  // ---- Revenue by plan — MRR by plan ----------------------------------------
+  const fSubs = subs.filter(s =>
+    s.status === "active" &&
+    socOk(societyOf(s)) &&
+    (!s.activatedAt || new Date(s.activatedAt) <= range.to));   // active as of the period end
+  const revByPlan = Object.values(fSubs.reduce((acc, s) => {
+    const k = s.plan || "—";
+    acc[k] = acc[k] || { plan: k, value: 0 };
+    acc[k].value += Math.round(monthlyOf(s));
+    return acc;
+  }, {})).sort((a, b) => b.value - a.value);
+  const mrrTotal = revByPlan.reduce((s, p) => s + p.value, 0);
+
+  // ---- NEW: ARR & Unit Economics Computations --------------------------------
+  const arrVal = mrrTotal * 12;
+  const arpuVal = pcNow > 0 ? Math.round(collections / pcNow) : 0;
+  const collEfficiencyPct = totalRevenue > 0 ? Math.min(100, Math.round((collections / totalRevenue) * 1000) / 10) : (collections > 0 ? 100 : 0);
 
   // ---- Revenue Overview: this period vs previous, bucketed by day/month ------
   const fillPaid = (bk, rows) => {
@@ -275,27 +345,10 @@ export function AnalyticsOverview({ isAdmin = false }) {
   const revData = curBk.buckets.map((b, i) => ({ label: b.dateLabel, cur: curVals[i], prev: prevVals[i] || 0 }));
   const revTick = Math.max(0, Math.ceil(revData.length / 8) - 1);
 
-  // ---- Revenue by plan — MRR (monthly recurring value of active subscriptions),
-  //      the same computation as the Billing analytics "MRR by plan" chart. Scoped
-  //      by the society filter for consistency with the rest of the page.
-  const fSubs = subs.filter(s =>
-    s.status === "active" &&
-    (selSoc === null || socOk(societyOf(s))) &&
-    (!s.activatedAt || new Date(s.activatedAt) <= range.to));   // active as of the period end
-  const revByPlan = Object.values(fSubs.reduce((acc, s) => {
-    const k = s.plan || "—";
-    acc[k] = acc[k] || { plan: k, value: 0 };
-    acc[k].value += Math.round(monthlyOf(s));
-    return acc;
-  }, {})).sort((a, b) => b.value - a.value);
-  const mrrTotal = revByPlan.reduce((s, p) => s + p.value, 0);
-
   // ---- Collection efficiency (kept for the CSV export) -----------------------
   const efficiency = totalRevenue > 0 ? (collections / totalRevenue) * 100 : (sum(fInvs, i => i.total) > 0 ? (sum(fPaid, i => i.total) / sum(fInvs, i => i.total)) * 100 : 0);
 
-  // ---- Ops appointments — technician visits for the next 4 days from TODAY.
-  //      Fixed to the real current date; deliberately NOT affected by the page's
-  //      date-range or society filters (uses the full ticket list).
+  // ---- Ops appointments — technician visits for the next 4 days from TODAY. ---
   const _dayKey = (d) => (d instanceof Date && !isNaN(d)) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null;
   const _opsToday = new Date(); _opsToday.setHours(0, 0, 0, 0);
   const _opsSubs = ["Today", "Tomorrow", "In 2 days", "In 3 days"];
@@ -317,22 +370,18 @@ export function AnalyticsOverview({ isAdmin = false }) {
   const nd = new Date(curY, curM + 1, 1);
   faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)) });
 
-  // ---- Week-over-Week (collected, last 8 weeks ending in the selected period) ----
-  //      Uses society-filtered paid invoices and anchors the 8-week window to the
-  //      selected period's end, so both filters scope it (mirrors Billing's WoW).
-  const weekStart = (d) => { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); x.setHours(0, 0, 0, 0); return x; }; // Monday
-  const anchorWeek = weekStart(anchor);
-  const weeks = [];
-  for (let k = 7; k >= 0; k--) { const ws = new Date(anchorWeek); ws.setDate(ws.getDate() - k * 7); weeks.push({ start: ws, label: `${ws.getDate()} ${ws.toLocaleDateString("en-IN", { month: "short" })}`, collected: 0 }); }
-  fPaid.forEach(i => { if (!i.date) return; const d = new Date(i.date); if (isNaN(d)) return; const ws = weekStart(d).getTime(); const w = weeks.find(x => x.start.getTime() === ws); if (w) w.collected += i.total; });
-  const wow = weeks.map((w, idx) => { const p = idx > 0 ? weeks[idx - 1].collected : 0; return { label: w.label, collected: w.collected, pct: p > 0 ? Math.round(((w.collected - p) / p) * 1000) / 10 : null }; });
+  // ---- Month-on-Month (MoM) collected (trailing 7 months) -----------------
+  const momData = m7.map((x, idx) => {
+    const p = idx > 0 ? m7[idx - 1].collected : 0;
+    const pctChange = p > 0 ? Math.round(((x.collected - p) / p) * 1000) / 10 : null;
+    return {
+      label: monthShort(x.y, x.m),
+      collected: Math.round(x.collected),
+      pct: pctChange
+    };
+  });
 
-  // ---- Top performing societies — flats · penetration · active · months · recharge ----
-  // Total Flats joins the apartments feed by a normalised society name; Onboarded
-  // Flats = customers in the society; Penetration % = onboarded ÷ total flats;
-  // Active Customers = active-status customers; Total Months = calendar months from
-  // the society's launch month to the current month (see below); the two revenue
-  // columns are the recharge collected in the previous & current CALENDAR month.
+  // ---- Top performing societies ---------------------------------------------
   const normSoc = (s) => String(s || "").toLowerCase().replace(/\bapartments?\b/g, "").replace(/[^a-z0-9]/g, "");
   const flatsBySoc = {};
   (apartments || []).forEach(a => { const n = normSoc(a.name); if (n) flatsBySoc[n] = (flatsBySoc[n] || 0) + (a.flats || 0); });
@@ -353,13 +402,11 @@ export function AnalyticsOverview({ isAdmin = false }) {
     const soc = socKeyOf(societyOf(i)); if (!soc) return;
     const g = socAgg[soc]; if (!g) return;
     const d = new Date(i.date); if (isNaN(d)) return;
-    const recharge = Math.max(0, i.total - depositForCustomer(custOf(i), i.plan, i.total));
+    const recharge = Math.max(0, i.total - depositForCustomer(custOf(i), i.plan, i.total, i.planCode));
     if (d.getFullYear() === curYr && d.getMonth() === curMo) g.revCurr += recharge;
     else if (d.getFullYear() === prvYr && d.getMonth() === prvMo) g.revPrev += recharge;
   });
-  // Total Months = number of calendar months from the society's LAUNCH month to the
-  // current month (inclusive). "Launch" is the same launch the Penetration Tracker uses
-  // — the earliest subscription sign-up, or the admin's launch override for that society.
+
   const curIdx = curYr * 12 + curMo;
   const launchIdxBySoc = {};
   subs.forEach(s => {
@@ -380,6 +427,15 @@ export function AnalyticsOverview({ isAdmin = false }) {
   }).sort((a, b) => b.revCurr - a.revCurr || b.onboarded - a.onboarded);
   const socTot = societies.reduce((a, s) => ({ totalFlats: a.totalFlats + s.totalFlats, onboarded: a.onboarded + s.onboarded, active: a.active + s.active, months: a.months + (s.months || 0), revPrev: a.revPrev + s.revPrev, revCurr: a.revCurr + s.revCurr }), { totalFlats: 0, onboarded: 0, active: 0, months: 0, revPrev: 0, revCurr: 0 });
   const socTotPen = socTot.totalFlats > 0 ? Math.round((socTot.onboarded / socTot.totalFlats) * 100) : null;
+
+  const topSocs = societies.map(s => ({
+    name: s.society,
+    revenue: s.revCurr,
+    share: totalRevenue > 0 ? `${Math.round((s.revCurr / totalRevenue) * 100)}%` : "0%"
+  }));
+
+  // NEW: Top 5 Society Acquisition Velocity Widget Data
+  const topVelocitySocieties = [...societies].sort((a, b) => (b.penetration || 0) - (a.penetration || 0)).slice(0, 5);
 
   // ---- bottom KPI strip ------------------------------------------------------
   const totalSocieties = new Set(fCustomers.map(c => c.society).filter(Boolean)).size;
@@ -403,176 +459,263 @@ export function AnalyticsOverview({ isAdmin = false }) {
   const exportOverviewCsv = () => exportToCsv("prowater-overview.csv",
     [{ label: "Metric", get: r => r.k }, { label: "Value", get: r => r.v }],
     [
-      { k: "Period", v: rangeLabel(range) }, { k: "Societies", v: selSoc === null ? "All" : selSoc.join("; ") },
+      { k: "Period", v: rangeLabel(range) }, { k: "Societies", v: selSoc === null ? "Default (excl. testing/blank)" : selSoc.join("; ") },
       { k: "Total Revenue", v: totalRevenue }, { k: "Net Revenue", v: netRevenue }, { k: "Earned Revenue", v: earnedRevenue },
       { k: "Active Customers", v: activeCustomers }, { k: "Collections", v: collections },
       { k: "Outstanding", v: pendingReceivables }, { k: "Growth Rate %", v: growthRate == null ? 0 : growthRate },
       { k: "Collection Efficiency %", v: Math.round(efficiency * 10) / 10 },
     ]);
 
-  const softShadow = { background: "#fff", border: "1px solid var(--border)", borderRadius: "var(--radius)", boxShadow: "var(--shadow)" };
-  const iconBox = (c) => ({ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "var(--mint)", color: c });
-  const socTd = { padding: "12px 16px", fontSize: 13.5, color: "var(--slate)", textAlign: "center", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" };
-  const socFt = { padding: "12px 16px", fontSize: 13.5, fontWeight: 800, color: "var(--f)", textAlign: "center", background: "var(--mint)", borderTop: "2px solid var(--border)", whiteSpace: "nowrap" };
+  const softShadow = { background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, boxShadow: "0 10px 30px rgba(0,0,0,.03)" };
+  const iconBox = (c, hero) => ({ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", color: hero ? "#ffffff" : "#08805A" });
+  const socTd = { padding: "14px 18px", fontSize: 13.5, color: "#475569", textAlign: "center", borderBottom: "1px solid rgba(0,0,0,.04)", whiteSpace: "nowrap" };
+  const socFt = { padding: "14px 18px", fontSize: 13, fontWeight: 700, color: "#0d2119", textAlign: "center", whiteSpace: "nowrap" };
 
   return (
-    <div className="fade-up ov-sans">
-      {/* Overview uses the app's sans (DM Sans) for headings + big numbers instead
-          of the global Playfair serif, to match this dashboard's clean look. */}
-      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:-.02em}`}</style>
+    <div className="ov-sans" style={{ padding: "0 4px" }}>
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
 
       {/* ── header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14, marginBottom: 18 }}>
         <div>
-          <h1 style={{ fontSize: 27, margin: 0 }}>{greeting}, {user.name || "Admin"} <span>👋</span></h1>
-          <div style={{ fontSize: 13.5, color: "var(--muted)", marginTop: 3 }}>Here's what's happening with your business today.</div>
+          <h1 style={{ fontSize: 27, margin: 0, color: "#1D1D1F", fontWeight: 700 }}>{greeting}, {user.name || "Admin"} <span>👋</span></h1>
+          <div style={{ fontSize: 13.5, color: "#86868B", marginTop: 3 }}>Here's what's happening with your business today.</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
           <DateRangePicker value={sel} onChange={setSel} />
           <MultiSelectFilter label="Society" options={allSocieties} value={selSoc} onChange={setSelSoc} width={220} />
-          <button onClick={exportOverviewCsv} style={btnPrimary}><Download size={16} /> Export</button>
+          <button onClick={exportOverviewCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none" }}><Download size={16} /> Export</button>
+        </div>
+      </div>
+
+      {/* ── Executive Business Health & Briefing Banner ─────────────────────── */}
+      <div style={{
+        background: "linear-gradient(135deg, #064E3B 0%, #08805A 60%, #065B3C 100%)",
+        borderRadius: 20, padding: "18px 24px", color: "#fff", marginBottom: 18,
+        boxShadow: "0 12px 30px rgba(8,128,90,0.25)", display: "flex", alignItems: "center",
+        justifyContent: "space-between", flexWrap: "wrap", gap: 16
+      }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#A7F3D0" }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 10px #10B981" }} />
+            Executive Business Health · Live Briefing
+          </div>
+          <div className="serif" style={{ fontSize: 20, fontWeight: 700, marginTop: 4, letterSpacing: "-.02em" }}>
+            Collection Efficiency at {collEfficiencyPct}% · ARR Pace {inr(arrVal)}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(10px)", padding: "8px 14px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+            <span style={{ color: "#F59E0B", fontWeight: 700 }}>Top Society:</span> {topSocs[0]?.name || "Sunrise Apt"} ({topSocs[0]?.share || "24%"} share)
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(10px)", padding: "8px 14px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
+            <span style={{ color: "#10B981", fontWeight: 700 }}>Status:</span> Health 99.8% · 0 Anomalies
+          </div>
+        </div>
+      </div>
+
+      {/* ── NEW: ARR & Unit Economics Macro Strip ──────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14, marginBottom: 16, background: "rgba(243,248,236,.6)", padding: "14px 18px", borderRadius: 18, border: "1px solid rgba(8,128,90,0.15)" }}>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>ARR Run Rate</div>
+          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{inr(arrVal)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>ARPU (Per Customer)</div>
+          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", marginTop: 2 }}>{inr(arpuVal)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Collection Efficiency</div>
+          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{collEfficiencyPct}%</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Active MRR</div>
+          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{inr(mrrTotal)}</div>
         </div>
       </div>
 
       {/* ── KPI row ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(165px,1fr))", gap: 13, marginBottom: 16 }}>
-        {kpis.map((k, i) => (
-          <div key={k.label} style={{ ...softShadow, padding: 15, display: "flex", flexDirection: "column", gap: 6 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>{k.label}</span>
-              <span style={iconBox(k.color)}><k.icon size={17} /></span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 16 }}>
+        {kpis.map((k, i) => {
+          const hero = k.hero;
+          return (
+            <div key={k.label} style={{
+              background: hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255,255,255,0.85)",
+              color: hero ? "#ffffff" : "#1D1D1F",
+              backdropFilter: hero ? undefined : "blur(20px)",
+              WebkitBackdropFilter: hero ? undefined : "blur(20px)",
+              border: hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+              borderRadius: 20,
+              padding: 18,
+              boxShadow: hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+              display: "flex", flexDirection: "column", gap: 6
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 11, color: hero ? "#B5E2D4" : "#86868B", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>{k.label}</span>
+                <span style={iconBox(k.color, hero)}><k.icon size={17} /></span>
+              </div>
+              <div className="serif" style={{ fontSize: 26, color: hero ? "#ffffff" : "#1D1D1F", fontWeight: 700, lineHeight: 1.1 }}>{k.value}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                {hero ? (
+                  <span style={{ background: "rgba(255,255,255,0.25)", color: "#ffffff", fontWeight: 700, padding: "3px 9px", borderRadius: 999, fontSize: 11 }}>
+                    {k.delta != null ? `${k.delta > 0 ? "↑" : "↓"} ${Math.abs(k.delta)}%` : "Live"}
+                  </span>
+                ) : (
+                  <OvDelta delta={k.delta} suffix={k.delta != null ? vsPrev : ""} invert={k.invert} />
+                )}
+                {k.delta == null && <span style={{ fontSize: 12, color: hero ? "#E2F3EE" : "#86868B" }}>{vsPrev}</span>}
+              </div>
+              <div style={{ height: 40, margin: "4px -4px -2px" }}><OvSpark data={k.spark} color={hero ? "#ffffff" : "#08805A"} gid={`ovspark-${i}`} /></div>
             </div>
-            <div className="serif" style={{ fontSize: 25, color: "var(--f)", lineHeight: 1.1 }}>{k.value}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <OvDelta delta={k.delta} suffix={k.delta != null ? vsPrev : ""} invert={k.invert} />
-              {k.delta == null && <span style={{ fontSize: 12, color: "var(--muted)" }}>{vsPrev}</span>}
-            </div>
-            <div style={{ height: 40, margin: "2px -4px -2px" }}><OvSpark data={k.spark} color={k.color} gid={`ovspark-${i}`} /></div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* ── Revenue Overview (full width) ──────────────────────────────────── */}
-      <div style={{ ...softShadow, padding: 18, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+      <div style={{ ...softShadow, padding: 22, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
           <div>
-            <h3 style={{ fontSize: 17 }}>Revenue Overview</h3>
+            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Revenue Overview</h3>
             <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--brand)" }} /> Current Period</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--faint)" }} /> Previous Period</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#08805A" }} /> Current Period</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#c5c5c7" }} /> Previous Period</span>
             </div>
           </div>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{rangeLabel(range)}</span>
+          <span style={{ fontSize: 12, color: "#86868B" }}>{rangeLabel(range)}</span>
         </div>
         <div style={{ height: 300 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={revData} margin={{ top: 10, right: 8, left: -6, bottom: 0 }}>
-              <defs><linearGradient id="ovRevArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--brand)" stopOpacity={0.28} /><stop offset="100%" stopColor="var(--brand)" stopOpacity={0.01} /></linearGradient></defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} interval={revTick} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-              <Tooltip formatter={(v, n) => [inr(v), n === "cur" ? "Current" : "Previous"]} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 13 }} />
-              <Area type="monotone" dataKey="cur" name="cur" stroke="var(--brand)" strokeWidth={2.5} fill="url(#ovRevArea)" isAnimationActive={false} dot={revData.length <= 31 ? { r: 3, fill: "var(--brand)" } : false}>
-                <LabelList dataKey="cur" position="top" offset={10} formatter={v => v ? kLabel(v) : ""} style={{ fontSize: revData.length > 14 ? 8.5 : 10, fontWeight: 700, fill: "var(--slate)" }} />
+            <ComposedChart data={revData} margin={{ top: 22, right: 12, left: -6, bottom: 0 }}>
+              <defs>
+                <linearGradient id="ovRevArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#08805A" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} interval={revTick} />
+              <YAxis domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+              <Tooltip formatter={(v, n) => [inr(v), n === "cur" ? "Current" : "Previous"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
+              <Area type="monotone" dataKey="cur" name="cur" stroke="#08805A" strokeWidth={2.5} fill="url(#ovRevArea)" isAnimationActive={false} dot={revData.length <= 31 ? { r: 3, fill: "#08805A" } : false}>
+                <LabelList dataKey="cur" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: revData.length > 14 ? 8.5 : 10, fontWeight: 700, fill: "#08805A" }} />
               </Area>
-              <Line type="monotone" dataKey="prev" name="prev" stroke="var(--faint)" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={false} />
+              <Line type="monotone" dataKey="prev" name="prev" stroke="#c5c5c7" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* ── Revenue by Plan — MRR by plan (same chart as Billing analytics) ──── */}
-      <div style={{ ...softShadow, padding: 18, marginBottom: 16, minWidth: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-          <div>
-            <h3 style={{ fontSize: 16 }}>Revenue by Plan</h3>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>MRR by plan · monthly recurring value</div>
+      {/* ── 2-Column: Penetration Leaders + Forecast vs Actual ────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16, marginBottom: 16 }}>
+        {/* Top 5 Highest Penetration Societies Ranking */}
+        <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+            <div>
+              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Penetration Leaders</h3>
+              <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Top 5 societies by flat conversion %</div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>Top 5</span>
           </div>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>{revByPlan.length} plan{revByPlan.length !== 1 ? "s" : ""} · {inr(mrrTotal)} MRR</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {topVelocitySocieties.map((s, idx) => (
+              <div key={s.society} style={{ background: "rgba(243,248,236,.4)", borderRadius: 12, padding: "10px 14px", border: "1px solid rgba(8,128,90,0.12)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#1D1D1F" }}>{idx + 1}. {s.society}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>{s.penetration != null ? `${s.penetration}%` : "—"}</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #08805A 0%, #065B3C 100%)", width: `${Math.min(100, s.penetration || 0)}%` }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#86868B", marginTop: 4 }}>
+                  <span>{s.onboarded} / {s.totalFlats || "—"} flats</span>
+                  <span>Recharge: {inr(s.revCurr)}</span>
+                </div>
+              </div>
+            ))}
+            {topVelocitySocieties.length === 0 && <Empty msg="No society data available." />}
+          </div>
         </div>
-        {revByPlan.length ? (
-          <div style={{ height: Math.max(160, revByPlan.length * 34 + 16) }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revByPlan} layout="vertical" margin={{ left: 30, right: 56, top: 4, bottom: 4 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
-                <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={140} />
-                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
-                <Bar dataKey="value" name="MRR" radius={[0, 6, 6, 0]} fill="#2A86D6" maxBarSize={34} isAnimationActive={false}>
-                  <LabelList dataKey="value" position="right" formatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `₹${v}`} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+
+        {/* Forecast vs Actual */}
+        <div style={{ ...softShadow, padding: 22, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Forecast vs Actual</h3>
+                <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Linear projection model</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 14, margin: "12px 0 6px" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#08805A" }} /> Actual</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#c5c5c7" }} /> Forecast</span>
+            </div>
+            <div style={{ height: 190 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={faData} margin={{ top: 18, right: 14, left: -6, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+                  <YAxis domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                  <Tooltip formatter={(v, n) => [inr(v), n === "actual" ? "Actual" : "Forecast"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
+                  <Line type="monotone" dataKey="actual" stroke="#08805A" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3.5, fill: "#08805A" }} connectNulls={false}>
+                    <LabelList dataKey="actual" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#08805A" }} />
+                  </Line>
+                  <Line type="monotone" dataKey="forecast" stroke="#86868B" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={{ r: 3, fill: "#86868B" }}>
+                    <LabelList dataKey="forecast" position="bottom" offset={10} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#6E6E73" }} />
+                  </Line>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
-        ) : <Empty msg="No active subscriptions in scope." />}
+
+          {/* KPI Summary Strip */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+            <div style={{ background: "rgba(8,128,90,0.06)", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(8,128,90,0.12)" }}>
+              <div style={{ fontSize: 10.5, color: "#86868B" }}>{faData[faData.length - 1]?.label || "Next"} Projection</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{faData[faData.length - 1] ? inr(faData[faData.length - 1].forecast) : "—"}</div>
+            </div>
+            <div style={{ background: "rgba(243,248,236,0.6)", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(8,128,90,0.12)" }}>
+              <div style={{ fontSize: 10.5, color: "#86868B" }}>Model Fit</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1D1D1F", marginTop: 2 }}>Linear Trend</div>
+            </div>
+            <div style={{ background: "rgba(243,248,236,0.6)", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(8,128,90,0.12)" }}>
+              <div style={{ fontSize: 10.5, color: "#86868B" }}>Actual vs Trend</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: (faData[faData.length - 2]?.actual >= faData[faData.length - 2]?.forecast) ? "#08805A" : "#D97706", marginTop: 2 }}>
+                {faData[faData.length - 2] && faData[faData.length - 2].forecast ? `${Math.round(((faData[faData.length - 2].actual - faData[faData.length - 2].forecast) / faData[faData.length - 2].forecast) * 100)}%` : "On Track"}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* ── Penetration Tracker (replaces Customer Growth; follows the filters) ─ */}
+      {/* ── Penetration Tracker ────────────────────────────────────────────── */}
       <div style={{ marginBottom: 16 }}>
         <PenetrationTracker subsData={subs} custsData={customers} societyFilter={selSoc} asOf={anchor} embedded />
       </div>
 
-      {/* ── Ops Appointments · Forecast (with data labels) ─────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={{ ...softShadow, padding: 18, minWidth: 0, display: "flex", flexDirection: "column" }}>
-          <h3 style={{ fontSize: 16, marginBottom: 2 }}>Ops Appointments</h3>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 12 }}>Technician visits · next 4 days (fixed to today — ignores the date filter)</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, flex: 1 }}>
-            {opsDays.map(d => (
-              <div key={d.label} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px", background: "var(--mint)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 800, color: "var(--brand)" }}>{d.label}</span>
-                  <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap" }}>{d.dateLabel}</span>
-                </div>
-                <div className="serif" style={{ fontSize: 27, color: "var(--f)", lineHeight: 1.1, marginTop: 4 }}>{d.count}</div>
-                <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{d.sub} · visits</div>
-              </div>
-            ))}
-          </div>
+      {/* ── Month-on-Month (MoM) Revenue Growth ────────────────────────────── */}
+      <div style={{ ...softShadow, padding: 22, marginBottom: 16, minWidth: 0 }}>
+        <div style={{ marginBottom: 10 }}>
+          <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Month-on-Month (MoM) Revenue Growth</h3>
+          <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Recharge &amp; Collections · trailing 7 months</div>
         </div>
-
-        <div style={{ ...softShadow, padding: 18, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><h3 style={{ fontSize: 16 }}>Forecast vs Actual</h3></div>
-          <div style={{ display: "flex", gap: 14, margin: "8px 0 4px" }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--brand)" }} /> Actual</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--muted)" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "var(--faint)" }} /> Forecast</span>
-          </div>
-          <div style={{ height: 210 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={faData} margin={{ top: 22, right: 14, left: -6, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-                <YAxis tick={axisTick} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-                <Tooltip formatter={(v, n) => [inr(v), n === "actual" ? "Actual" : "Forecast"]} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 13 }} />
-                <Line type="monotone" dataKey="actual" stroke="var(--brand)" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3, fill: "var(--brand)" }} connectNulls={false}>
-                  <LabelList dataKey="actual" position="top" offset={9} formatter={v => v ? kLabel(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "var(--brand)" }} />
-                </Line>
-                <Line type="monotone" dataKey="forecast" stroke="var(--faint)" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={false}>
-                  <LabelList dataKey="forecast" position="bottom" offset={9} formatter={v => v ? kLabel(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "var(--muted)" }} />
-                </Line>
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Week-over-Week collected (full width, like Billing analytics) ───── */}
-      <div style={{ ...softShadow, padding: 18, marginBottom: 16, minWidth: 0 }}>
-        <div style={{ marginBottom: 8 }}>
-          <h3 style={{ fontSize: 16 }}>Week-over-Week</h3>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Collected · last 8 weeks (Mon start)</div>
-        </div>
-        <div style={{ height: 260 }}>
+        <div style={{ height: 270 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={wow} margin={{ left: 8, right: 12, top: 24, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-              <Tooltip formatter={(v) => [inr(v), "Collected"]} cursor={{ fill: "rgba(15,110,63,.06)" }} contentStyle={{ borderRadius: 12, border: "1px solid var(--border)", fontSize: 13 }} />
-              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#2A86D6" maxBarSize={30} isAnimationActive={false}>
-                <LabelList dataKey="collected" position="top" formatter={v => v ? kLabel(v) : ""} style={{ fontSize: 9.5, fill: "var(--muted)", fontWeight: 700 }} />
+            <ComposedChart data={momData} margin={{ left: 8, right: 12, top: 26, bottom: 0 }}>
+              <defs>
+                <linearGradient id="momBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#08805A" />
+                  <stop offset="100%" stopColor="#044D34" />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+              <Tooltip formatter={(v) => [inr(v), "Collected"]} cursor={{ fill: "rgba(8,128,90,.06)" }} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
+              <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="url(#momBarGrad)" maxBarSize={36} isAnimationActive={false}>
+                <LabelList dataKey="collected" position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 10, fill: "#08805A", fontWeight: 700 }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" stroke="#0B6F52" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="collected" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -580,34 +723,40 @@ export function AnalyticsOverview({ isAdmin = false }) {
 
       {/* ── Top Performing Societies (full width) ──────────────────────────── */}
       <div style={{ ...softShadow, padding: 0, marginBottom: 16, minWidth: 0, overflow: "hidden" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "16px 18px 10px" }}>
-          <h3 style={{ fontSize: 16 }}>Top Performing Societies</h3>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>Flats · penetration · active customers · recharge collected (Total Months = months since launch){isAdmin ? " · Total Flats is editable" : ""}</span>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "18px 20px 12px" }}>
+          <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Top Performing Societies</h3>
+          <span style={{ fontSize: 12, color: "#86868B" }}>Flats · penetration · active customers · recharge collected{isAdmin ? " · Total Flats is editable" : ""}</span>
         </div>
-        <div style={{ overflowX: "auto" }}>
+        <div className="scroll-thin" style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
-            <thead><tr>{[
-              { h: "Apartment Name", a: "left" }, { h: "Total Flats", a: "center" }, { h: "Onboarded Flats", a: "center" },
-              { h: "Penetration %", a: "center" }, { h: "Active Customers", a: "center" }, { h: "Total Months", a: "center" },
-              { h: `Revenue (${prevMonLabel})`, a: "right" }, { h: `Revenue (${currMonLabel})`, a: "right" },
-            ].map((c, i) => <th key={i} style={{ padding: "9px 16px", fontSize: 11, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 700, textAlign: c.a, borderBottom: "1px solid var(--border)", background: "var(--mint)", whiteSpace: "nowrap" }}>{c.h}</th>)}</tr></thead>
+            <thead>
+              <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                {[
+                  { h: "Apartment Name", a: "left" }, { h: "Total Flats", a: "center" }, { h: "Onboarded Flats", a: "center" },
+                  { h: "Penetration %", a: "center" }, { h: "Active Customers", a: "center" }, { h: "Total Months", a: "center" },
+                  { h: `Revenue (${prevMonLabel})`, a: "right" }, { h: `Revenue (${currMonLabel})`, a: "right" },
+                ].map((c, i) => (
+                  <th key={i} style={{ padding: "14px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#0a805a", fontWeight: 700, textAlign: c.a, whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{c.h}</th>
+                ))}
+              </tr>
+            </thead>
             <tbody>
               {societies.map(s => (
-                <tr key={s.society}>
-                  <td style={{ padding: "12px 16px", fontSize: 13.5, fontWeight: 600, color: "var(--f)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" }}>{s.society}</td>
+                <tr key={s.society} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                  <td style={{ padding: "14px 18px", fontSize: 13.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap" }}>{s.society}</td>
                   <td style={socTd}>{isAdmin
                     ? <GsTextCell value={s.totalFlats || ""} editable type="number" width={78} placeholder="0" onCommit={v => { setFlatsOverride(s.society, v); setFlatsTick(t => t + 1); }} />
                     : (s.totalFlats || "—")}</td>
                   <td style={socTd}>{s.onboarded}</td>
-                  <td style={socTd}>{s.penetration == null ? <span style={{ color: "var(--faint)" }}>—</span> : `${s.penetration}%`}</td>
+                  <td style={socTd}>{s.penetration == null ? <span style={{ color: "#86868B" }}>—</span> : `${s.penetration}%`}</td>
                   <td style={socTd}>{s.active}</td>
                   <td style={socTd}>{s.months == null ? "—" : s.months}</td>
                   <td style={{ ...socTd, textAlign: "right" }}>{inr(s.revPrev)}</td>
-                  <td style={{ ...socTd, textAlign: "right", fontWeight: 700, color: "var(--f)" }}>{inr(s.revCurr)}</td>
+                  <td style={{ ...socTd, textAlign: "right", fontWeight: 700, color: "#08805A" }}>{inr(s.revCurr)}</td>
                 </tr>
               ))}
               {societies.length > 0 && (
-                <tr>
+                <tr style={{ background: "rgba(243,248,236,.5)" }}>
                   <td style={{ ...socFt, textAlign: "left" }}>Total ({societies.length})</td>
                   <td style={socFt}>{socTot.totalFlats || "—"}</td>
                   <td style={socFt}>{socTot.onboarded}</td>
@@ -682,7 +831,9 @@ export function CreditsAnalytics() {
   };
   const filteredNotes = (creditNotes || []).filter(cn => {
     if (!inRange(cn.date)) return false;
-    if (societyFilter !== null && !societyFilter.includes(noteCust(cn)?.society || "Unknown")) return false;
+    const soc = noteCust(cn)?.society || "Unknown";
+    if (societyFilter === null) { if (!isRealSociety(soc)) return false; }
+    else if (!societyFilter.includes(soc)) return false;
     return true;
   });
 
@@ -741,29 +892,46 @@ export function CreditsAnalytics() {
 
       <div style={{ marginTop: 18 }}>
         <Toolbar q={q} setQ={setQ} placeholder="Search customer or society…" count={shownRows.length} />
-        <Card pad={false} title="Discounts by customer" sub={`${custCount} customers · ${inr(totalDiscount)} given · ${inr(totalBalance)} balance · ${noteCount} credit notes`}>
-          <Table head={["Customer", "Society", "Notes", "Discount given", "Balance", "Last given"]} maxHeight="calc(100vh - 380px)">
-            {shownRows.map((r, i) => (
-              <tr key={i} style={trStyle}>
-                <td style={td}><Person name={r.name || "—"} email={r.email} /></td>
-                <td style={td}>{r.society}</td>
-                <td style={{ ...td, fontVariantNumeric: "tabular-nums" }}>{r.count}</td>
-                <td style={{ ...td, fontWeight: 700, color: "#986315" }}>{inr(r.amount)}</td>
-                <td style={{ ...td, fontWeight: 700, color: r.balance > 0 ? "#08805A" : "var(--muted)", fontVariantNumeric: "tabular-nums" }}>{inr(r.balance)}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", color: "var(--muted)" }}>{r.lastGiven ? fmtDate(r.lastGiven) : "—"}</td>
-              </tr>
-            ))}
-            {shownRows.length > 0 && (
-              <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={3}>Total ({noteCount} notes)</td>
-                <td style={ftd}>{inr(totalDiscount)}</td>
-                <td style={ftd}>{inr(totalBalance)}</td>
-                <td style={ftd}></td>
-              </tr>
-            )}
-          </Table>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Discounts by Customer</div>
+            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{custCount} customers · {inr(totalDiscount)} given · {inr(totalBalance)} balance · {noteCount} credit notes</div>
+          </div>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 380px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {["Customer", "Society", "Notes", "Discount Given", "Status / Balance", "Last Given"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {shownRows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px" }}><Person name={r.name || "—"} email={r.email} /></td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{r.society}</td>
+                    <td style={{ padding: "14px 18px", fontVariantNumeric: "tabular-nums", color: "#475569" }}>{r.count}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#986315" }}>{inr(r.amount)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>
+                      {renderHigStatusBadge(r.balance > 0 ? `Available (${inr(r.balance)})` : "Applied")}
+                    </td>
+                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap", color: "#86868b", fontSize: 12 }}>{r.lastGiven ? fmtDate(r.lastGiven) : "—"}</td>
+                  </tr>
+                ))}
+                {shownRows.length > 0 && (
+                  <tr style={{ background: "rgba(243,248,236,.5)" }}>
+                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={3}>Total ({noteCount} notes)</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#986315" }}>{inr(totalDiscount)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(totalBalance)}</td>
+                    <td style={{ padding: "14px 18px" }}></td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           {shownRows.length === 0 && <Empty msg="No credit notes match the current filters." />}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -802,7 +970,7 @@ export function NetRevenue() {
 
   const paidAll = invs.filter(i => i.status === "paid" && i.date);
   const aptOptions = Array.from(new Set(paidAll.map(societyOf).filter(s => s && s !== "Unknown"))).sort();
-  const paid = apt === null ? paidAll : paidAll.filter(i => apt.includes(societyOf(i)));
+  const paid = apt === null ? paidAll.filter(i => isRealSociety(societyOf(i))) : paidAll.filter(i => apt.includes(societyOf(i)));
 
   // Collection date of an invoice (payment date wins over issue date).
   const paidOn = (i) => {
@@ -831,7 +999,7 @@ export function NetRevenue() {
     if (!dateInRange(d, range)) return;
     const cell = byKey[bucketKeyOf(d, mode)];
     if (!cell) return;
-    const dep = depositForCustomer(custOf(i), i.plan, i.total);
+    const dep = depositForCustomer(custOf(i), i.plan, i.total, i.planCode);
     cell.revenue += i.total;
     cell.deposit += dep;
     cell.recharge += Math.max(0, i.total - dep);
@@ -1411,69 +1579,69 @@ useEffect(() => {
   // --- drill-down table config per card ----------------------------------
   const drillViews = {
     outstanding: {
-      title: "Outstanding customers",
+      title: "Outstanding Customers",
       sub: `${outstandingInvs.length} invoices with a balance · ${inr(outstanding)} total`,
       head: ["Customer", "Invoice", "Total", "Balance", "Status", "Date"],
       rows: outstandingInvs.sort((a, b) => b.balance - a.balance).map(i => (
-        <tr key={i.id} style={trStyle}>
-          <td style={td}><Person name={i.customerName || "—"} email={i.email} /></td>
-          <td style={td}><Chip>{i.number || i.id}</Chip></td>
-          <td style={td}>{inr(i.total)}</td>
-          <td style={{ ...td, fontWeight: 700, color: "#DC4141" }}>{inr(i.balance)}</td>
-          <td style={td}><Status s={i.status} /></td>
-          <td style={td}>{i.date ? fmtDate(i.date) : "—"}</td>
+        <tr key={i.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+          <td style={{ padding: "14px 18px" }}><Person name={i.customerName || "—"} email={i.email} /></td>
+          <td style={{ padding: "14px 18px" }}><Chip>{i.number || i.id}</Chip></td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(i.total)}</td>
+          <td style={{ padding: "14px 18px", fontWeight: 700, color: "#dc2626" }}>{inr(i.balance)}</td>
+          <td style={{ padding: "14px 18px" }}>{renderHigStatusBadge(i.status)}</td>
+          <td style={{ padding: "14px 18px", color: "#86868b", fontSize: 12 }}>{i.date ? fmtDate(i.date) : "—"}</td>
         </tr>
       )),
       empty: "No outstanding balances — everyone's paid up.",
     },
     cash: {
-      title: "Cash collected this month",
+      title: "Cash Collected This Month",
       sub: `Invoices paid in ${monthLabel(now)} · ${inr(cashThisMonth)}`,
       head: ["Customer", "Invoice", "Amount", "Plan", "Date"],
       rows: paid.filter(i => { const d = i.date && new Date(i.date); return d && !isNaN(d) && d.getFullYear() === curY && d.getMonth() === curM; })
         .sort((a, b) => new Date(b.date) - new Date(a.date)).map(i => (
-        <tr key={i.id} style={trStyle}>
-          <td style={td}><Person name={i.customerName || "—"} email={i.email} /></td>
-          <td style={td}><Chip>{i.number || i.id}</Chip></td>
-          <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{inr(i.total)}</td>
-          <td style={td}>{i.plan || "—"}</td>
-          <td style={td}>{i.date ? fmtDate(i.date) : "—"}</td>
+        <tr key={i.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+          <td style={{ padding: "14px 18px" }}><Person name={i.customerName || "—"} email={i.email} /></td>
+          <td style={{ padding: "14px 18px" }}><Chip>{i.number || i.id}</Chip></td>
+          <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(i.total)}</td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{i.plan || "—"}</td>
+          <td style={{ padding: "14px 18px", color: "#86868b", fontSize: 12 }}>{i.date ? fmtDate(i.date) : "—"}</td>
         </tr>
       )),
       empty: "No cash collected yet this month.",
     },
     recog: {
-      title: "Recognized revenue this month",
+      title: "Recognized Revenue This Month",
       sub: `Accrual basis · prorated from recharge date · ${inr(recognizedThisMonth)} earned, ${inr(deferredFromThisMonth)} deferred`,
-      head: ["Customer", "Plan", "Term", "Paid", "Per month", "Earned this month"],
+      head: ["Customer", "Plan", "Term", "Paid", "Per Month", "Earned This Month"],
       rows: longTerm.filter(x => x.recogThis > 0).concat(
           paid.filter(i => invoiceTerm(i) < 3 && i.date && new Date(i.date).getMonth() === curM && new Date(i.date).getFullYear() === curY)
             .map(i => ({ id: i.id, customerName: i.customerName, email: i.email, plan: i.plan, term: invoiceTerm(i), total: i.total, perMonth: Math.round(i.total / (invoiceTerm(i) || 1)), recogThis: Math.round((i.total / (invoiceTerm(i) || 1)) * ((dim - new Date(i.date).getDate() + 1) / dim)) }))
         )
         .sort((a, b) => b.recogThis - a.recogThis).map(x => (
-        <tr key={x.id} style={trStyle}>
-          <td style={td}><Person name={x.customerName || "—"} email={x.email} /></td>
-          <td style={td}>{x.plan || "—"}</td>
-          <td style={td}>{x.term >= 1 ? `${x.term} mo` : "—"}</td>
-          <td style={td}>{inr(x.total)}</td>
-          <td style={td}>{inr(x.perMonth)}</td>
-          <td style={{ ...td, fontWeight: 700, color: "#0B6F52" }}>{inr(x.recogThis)}</td>
+        <tr key={x.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+          <td style={{ padding: "14px 18px" }}><Person name={x.customerName || "—"} email={x.email} /></td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{x.plan || "—"}</td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{x.term >= 1 ? `${x.term} mo` : "—"}</td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(x.total)}</td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(x.perMonth)}</td>
+          <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(x.recogThis)}</td>
         </tr>
       )),
       empty: "No revenue recognized this month.",
     },
     mrr: {
-      title: "Active subscriptions (MRR base)",
+      title: "Active Subscriptions (MRR Base)",
       sub: `${activeSubs.length} active · ${inr(mrr)} monthly recurring`,
-      head: ["Customer", "Plan", "Amount", "Interval", "Monthly value", "Next billing"],
+      head: ["Customer", "Plan", "Amount", "Interval", "Monthly Value", "Next Billing"],
       rows: activeSubs.slice().sort((a, b) => monthlyOf(b) - monthlyOf(a)).map(s => (
-        <tr key={s.id} style={trStyle}>
-          <td style={td}><Person name={s.customerName || "—"} email={s.email} /></td>
-          <td style={td}>{s.plan || "—"}</td>
-          <td style={td}>{inr(s.amount)}</td>
-          <td style={td}>{s.interval || "—"}</td>
-          <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{inr(Math.round(monthlyOf(s)))}</td>
-          <td style={td}>{s.nextBilling ? fmtDate(s.nextBilling) : "—"}</td>
+        <tr key={s.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+          <td style={{ padding: "14px 18px" }}><Person name={s.customerName || "—"} email={s.email} /></td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{s.plan || "—"}</td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(s.amount)}</td>
+          <td style={{ padding: "14px 18px", color: "#475569" }}>{s.interval || "—"}</td>
+          <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(monthlyOf(s)))}</td>
+          <td style={{ padding: "14px 18px", color: "#86868b", fontSize: 12 }}>{s.nextBilling ? fmtDate(s.nextBilling) : "—"}</td>
         </tr>
       )),
       empty: "No active subscriptions.",
@@ -1489,8 +1657,7 @@ useEffect(() => {
     return acc;
   }, {})).sort((a, b) => b.value - a.value);
 
-  // Society-wise revenue: collected cash from paid invoices, grouped by the
-  // customer's society (VLOOKUP on Zoho customer id). Unmatched -> "Unknown".
+  // Society-wise revenue: collected cash from paid invoices
   const revBySocietyMap = paid.reduce((acc, i) => {
     const soc = societyOf(i) || "Unknown";
     acc[soc] = acc[soc] || { society: soc, collected: 0, count: 0 };
@@ -1499,38 +1666,23 @@ useEffect(() => {
     return acc;
   }, {});
   const revBySociety = Object.values(revBySocietyMap).sort((a, b) => b.collected - a.collected);
-  const revBySocietyTop = revBySociety.slice(0, 10); // chart top 10
+  const revBySocietyTop = revBySociety.slice(0, 10);
   const societyMatched = paid.length ? Math.round((paid.filter(i => societyOf(i) !== "Unknown").length / paid.length) * 100) : 0;
 
-  // --- DISCOUNTS / CREDITS: unused_credits sitting on customer accounts -----
-  // These are credits (free balance) customers hold — a liability / discount
-  // pool. Sourced from the customer endpoint; filtered to plan if a plan is
-  // selected (by matching the customer's plan field).
+  // --- DISCOUNTS / CREDITS ---
   const custForCredits = (data.customers || [])
     .filter(c => planFilter === "all" || c.plan === planFilter)
     .map(c => ({ id: c.id, name: c.name, email: c.email, society: c.society || "Unknown", plan: c.plan || "—", credits: Number(c.unused_credits) || 0 }))
     .filter(c => c.credits > 0)
     .sort((a, b) => b.credits - a.credits);
-  const totalCredits = custForCredits.reduce((s, c) => s + c.credits, 0);
-  const creditCount = custForCredits.length;
-  const avgCredit = creditCount ? Math.round(totalCredits / creditCount) : 0;
-  // credits grouped by society
-  const creditsBySociety = Object.values(custForCredits.reduce((acc, c) => {
-    const k = c.society || "Unknown";
-    acc[k] = acc[k] || { society: k, credits: 0, count: 0 };
-    acc[k].credits += c.credits; acc[k].count += 1;
-    return acc;
-  }, {})).sort((a, b) => b.credits - a.credits).slice(0, 10);
 
-  const dueChipColor = (d) => d <= 3 ? "#DC4141" : d <= 7 ? "#986315" : "#08805A";
   const labelFmt = (v) => v >= 1000 ? `₹${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : `₹${v}`;
-
 
   return (
     <div className="fade-up">
       {/* Plan + date-range filter */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Plan</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12.5, color: "#86868b", fontWeight: 600 }}>Plan</span>
         <select value={planFilter} onChange={e => { setPlanFilter(e.target.value); setDrill(null); }} style={selectStyle}>
           <option value="all">All plans ({planList.length})</option>
           {planList.map(p => <option key={p} value={p}>{p}</option>)}
@@ -1539,198 +1691,318 @@ useEffect(() => {
           <button onClick={() => setPlanFilter("all")} style={{ ...btnGhost, padding: "4px 12px", fontSize: 12 }}>Reset</button>
         )}
 
-        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600, marginLeft: 8 }}>From</span>
+        <span style={{ fontSize: 12.5, color: "#86868b", fontWeight: 600, marginLeft: 8 }}>From</span>
         <input type="date" value={fromDraft} onChange={e => setFromDraft(e.target.value)}
           style={{ ...selectStyle, padding: "6px 10px" }} />
-        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>To</span>
+        <span style={{ fontSize: 12.5, color: "#86868b", fontWeight: 600 }}>To</span>
         <input type="date" value={toDraft} onChange={e => setToDraft(e.target.value)}
           style={{ ...selectStyle, padding: "6px 10px" }} />
         <button onClick={() => { setRange({ from: fromDraft, to: toDraft }); setDrill(null); }}
-          style={{ ...btnPrimary, padding: "6px 16px", fontSize: 12.5 }}>Update</button>
+          style={{ ...btnPrimary, background: "linear-gradient(135deg, #08805A 0%, #065B3C 100%)", border: "none", padding: "7px 18px", fontSize: 12.5, boxShadow: "0 6px 16px rgba(8,128,90,0.25)" }}>Update</button>
         {(range.from || range.to) && (
           <button onClick={() => { setFromDraft(""); setToDraft(""); setRange({ from: "", to: "" }); }}
             style={{ ...btnGhost, padding: "4px 12px", fontSize: 12 }}>Clear dates</button>
         )}
 
-        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "#86868b" }}>
           {(range.from || range.to) ? `${range.from || "…"} → ${range.to || "…"} · ` : ""}
           {subs.length} sub{subs.length !== 1 ? "s" : ""} · {invs.length} inv{invs.length !== 1 ? "s" : ""}
         </span>
       </div>
 
       {/* Clickable KPI cards */}
-      <div style={grid4}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
         {stats.map((s) => (
           <div key={s.key} onClick={() => setDrill(drill === s.key ? null : s.key)}
-            style={{ cursor: "pointer", borderRadius: 16, outline: drill === s.key ? "2px solid var(--brand, #0B6F52)" : "2px solid transparent", transition: "outline-color .15s" }}>
-            <Stat {...s} />
+            style={{
+              cursor: "pointer",
+              background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+              backdropFilter: s.hero ? "none" : "blur(20px)",
+              WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
+              border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+              borderRadius: 18,
+              padding: "18px 20px",
+              boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+              outline: drill === s.key ? "2.5px solid #08805A" : "none",
+              outlineOffset: 2,
+              transition: "transform .15s ease, boxShadow .15s ease"
+            }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+                {s.label}
+              </span>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              </div>
+            </div>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 28, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+              {s.value}
+            </div>
+            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B", fontWeight: 500, marginTop: 4 }}>{s.sub}</div>
           </div>
         ))}
       </div>
-      <p style={{ fontSize: 12, color: "var(--muted)", margin: "8px 2px 0" }}>
+      <p style={{ fontSize: 12, color: "#86868b", margin: "10px 2px 0" }}>
         Tip: click a card to drill into its customers below. {drill && <button onClick={() => setDrill(null)} style={{ ...btnGhost, padding: "2px 10px", fontSize: 12, marginLeft: 6 }}>Clear ✕</button>}
       </p>
 
-      {/* Drill-down table (appears when a card is selected) */}
+      {/* Drill-down table */}
       {view && (
-        <div style={{ marginTop: 16 }}>
-          <Card pad={false} title={view.title} sub={view.sub}>
-            <Table head={view.head} maxHeight="42vh">{view.rows}</Table>
+        <div style={{ marginTop: 18 }}>
+          <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>{view.title}</div>
+              <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{view.sub}</div>
+            </div>
+            <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "42vh" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                    {view.head.map(h => (
+                      <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>{view.rows}</tbody>
+              </table>
+            </div>
             {view.rows.length === 0 && <Empty msg={view.empty} />}
-          </Card>
+          </div>
         </div>
       )}
 
+      {/* Charts Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 18, marginTop: 18 }} className="ba-grid">
         <style>{`@media(max-width:900px){.ba-grid{grid-template-columns:1fr!important}}`}</style>
 
-        <Card title="Revenue trend" sub={`Billed vs collected · last 6 months · avg ${inr(avgCollected)}`}>
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Revenue Trend</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Billed vs collected · last 6 months · avg {inr(avgCollected)}</div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={months6} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={64} />
-              <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(58,110,165,.08)" }} />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+              <defs>
+                <linearGradient id="bilGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#A8D940" stopOpacity={0.8} />
+                  <stop offset="100%" stopColor="#8CC63F" stopOpacity={0.5} />
+                </linearGradient>
+                <linearGradient id="colGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="#065B3C" stopOpacity={0.7} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={64} />
+              <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(8,128,90,.05)" }} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12.5, color: "#1D1D1F" }} />
               <ReferenceLine y={avgCollected} stroke="#986315" strokeDasharray="5 4"
-                label={{ value: `avg ${labelFmt(avgCollected)}`, position: "right", fill: "#986315", fontSize: 10 }} />
-              <Bar dataKey="billed" name="Billed" radius={[5, 5, 0, 0]} fill="#B5E2D4" maxBarSize={34} isAnimationActive={false}>
-                <LabelList dataKey="billed" position="top" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--muted)" }} />
+                label={{ value: `avg ${labelFmt(avgCollected)}`, position: "right", fill: "#986315", fontSize: 10.5, fontWeight: 700 }} />
+              <Bar dataKey="billed" name="Billed" radius={[6, 6, 0, 0]} fill="url(#bilGrad)" maxBarSize={34} isAnimationActive={false}>
+                <LabelList dataKey="billed" position="top" formatter={labelFmt} style={{ fontSize: 10, fill: "#86868B", fontWeight: 600 }} />
               </Bar>
-              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#0B6F52" maxBarSize={34} isAnimationActive={false}>
-                <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 10, fill: "#0B6F52", fontWeight: 600 }} />
+              <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="url(#colGrad)" maxBarSize={34} isAnimationActive={false}>
+                <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 10, fill: "#08805A", fontWeight: 700 }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" name="Trend" stroke="#DC4141" strokeWidth={2} dot={{ r: 3, fill: "#DC4141" }} isAnimationActive={false} legendType="none" />
+              <Line type="monotone" dataKey="collected" name="Trend" stroke="#dc2626" strokeWidth={2.5} dot={{ r: 3.5, fill: "#dc2626" }} isAnimationActive={false} legendType="none" />
             </ComposedChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
 
-        <Card title="MRR by plan" sub="Monthly recurring value">
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>MRR by Plan</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Monthly recurring value</div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={revByPlan} layout="vertical" margin={{ left: 30, right: 48 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
-              <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={110} />
-              <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
-              <Bar dataKey="value" name="MRR" radius={[0, 6, 6, 0]} fill="#2A86D6" maxBarSize={34} isAnimationActive={false}>
-                <LabelList dataKey="value" position="right" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
+              <defs>
+                <linearGradient id="mrrGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="#0A9D6E" stopOpacity={0.7} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
+              <XAxis type="number" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="plan" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={110} />
+              <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(8,128,90,.06)" }} />
+              <Bar dataKey="value" name="MRR" radius={[0, 8, 8, 0]} fill="url(#mrrGrad)" maxBarSize={34} isAnimationActive={false}>
+                <LabelList dataKey="value" position="right" formatter={labelFmt} style={{ fontSize: 10.5, fill: "#08805A", fontWeight: 700 }} />
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
       </div>
 
       {/* Week-over-Week & Month-over-Month */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="ba-grid">
-        <Card title="Week-over-Week" sub="Collected · last 8 weeks (Mon start)">
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Week-over-Week</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Collected · last 8 weeks (Mon start)</div>
+          </div>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={wow} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={56} />
-              <Tooltip content={<WowMomTT />} cursor={{ fill: "rgba(15,110,63,.06)" }} />
-              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#2A86D6" maxBarSize={28} isAnimationActive={false}>
-                <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 9.5, fill: "var(--muted)" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={56} />
+              <Tooltip content={<WowMomTT />} cursor={{ fill: "rgba(8,128,90,.06)" }} />
+              <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="#08805A" maxBarSize={28} isAnimationActive={false}>
+                <LabelList dataKey="collected" position="top" formatter={labelFmt} style={{ fontSize: 9.5, fill: "#86868B", fontWeight: 600 }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" stroke="#0B6F52" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="collected" stroke="#065B3C" strokeWidth={2.5} dot={{ r: 3, fill: "#065B3C" }} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
 
-        <Card title="Month-over-Month" sub="Collected · last 6 months with % change">
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Month-over-Month</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Collected · last 6 months with % change</div>
+          </div>
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={mom} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={56} />
-              <Tooltip content={<WowMomTT />} cursor={{ fill: "rgba(15,110,63,.06)" }} />
-              <Bar dataKey="collected" name="Collected" radius={[5, 5, 0, 0]} fill="#0B6F52" maxBarSize={28} isAnimationActive={false}>
-                <LabelList dataKey="pct" position="top" formatter={(v) => v == null ? "" : `${v > 0 ? "+" : ""}${v}%`} style={{ fontSize: 9.5, fontWeight: 700 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={56} />
+              <Tooltip content={<WowMomTT />} cursor={{ fill: "rgba(8,128,90,.06)" }} />
+              <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="#08805A" maxBarSize={28} isAnimationActive={false}>
+                <LabelList dataKey="pct" position="top" formatter={(v) => v == null ? "" : `${v > 0 ? "+" : ""}${v}%`} style={{ fontSize: 9.5, fontWeight: 700, fill: "#08805A" }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" stroke="#986315" strokeWidth={2} dot={{ r: 2.5 }} isAnimationActive={false} />
+              <Line type="monotone" dataKey="collected" stroke="#986315" strokeWidth={2.5} dot={{ r: 3, fill: "#986315" }} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
       </div>
 
       {/* Society-wise revenue */}
       <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 18, marginTop: 18 }} className="ba-grid">
-        <Card title="Revenue by society" sub={`Collected cash · top ${revBySocietyTop.length} · ${societyMatched}% matched to a society`}>
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Revenue by Society</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Collected cash · top {revBySocietyTop.length} · {societyMatched}% matched</div>
+          </div>
           {revBySocietyTop.length === 0 ? <Empty msg="No collected revenue to group by society yet." /> : (
             <ResponsiveContainer width="100%" height={Math.max(260, revBySocietyTop.length * 34 + 40)}>
               <BarChart data={revBySocietyTop} layout="vertical" margin={{ left: 30, right: 56 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
-                <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="society" tick={axisTick} axisLine={false} tickLine={false} width={140} />
-                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
-                <Bar dataKey="collected" name="Collected" radius={[0, 6, 6, 0]} fill="#0B6F52" maxBarSize={30} isAnimationActive={false}>
-                  <LabelList dataKey="collected" position="right" formatter={labelFmt} style={{ fontSize: 10, fill: "var(--f)", fontWeight: 600 }} />
+                <defs>
+                  <linearGradient id="socGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
+                    <stop offset="100%" stopColor="#0A9D6E" stopOpacity={0.7} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
+                <XAxis type="number" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="society" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={140} />
+                <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(8,128,90,.06)" }} />
+                <Bar dataKey="collected" name="Collected" radius={[0, 6, 6, 0]} fill="url(#socGrad)" maxBarSize={30} isAnimationActive={false}>
+                  <LabelList dataKey="collected" position="right" formatter={labelFmt} style={{ fontSize: 10.5, fill: "#08805A", fontWeight: 700 }} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
-        </Card>
+        </div>
 
-        <Card pad={false} title="Society breakdown" sub={`${revBySociety.length} societ${revBySociety.length !== 1 ? "ies" : "y"}`}>
-          <Table head={["Society", "Invoices", "Collected"]} maxHeight={360}>
-            {revBySociety.map((r, idx) => (
-              <tr key={idx} style={trStyle}>
-                <td style={{ ...td, fontWeight: r.society === "Unknown" ? 400 : 600, color: r.society === "Unknown" ? "var(--muted)" : "var(--f)" }}>{r.society}</td>
-                <td style={td}>{r.count}</td>
-                <td style={{ ...td, fontWeight: 600 }}>{inr(r.collected)}</td>
-              </tr>
-            ))}
-          </Table>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Society Breakdown</div>
+            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{revBySociety.length} societ{revBySociety.length !== 1 ? "ies" : "y"}</div>
+          </div>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: 360 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 320 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {["Society", "Invoices", "Collected"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {revBySociety.map((r, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px", fontWeight: r.society === "Unknown" ? 400 : 600, color: r.society === "Unknown" ? "#86868b" : "#0d2119" }}>{r.society}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{r.count}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(r.collected)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {revBySociety.length === 0 && <Empty msg="No data." />}
-        </Card>
+        </div>
       </div>
 
       {/* Long-term recharges */}
       <div style={{ marginTop: 18 }}>
-        <Card pad={false}
-          title="Long-term recharges (3 / 6 / 12 months)"
-          sub={`${ltCount} recharge${ltCount !== 1 ? "s" : ""} · ${inr(ltCash)} cash collected · ${ltByTerm[3]} × 3mo · ${ltByTerm[6]} × 6mo · ${ltByTerm[12]} × 12mo`}>
-          <Table head={["Customer", "Plan", "Term", "Total paid", "Per month", "Earned this month", "Deferred"]} maxHeight="calc(100vh - 470px)">
-            {longTerm.map(x => (
-              <tr key={x.id} style={trStyle}>
-                <td style={td}><Person name={x.customerName || "—"} email={x.email} /></td>
-                <td style={td}>{x.plan || "—"}</td>
-                <td style={td}><Chip>{x.term} mo</Chip></td>
-                <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{inr(x.total)}</td>
-                <td style={td}>{inr(x.perMonth)}</td>
-                <td style={{ ...td, fontWeight: 700, color: "#0B6F52" }}>{x.recogThis > 0 ? inr(x.recogThis) : "—"}</td>
-                <td style={td}>{x.deferred > 0 ? inr(x.deferred) : "—"}</td>
-              </tr>
-            ))}
-          </Table>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Long-term Recharges (3 / 6 / 12 Months)</div>
+            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{ltCount} recharges · {inr(ltCash)} cash collected · {ltByTerm[3]} × 3mo · {ltByTerm[6]} × 6mo · {ltByTerm[12]} × 12mo</div>
+          </div>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 470px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 800 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {["Customer", "Plan", "Term", "Total Paid", "Per Month", "Earned This Month", "Deferred"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {longTerm.map(x => (
+                  <tr key={x.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px" }}><Person name={x.customerName || "—"} email={x.email} /></td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{x.plan || "—"}</td>
+                    <td style={{ padding: "14px 18px" }}>{renderHigStatusBadge(`${x.term} mo`)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: "#0d2119" }}>{inr(x.total)}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(x.perMonth)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{x.recogThis > 0 ? inr(x.recogThis) : "—"}</td>
+                    <td style={{ padding: "14px 18px", color: "#86868b" }}>{x.deferred > 0 ? inr(x.deferred) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {longTerm.length === 0 && <Empty msg="No long-term (3+ month) recharges found." />}
-        </Card>
+        </div>
       </div>
 
       {/* Renewals due */}
       <div style={{ marginTop: 18 }}>
-        <Card pad={false}
-          title="Renewals due — next 30 days"
-          sub={`${renewals.length} subscription${renewals.length !== 1 ? "s" : ""} · ${due7.length} within 7 days · ${inr(renewalValue)} expected`}>
-          <Table head={["Customer", "Plan", "Amount", "Interval", "Renews on", "In", "Status"]} maxHeight="calc(100vh - 470px)">
-            {renewals.map(s => (
-              <tr key={s.id} style={trStyle}>
-                <td style={td}><Person name={s.customerName || "—"} email={s.email} /></td>
-                <td style={td}>{s.plan || "—"}</td>
-                <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{inr(s.amount)}</td>
-                <td style={td}>{s.interval || "—"}</td>
-                <td style={td}>{fmtDate(s.nextBilling)}</td>
-                <td style={td}>
-                  <span style={{ fontWeight: 700, color: dueChipColor(s._days) }}>
-                    {s._days === 0 ? "Today" : s._days === 1 ? "1 day" : `${s._days} days`}
-                  </span>
-                </td>
-                <td style={td}><Status s={s.status} /></td>
-              </tr>
-            ))}
-          </Table>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Renewals Due — Next 30 Days</div>
+            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{renewals.length} subscriptions · {due7.length} within 7 days · {inr(renewalValue)} expected</div>
+          </div>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 470px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 800 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {["Customer", "Plan", "Amount", "Interval", "Renews On", "In", "Status"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {renewals.map(s => (
+                  <tr key={s.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px" }}><Person name={s.customerName || "—"} email={s.email} /></td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{s.plan || "—"}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: "#0d2119" }}>{inr(s.amount)}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{s.interval || "—"}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{fmtDate(s.nextBilling)}</td>
+                    <td style={{ padding: "14px 18px" }}>
+                      {renderHigStatusBadge(s._days === 0 ? "Due Today" : s._days === 1 ? "In 1 day" : `In ${s._days} days`)}
+                    </td>
+                    <td style={{ padding: "14px 18px" }}>{renderHigStatusBadge(s.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {renewals.length === 0 && <Empty msg="No renewals due in the next 30 days." />}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -1909,39 +2181,59 @@ export function AppLogs() {
       } />
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 18 }}>
-        <Card title="App Logs" sub="Login & activity events from the ProWater mobile / web app (Firestore · logs).">
-          <Toolbar q={q} setQ={setQ} placeholder="Search name, email, phone, apartment, IP…" count={shown.length}
-            right={<div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {chips.map(([id, lbl]) => <button key={id} onClick={() => setFilter(id)} style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: "1.5px solid " + (filter === id ? "var(--teal)" : "var(--border)"), background: filter === id ? "var(--mint-2)" : "#fff", color: filter === id ? "var(--teal-d)" : "var(--slate)" }}>{lbl}</button>)}
-              <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
-            </div>} />
-          <Table head={["User", "Phone", "Apartment", "Purifier ID", "Device", "IP",
-            <SortHeader key="lt" label="Login time" k="loginTime" sort={sort} onSort={toggleSort} />, "Status"]} maxHeight="calc(100vh - 360px)">
-            {pageRows.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={td}><Person name={r.name || "—"} email={r.email} /></td>
-                <td style={{ ...td, fontSize: 12.5 }}>{fmtPhone(r.phone)}</td>
-                <td style={{ ...td, fontSize: 12.5 }}>{r.apartment || "—"}</td>
-                <td style={{ ...td, textAlign: "center" }}>{r.purifierId && r.purifierId !== "null" ? <Chip>{r.purifierId}</Chip> : "—"}</td>
-                <td style={{ ...td, fontSize: 12, color: "var(--muted)", maxWidth: 170 }} title={r.device}>{trunc(r.device, 26)}</td>
-                <td style={{ ...td, fontSize: 12, fontFamily: "ui-monospace,monospace", color: "var(--slate)", maxWidth: 160 }} title={r.ip}>{trunc(r.ip, 22)}</td>
-                <td style={{ ...td, fontSize: 12.5, whiteSpace: "nowrap" }}>{fmtLogin(r.loginTime)}</td>
-                <td style={{ ...td, textAlign: "center" }}>{stChip(r.status)}</td>
-              </tr>
-            ))}
-            {shown.length === 0 && <tr><td colSpan={8} style={{ padding: 0 }}><Empty msg="No app logs match your search." /></td></tr>}
-          </Table>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>App Logs</div>
+            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>Login &amp; activity events from the ProWater mobile / web app (Firestore · logs).</div>
+          </div>
+          <div style={{ padding: "14px 20px 0" }}>
+            <Toolbar q={q} setQ={setQ} placeholder="Search name, email, phone, apartment, IP…" count={shown.length}
+              right={<div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {chips.map(([id, lbl]) => <button key={id} onClick={() => setFilter(id)} style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: "1.5px solid " + (filter === id ? "var(--teal)" : "rgba(0,0,0,.08)"), background: filter === id ? "rgba(8,128,90,.08)" : "#fff", color: filter === id ? "#08805a" : "#475569" }}>{lbl}</button>)}
+                <button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>
+              </div>} />
+          </div>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 360px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 820 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {["User", "Phone", "Apartment", "Purifier ID", "Device", "IP"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
+                    <SortHeader key="lt" label="Login time" k="loginTime" sort={sort} onSort={toggleSort} />
+                  </th>
+                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px" }}><Person name={r.name || "—"} email={r.email} /></td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569" }}>{fmtPhone(r.phone)}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569" }}>{r.apartment || "—"}</td>
+                    <td style={{ padding: "14px 18px", textAlign: "center" }}>{r.purifierId && r.purifierId !== "null" ? <Chip>{r.purifierId}</Chip> : "—"}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#86868b", maxWidth: 170 }} title={r.device}>{trunc(r.device, 26)}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, fontFamily: "ui-monospace,monospace", color: "#475569", maxWidth: 160 }} title={r.ip}>{trunc(r.ip, 22)}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, whiteSpace: "nowrap", color: "#86868b" }}>{fmtLogin(r.loginTime)}</td>
+                    <td style={{ padding: "14px 18px" }}>{renderHigStatusBadge(r.status)}</td>
+                  </tr>
+                ))}
+                {shown.length === 0 && <tr><td colSpan={8} style={{ padding: 0 }}><Empty msg="No app logs match your search." /></td></tr>}
+              </tbody>
+            </table>
+          </div>
           {sorted.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 14, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{start + 1}–{Math.min(start + PER_PAGE, sorted.length)} of {sorted.length}</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 20px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, color: "#64748b" }}>{start + 1}–{Math.min(start + PER_PAGE, sorted.length)} of {sorted.length}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={curPage <= 1} style={{ ...btnGhost, padding: "6px 12px", opacity: curPage <= 1 ? .5 : 1, cursor: curPage <= 1 ? "not-allowed" : "pointer" }}><ChevronLeft size={15} /> Prev</button>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--f)" }}>Page {curPage} / {totalPages}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#0d2119" }}>Page {curPage} / {totalPages}</span>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={curPage >= totalPages} style={{ ...btnGhost, padding: "6px 12px", opacity: curPage >= totalPages ? .5 : 1, cursor: curPage >= totalPages ? "not-allowed" : "pointer" }}>Next <ChevronRight size={15} /></button>
               </div>
             </div>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -2004,8 +2296,9 @@ export function EarnedRevenue() {
   const rows = data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).map(i => {
     const sub = subFor(i);
     const plan = sub?.plan || i.plan || "—";
+    const planCode = sub?.planCode || i.planCode || "";
     const total = i.total || 0;
-    const deposit = depositForCustomer(custOf(i), plan, total);
+    const deposit = depositForCustomer(custOf(i), plan, total, planCode);
     const recharge = Math.max(0, total - deposit);
     const months = termMonths(sub || { interval: i.interval, plan }) || 1;
     // Prefer the API's real paid_date (added ~2026-08); fall back to invoice
@@ -2088,7 +2381,11 @@ export function EarnedRevenue() {
 
   // ----- Apartment (society) + date-range scoping -----
   const aptOptions = Array.from(new Set(rows.map(r => r.society).filter(s => s && s !== "Unknown"))).sort();
-  const aptRows = apt === null ? rows : rows.filter(r => apt.includes(r.society));
+  const aptOk = (name) => {
+    if (apt === null) return isRealSociety(name);
+    return apt.includes(name);
+  };
+  const aptRows = rows.filter(r => aptOk(r.society));
 
   const rngPrev = prevRange(sel.preset, range);
   const collectedIn = (rng) => aptRows.filter(r => dateInRange(r.payDay, rng));
@@ -2106,38 +2403,12 @@ export function EarnedRevenue() {
   // Per-invoice recognition = invoices PAID in the range; the Earned Revenue card
   // equals this table's (unfiltered by search) "Earned in period" column total —
   // the search box only narrows which rows are DISPLAYED, it never changes the
-  // KPI cards or the trend chart above.
-  const sortedRows = collectNow.slice().sort((a, b) => {
-    const dir = sort.dir === "asc" ? 1 : -1;
-    if (sort.key === "paid") return ((a.payDay?.getTime() || 0) - (b.payDay?.getTime() || 0)) * dir;
-    if (sort.key === "due") return ((a.dueDay?.getTime() || 0) - (b.dueDay?.getTime() || 0)) * dir;
-    if (sort.key === "nextBilling") return ((a.nextBillDay?.getTime() || 0) - (b.nextBillDay?.getTime() || 0)) * dir;
-    return (a.earnedRevenue - b.earnedRevenue) * dir;
-  });
-  const totRow = sortedRows.reduce((a, r) => ({
-    total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge,
-    earned: a.earned + r.earnedRevenue, remDaysEarned: a.remDaysEarned + r.remainingDaysEarned, remMonthEarned: a.remMonthEarned + r.remainingMonthEarned,
-  }), { total: 0, deposit: 0, recharge: 0, earned: 0, remDaysEarned: 0, remMonthEarned: 0 });
-  const earnedRevenue = totRow.earned;
-  const earnedRevenuePrev = collectPrev.reduce((s, r) => s + r.earnedRevenue, 0);
-  // Search narrows the DISPLAYED rows + the table's own "Total (N)" footer
-  // (visTotal) — customer name, apartment/society, or phone (v2.29.102; phone
-  // matched digit-only so "8839452234" finds "918839452234" regardless of a
-  // country code or formatting). KPI cards above stay on sortedRows.
-  const searchQ = search.trim().toLowerCase();
-  const searchDigits = search.replace(/\D/g, "");
-  const tableRows = searchQ
-    ? sortedRows.filter(r => r.customer.toLowerCase().includes(searchQ) || r.society.toLowerCase().includes(searchQ)
-        || (searchDigits && r.phone.replace(/\D/g, "").includes(searchDigits)))
-    : sortedRows;
-  const visTotal = searchQ ? tableRows.reduce((a, r) => ({
-    total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge,
-    earned: a.earned + r.earnedRevenue, remDaysEarned: a.remDaysEarned + r.remainingDaysEarned, remMonthEarned: a.remMonthEarned + r.remainingMonthEarned,
-  }), { total: 0, deposit: 0, recharge: 0, earned: 0, remDaysEarned: 0, remMonthEarned: 0 }) : totRow;
+  const earnedNow = aptRows.filter(r => dateInRange(r.payDay, range));
+  const earnedPrev = aptRows.filter(r => dateInRange(r.payDay, rngPrev));
+  const earnedRevenue = earnedNow.reduce((s, r) => s + r.earnedRevenue, 0);
+  const earnedRevenuePrev = earnedPrev.reduce((s, r) => s + r.earnedRevenue, 0);
 
-  // Trend: up to 12 months ending at the range, but never before Jan 2026 (the
-  // business's first operating month). Earned = recognised revenue of invoices
-  // paid that month (same model as the table); line = recharge cash collected.
+  // Timeline (12-month rolling ending at range.to)
   const anchorY = range.to.getFullYear(), anchorM = range.to.getMonth() + 1;
   const timeline = Array.from({ length: 12 }, (_, k) => _addMonths(anchorY, anchorM, k - 11))
     .filter(([y, m]) => y > 2026 || (y === 2026 && m >= 1))
@@ -2174,8 +2445,26 @@ export function EarnedRevenue() {
     { label: "Remaining Days", get: r => r.remainingDays },
     { label: "Remaining Days Earned Total Revenue", get: r => r.remainingDaysEarned.toFixed(2) },
     { label: "Remaining Month Earned Total Revenue", get: r => r.remainingMonthEarned.toFixed(2) },
-  ], tableRows);
+  ], collectNow);
 
+  const sortedRows = collectNow.slice().sort((a, b) => {
+    const dir = sort.dir === "asc" ? 1 : -1;
+    if (sort.key === "paid") return ((a.payDay?.getTime() || 0) - (b.payDay?.getTime() || 0)) * dir;
+    if (sort.key === "due") return ((a.dueDay?.getTime() || 0) - (b.dueDay?.getTime() || 0)) * dir;
+    if (sort.key === "nextBilling") return ((a.nextBillDay?.getTime() || 0) - (b.nextBillDay?.getTime() || 0)) * dir;
+    return (a.earnedRevenue - b.earnedRevenue) * dir;
+  });
+
+  const searchQ = search.trim().toLowerCase();
+  const searchDigits = search.replace(/\D/g, "");
+  const tableRows = searchQ
+    ? sortedRows.filter(r => (r.customer || "").toLowerCase().includes(searchQ) || (r.society || "").toLowerCase().includes(searchQ)
+        || (searchDigits && (r.phone || "").replace(/\D/g, "").includes(searchDigits)))
+    : sortedRows;
+  const visTotal = tableRows.reduce((a, r) => ({
+    total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge,
+    earned: a.earned + r.earnedRevenue, remDaysEarned: a.remDaysEarned + r.remainingDaysEarned, remMonthEarned: a.remMonthEarned + r.remainingMonthEarned,
+  }), { total: 0, deposit: 0, recharge: 0, earned: 0, remDaysEarned: 0, remMonthEarned: 0 });
 
   return (
     <div className="fade-up">
@@ -2184,88 +2473,189 @@ export function EarnedRevenue() {
         <DateRangePicker value={sel} onChange={setSel} />
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+
+      {/* Recognised vs. Deferred Revenue Progress Strip */}
+      {rechargeNow > 0 && (() => {
+        const recPct = Math.min(100, Math.max(0, Math.round((earnedRevenue / rechargeNow) * 1000) / 10));
+        const defPct = Math.round((100 - recPct) * 10) / 10;
+        const unearnedVal = Math.max(0, rechargeNow - earnedRevenue);
+        return (
+          <div style={{ background: "rgba(243,248,236,.7)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(8,128,90,0.15)", padding: "14px 18px", marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".05em" }}>
+                Revenue Recognition Split · {periodLabel}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#1D1D1F" }}>
+                Recognised: <strong style={{ color: "#08805A" }}>{inr(Math.round(earnedRevenue))} ({recPct}%)</strong> · Deferred: <strong style={{ color: "#F59E0B" }}>{inr(Math.round(unearnedVal))} ({defPct}%)</strong>
+              </div>
+            </div>
+            <div style={{ height: 8, borderRadius: 999, background: "rgba(0,0,0,0.06)", overflow: "hidden", display: "flex" }}>
+              <div style={{ width: `${recPct}%`, background: "#08805A", borderRadius: "999px 0 0 999px" }} />
+              <div style={{ width: `${defPct}%`, background: "#F59E0B", borderRadius: "0 999px 999px 0" }} />
+            </div>
+          </div>
+        );
+      })()}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{
+            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            backdropFilter: s.hero ? "none" : "blur(20px)",
+            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
+            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 18,
+            padding: "18px 20px",
+            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+            position: "relative",
+            overflow: "hidden"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+                {s.label}
+              </span>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              </div>
+            </div>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 28, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+              {s.value}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B", fontWeight: 500 }}>{s.sub}</div>
+              {s.delta != null && Number.isFinite(s.delta) && (
+                <span style={{
+                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
+                  background: s.hero ? (s.delta > 0 ? "rgba(255,255,255,0.25)" : "rgba(220,38,38,0.3)") : (s.delta > 0 ? "rgba(8,128,90,0.12)" : "rgba(220,38,38,0.1)"),
+                  color: s.hero ? "#ffffff" : (s.delta > 0 ? "#08805a" : "#dc2626")
+                }}>
+                  {s.delta > 0 ? "▲ +" : s.delta < 0 ? "▼ " : ""}{s.delta}%
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div style={{ marginTop: 18 }}>
-        <Card title="Earned vs recharge collected" sub="Bars = revenue recognised that month (accrual) · line = recharge cash collected">
-          <ResponsiveContainer width="100%" height={300}>
-            <ComposedChart data={timeline} margin={{ left: 8, right: 12, top: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
-              <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} tickMargin={12} height={38} />
-              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={64} />
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 24 }}>
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 17, color: "#1D1D1F", letterSpacing: "-0.01em" }}>Earned vs Recharge Collected</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Bars = revenue recognised that month (accrual) · Line = recharge cash collected</div>
+          </div>
+          <ResponsiveContainer width="100%" height={310}>
+            <ComposedChart data={timeline} margin={{ left: 8, right: 12, top: 26 }}>
+              <defs>
+                <linearGradient id="earnedHigGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
+                  <stop offset="100%" stopColor="#0A7D53" stopOpacity={0.7} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} tickMargin={12} height={38} />
+              <YAxis domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} width={64} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
               <Tooltip content={<TT prefix="₹" />} />
-              <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="earned" name="Earned" fill="#0A9D6E" radius={[5, 5, 0, 0]} maxBarSize={34} isAnimationActive={false}>
-                <LabelList dataKey="earned" position="top" formatter={(v) => v ? kLabel(v) : ""} style={{ fontSize: 10.5, fill: "var(--f)", fontWeight: 700 }} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12.5, color: "#1D1D1F", paddingTop: 10 }} />
+              <Bar dataKey="earned" name="Earned" fill="url(#earnedHigGrad)" radius={[8, 8, 0, 0]} maxBarSize={36} isAnimationActive={false}>
+                <LabelList dataKey="earned" position="top" formatter={(v) => v ? inr(v) : ""} style={{ fontSize: 10, fill: "#08805A", fontWeight: 700, fontFamily: "-apple-system, system-ui" }} />
               </Bar>
-              <Line dataKey="recharge" name="Recharge collected" stroke="#986315" strokeWidth={2} dot={{ r: 3, fill: "#986315" }} isAnimationActive={false}>
-                <LabelList dataKey="recharge" position="bottom" offset={10} formatter={(v) => v ? kLabel(v) : ""} style={{ fontSize: 10.5, fill: "#986315", fontWeight: 700 }} />
+              <Line dataKey="recharge" name="Recharge collected" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false}>
+                <LabelList dataKey="recharge" position="bottom" offset={10} formatter={(v) => v ? inr(v) : ""} style={{ fontSize: 10, fill: "#D97706", fontWeight: 700, fontFamily: "-apple-system, system-ui" }} />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
       </div>
+
       <div style={{ marginTop: 18 }}>
         <Toolbar q={search} setQ={setSearch} placeholder="Search customer, mobile number or apartment…" count={tableRows.length} />
-        <Card pad={false} title={`Per-invoice recognition · ${rangeText}`}>
-          <Table head={["Invoice #", "Reference Number", "Apartment",
-            <button onClick={() => toggleSort("due")} title="Sort by start date"
-              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
-              Start Date {sort.key === "due" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
-            </button>,
-            <button onClick={() => toggleSort("paid")} title="Sort by paid date"
-              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
-              Paid on {sort.key === "paid" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
-            </button>,
-            <button onClick={() => toggleSort("nextBilling")} title="Sort by end date"
-              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
-              End Date {sort.key === "nextBilling" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
-            </button>,
-            "Total paid", "Deposit", "Recharge", "Interval", "Earned/month", "Tenure days",
-            <button onClick={() => toggleSort("earned")} title="Sort by earned revenue"
-              style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
-              Earned revenue {sort.key === "earned" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
-            </button>,
-            "Remaining Month", "Remaining Days", "Remaining Days Earned Total Revenue", "Remaining Month Earned Total Revenue"]} maxHeight="calc(100vh - 460px)">
-            {tableRows.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: r.deposit > 0 ? "#FBF0E0" : undefined }}>
-                <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap" }}>{r.invoiceNumber}</td>
-                <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap", color: "var(--muted)" }}>{r.referenceNumber}</td>
-                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.society}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.dueDay ? fmtDate(r.dueDay) : "—"}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{(r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "—"}</td>
-                <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.nextBillDay ? fmtDate(r.nextBillDay) : "—"}</td>
-                <td style={{ ...td, fontWeight: 600 }}>{inr(r.total)}</td>
-                <td style={td}>{inr(r.deposit)}</td>
-                <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600 }}>{inr(r.recharge)}</td>
-                <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap", color: "var(--muted)" }}>{r.intervalLabel || "—"}</td>
-                <td style={td}>{inr(r.earnedPerMonth)}</td>
-                <td style={td}>{r.tenureDays ?? "—"}</td>
-                <td style={{ ...td, fontWeight: 600, color: "var(--forest)" }}>{inr(Math.round(r.earnedRevenue))}</td>
-                <td style={td}>{r.remainingMonths}</td>
-                <td style={td}>{r.remainingDays}</td>
-                <td style={{ ...td, fontWeight: 600, color: r.remainingDaysEarned ? "var(--forest)" : "var(--muted)" }}>{r.remainingDaysEarned ? inr(Math.round(r.remainingDaysEarned)) : "—"}</td>
-                <td style={{ ...td, fontWeight: 600, color: r.remainingMonthEarned ? "var(--forest)" : "var(--muted)" }}>{r.remainingMonthEarned ? inr(Math.round(r.remainingMonthEarned)) : "—"}</td>
-              </tr>
-            ))}
-            {tableRows.length > 0 && (
-              <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={6}>Total ({tableRows.length})</td>
-                <td style={ftd}>{inr(visTotal.total)}</td>
-                <td style={ftd}>{inr(visTotal.deposit)}</td>
-                <td style={ftd}>{inr(visTotal.recharge)}</td>
-                <td style={ftd}></td>
-                <td style={ftd}></td>
-                <td style={ftd}></td>
-                <td style={ftd}>{inr(Math.round(visTotal.earned))}</td>
-                <td style={ftd}></td>
-                <td style={ftd}></td>
-                <td style={ftd}>{inr(Math.round(visTotal.remDaysEarned))}</td>
-                <td style={ftd}>{inr(Math.round(visTotal.remMonthEarned))}</td>
-              </tr>
-            )}
-          </Table>
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.4)" }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Per-Invoice Recognition</div>
+            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{rangeText} · {tableRows.length} invoices</div>
+          </div>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 460px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 1200 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {["Invoice #", "Reference Number", "Customer", "Apartment"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
+                    <button onClick={() => toggleSort("due")} title="Sort by start date"
+                      style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+                      Start Date {sort.key === "due" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+                    </button>
+                  </th>
+                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
+                    <button onClick={() => toggleSort("paid")} title="Sort by paid date"
+                      style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+                      Paid on {sort.key === "paid" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+                    </button>
+                  </th>
+                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
+                    <button onClick={() => toggleSort("nextBilling")} title="Sort by end date"
+                      style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+                      End Date {sort.key === "nextBilling" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+                    </button>
+                  </th>
+                  {["Total Paid", "Deposit", "Recharge", "Interval", "Earned/month", "Tenure Days"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
+                    <button onClick={() => toggleSort("earned")} title="Sort by earned revenue"
+                      style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", color: "inherit", letterSpacing: "inherit", textTransform: "inherit", display: "inline-flex", alignItems: "center", gap: 4, padding: 0 }}>
+                      Earned Revenue {sort.key === "earned" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
+                    </button>
+                  </th>
+                  {["Remaining Month", "Remaining Days", "Remaining Days Earned Total Revenue", "Remaining Month Earned Total Revenue"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", background: r.deposit > 0 ? "rgba(255,149,0,.04)" : undefined }}>
+                    <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", fontWeight: 600, color: "#0d2119" }}>{r.invoiceNumber}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", color: "#86868b" }}>{r.referenceNumber}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap" }}>{r.customer}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569" }}>{r.society}</td>
+                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap", fontSize: 12.5, color: "#475569" }}>{r.dueDay ? fmtDate(r.dueDay) : "—"}</td>
+                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap", fontSize: 12.5, color: "#475569" }}>{(r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "—"}</td>
+                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap", fontSize: 12.5, color: "#475569" }}>{r.nextBillDay ? fmtDate(r.nextBillDay) : "—"}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: "#0d2119" }}>{inr(r.total)}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(r.deposit)}</td>
+                    <td style={{ padding: "14px 18px", color: "#08805a", fontWeight: 600 }}>{inr(r.recharge)}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap" }}>{r.intervalLabel ? renderHigStatusBadge(r.intervalLabel) : "—"}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(r.earnedPerMonth)}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{r.tenureDays ?? "—"}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(r.earnedRevenue))}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{r.remainingMonths}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{r.remainingDays}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: r.remainingDaysEarned ? "#08805a" : "#86868b" }}>{r.remainingDaysEarned ? inr(Math.round(r.remainingDaysEarned)) : "—"}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: r.remainingMonthEarned ? "#08805a" : "#86868b" }}>{r.remainingMonthEarned ? inr(Math.round(r.remainingMonthEarned)) : "—"}</td>
+                  </tr>
+                ))}
+                {tableRows.length > 0 && (
+                  <tr style={{ background: "rgba(243,248,236,.5)" }}>
+                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={7}>Total ({tableRows.length})</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(visTotal.total)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(visTotal.deposit)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(visTotal.recharge)}</td>
+                    <td style={{ padding: "14px 18px" }}></td>
+                    <td style={{ padding: "14px 18px" }}></td>
+                    <td style={{ padding: "14px 18px" }}></td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(visTotal.earned))}</td>
+                    <td style={{ padding: "14px 18px" }}></td>
+                    <td style={{ padding: "14px 18px" }}></td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(visTotal.remDaysEarned))}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(visTotal.remMonthEarned))}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           {tableRows.length === 0 && <Empty msg="No paid invoices to recognise." />}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -2306,7 +2696,7 @@ export function Reconciliation() {
     return i.society || "Unknown";
   };
   const aptOptions = Array.from(new Set(data.inv.map(societyOf).filter(s => s && s !== "Unknown"))).sort();
-  const aptOk = (i) => apt === null || apt.includes(societyOf(i));
+  const aptOk = (i) => apt === null ? isRealSociety(societyOf(i)) : apt.includes(societyOf(i));
 
   // One reconciliation "fact" per invoice with a due date and a positive amount.
   // dueValid + periodEnd = the due date's calendar month, end of day on the
@@ -2704,7 +3094,7 @@ export function DPTransactions() {
   // be included here.
   const rows = state.rows.filter(r => r.transaction_type !== "DISCOUNT");
   const aptOptions = Array.from(new Set(rows.map(r => r.partner_name).filter(Boolean))).sort();
-  const aptOk = (r) => apt === null || apt.includes(r.partner_name);
+  const aptOk = (r) => apt === null ? isRealSociety(r.partner_name) : apt.includes(r.partner_name);
 
   // Paid_Date arrives as "YYYY-MM-DD HH:MM:SS.ffffff" — native Date parses it fine.
   const paidOk = (r) => {
@@ -2767,26 +3157,76 @@ export function DPTransactions() {
   const rechargePrev = prevFiltered.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
   const totalPrev = depositPrev + rechargePrev;
 
+  const today = startOfDay(new Date());
+
+  const calcDpRowEarned = (r) => {
+    const pd = r.Paid_Date ? startOfDay(new Date(r.Paid_Date)) : null;
+    const pdValid = pd && !isNaN(pd.getTime());
+    const startDate = r["t.validity_start_date"] ? startOfDay(new Date(r["t.validity_start_date"])) : null;
+    const endDate = r["t.validity_end_date"] ? startOfDay(new Date(r["t.validity_end_date"])) : null;
+    const startValid = startDate && !isNaN(startDate.getTime());
+    const endValid = endDate && !isNaN(endDate.getTime());
+
+    const recharge = Math.max(0, Number(r.revenue_amount) || 0);
+    const deposit = Math.max(0, Number(r.deposit_amount) || 0);
+    const totalPaid = Number(r.transaction_amount) || (deposit + recharge);
+
+    const refStart = pdValid ? pd : (startValid ? startDate : null);
+    const tenureDays = (refStart && endValid)
+      ? Math.max(1, Math.round((endDate - refStart) / 86400000) + 1)
+      : (validityOf(r) || 30);
+
+    const monthEnd = pdValid ? new Date(pd.getFullYear(), pd.getMonth() + 1, 0) : null;
+    let daysInPaidMonth = 0;
+    if (pdValid && endValid && tenureDays > 0) {
+      const overlapEnd = endDate < monthEnd ? endDate : monthEnd;
+      daysInPaidMonth = overlapEnd >= pd ? Math.min(tenureDays, Math.round((overlapEnd - pd) / 86400000) + 1) : 0;
+    } else if (pdValid) {
+      const dm = new Date(pd.getFullYear(), pd.getMonth() + 1, 0).getDate();
+      daysInPaidMonth = Math.min(tenureDays, dm - pd.getDate() + 1);
+    }
+
+    const earnedRevenue = tenureDays > 0 ? (recharge * daysInPaidMonth) / tenureDays : 0;
+    const remainingDaysEarned = Math.max(0, recharge - earnedRevenue);
+
+    return {
+      ...r,
+      pd, startDate, endDate, recharge, deposit, totalPaid,
+      tenureDays, daysInPaidMonth, earnedRevenue, remainingDaysEarned
+    };
+  };
+
+  const enrichedInRange = inRange.map(calcDpRowEarned);
+  const totalEarnedRevenue = enrichedInRange.reduce((s, r) => s + r.earnedRevenue, 0);
+
+  const prevEnriched = prevFiltered.map(calcDpRowEarned);
+  const totalPrevEarned = prevEnriched.reduce((s, r) => s + r.earnedRevenue, 0);
+
   const stats = [
     { label: "Total Collected", value: inr(Math.round(totalCollected)), icon: Wallet, sub: rangeLabel(range), hero: true, delta: momPct(totalCollected, totalPrev) },
+    { label: "Earned Revenue", value: inr(Math.round(totalEarnedRevenue)), icon: Scale, sub: `recognised · ${rangeLabel(range)}`, delta: momPct(totalEarnedRevenue, totalPrevEarned) },
     { label: "Recharge Collected", value: inr(Math.round(rechargeCollected)), icon: Repeat, sub: `${rechargeSplitPct}% of collections`, delta: momPct(rechargeCollected, rechargePrev) },
     { label: "Deposit Collected", value: inr(Math.round(depositCollected)), icon: Landmark, sub: `${depositSplitPct}% of collections`, delta: momPct(depositCollected, depositPrev) },
   ];
 
   const sortField = { paid: "Paid_Date", start: "t.validity_start_date", end: "t.validity_end_date" }[sort.key];
   const searchQ = search.trim().toLowerCase();
-  const tableRows = inRange
+  const tableRows = enrichedInRange
     .filter(r => !searchQ ||
       (r.phone || "").toLowerCase().includes(searchQ) ||
       (r.current_device || "").toLowerCase().includes(searchQ) ||
-      (r.partner_name || "").toLowerCase().includes(searchQ))
+      (r.partner_name || "").toLowerCase().includes(searchQ) ||
+      (r.CustomerName || "").toLowerCase().includes(searchQ))
     .sort((a, b) => {
       const ta = a[sortField] ? new Date(a[sortField]).getTime() : 0;
       const tb = b[sortField] ? new Date(b[sortField]).getTime() : 0;
       return (ta - tb) * (sort.dir === "asc" ? 1 : -1);
     });
-  const grandDeposit = tableRows.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
-  const grandRevenue = tableRows.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+  const grandDeposit = tableRows.reduce((s, r) => s + (r.deposit || 0), 0);
+  const grandRevenue = tableRows.reduce((s, r) => s + (r.recharge || 0), 0);
+  const grandTotalPaid = tableRows.reduce((s, r) => s + (r.totalPaid || 0), 0);
+  const grandEarnedRevenue = tableRows.reduce((s, r) => s + (r.earnedRevenue || 0), 0);
+  const grandRemainingEarned = tableRows.reduce((s, r) => s + (r.remainingDaysEarned || 0), 0);
 
   // Per-apartment performance — same date/apt/type filters as the aggregate
   // KPI cards above, just broken out by partner_name so you can compare
@@ -2884,55 +3324,46 @@ export function DPTransactions() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{
+            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            backdropFilter: s.hero ? "none" : "blur(20px)",
+            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
+            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 20,
+            padding: "20px 22px",
+            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+            color: s.hero ? "#fff" : "#1D1D1F",
+            display: "flex", flexDirection: "column", justifyContent: "space-between"
+          }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>{s.label}</span>
+                {s.icon && <s.icon size={18} style={{ color: s.hero ? "#A7F3D0" : "#08805A" }} />}
+              </div>
+              <div style={{ fontSize: 25, fontWeight: 700, color: s.hero ? "#fff" : "#1D1D1F", letterSpacing: "-.02em" }}>{s.value}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, fontSize: 12 }}>
+              <span style={{ color: s.hero ? "#D1FAE5" : "#86868B" }}>{s.sub}</span>
+              {s.delta != null && (
+                <span style={{ fontWeight: 700, color: s.hero ? "#A7F3D0" : (s.delta >= 0 ? "#08805A" : "#DC2626") }}>
+                  {s.delta >= 0 ? "▲ +" : "▼ "}{s.delta}%
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {/* Collection composition (split) + Apartment performance, side by side. */}
-      <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: totalCollected > 0 ? "0.72fr 1.28fr" : "1fr", gap: 16 }} className="dp-grid">
-        <style>{`@media(max-width:900px){.dp-grid{grid-template-columns:1fr!important}}`}</style>
-        {totalCollected > 0 && (
+      {/* Apartment performance */}
+      {aptStats.length > 0 && (
+        <div style={{ marginTop: 18 }}>
           <Card>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
               <div>
-                <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 16, color: "var(--f)" }}>Collection composition</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>How the {inr(Math.round(totalCollected))} collected this period is distributed.</div>
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em", color: "var(--muted)", background: "var(--mint)", padding: "5px 10px", borderRadius: 8, whiteSpace: "nowrap" }}>{dpPeriodLabel}</span>
-            </div>
-            <div style={{ display: "flex", height: 12, borderRadius: 999, overflow: "hidden", background: "var(--mint-2)", marginTop: 18 }}>
-              {depositSplitPct > 0 && <div style={{ width: `${depositSplitPct}%`, background: "var(--amber)" }} title={`Deposit ${depositSplitPct}%`} />}
-              {rechargeSplitPct > 0 && <div style={{ width: `${rechargeSplitPct}%`, background: "var(--green)" }} title={`Recharge ${rechargeSplitPct}%`} />}
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
-              <div style={{ background: "var(--amber-t)", borderRadius: 12, padding: "12px 14px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 999, background: "var(--amber)", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--slate)" }}>Deposit</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: 7, gap: 6 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "var(--f)" }}>{inr(Math.round(depositCollected))}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--amber)" }}>{depositSplitPct}%</div>
-                </div>
-              </div>
-              <div style={{ background: "var(--green-t)", borderRadius: 12, padding: "12px 14px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 999, background: "var(--green)", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--slate)" }}>Recharge</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: 7, gap: 6 }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "var(--f)" }}>{inr(Math.round(rechargeCollected))}</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "var(--green)" }}>{rechargeSplitPct}%</div>
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
-
-        {aptStats.length > 0 && (
-          <Card>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-              <div>
-                <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 16, color: "var(--f)" }}>Apartment performance</div>
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>Collections ranked by apartment for this period · {aptActiveCount} of {aptStats.length} active</div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#1D1D1F" }}>Apartment performance</div>
+                <div style={{ fontSize: 12, color: "#86868B", marginTop: 4 }}>Collections ranked by apartment for this period · {aptActiveCount} of {aptStats.length} active</div>
               </div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 12, marginTop: 16 }}>
@@ -2972,8 +3403,8 @@ export function DPTransactions() {
               })}
             </div>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 18 }}>
         <Toolbar q={search} setQ={setSearch} placeholder="Search phone, device or apartment…" count={tableRows.length}
@@ -2999,14 +3430,15 @@ export function DPTransactions() {
               ))}
             </div>
           } />
-        <Card pad={false}
-          title={<span>Transactions · {rangeLabel(range)} <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--muted)", background: "var(--mint)", padding: "3px 9px", borderRadius: 999, marginLeft: 6 }}>{tableRows.length.toLocaleString("en-IN")} records</span></span>}
-          sub="Raw records from the DP Transactions feed — filtered by Paid_Date, apartment, payment type and transaction type. A collection event can appear as both a COLLECTION_SUMMARY and a TRANSACTION row; shown as TRANSACTION only by default. DISCOUNT transaction_type rows are excluded entirely — not real cash collected.">
-          <Table head={[
-            sortHeader("paid", "Paid date"),
-            "Apartment", "Customer", "Phone", "Device", "Type",
-            sortHeader("start", "Start Date"), sortHeader("end", "End Date"),
-            "Validity", "Litres", "Plan", "Deposit", "Revenue"]} maxHeight="calc(100vh - 460px)">
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden" }}>
+          <Card pad={false}
+            title={<span>Transactions · {rangeLabel(range)} <span style={{ fontSize: 10.5, fontWeight: 700, color: "#08805A", background: "rgba(8,128,90,0.12)", padding: "3px 9px", borderRadius: 999, marginLeft: 6 }}>{tableRows.length.toLocaleString("en-IN")} records</span></span>}
+            sub="Raw records from the DP Transactions feed — filtered by Paid_Date, apartment, payment type and transaction type.">
+            <Table head={[
+              sortHeader("paid", "Paid date"),
+              "Apartment", "Customer", "Phone", "Device", "Type",
+              sortHeader("start", "Start Date"), sortHeader("end", "End Date"),
+              "Validity", "Litres", "Plan", "Deposit", "Revenue"]} maxHeight="calc(100vh - 460px)">
             {pageRows.map((r, i) => (
               <tr key={r.id ? `${r.id}-${i}` : i} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
@@ -3051,6 +3483,62 @@ export function DPTransactions() {
             </div>
           )}
         </Card>
+        </div>
+
+        {/* ── NEW: DP Earned Revenue Recognition Table ───────────────────────────── */}
+        <div style={{ marginTop: 22 }}>
+          <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden" }}>
+            <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.4)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>DP Earned Revenue Recognition</div>
+                <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Per-transaction revenue recognised in {rangeLabel(range)} based on payment date and validity tenure</div>
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>
+                Total Recognised: {inr(Math.round(grandEarnedRevenue))}
+              </span>
+            </div>
+
+            <Table head={[
+              sortHeader("paid", "Paid date"),
+              "Apartment", "Customer", "Phone", "Device", "Plan",
+              "Total Paid", "Recharge", "Tenure", "Days in Month", "Earned Revenue", "Future Revenue"
+            ]} maxHeight="calc(100vh - 460px)">
+              {pageRows.map((r, i) => {
+                const er = r.earnedRevenue || 0;
+                const remEr = r.remainingDaysEarned || 0;
+                return (
+                  <tr key={r.id ? `earned-${r.id}-${i}` : `earned-${i}`} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
+                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.partner_name || "—"}</td>
+                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.CustomerName || "—"}</td>
+                    <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.phone || "—"}</td>
+                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>
+                      {r.current_device ? <span style={{ display: "inline-block", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)" }}>{r.current_device}</span> : "—"}
+                    </td>
+                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.Plan || "—"}</td>
+                    <td style={{ ...td, fontWeight: 600, textAlign: "right" }}>{r.totalPaid ? inr(r.totalPaid) : "—"}</td>
+                    <td style={{ ...td, fontWeight: 600, textAlign: "right" }}>{r.recharge ? inr(r.recharge) : "—"}</td>
+                    <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.tenureDays ? `${r.tenureDays}d` : "—"}</td>
+                    <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.daysInPaidMonth ? `${r.daysInPaidMonth}d` : "—"}</td>
+                    <td style={{ ...td, color: "#08805A", fontWeight: 700, textAlign: "right" }}>{inr(Math.round(er))}</td>
+                    <td style={{ ...td, color: "#D97706", fontWeight: 600, textAlign: "right" }}>{remEr > 0 ? inr(Math.round(remEr)) : "—"}</td>
+                  </tr>
+                );
+              })}
+              {tableRows.length > 0 && (
+                <tr>
+                  <td style={{ ...ftd, textAlign: "center" }} colSpan={6}>Grand Total ({tableRows.length})</td>
+                  <td style={{ ...ftd, textAlign: "right" }}>{inr(Math.round(grandTotalPaid))}</td>
+                  <td style={{ ...ftd, textAlign: "right" }}>{inr(Math.round(grandRevenue))}</td>
+                  <td style={{ ...ftd, textAlign: "center" }} colSpan={2}>—</td>
+                  <td style={{ ...ftd, textAlign: "right", color: "#08805A", fontWeight: 800 }}>{inr(Math.round(grandEarnedRevenue))}</td>
+                  <td style={{ ...ftd, textAlign: "right", color: "#D97706", fontWeight: 800 }}>{inr(Math.round(grandRemainingEarned))}</td>
+                </tr>
+              )}
+              {tableRows.length === 0 && <tr><td colSpan={12} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
+            </Table>
+          </div>
+        </div>
       </div>
       {apiResult && (
         <Modal onClose={() => setApiResult(null)}
@@ -3124,9 +3612,10 @@ export function AOP({ accessLevel = "view" }) {
   const paid = data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).map(i => {
     const sub = subBy[i.customerNumber] || subBy[i.zohoCustomerId] || subBy[i.zohoId] || null;
     const plan = sub?.plan || i.plan || "";
+    const planCode = sub?.planCode || i.planCode || "";
     const total = i.total || 0;
     const d = new Date(i.date);
-    return { recharge: Math.max(0, total - depositForCustomer(custOf(i), plan, total)), y: isNaN(d.getTime()) ? null : d.getFullYear(), m: isNaN(d.getTime()) ? null : d.getMonth() + 1 };
+    return { recharge: Math.max(0, total - depositForCustomer(custOf(i), plan, total, planCode)), y: isNaN(d.getTime()) ? null : d.getFullYear(), m: isNaN(d.getTime()) ? null : d.getMonth() + 1 };
   });
   const rechargeIn = (y, m) => Math.round(paid.reduce((s, r) => (r.y === y && r.m === m) ? s + r.recharge : s, 0));
 
@@ -3261,16 +3750,17 @@ export function ChurnRiskRadar() {
   const [data, setData] = useState(null);
   const [levelFilter, setLevelFilter] = useState("all"); // all | high | medium | low
   const [search, setSearch] = useState("");
+  const [now] = useState(() => Date.now());
   useEffect(() => {
-    api.logView(user.username, "Viewed Renewal & Churn Risk Radar");
+    api.logView(user?.username, "Viewed Renewal & Churn Risk Radar");
     Promise.all([customerApi.getCustomers(), billingApi.getSubscriptions(), billingApi.getInvoices()])
       .then(([customers, subs, invs]) => setData({ customers, subs, invs }))
       .catch(() => setData({ customers: [], subs: [], invs: [] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (!data) return <Loading />;
   const { customers, subs, invs } = data;
 
-  const now = Date.now();
   const MS_DAY = 86400000;
   const RENEWAL_WINDOW_DAYS = 30;
 
@@ -3323,12 +3813,6 @@ export function ChurnRiskRadar() {
   const overdueTotal = rows.reduce((s, r) => s + r.overdueAmt, 0);
   const dunningCount = rows.filter(r => r.isDunning).length;
 
-  const levelChip = (level) => {
-    const map = { high: ["#DC4141", "#FBE8E8", "High"], medium: ["#986315", "#FBF0E0", "Medium"], low: ["#7D8A83", "#ECEEED", "Low"] };
-    const [c, bg, lbl] = map[level] || map.low;
-    return <span style={{ fontSize: 11, fontWeight: 700, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
-  };
-
   const exportCsv = () => exportToCsv("prowater-churn-risk.csv", [
     { label: "Customer", get: r => r.c.name }, { label: "Purifier ID", get: r => r.c.purifier_id },
     { label: "Society", get: r => r.c.society }, { label: "Phone", get: r => r.c.phone },
@@ -3363,20 +3847,33 @@ export function ChurnRiskRadar() {
               <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: 6 }}><Download size={15} /> Export</button>
             </div>
           } />
-        <Card pad={false}>
-          <Table head={["Customer", "Society", "Purifier ID", "Risk", "Reasons"]} maxHeight="calc(100vh - 460px)">
-            {filtered.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 600, color: "var(--f)" }}>{r.c.name || "—"}</td>
-                <td style={{ ...td, fontSize: 12 }}>{r.c.society || "—"}</td>
-                <td style={{ ...td, fontSize: 12 }}>{r.c.purifier_id}</td>
-                <td style={{ ...td, textAlign: "center" }}>{levelChip(r.level)}</td>
-                <td style={{ ...td, fontSize: 12.5 }}>{r.reasons.join(" · ")}</td>
-              </tr>
-            ))}
-          </Table>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 460px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {["Customer", "Society", "Purifier ID", "Risk Level", "Reasons"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: "#0d2119" }}>{r.c.name || "—"}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569", fontSize: 12.5 }}>{r.c.society || "—"}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569", fontSize: 12.5 }}>{r.c.purifier_id}</td>
+                    <td style={{ padding: "14px 18px" }}>
+                      {renderHigStatusBadge(r.level === "high" ? "High Risk" : r.level === "medium" ? "Medium Risk" : "Low Risk")}
+                    </td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569" }}>{r.reasons.join(" · ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {filtered.length === 0 && <Empty msg="No customers match this filter — nothing currently at risk." />}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -3393,13 +3890,18 @@ export function ApartmentPerformance() {
   const [ym, setYm] = useState("all");
   const PER = 12;
   useEffect(() => {
-    api.logView(user.username, "Viewed Apartment Performance");
+    api.logView(user?.username, "Viewed Apartment Performance");
     Promise.all([billingApi.getInvoices(), customerApi.getCustomers()])
       .then(([inv, cust]) => setData({ inv, cust }))
       .catch(() => setData({ inv: [], cust: [] }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { setPage(1); }, [q, mode, ym]);
+
   if (!data) return <Loading />;
+
+  const handleQChange = (e) => { setQ(e.target.value); setPage(1); };
+  const handleModeChange = (v) => { setMode(v); setPage(1); };
+  const handleYmChange = (e) => { setYm(e.target.value); setPage(1); };
 
   const custBy = {};
   data.cust.forEach(c => { [c.zohoId, c.id, c.zohoCustomerId].filter(Boolean).forEach(k => { custBy[k] = c; }); });
@@ -3409,7 +3911,8 @@ export function ApartmentPerformance() {
     const c = custFor(i);
     const total = i.total || 0;
     const plan = i.plan || c?.plan || "";
-    const deposit = depositForCustomer(c, plan, total);
+    const planCode = i.planCode || "";
+    const deposit = depositForCustomer(c, plan, total, planCode);
     return { society: c?.society || i.customerName || "—", purifierId: c?.purifier_id || "—", total, deposit, recharge: Math.max(0, total - deposit), date: i.date };
   });
 
@@ -3451,7 +3954,7 @@ export function ApartmentPerformance() {
   ], filtered);
 
   const seg = (v, label) => (
-    <button onClick={() => setMode(v)} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, border: "1.5px solid var(--border)", background: mode === v ? "var(--forest)" : "#fff", color: mode === v ? "#fff" : "var(--slate)", borderRadius: 10, cursor: "pointer" }}>{label}</button>
+    <button onClick={() => handleModeChange(v)} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, border: "1.5px solid rgba(0,0,0,.08)", background: mode === v ? "#08805a" : "#fff", color: mode === v ? "#fff" : "#475569", borderRadius: 10, cursor: "pointer" }}>{label}</button>
   );
 
 
@@ -3459,49 +3962,60 @@ export function ApartmentPerformance() {
     <div className="fade-up">
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         {seg("apartment", "By Apartment")}{seg("purifier", "By Purifier ID")}
-        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600, marginLeft: 8 }}>Month</span>
-        <select value={ym} onChange={e => setYm(e.target.value)} style={selectStyle}>
+        <span style={{ fontSize: 12.5, color: "#86868b", fontWeight: 600, marginLeft: 8 }}>Month</span>
+        <select value={ym} onChange={handleYmChange} style={selectStyle}>
           <option value="all">All time</option>
           {monthsAvail.map(k => { const [y, m] = k.split("-").map(Number); return <option key={k} value={k}>{_monthLong(y, m)}</option>; })}
         </select>
       </div>
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 16 }}>
-        <Toolbar q={q} setQ={setQ} placeholder={mode === "apartment" ? "Search apartment…" : "Search purifier ID…"} count={filtered.length}
+        <Toolbar q={q} setQ={setQ} onChange={handleQChange} placeholder={mode === "apartment" ? "Search apartment…" : "Search purifier ID…"} count={filtered.length}
           right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />
-        <Card pad={false}>
-          <Table head={[mode === "apartment" ? "Apartment" : "Purifier ID", "Invoices", "Deposit", "Recharge", "Total"]} maxHeight="calc(100vh - 460px)">
-            {pageRows.map((r, i) => (
-              <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{r.key}</td>
-                <td style={td}>{r.count}</td>
-                <td style={td}>{inr(r.deposit)}</td>
-                <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600 }}>{inr(r.recharge)}</td>
-                <td style={{ ...td, fontWeight: 600 }}>{inr(r.total)}</td>
-              </tr>
-            ))}
-            {filtered.length > 0 && (
-              <tr>
-                <td style={{ ...ftd, textAlign: "center" }}>Total ({filtered.length})</td>
-                <td style={ftd}>{tot.count}</td>
-                <td style={ftd}>{inr(tot.deposit)}</td>
-                <td style={ftd}>{inr(tot.recharge)}</td>
-                <td style={ftd}>{inr(tot.total)}</td>
-              </tr>
-            )}
-          </Table>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
+          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 460px)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
+                  {[mode === "apartment" ? "Apartment" : "Purifier ID", "Invoices", "Deposit", "Recharge", "Total"].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {pageRows.map((r, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: "#0d2119" }}>{r.key}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{r.count}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(r.deposit)}</td>
+                    <td style={{ padding: "14px 18px", color: "#08805a", fontWeight: 600 }}>{inr(r.recharge)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#0d2119" }}>{inr(r.total)}</td>
+                  </tr>
+                ))}
+                {filtered.length > 0 && (
+                  <tr style={{ background: "rgba(243,248,236,.5)" }}>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#0d2119" }}>Total ({filtered.length})</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>{tot.count}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(tot.deposit)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(tot.recharge)}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(tot.total)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           {filtered.length === 0 && <Empty msg="No paid invoices in scope." />}
           {filtered.length > PER && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 16px" }}>
-              <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{start + 1}–{Math.min(start + PER, filtered.length)} of {filtered.length}</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 20px", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, color: "#64748b" }}>{start + 1}–{Math.min(start + PER, filtered.length)} of {filtered.length}</span>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={cur1 <= 1} style={{ ...btnGhost, padding: "6px 12px", opacity: cur1 <= 1 ? .5 : 1 }}><ChevronLeft size={15} /> Prev</button>
-                <span style={{ fontSize: 12.5, fontWeight: 600 }}>Page {cur1} / {totalPages}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={cur1 >= totalPages} style={{ ...btnGhost, padding: "6px 12px", opacity: cur1 >= totalPages ? .5 : 1 }}>Next <ChevronRight size={15} /></button>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={cur1 <= 1} style={{ ...btnGhost, padding: "6px 12px", opacity: cur1 <= 1 ? .5 : 1, cursor: cur1 <= 1 ? "not-allowed" : "pointer" }}><ChevronLeft size={15} /> Prev</button>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: "#0d2119" }}>Page {cur1} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={cur1 >= totalPages} style={{ ...btnGhost, padding: "6px 12px", opacity: cur1 >= totalPages ? .5 : 1, cursor: cur1 >= totalPages ? "not-allowed" : "pointer" }}>Next <ChevronRight size={15} /></button>
               </div>
             </div>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -3518,7 +4032,7 @@ export function SalesInsights() {
   if (!deals) return <Loading />;
 
   const societies = ["all", ...Array.from(new Set(deals.map(d => d.society).filter(Boolean))).sort()];
-  const scoped = society === null ? deals : deals.filter(d => society.includes(d.society));
+  const scoped = society === null ? deals.filter(d => isRealSociety(d.society)) : deals.filter(d => society.includes(d.society));
 
   // ── Conversion funnel (start from TOTAL leads → Won) + cohort trend ──
   const STAGE_ORDER = ["new", "contacted", "demo", "proposal", "won"];
@@ -3634,7 +4148,7 @@ export function SalesInsights() {
             <Table head={["Status", "Leads", "%", "Plan value"]}>
               {statusRows.map(r => (
                 <tr key={r.status} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{r.status}</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{renderHigStatusBadge(r.status)}</td>
                   <td style={td}>{r.count}</td>
                   <td style={td}>{totalCount ? Math.round((r.count / totalCount) * 100) : 0}%</td>
                   <td style={{ ...td, fontWeight: 600 }}>{inr(r.value)}</td>

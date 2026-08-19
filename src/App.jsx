@@ -61,11 +61,11 @@ import { AutoGSSociety, IoTAlerts } from "./modules/AutoScheduler";
 import { tkStatus, tkPriority, TicketBadge, TicketOverview, OpsKpis, OpsSparesTable, OpsTdsTable, TicketList } from "./modules/Ticketing";
 import { ApiUsageDashboard, Logs, Failures } from "./modules/LogsTracker";
 import { ReleaseManager, ReleasePopup, AboutModule } from "./modules/About";
-import { SalesPipeline, SalesLeads, SalesAnalytics, SalesTrendAnalysis, SalesErrorCorrection, ApartmentLeads, salesApi, notHiddenLead } from "./modules/Sales";
+import { SalesLeads, SalesTrendAnalysis, SalesErrorCorrection, ApartmentLeads, salesApi, notHiddenLead } from "./modules/Sales";
 import { TaskPlanner, TaskAdmin } from "./modules/TaskPlanner";
 import { CustomerSocieties, AllCustomers, Customers, CustomerDrawer } from "./modules/Customer";
 import { Overview, Referrers, Referees, Credits, AddManualCredit, Analytics as ReferralAnalyticsTab, Backtrack, Tracker } from "./modules/Referral";
-import { BillingOverview, Subscriptions, Invoices, DepositRefunds } from "./modules/Billing";
+import { BillingOverview, Subscriptions, Invoices, DepositRefunds, Plans } from "./modules/Billing";
 import { IoTDevices, IoTAlertsPage } from "./modules/IoT";
 import {
   AnalyticsOverview, SalesInsights, CreditsAnalytics, NetRevenue,
@@ -980,10 +980,8 @@ const doRefresh = async () => {
       ...(isModuleAdmin ? [{ id: "backtrack", label: "Backtrack", icon: Undo2 }] : []),
     ],
     sales: [
-      { id: "sales_overview", label: "Pipeline", icon: LayoutDashboard },
       { id: "sales_leads", label: "Leads & Deals", icon: Briefcase },
       { id: "sales_apartments", label: "Apartment Leads", icon: Boxes },
-      { id: "sales_analytics", label: "Sales Analytics", icon: BarChart3 },
       { id: "sales_trend", label: "Trend Analysis", icon: TrendingUp },
       { id: "sales_errors", label: "Error Correction", icon: AlertCircle },
     ],
@@ -1026,6 +1024,7 @@ const doRefresh = async () => {
       { id: "bill_subs", label: "Subscriptions", icon: RefreshCw },
       { id: "bill_invoices", label: "Invoices", icon: Receipt },
       { id: "bill_deposits", label: "Deposits & Refunds", icon: Wallet },
+      { id: "bill_plans", label: "Plans", icon: Tag },
     ],
     fsm: [
       { id: "fsm_track", label: "Track Technician", icon: MapPin },
@@ -1201,10 +1200,8 @@ const doRefresh = async () => {
             {tab === "plan_board" && <TaskPlanner key={`board-${refreshKey}`} />}
             {tab === "plan_weekly" && <TaskPlanner key={`weekly-${refreshKey}`} initialView="weekly" />}
             {tab === "plan_admin" && isModuleAdmin && <TaskAdmin key={refreshKey} />}
-            {tab === "sales_overview" && <SalesPipeline key={refreshKey} />}
             {tab === "sales_leads" && <SalesLeads key={refreshKey} isAdmin={tabIsAdmin} />}
             {tab === "sales_apartments" && <ApartmentLeads key={refreshKey} />}
-            {tab === "sales_analytics" && <SalesAnalytics key={refreshKey} />}
             {tab === "sales_trend" && <SalesTrendAnalysis key={refreshKey} />}
             {tab === "sales_errors" && <SalesErrorCorrection key={refreshKey} isAdmin={tabIsAdmin} />}
             {tab === "emp_users" && <UsersAdmin key={refreshKey} accessLevel={tabAccess} />}
@@ -1240,6 +1237,7 @@ const doRefresh = async () => {
             {tab === "bill_subs" && <Subscriptions key={refreshKey} />}
             {tab === "bill_invoices" && <Invoices key={refreshKey} />}
             {tab === "bill_deposits" && <DepositRefunds key={refreshKey} />}
+            {tab === "bill_plans" && <Plans key={refreshKey} />}
             {tab === "fsm_track" && <TrackTechnician key={refreshKey} />}
             {tab === "fsm_amc" && <MaintenanceSchedule key={refreshKey} />}
             {tab === "fsm_quality" && <WaterQuality key={refreshKey} />}

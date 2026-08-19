@@ -60,7 +60,8 @@ export const API_USAGE = [
     { m: "POST", path: "/dp-transactions/add", use: "DP Transaction's admin-only Upload JSON → Run API (multipart, field \"file\")" },
   ] },
   { group: "DrinkPrime · separate origin, unauthenticated, CORS-open", items: [
-    { m: "GET", path: "api.drinkprime.in/payments/payments/v2/collections", use: "Customer · All Customers, DP-stack Transactions sub-page (?installationId={dp_installation_id}&page=0&size=10, v2.29.113)" },
+    { m: "GET", path: "api.drinkprime.in/payments/payments/payments/v1", use: "Customer · All Customers, DP-stack Transactions sub-page (?loader=true&page=1&pageSize=100&deviceCode={purifier_id}&installationID={dp_installation_id}, v2.29.134 — replaced the old v2/collections endpoint)" },
+    { m: "GET", path: "api.drinkprime.in/sponsor/device/details/syncs", use: "Customer · All Customers, DP-stack Sync History sub-page (?pageSize=10&page=1&orderDir=desc&orderBy=id&deviceCode={purifier_id}, v2.29.127)" },
   ] },
   { group: "Google / Firebase", items: [
     { m: "POST", path: "identitytoolkit.googleapis.com/…:signInWithPassword", use: "Login — email/password auth" },

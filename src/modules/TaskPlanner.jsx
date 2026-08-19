@@ -608,7 +608,7 @@ export function TaskPlanner({ initialView = "board" }) {
   const isOverdue = (t) => t.endDate && t.endDate < todayStr && t.status !== "Live";
 
   const seg = (v, label) => (
-    <button onClick={() => setView(v)} style={{ padding: "8px 14px", fontSize: 13, fontWeight: 600, border: "1.5px solid var(--border)", background: view === v ? "var(--forest)" : "#fff", color: view === v ? "#fff" : "var(--slate)", borderRadius: 10 }}>{label}</button>
+    <button onClick={() => setView(v)} style={{ padding: "7px 15px", fontSize: 13, fontWeight: 700, border: "none", background: view === v ? "#08805A" : "rgba(0,0,0,0.06)", color: view === v ? "#ffffff" : "#86868B", borderRadius: 999, transition: "all .15s ease", cursor: "pointer" }}>{label}</button>
   );
 
 
@@ -760,7 +760,7 @@ export function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
   const buckets = [
     { name: "Done", value: done, color: "#08805A" },
     { name: "In progress", value: inProgress, color: "#986315" },
-    { name: "Not started", value: notStarted, color: "#7D8A83" },
+    { name: "Not started", value: notStarted, color: "#86868B" },
   ].filter(b => b.value > 0);
 
   const cats = [...PLAN_CATEGORIES.map(c => c.key), "General"];
@@ -777,62 +777,103 @@ export function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
     { label: "Completion", value: pct + "%", icon: TrendingUp, sub: "across all scopes" },
   ];
 
-
   return (
-    <div className="fade-up">
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+    <div className="fade-up ov-sans">
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+
+      {/* KPI Row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
+        {stats.map((s, i) => (
+          <div key={i} style={{
+            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            backdropFilter: s.hero ? "none" : "blur(20px)",
+            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
+            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 18,
+            padding: "18px 20px",
+            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+                {s.label}
+              </span>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              </div>
+            </div>
+            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+              {s.value}
+            </div>
+            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B" }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
         <style>{`@media(max-width:820px){.an-grid{grid-template-columns:1fr!important}}`}</style>
-        <Card title="Delivery status" sub="Where all work stands right now">
+        
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Delivery Status</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Where all work stands right now</div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie data={buckets} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
                 {buckets.map((b, i) => <Cell key={i} fill={b.color} />)}
               </Pie>
-              <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+              <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12.5, color: "#1D1D1F" }} />
             </PieChart>
           </ResponsiveContainer>
-        </Card>
-        <Card title="Scope size by category" sub="How the work is distributed">
+        </div>
+
+        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Scope Size by Category</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>How the work is distributed</div>
+          </div>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={catBars} layout="vertical" margin={{ left: 20, right: 16 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
-              <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" tick={axisTick} axisLine={false} tickLine={false} width={112} />
-              <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
+              <XAxis type="number" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+              <YAxis type="category" dataKey="name" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={112} />
+              <Tooltip content={<TT />} cursor={{ fill: "rgba(8,128,90,.06)" }} />
               <Bar dataKey="value" name="tasks" radius={[0, 6, 6, 0]} maxBarSize={26} isAnimationActive={false}>
                 {catBars.map((b, i) => <Cell key={i} fill={b.color} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </Card>
+        </div>
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <Card pad={false} title="Scope breakdown" sub="Click any scope to expand its tasks">
-          <div>
+        <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden", padding: 22 }}>
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Scope Breakdown</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Click any scope to expand its tasks</div>
+          </div>
+          <div style={{ borderRadius: 14, border: "1px solid rgba(0,0,0,.06)", overflow: "hidden" }}>
             {catStats.map(g => {
               const open = expanded.has(g.key);
               const p = Math.round(g.done / g.total * 100);
               return (
-                <div key={g.key} style={{ borderTop: "1px solid var(--border)" }}>
-                  <div onClick={() => toggle(g.key)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", cursor: "pointer" }}>
-                    <ChevronRight size={16} style={{ color: "var(--muted)", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
+                <div key={g.key} style={{ borderTop: "1px solid rgba(0,0,0,.04)" }}>
+                  <div onClick={() => toggle(g.key)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", cursor: "pointer", background: open ? "rgba(8,128,90,0.04)" : "#fff" }}>
+                    <ChevronRight size={16} style={{ color: "#08805A", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s", flexShrink: 0 }} />
                     <span style={{ width: 10, height: 10, borderRadius: 3, background: g.meta.color, flexShrink: 0 }} />
-                    <span style={{ fontWeight: 700, fontSize: 14, color: "var(--f)", minWidth: 130 }}>{g.key}</span>
-                    <div style={{ flex: 1, height: 8, borderRadius: 999, background: "var(--mint-2)", overflow: "hidden", minWidth: 70 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: "#1D1D1F", minWidth: 130 }}>{g.key}</span>
+                    <div style={{ flex: 1, height: 8, borderRadius: 999, background: "rgba(0,0,0,0.06)", overflow: "hidden", minWidth: 70 }}>
                       <div style={{ width: `${p}%`, height: "100%", background: g.meta.color }} />
                     </div>
                     <span style={{ fontSize: 12.5, fontWeight: 700, color: g.meta.color, width: 92, textAlign: "right", flexShrink: 0 }}>{g.done}/{g.total} done</span>
                   </div>
                   {open && (
-                    <div style={{ background: "var(--mint)" }}>
+                    <div style={{ background: "rgba(8,128,90,0.02)" }}>
                       {g.items.map(t => { const sm = planStatusMeta(t.status); return (
-                        <div key={t.id} onClick={() => onOpen(t)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 18px 9px 46px", cursor: "pointer", borderTop: "1px solid var(--border)" }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: sm.color, background: sm.bg, borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>{t.status}</span>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--f)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled task"}</span>
-                          {t.endDate && <span style={{ fontSize: 11.5, color: isOverdue(t) ? "#DC4141" : "var(--muted)", whiteSpace: "nowrap" }}>due {fmtDate(t.endDate)}</span>}
+                        <div key={t.id} onClick={() => onOpen(t)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 18px 10px 46px", cursor: "pointer", borderTop: "1px solid rgba(0,0,0,.04)" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: sm.color, background: sm.bg, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>{t.status}</span>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: "#1D1D1F", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{t.title || "Untitled task"}</span>
+                          {t.endDate && <span style={{ fontSize: 11.5, color: isOverdue(t) ? "#DC4141" : "#86868B", whiteSpace: "nowrap" }}>due {fmtDate(t.endDate)}</span>}
                           <AssigneeStack names={t.assignees} size={22} />
                         </div>
                       ); })}
@@ -842,7 +883,7 @@ export function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
               );
             })}
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -852,18 +893,18 @@ export function TaskCard({ t, overdue, onOpen, onDragStart, onDragEnd, dragging 
   const sm = planStatusMeta(t.status), pm = planPrioMeta(t.priority), cm = planCatMeta(t.category);
   return (
     <div draggable onDragStart={onDragStart} onDragEnd={onDragEnd} onClick={onOpen}
-      style={{ background: "#fff", border: "1px solid var(--border)", borderLeft: `3px solid ${sm.color}`, borderRadius: 11, padding: "11px 12px", boxShadow: "var(--shadow)", cursor: "pointer", opacity: dragging ? 0.4 : 1 }}>
+      style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", borderLeft: `3.5px solid ${sm.color}`, borderRadius: 14, padding: "12px 14px", boxShadow: "0 4px 14px rgba(0,0,0,0.04)", cursor: "pointer", opacity: dragging ? 0.4 : 1 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-        <GripVertical size={14} style={{ color: "var(--muted)", marginTop: 2, flexShrink: 0, cursor: "grab" }} />
-        <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--f)", lineHeight: 1.3 }}>{t.title || "Untitled task"}</div>
+        <GripVertical size={14} style={{ color: "#86868B", marginTop: 2, flexShrink: 0, cursor: "grab" }} />
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: "#1D1D1F", lineHeight: 1.3 }}>{t.title || "Untitled task"}</div>
       </div>
-      {t.notes && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{t.notes}</div>}
+      {t.notes && <div style={{ fontSize: 12, color: "#86868B", marginTop: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{t.notes}</div>}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
         <span style={{ fontSize: 10.5, fontWeight: 700, color: pm.color, background: `${pm.color}18`, padding: "2px 8px", borderRadius: 999 }}>{t.priority}</span>
         {t.category && t.category !== "General" && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 600, color: cm.color, background: `${cm.color}14`, padding: "2px 8px", borderRadius: 999 }}><Tag size={10} />{t.category}</span>}
-        {t.sprint && <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--slate)", background: "var(--mint-2)", padding: "2px 8px", borderRadius: 999 }}>{t.sprint}</span>}
-        {t.endDate && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: overdue ? "#DC4141" : "var(--slate)" }}><CalendarDays size={12} />{fmtDate(t.endDate)}</span>}
-        {t.attachments?.length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "var(--teal)" }}><Paperclip size={12} />{t.attachments.length}</span>}
+        {t.sprint && <span style={{ fontSize: 10.5, fontWeight: 600, color: "#0d2119", background: "rgba(8,128,90,0.08)", padding: "2px 8px", borderRadius: 999 }}>{t.sprint}</span>}
+        {t.endDate && <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 600, color: overdue ? "#DC4141" : "#475569" }}><CalendarDays size={12} />{fmtDate(t.endDate)}</span>}
+        {t.attachments?.length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "#08805A" }}><Paperclip size={12} />{t.attachments.length}</span>}
         <span style={{ marginLeft: "auto" }}><AssigneeStack names={t.assignees} size={24} /></span>
       </div>
     </div>
