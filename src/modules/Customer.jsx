@@ -16,7 +16,7 @@ import {
   useAuth, api, customerApi, billingApi, creditNoteApi, ticketApi,
   depositForCustomer, CUSTOMER_FIELDS,
   API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate,
-  exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, isRealSociety,
+  exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety,
   parsePartsUsed, jobDurationMin, zdIsClosed,
 } from "../shared/core";
 import {
@@ -26,6 +26,9 @@ import {
   btnGhost, btnPrimary, td, ftd, trStyle, grid4, axisTick, selectStyle,
   toastStyle, iconBtn, inp,
 } from "../shared/ui";
+import imgWaterFilter from "../../Tank Photos/water-filter.png";
+import imgTool from "../../Tank Photos/tool.png";
+import imgTechnology from "../../Tank Photos/technology.png";
 
 /* ===========================================================================
    CUSTOMER MODULE (Zoho Billing) — list + editable detail with role gating
@@ -627,6 +630,88 @@ export function InvoiceBreakdownCard({ inv, recharge }) {
   );
 }
 
+function AllCustomersLoadingScreen() {
+  return (
+    <div className="fade-up ov-sans" style={{ minHeight: "calc(100vh - 160px)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "60px 20px" }}>
+      <style>{`
+        @keyframes pw-ripple {
+          0% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(8, 128, 90, 0.4); }
+          50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 0 20px rgba(8, 128, 90, 0); }
+          100% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(8, 128, 90, 0); }
+        }
+        @keyframes pw-spin-ring {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes pw-shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .pw-skeleton-bar {
+          background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+          background-size: 200% 100%;
+          animation: pw-shimmer 1.8s infinite ease-in-out;
+          border-radius: 8px;
+        }
+      `}</style>
+
+      {/* Main Animated Water Droplet Spinner Emblem */}
+      <div style={{ position: "relative", width: 90, height: 90, display: "grid", placeItems: "center", marginBottom: 26 }}>
+        {/* Outer Rotating Dotted Ring */}
+        <div style={{ position: "absolute", inset: -10, borderRadius: "50%", border: "2px dashed rgba(8, 128, 90, 0.25)", animation: "pw-spin-ring 12s linear infinite" }} />
+
+        {/* Conic Gradient Spinner Ring */}
+        <div style={{
+          position: "absolute", inset: 0, borderRadius: "50%",
+          background: "conic-gradient(from 0deg, #08805A, #0EA5E9, #08805A 80%, transparent 100%)",
+          WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
+          mask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
+          animation: "pw-spin-ring 1.2s linear infinite",
+        }} />
+
+        {/* Center Glowing Orb with Droplet Icon */}
+        <div style={{
+          width: 58, height: 58, borderRadius: "50%",
+          background: "linear-gradient(135deg, #08805A 0%, #065B3C 100%)",
+          boxShadow: "0 8px 24px rgba(8, 128, 90, 0.35)",
+          display: "grid", placeItems: "center",
+          animation: "pw-ripple 2.4s infinite ease-in-out",
+        }}>
+          <Droplets size={26} color="#ffffff" />
+        </div>
+      </div>
+
+      {/* Text Readout & Sync Status */}
+      <div style={{ textAlign: "center", marginBottom: 36 }}>
+        <h3 style={{ fontSize: 18, fontWeight: 700, color: "#1D1D1F", margin: 0, letterSpacing: "-.02em" }}>
+          Loading All Customers Directory
+        </h3>
+        <p style={{ fontSize: 13, color: "#86868B", marginTop: 6, marginBottom: 0, fontVariantNumeric: "tabular-nums" }}>
+          Synchronizing DrinkPrime &amp; Zoho Billing records…
+        </p>
+      </div>
+
+      {/* HIG Skeleton Layout Preview */}
+      <div style={{ width: "100%", maxWidth: 860, background: "rgba(255,255,255,0.7)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 20, padding: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.02)" }}>
+        {/* Top Controls Skeleton */}
+        <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+          <div className="pw-skeleton-bar" style={{ width: 220, height: 38 }} />
+          <div className="pw-skeleton-bar" style={{ width: 140, height: 38 }} />
+          <div className="pw-skeleton-bar" style={{ width: 160, height: 38 }} />
+        </div>
+
+        {/* Table Rows Skeleton */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div className="pw-skeleton-bar" style={{ width: "100%", height: 20, borderRadius: 6 }} />
+          <div className="pw-skeleton-bar" style={{ width: "100%", height: 48, borderRadius: 10 }} />
+          <div className="pw-skeleton-bar" style={{ width: "100%", height: 48, borderRadius: 10 }} />
+          <div className="pw-skeleton-bar" style={{ width: "100%", height: 48, borderRadius: 10 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function AllCustomers() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
@@ -643,6 +728,8 @@ export function AllCustomers() {
   // real filter the user can widen back to "all" from the dropdown.
   const [statusFilter, setStatusFilter] = useState(["Active", "In-Active", "active", "dunning"]);
   const [stackFilter, setStackFilter] = useState(null);     // null = all; "Zoho" | "DP" (v2.29.113)
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState(null); // null = all (v2.29.140)
+  const [filterTypeFilter, setFilterTypeFilter] = useState(null); // null = all (v2.29.140)
   const [dateSel, setDateSel] = useState({ preset: "all", from: "", to: "" });
   // DP customers' Transactions sub-page (v2.29.113): reads the DrinkPrime
   // collections API directly (installationId = dp_installation_id), since a
@@ -703,21 +790,39 @@ export function AllCustomers() {
       .catch(() => { setSyncHistory([]); setSyncHistoryTotal(0); setSyncHistoryErr(true); })
       .finally(() => setSyncHistoryLoading(false));
   }, [sel, subtab]);
-  if (!data) return <Loading />;
+  if (!data) return <AllCustomersLoadingScreen />;
   const { customers, subs, invs, tickets, referrers, referees, creditNotes, submodules } = data;
 
   const keysOf = (c) => [c.id, c.zohoId, c.email].filter(Boolean).map(k => String(k).toLowerCase());
   const belongs = (rec, keys) => [rec.zohoCustomerId, rec.customerNumber, rec.zohoId, rec.email]
     .filter(Boolean).map(k => String(k).toLowerCase()).some(k => keys.includes(k));
 
+  // Real Device Type / Filter Type, from the business-given plan catalog
+  // (v2.29.132/133/138 — keyed by plan_code, NOT the purifier-ID prefix guess
+  // `deviceType()` falls back to). Same join convention as Customer > Customers.
+  const planMetaByKey = {};
+  subs.forEach(s => [s.customerNumber, s.zohoCustomerId, s.email].forEach(k => {
+    if (k && (s.planDeviceType || s.planFilterType)) {
+      planMetaByKey[String(k).toLowerCase()] = { deviceType: s.planDeviceType, filterType: s.planFilterType };
+    }
+  }));
+  const planMeta = (c) =>
+    planMetaByKey[String(c.id).toLowerCase()] ??
+    planMetaByKey[String(c.zohoId).toLowerCase()] ??
+    planMetaByKey[String(c.email).toLowerCase()] ?? null;
+  const deviceTypeOf = (c) => planMeta(c)?.deviceType || deviceType(c.purifier_id) || "";
+  const filterTypeOf = (c) => planMeta(c)?.filterType || "";
+
   const ql = q.trim().toLowerCase();
   const withPur = customers.filter(c => c.purifier_id);
-  // Search across Purifier ID, phone, name and email.
-  const matchesQ = (c) => [c.purifier_id, c.phone, c.name, c.email].some(f => String(f || "").toLowerCase().includes(ql));
+  // Search across Purifier ID, phone, name, email, Device Type and Filter Type.
+  const matchesQ = (c) => [c.purifier_id, c.phone, c.name, c.email, deviceTypeOf(c), filterTypeOf(c)].some(f => String(f || "").toLowerCase().includes(ql));
 
   // Filter option lists — derived from the population being browsed (has a Purifier ID).
   const societyOptions = Array.from(new Set(withPur.map(c => c.society).filter(Boolean))).sort();
   const statusOptions = Array.from(new Set(withPur.map(c => c.status).filter(Boolean))).sort();
+  const deviceTypeOptions = Array.from(new Set(withPur.map(deviceTypeOf).filter(Boolean))).sort();
+  const filterTypeOptions = Array.from(new Set(withPur.map(filterTypeOf).filter(Boolean))).sort();
   // Customer Stack (v2.29.113): is_dp_customer false → "Zoho", true → "DP".
   const stackOf = (c) => c.isDpCustomer ? "DP" : "Zoho";
   const stackOptions = ["Zoho", "DP"];
@@ -741,6 +846,8 @@ export function AllCustomers() {
     (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
     (statusFilter === null || statusFilter.includes(c.status)) &&
     (stackFilter === null || stackFilter.includes(stackOf(c))) &&
+    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
+    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
     matchesDate(c));
   const results = (ql ? filtered.filter(matchesQ) : filtered)
     .slice().sort((a, b) => String(a.purifier_id).localeCompare(String(b.purifier_id), undefined, { numeric: true }));
@@ -1302,17 +1409,29 @@ export function AllCustomers() {
             <MultiSelectFilter label="Society" options={societyOptions} value={societyFilter} onChange={setSocietyFilter} />
             <MultiSelectFilter label="Status" options={statusOptions} value={statusFilter} onChange={setStatusFilter} />
             <MultiSelectFilter label="Customer Stack" options={stackOptions} value={stackFilter} onChange={setStackFilter} />
+            <MultiSelectFilter label="Device Type" options={deviceTypeOptions} value={deviceTypeFilter} onChange={setDeviceTypeFilter} />
+            <MultiSelectFilter label="Filter Type" options={filterTypeOptions} value={filterTypeFilter} onChange={setFilterTypeFilter} />
           </div>
         } />
       <Card pad={false} hover={false}>
-        <Table head={["Purifier ID", "Customer", "Society", "Plan", "Device Type", "Stack", "Status", ""]} maxHeight="calc(100vh - 260px)">
-          {results.map(c => (
+        <Table head={["Purifier ID", "Customer", "Society", "Plan", "Device Type", "Filter Type", "Stack", "Status", ""]} maxHeight="calc(100vh - 260px)">
+          {results.map(c => {
+            const pm = planMeta(c);
+            const dtStyle = pm?.deviceType && DEVICE_TYPE_STYLE[pm.deviceType === "Normal" ? "Normal Device" : pm.deviceType];
+            return (
             <tr key={c.id} style={{ ...trStyle, ...rowTint(c) }} onClick={() => openCustomer(c)}>
               <td style={{ ...td, fontWeight: 700, color: "var(--brand)" }}>{c.purifier_id}</td>
               <td style={td}>{c.name || "—"}</td>
               <td style={td}>{c.society || "—"}</td>
               <td style={td}>{c.plan || "—"}</td>
-              <td style={td}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
+              <td style={td}>
+                {pm?.deviceType ? (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, color: (dtStyle || ["#475569", "#F1F5F9"])[0], background: (dtStyle || ["#475569", "#F1F5F9"])[1] }}>
+                    {pm.deviceType}
+                  </span>
+                ) : <DeviceTypeBadge purifierId={c.purifier_id} />}
+              </td>
+              <td style={td}>{pm?.filterType ? <Chip>{pm.filterType}</Chip> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
               <td style={td}>
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
@@ -1323,9 +1442,10 @@ export function AllCustomers() {
               <td style={{ ...td, textTransform: "capitalize" }}>{c.status || "—"}</td>
               <td style={{ ...td, textAlign: "center" }}><ChevronRight size={16} color="var(--muted)" /></td>
             </tr>
-          ))}
+            );
+          })}
         </Table>
-        {results.length === 0 && <Empty msg={ql || societyFilter || statusFilter || stackFilter || dateSel.preset !== "all" ? "No customer matches these filters." : "No customers with a Purifier ID."} />}
+        {results.length === 0 && <Empty msg={ql || societyFilter || statusFilter || stackFilter || deviceTypeFilter || filterTypeFilter || dateSel.preset !== "all" ? "No customer matches these filters." : "No customers with a Purifier ID."} />}
       </Card>
     </div>
   );
@@ -1337,6 +1457,8 @@ export function Customers({ accessLevel = "view" }) {
   const [subs, setSubs] = useState([]);
   const [q, setQ] = useState("");
   const [societyFilter, setSocietyFilter] = useState(null); // null = all; else the selected societies
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState(null); // null = all; else selected Device Types (plan-catalog value, heuristic fallback)
+  const [filterTypeFilter, setFilterTypeFilter] = useState(null); // null = all; else selected Filter Types
   const [sort, setSort] = useState({ key: null, dir: "asc" });
   const [sel, setSel] = useState(null);
   const [toast, setToast] = useState("");
@@ -1363,8 +1485,33 @@ export function Customers({ accessLevel = "view" }) {
     amtByKey[String(c.zohoId).toLowerCase()] ??
     amtByKey[String(c.email).toLowerCase()] ?? null;
 
-  // Society filter options.
+  // Real Device Type / Filter Type, from the business-given plan catalog
+  // (v2.29.132/133 — keyed by plan_code, NOT the purifier-ID prefix guess
+  // `deviceType()` below still falls back to). Joined the same way as
+  // `amtByKey` above, via each subscription's customer/zoho/email key.
+  const planMetaByKey = {};
+  subs.forEach(s => [s.customerNumber, s.zohoCustomerId, s.email].forEach(k => {
+    if (k && (s.planDeviceType || s.planFilterType)) {
+      planMetaByKey[String(k).toLowerCase()] = { deviceType: s.planDeviceType, filterType: s.planFilterType };
+    }
+  }));
+  const planMeta = (c) =>
+    planMetaByKey[String(c.id).toLowerCase()] ??
+    planMetaByKey[String(c.zohoId).toLowerCase()] ??
+    planMetaByKey[String(c.email).toLowerCase()] ?? null;
+  // Device Type shown in the table/CSV/drawer: the real plan-catalog value
+  // when the customer's subscription plan_code is recognised, else the old
+  // purifier-ID-prefix guess — same precedence as depositForCustomer's
+  // PLAN_CATALOG-first/heuristic-fallback rule.
+  const deviceTypeOf = (c) => planMeta(c)?.deviceType || deviceType(c.purifier_id) || "";
+  const filterTypeOf = (c) => planMeta(c)?.filterType || "";
+
+  // Society / Device Type / Filter Type filter options — the latter two built
+  // from deviceTypeOf/filterTypeOf so the dropdown only ever lists values that
+  // can actually appear (plan-catalog values, or the heuristic fallback).
   const societies = Array.from(new Set(rows.map(c => c.society).filter(Boolean))).sort();
+  const deviceTypeOptions = Array.from(new Set(rows.map(deviceTypeOf).filter(Boolean))).sort();
+  const filterTypeOptions = Array.from(new Set(rows.map(filterTypeOf).filter(Boolean))).sort();
 
   // Active-customers KPI + month-on-month growth in new sign-ups (by `since`).
   const activeCount = rows.filter(c => c.status === "active").length;
@@ -1383,7 +1530,9 @@ export function Customers({ accessLevel = "view" }) {
 
   const filtered = rows.filter(c =>
     (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
-    (c.name + c.email + c.phone + c.id + c.society + (c.purifier_id || "") + deviceType(c.purifier_id)).toLowerCase().includes(q.toLowerCase()));
+    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
+    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
+    (c.name + c.email + c.phone + c.id + c.society + (c.purifier_id || "") + deviceTypeOf(c) + filterTypeOf(c)).toLowerCase().includes(q.toLowerCase()));
 
   // Sortable by Customer ID (natural order) and Plan Amount (numeric).
   const sorted = [...filtered];
@@ -1398,7 +1547,8 @@ export function Customers({ accessLevel = "view" }) {
   const exportCsv = () => exportToCsv("prowater-customers.csv", [
     { label: "Customer ID", get: c => c.id },
     { label: "Purifier ID", get: c => c.purifier_id },
-    { label: "Device Type", get: c => deviceType(c.purifier_id) },
+    { label: "Device Type", get: c => deviceTypeOf(c) },
+    { label: "Filter Type", get: c => filterTypeOf(c) },
     { label: "Name", get: c => c.name },
     { label: "Email", get: c => c.email },
     { label: "Phone", get: c => c.phone },
@@ -1447,9 +1597,9 @@ export function Customers({ accessLevel = "view" }) {
 
         {[
           { label: "Inactive Customers", value: inactiveCount.toLocaleString("en-IN"), icon: Ban, sub: `of ${rows.length.toLocaleString("en-IN")} total` },
-          { label: "Own Device", value: ownCount.toLocaleString("en-IN"), icon: Cpu, sub: "OWN- purifiers" },
-          { label: "Normal Device", value: normalCount.toLocaleString("en-IN"), icon: Droplets, sub: "standard units" },
-          { label: "Hot & Cold Device", value: hotColdCount.toLocaleString("en-IN"), icon: Sun, sub: "HAC- purifiers" },
+          { label: "Own Device", value: ownCount.toLocaleString("en-IN"), img: imgWaterFilter, sub: "OWN- purifiers" },
+          { label: "Normal Device", value: normalCount.toLocaleString("en-IN"), img: imgTool, sub: "standard units" },
+          { label: "Hot & Cold Device", value: hotColdCount.toLocaleString("en-IN"), img: imgTechnology, sub: "HAC- purifiers" },
         ].map((s, i) => (
           <div key={i} style={{
             background: "rgba(255, 255, 255, 0.85)",
@@ -1464,8 +1614,12 @@ export function Customers({ accessLevel = "view" }) {
               <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
                 {s.label}
               </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <s.icon size={17} color="#08805A" />
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center", overflow: "hidden" }}>
+                {s.img ? (
+                  <img src={s.img} alt={s.label} style={{ width: 22, height: 22, objectFit: "contain" }} />
+                ) : (
+                  <s.icon size={17} color="#08805A" />
+                )}
               </div>
             </div>
             <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
@@ -1480,6 +1634,8 @@ export function Customers({ accessLevel = "view" }) {
         right={
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <MultiSelectFilter label="Society" options={societies} value={societyFilter} onChange={setSocietyFilter} />
+            <MultiSelectFilter label="Device Type" options={deviceTypeOptions} value={deviceTypeFilter} onChange={setDeviceTypeFilter} />
+            <MultiSelectFilter label="Filter Type" options={filterTypeOptions} value={filterTypeFilter} onChange={setFilterTypeFilter} />
             <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>
           </div>
         } />
@@ -1491,7 +1647,7 @@ export function Customers({ accessLevel = "view" }) {
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {[
                   <SortHeader key="id" label="Customer ID" k="id" sort={sort} onSort={toggleSort} />,
-                  "Purifier ID", "Device Type", "Name", "Phone", "Society",
+                  "Purifier ID", "Device Type", "Filter Type", "Name", "Phone", "Society",
                   <SortHeader key="amt" label="Plan Amount" k="amount" sort={sort} onSort={toggleSort} />,
                   "Status", ""
                 ].map((h, idx) => (
@@ -1502,14 +1658,26 @@ export function Customers({ accessLevel = "view" }) {
             <tbody>
               {sorted.map(c => {
                 const amt = planAmount(c);
+                const pm = planMeta(c);
                 const st = String(c.status || "").toLowerCase();
                 const stColor = st === "inactive" ? "#DC4141" : st === "dunning" ? "#986315" : st === "active" ? "#08805A" : "#86868B";
                 const stBg = st === "active" ? "rgba(8,128,90,0.12)" : st === "inactive" ? "rgba(220,38,38,0.12)" : "rgba(152,99,21,0.12)";
+                // Real plan-catalog Device Type (v2.29.132/133) wins when the
+                // customer's subscription plan_code is recognised; otherwise
+                // fall back to the old purifier-ID-prefix badge.
+                const dtStyle = pm?.deviceType && DEVICE_TYPE_STYLE[pm.deviceType === "Normal" ? "Normal Device" : pm.deviceType];
                 return (
                 <tr key={c.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", cursor: "pointer" }} onClick={() => setSel(c)}>
                   <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{c.id}</td>
                   <td style={{ padding: "14px 18px" }}>{c.purifier_id ? <Chip>{c.purifier_id}</Chip> : <span style={{ color: "#86868B" }}>—</span>}</td>
-                  <td style={{ padding: "14px 18px" }}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
+                  <td style={{ padding: "14px 18px" }}>
+                    {pm?.deviceType ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, color: (dtStyle || ["#475569", "#F1F5F9"])[0], background: (dtStyle || ["#475569", "#F1F5F9"])[1] }}>
+                        {pm.deviceType}
+                      </span>
+                    ) : <DeviceTypeBadge purifierId={c.purifier_id} />}
+                  </td>
+                  <td style={{ padding: "14px 18px" }}>{pm?.filterType ? <Chip>{pm.filterType}</Chip> : <span style={{ color: "#86868B" }}>—</span>}</td>
                   <td style={{ padding: "14px 18px" }}>
                     <div style={{ fontSize: 13.5, fontWeight: 600, color: "#1D1D1F" }}>{c.name}</div>
                     <div style={{ fontSize: 11.5, color: "#86868B", wordBreak: "break-word" }}>{c.email}</div>
@@ -1528,7 +1696,7 @@ export function Customers({ accessLevel = "view" }) {
               })}
               {filtered.length > 0 && (
                 <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                  <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }} colSpan={6}>Total ({filtered.length})</td>
+                  <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }} colSpan={7}>Total ({filtered.length})</td>
                   <td style={{ padding: "14px 18px", fontWeight: 800, color: "#08805A" }}>{inr(filtered.reduce((s, c) => s + (planAmount(c) || 0), 0))}</td>
                   <td style={{ padding: "14px 18px" }}></td>
                   <td style={{ padding: "14px 18px" }}></td>
@@ -1540,7 +1708,7 @@ export function Customers({ accessLevel = "view" }) {
         {filtered.length === 0 && <Empty msg="No customers match your search." />}
       </div>
 
-      {sel && <CustomerDrawer customer={sel} amount={planAmount(sel)} accessLevel={accessLevel} actor={user.username}
+      {sel && <CustomerDrawer customer={sel} amount={planAmount(sel)} planMeta={planMeta(sel)} accessLevel={accessLevel} actor={user.username}
         onClose={() => setSel(null)}
         onSaved={(updated) => { setSel(updated); refresh(); flash("Customer updated"); }} />}
       {toast && <div style={toastStyle}><CheckCircle2 size={16} /> {toast}</div>}
@@ -1548,7 +1716,7 @@ export function Customers({ accessLevel = "view" }) {
   );
 }
 
-export function CustomerDrawer({ customer, amount, accessLevel, actor, onClose, onSaved }) {
+export function CustomerDrawer({ customer, amount, planMeta, accessLevel, actor, onClose, onSaved }) {
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState(customer);
   const [busy, setBusy] = useState(false);
@@ -1579,7 +1747,8 @@ export function CustomerDrawer({ customer, amount, accessLevel, actor, onClose, 
 
       {!edit ? <>
         <DefRow k="Purifier ID" v={customer.purifier_id || "—"} />
-        <DefRow k="Device Type" v={deviceType(customer.purifier_id) || "—"} />
+        <DefRow k="Device Type" v={planMeta?.deviceType || deviceType(customer.purifier_id) || "—"} />
+        <DefRow k="Filter Type" v={planMeta?.filterType || "—"} />
         <DefRow k="Email" v={customer.email} />
         <DefRow k="Phone" v={fmtPhone(customer.phone)} />
         <DefRow k="Address" v={customer.address} />

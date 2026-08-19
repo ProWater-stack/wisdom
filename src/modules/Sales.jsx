@@ -426,8 +426,6 @@ export function SalesTrendAnalysis() {
   const interestedN = inRange.filter(d => (d.rawStatus || "").toLowerCase() === "interested").length;
   const notInterestedN = Math.max(0, totalN - interestedN - wonN);
   const convPct = totalN ? (wonN / totalN) * 100 : 0;
-  const convPrevPct = totalPrevN ? (wonPrevN / totalPrevN) * 100 : 0;
-  const convDeltaPts = (totalN && totalPrevN) ? Math.round((convPct - convPrevPct) * 10) / 10 : null;
   const interestedSharePct = totalN ? Math.round((interestedN / totalN) * 1000) / 10 : 0;
 
   // ── Monthly cohort trend (last 8 calendar months) ──────────────────────────
@@ -467,16 +465,23 @@ export function SalesTrendAnalysis() {
       forecastMonths.push({ label: `${MONL[m]} '${String(y).slice(2)}` });
     }
   }
+  const avgWonF = recentReal.length ? Math.round(recentReal.reduce((s, t) => s + t.won, 0) / recentReal.length) : 0;
+
   const chartData = [
     ...trend.map((t, i) => ({
       label: t.label,
       leadsActual: t.leads,
       leadsProjected: i === lastIdx ? t.leads : null,
+      wonActual: t.won,
+      wonProjected: i === lastIdx ? t.won : null,
       convActual: t.conv,
       convProjected: i === lastIdx ? t.conv : null,
     })),
     ...forecastMonths.map(f => ({
-      label: f.label, leadsActual: null, leadsProjected: avgLeadsF, convActual: null, convProjected: avgConvF,
+      label: f.label,
+      leadsActual: null, leadsProjected: avgLeadsF,
+      wonActual: null, wonProjected: avgWonF,
+      convActual: null, convProjected: avgConvF,
     })),
   ];
 
@@ -611,7 +616,7 @@ export function SalesTrendAnalysis() {
         {kpiCard({
           label: "Conversion Rate", value: `${convPct.toFixed(1)}%`, valueColor: "#08805A",
           icon: Target, iconBg: "rgba(8,128,90,.12)", iconColor: "#08805A",
-          delta: kpiDelta(convDeltaPts, "up", " pts", false),
+          delta: null,
         })}
       </div>
 
@@ -660,9 +665,9 @@ export function SalesTrendAnalysis() {
 
         {/* Forecast & Trend Chart */}
         {chartData.length ? (
-          <div style={{ height: 260, width: "100%" }}>
+          <div style={{ height: 270, width: "100%" }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 28, right: 24, left: 12, bottom: 6 }}>
+              <ComposedChart data={chartData} margin={{ top: 28, right: 28, left: 12, bottom: 12 }}>
                 <defs>
                   <linearGradient id="trendLeadsGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#08805A" stopOpacity={0.8} />
@@ -671,8 +676,8 @@ export function SalesTrendAnalysis() {
                 </defs>
                 <CartesianGrid stroke="rgba(0,0,0,.06)" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#86868B" }} axisLine={false} tickLine={false} />
-                <YAxis yAxisId="leads" tick={{ fontSize: 11, fill: "#86868B" }} axisLine={false} tickLine={false} width={36} allowDecimals={false} domain={["auto - 20", "dataMax + 40"]} />
-                <YAxis yAxisId="conv" orientation="right" tick={{ fontSize: 11, fill: "#D97706", fontWeight: 600 }} axisLine={false} tickLine={false} width={38} tickFormatter={(v) => `${v}%`} domain={["auto - 5", "dataMax + 10"]} />
+                <YAxis yAxisId="leads" tick={{ fontSize: 11, fill: "#86868B" }} axisLine={false} tickLine={false} width={36} allowDecimals={false} domain={[0, "dataMax + 40"]} />
+                <YAxis yAxisId="conv" orientation="right" tick={{ fontSize: 11, fill: "#D97706", fontWeight: 600 }} axisLine={false} tickLine={false} width={38} tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
                 <Tooltip contentStyle={{ background: "rgba(28,28,30,.92)", border: "none", borderRadius: 10, fontSize: 12, color: "#fff" }} labelStyle={{ color: "#fff", fontWeight: 700 }} itemStyle={{ color: "#fff" }} />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#86868B" }} />
                 <Line yAxisId="leads" type="monotone" dataKey="leadsActual" name="Lead Volume" stroke="#08805A" strokeWidth={2.5} dot={{ r: 4, fill: "#08805A" }} isAnimationActive={false} connectNulls={false}>
@@ -680,15 +685,31 @@ export function SalesTrendAnalysis() {
                     const { x, y, value, index } = props;
                     if (value == null || value === "") return null;
                     const lx = index === 0 ? x + 12 : x;
-                    return <text x={lx} y={y - 10} fill="#08805A" fontSize={11} fontWeight={700} textAnchor="middle">{value}</text>;
+                    return <text x={lx} y={y - 12} fill="#08805A" fontSize={11} fontWeight={700} textAnchor="middle">{value}</text>;
                   }} />
                 </Line>
                 <Line yAxisId="leads" type="monotone" dataKey="leadsProjected" name="Lead Volume (proj.)" stroke="#08805A" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: "#08805A" }} isAnimationActive={false} connectNulls={true}>
                   <LabelList dataKey="leadsProjected" content={(props) => {
                     const { x, y, value, index } = props;
                     if (value == null || value === "") return null;
+                    if (chartData[index]?.leadsActual != null) return null;
+                    return <text x={x} y={y - 12} fill="#08805A" fontSize={10.5} fontWeight={600} textAnchor="middle">{value}</text>;
+                  }} />
+                </Line>
+                <Line yAxisId="leads" type="monotone" dataKey="wonActual" name="Converted Leads" stroke="#0D9488" strokeWidth={2.5} dot={{ r: 4, fill: "#0D9488" }} isAnimationActive={false} connectNulls={false}>
+                  <LabelList dataKey="wonActual" content={(props) => {
+                    const { x, y, value, index } = props;
+                    if (value == null || value === "") return null;
                     const lx = index === 0 ? x + 12 : x;
-                    return <text x={lx} y={y - 10} fill="#08805A" fontSize={10.5} fontWeight={600} textAnchor="middle">{value}</text>;
+                    return <text x={lx} y={y + 16} fill="#0D9488" fontSize={11} fontWeight={700} textAnchor="middle">{value}</text>;
+                  }} />
+                </Line>
+                <Line yAxisId="leads" type="monotone" dataKey="wonProjected" name="Converted Leads (proj.)" stroke="#0D9488" strokeWidth={2} strokeDasharray="5 5" dot={{ r: 3, fill: "#0D9488" }} isAnimationActive={false} connectNulls={true}>
+                  <LabelList dataKey="wonProjected" content={(props) => {
+                    const { x, y, value, index } = props;
+                    if (value == null || value === "") return null;
+                    if (chartData[index]?.wonActual != null) return null;
+                    return <text x={x} y={y + 16} fill="#0D9488" fontSize={10.5} fontWeight={600} textAnchor="middle">{value}</text>;
                   }} />
                 </Line>
                 <Line yAxisId="conv" type="monotone" dataKey="convActual" name="Conversion %" stroke="#F59E0B" strokeWidth={2.5} dot={{ r: 4, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 1.5 }} isAnimationActive={false} connectNulls={false}>
@@ -696,15 +717,15 @@ export function SalesTrendAnalysis() {
                     const { x, y, value, index } = props;
                     if (value == null || value === "") return null;
                     const lx = index === 0 ? x + 16 : x;
-                    return <text x={lx} y={y + 18} fill="#D97706" fontSize={11} fontWeight={700} textAnchor="middle">{value}%</text>;
+                    return <text x={lx} y={y - 12} fill="#D97706" fontSize={11} fontWeight={700} textAnchor="middle">{value}%</text>;
                   }} />
                 </Line>
                 <Line yAxisId="conv" type="monotone" dataKey="convProjected" name="Conversion % (proj.)" stroke="#D97706" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3, fill: "#D97706" }} isAnimationActive={false} connectNulls={true}>
                   <LabelList dataKey="convProjected" content={(props) => {
                     const { x, y, value, index } = props;
                     if (value == null || value === "") return null;
-                    const lx = index === 0 ? x + 16 : x;
-                    return <text x={lx} y={y + 18} fill="#D97706" fontSize={10.5} fontWeight={600} textAnchor="middle">{value}%</text>;
+                    if (chartData[index]?.convActual != null) return null;
+                    return <text x={x} y={y - 12} fill="#D97706" fontSize={10.5} fontWeight={600} textAnchor="middle">{value}%</text>;
                   }} />
                 </Line>
               </ComposedChart>
@@ -732,16 +753,22 @@ export function SalesTrendAnalysis() {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {funnel.map((f, i) => {
                 const pct = totalN ? (f.n / totalN) * 100 : 0;
-                const col = ["#86868B", "#08805A", "#986315", "#08805A"][i];
+                const col = [
+                  "linear-gradient(90deg, #475569 0%, #334155 100%)", // Total Leads (Slate)
+                  "linear-gradient(90deg, #0EA5E9 0%, #0284C7 100%)", // Interested (Cyan Sky)
+                  "linear-gradient(90deg, #F59E0B 0%, #D97706 100%)", // Not Interested (Amber)
+                  "linear-gradient(90deg, #08805A 0%, #065B3C 100%)", // Converted (Forest Green)
+                ][i];
+                const stageColor = ["#334155", "#0284C7", "#D97706", "#08805A"][i];
                 const barPct = Math.max(pct, pct > 0 ? 2 : 0);
                 return (
                   <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
                     <div style={{ width: 105, fontSize: 12, fontWeight: 600, color: "#1D1D1F", textAlign: "right", flexShrink: 0 }}>{f.label}</div>
                     <div style={{ flex: 1, background: "rgba(0,0,0,.04)", borderRadius: 8, height: 26, position: "relative", overflow: "hidden", display: "flex", alignItems: "center" }}>
                       <div style={{ width: barPct + "%", height: "100%", background: col, borderRadius: 8, transition: "width .4s ease" }} />
-                      <span style={{ position: "absolute", left: 10, fontSize: 11.5, fontWeight: pct > 14 ? 700 : 600, color: pct > 14 ? "#fff" : "#86868B" }}>{f.n}</span>
+                      <span style={{ position: "absolute", left: 10, fontSize: 11.5, fontWeight: 700, color: pct > 14 ? "#fff" : "#1D1D1F" }}>{f.n}</span>
                     </div>
-                    <div style={{ width: 40, fontSize: 12, fontWeight: 700, color: i === 3 ? "#08805A" : "#86868B", textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{Math.round(pct)}%</div>
+                    <div style={{ width: 40, fontSize: 12, fontWeight: 700, color: stageColor, textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{Math.round(pct)}%</div>
                   </div>
                 );
               })}

@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.136**.
+> **Reflects:** `APP_VERSION` **2.29.140**.
 
 ---
 
@@ -181,6 +181,16 @@ Same origin, but **unauthenticated** (no Bearer header sent) — separate cursor
 - **Society join (VLOOKUP):** subscriptions/invoices/tickets are joined to a **society** via the
   customer: `zohoCustomerId | zohoId | customerNumber → customer.society`. Unmatched → `"Unknown"`.
   Used across Billing, Analytics, Penetration Tracker, Top Societies.
+- **Default-excluded societies (`isRealSociety(name)`, v2.29.137):** the one canonical rule for what
+  counts as a "real" society/apartment when a Society/Apartment filter is in its default (unset,
+  `null`) state — excludes `"Apartment (Testing)"` and blank/unknown values (`""`, `"—"`, `"Unknown"`,
+  `"— No society —"`, `"N/A"`/`"NA"`). Applied CRM-wide to every Society/Apartment `MultiSelectFilter`:
+  Sales (Leads & Deals, Trend Analysis), Customer (Societies, All Customers, Customers), and Analytics
+  (Overview, Sales Insights, Credits, Net Revenue, Earned Revenue, Reconciliation, DP Transactions) —
+  12 sites total, all following the same pattern: `filter === null ? isRealSociety(x) : filter.includes(x)`.
+  The excluded values stay selectable in each filter's dropdown; picking one explicitly overrides the
+  default and shows it. First built for Customer > Societies alone (v2.29.130), generalized into this
+  shared helper and applied everywhere else in v2.29.137.
 - **Master Plan Catalog (`PLAN_CATALOG` + `planInfo(planCode)`, v2.29.133):** a 64-entry lookup, given
   directly by the business as an exhaustive real plan_code dump — every plan's **Device Type** (Normal /
   Hot & Cold / Test), **Filter Type** (UV / Mineral / Copper / Alkaline / Uncategorised / Test), and
@@ -398,6 +408,15 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   editable per role; grand-total row. **Societies** sub-tab groups customers by society with
   count/active/device-mix (Own/Normal/Hot&Cold from the purifier-ID prefix), expandable per society.
   The Overview "Active Customers" figure and Top-Societies "Active" column come from this active-status logic.
+- **Customers list — real Device/Filter Type (v2.29.138):** the table, CSV export, and detail drawer now
+  show the real business-given **Device Type** and **Filter Type** (`planInfo`/`PLAN_CATALOG`, v2.29.132/133)
+  looked up via the customer's subscription `plan_code` (same join key as Plan Amount). Falls back to the
+  purifier-ID-prefix guess (`deviceType()`) for Device Type only when no subscription/plan_code match exists
+  — Filter Type has no such heuristic, so it shows "—" in that case. This is a *different, more accurate*
+  Device Type value than the purifier-ID heuristic used everywhere else (Societies' device-mix, All
+  Customers' badge, the KPI cards on this same page) — those are intentionally left on the heuristic for now.
+  **v2.29.139:** added Device Type and Filter Type as their own `MultiSelectFilter`s in the toolbar
+  (options built from the same `deviceTypeOf`/`filterTypeOf` values shown in the table, `null`/all by default).
 - **Societies rebuilt (v2.29.130)** per explicit request. **(1) Per-metric expand:** each society row's
   numbers are individually clickable — Customers expands everyone in that society; Active/Own/Normal/
   Hot & Cold/**Churned** expand only that slice. Clicking the same number again collapses; clicking a
@@ -419,7 +438,10 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   a **Device Type** column (`DeviceTypeBadge`) and, in the toolbar, a **signup-date range** filter ("All
   Time" plus the same Today/…/Custom presets used elsewhere, filtering on each customer's `since` date) and
   **Society / Status** multi-select filters (`MultiSelectFilter`, v2.29.99 — same component/summary
-  convention as the Customers page's Society filter). Clicking a customer opens a
+  convention as the Customers page's Society filter). **v2.29.140:** Device Type now uses the real
+  plan-catalog value (same `planInfo`/plan_code join as the Customers page, purifier-ID heuristic as
+  fallback) and a new **Filter Type** column was added — both now have their own `MultiSelectFilter`s in
+  the toolbar too, alongside Society/Status/Customer Stack. Clicking a customer opens a
   full-page view with an always-visible **"at a glance" strip (v2.29.82)** — Status, Customer score, LTV,
   Open tickets, Last payment, Referral code, shown above the tab bar on every sub-screen, not just Profile
   — and six sub-screens — **Timeline (v2.29.82)** — every payment, ticket, referral and discount/credit-note
