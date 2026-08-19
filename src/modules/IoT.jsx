@@ -24,6 +24,7 @@ import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, DefRow,
   axisTick, selectStyle, td, toastStyle,
 } from "../shared/ui";
+import junctionBoxImg from "../../Tank Photos/Junction Box.png";
 
 /* ===========================================================================
    IOT CORE — live device monitoring (AWS API). Device list + pressure / flow /
@@ -580,6 +581,44 @@ export function IoTTankPanel({ device, tank, refilling = false, warming = false,
               <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{periodLabel}</div>
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Junction Box Product Panel — displays Junction Box photo + unit info + line pressure & relays
+export function IoTJunctionBoxPanel({ device, channels }) {
+  const fw = device.firmwareVersion || device.FIRMWARE_VERSION || "1.0.10";
+  const meta = [device.roUnitId, device.deviceType].filter(Boolean).join(" · ") || "RO Junction Box Unit";
+  const isOnline = iotOnlineFor(device);
+  return (
+    <div style={{ ...IOT_CARD, position: "relative", overflow: "hidden", padding: "16px 20px", width: "100%", maxWidth: 520,
+      background: "radial-gradient(circle at 50% 35%, rgba(42,134,214,.08), transparent 50%), linear-gradient(180deg,#fff,#f8fcfa)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h2 className="serif" style={{ fontSize: 18, fontWeight: 750, color: "var(--f)", margin: 0 }}>{device.deviceId}</h2>
+          <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>{meta} · Firmware {fw}</div>
+        </div>
+        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: isOnline ? "rgba(8,128,90,0.12)" : "rgba(220,38,38,0.12)", color: isOnline ? "#08805A" : "#DC4141" }}>
+          ● {isOnline ? "Online" : "Offline"}
+        </span>
+      </div>
+
+      {/* Product Image: Junction Box Blended Seamlessly */}
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "12px 0", minHeight: 190 }}>
+        <img src={junctionBoxImg} alt="Junction Box" style={{ maxHeight: 180, width: "auto", objectFit: "contain", mixBlendMode: "multiply", opacity: 0.92, filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.06))" }} />
+      </div>
+
+      {/* Junction Box Key Stats */}
+      <div style={{ marginTop: 10, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,0.07)", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{ background: "rgba(8,128,90,0.06)", borderRadius: 10, padding: "8px 12px" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "#86868B" }}>Input Line Pressure</div>
+          <div className="serif" style={{ fontSize: 20, fontWeight: 800, color: "#1D1D1F", marginTop: 2 }}>{device.payload?.inputPressure ?? 0} bar</div>
+        </div>
+        <div style={{ background: "rgba(42,134,214,0.06)", borderRadius: 10, padding: "8px 12px" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", color: "#86868B" }}>Last Heartbeat</div>
+          <div className="serif" style={{ fontSize: 20, fontWeight: 800, color: "#0284C7", marginTop: 2 }}>{iotTimeAgo(device.timestamp)}</div>
         </div>
       </div>
     </div>
@@ -1435,6 +1474,13 @@ export function IoTAlertsPage() {
   const [hist, setHist] = useState({});
   const [sevF, setSevF] = useState("all");
   const [typeF, setTypeF] = useState("all");
+  const [searchQ, setSearchQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [expandedId, setExpandedId] = useState(null);
+  const [showSignals, setShowSignals] = useState(false);
+
+  const ALERTS_PER_PAGE = 6;
+
   useEffect(() => {
     api.logView(user.username, "Viewed IoT Alerts");
     let alive = true;
@@ -1453,100 +1499,160 @@ export function IoTAlertsPage() {
     const t = setInterval(load, 60000);
     return () => { alive = false; clearInterval(t); };
   }, []);
+
   const devices = useMemo(() => { const ids = Array.from(new Set([...roster.map((d) => d.deviceId), ...IOT_KNOWN_TANK_DEVICES])); return ids.map((id) => iotMergeLatest(roster.find((d) => d.deviceId === id) || { deviceId: id, deviceType: "RO Tank" }, hist[id])); }, [roster, hist]);
-  // Persisted anomaly log — detect on each poll, upsert into localStorage, and
-  // render from the stored log so alerts don't vanish when the live window moves.
   const [alerts, setAlerts] = useState(() => iotLogAlerts([]));
   useEffect(() => { setAlerts(iotLogAlerts(iotAnomalyEvents(devices, hist))); }, [devices, hist]);
   const clearLog = () => { iotClearAlertLog(); setAlerts([]); };
+
   const bySev = { critical: 0, high: 0, medium: 0 };
   alerts.forEach((a) => { bySev[a.sev] = (bySev[a.sev] || 0) + 1; });
   const deadN = alerts.filter((a) => a.rule === "DEAD").length;
   const contamN = alerts.filter((a) => ["PH_CRIT", "TDS_SPIKE", "COR_ACID", "TDS_OOR", "PH_OOR"].includes(a.rule)).length;
+
   const byType = {};
   alerts.forEach((a) => { byType[a.name] = (byType[a.name] || 0) + 1; });
   const typeRows = Object.entries(byType).map(([name, n]) => ({ name, n })).sort((a, b) => b.n - a.n);
-  const TYPES = [["all", "All"], ...typeRows.map((t) => [t.name, t.name])];
-  const shown = alerts.filter((a) => (sevF === "all" || a.sev === sevF) && (typeF === "all" || a.name === typeF));
-  const kpis = [
-    { l: "Open alerts", v: String(alerts.length), c: alerts.length ? "#DC4141" : "#0A7D53" },
-    { l: "Critical", v: String(bySev.critical), c: bySev.critical ? "#DC4141" : "#6b8577" },
-    { l: "High", v: String(bySev.high), c: bySev.high ? "#a86e00" : "#6b8577" },
-    { l: "Dead devices", v: String(deadN), c: deadN ? "#DC4141" : "#0A7D53" },
-    { l: "Contamination", v: String(contamN), c: contamN ? "#a86e00" : "#0A7D53" },
-    { l: "Devices watched", v: String(devices.length), c: "var(--f)" },
-  ];
-  const chip = (active, on, label, count) => (
-    <button onClick={on} style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), background: active ? "var(--brand)" : "#fff", color: active ? "#fff" : "var(--slate)" }}>{label}{count != null ? ` (${count})` : ""}</button>
-  );
+  const TYPES = [["all", "All Types"], ...typeRows.map((t) => [t.name, t.name])];
 
+  const filtered = useMemo(() => {
+    return alerts.filter((a) => {
+      const matchSev = sevF === "all" || a.sev === sevF;
+      const matchType = typeF === "all" || a.name === typeF;
+      const matchQuery = !searchQ || (a.deviceId || "").toLowerCase().includes(searchQ.toLowerCase()) || (a.name || "").toLowerCase().includes(searchQ.toLowerCase()) || (a.detail || "").toLowerCase().includes(searchQ.toLowerCase());
+      return matchSev && matchType && matchQuery;
+    });
+  }, [alerts, sevF, typeF, searchQ]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ALERTS_PER_PAGE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedAlerts = filtered.slice((currentPage - 1) * ALERTS_PER_PAGE, currentPage * ALERTS_PER_PAGE);
+
+  const kpis = [
+    { l: "Open alerts", v: String(alerts.length), c: alerts.length ? "#DC4141" : "#08805A" },
+    { l: "Critical", v: String(bySev.critical), c: bySev.critical ? "#DC4141" : "#666" },
+    { l: "Dead devices", v: String(deadN), c: deadN ? "#DC4141" : "#08805A" },
+    { l: "Contamination", v: String(contamN), c: contamN ? "#F59E0B" : "#08805A" },
+  ];
 
   return (
-    <div className="fade-up ov-sans">
-      <div style={{ fontSize: 13, color: "var(--muted)", marginTop: -6, marginBottom: 14 }}>Every anomaly detected across the fleet is captured and stored locally, so the log persists after the live window moves on — with severity, likely cause and the action to take.</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 16 }}>
+    <div className="fade-up ov-sans" style={{ maxWidth: 1100, margin: "0 auto" }}>
+      {/* Top 4 KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 14 }}>
         {kpis.map((k, i) => (
-          <div key={i} style={{ ...IOT_CARD, padding: "12px 14px" }}>
-            <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{k.l}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: k.c, marginTop: 4, fontVariantNumeric: "tabular-nums" }}>{k.v}</div>
+          <div key={i} style={{ ...IOT_CARD, padding: "10px 14px" }}>
+            <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>{k.l}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: k.c, marginTop: 2 }}>{k.v}</div>
           </div>
         ))}
       </div>
-      {typeRows.length > 0 && (
-        <div style={{ ...IOT_CARD, padding: "14px 16px", marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 800, color: "var(--f)", marginBottom: 10 }}>Anomalies by type</div>
-          <ResponsiveContainer width="100%" height={Math.max(120, typeRows.length * 34)}>
-            <BarChart data={typeRows} layout="vertical" margin={{ left: 4, right: 24, top: 4, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: "#6b8577" }} axisLine={false} tickLine={false} allowDecimals={false} />
-              <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 11, fill: "var(--f)" }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: "rgba(220,65,65,.06)" }} />
-              <Bar dataKey="n" fill="#DC4141" radius={[0, 5, 5, 0]} maxBarSize={20} isAnimationActive={false}><LabelList dataKey="n" position="right" style={{ fontSize: 11, fill: "var(--f)", fontWeight: 700 }} /></Bar>
-            </BarChart>
-          </ResponsiveContainer>
+
+      {/* Search & Filter Toolbar */}
+      <div style={{ ...IOT_CARD, padding: "12px 16px", marginBottom: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", flex: 1, minWidth: 280 }}>
+          <input
+            type="text"
+            placeholder="Search alerts or device ID..."
+            value={searchQ}
+            onChange={(e) => { setSearchQ(e.target.value); setPage(1); }}
+            style={{ padding: "6px 12px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)", fontSize: 12, outline: "none", width: 200 }}
+          />
+          <div style={{ display: "flex", gap: 4 }}>
+            {["all", "critical", "high", "medium"].map((sev) => {
+              const active = sevF === sev;
+              const label = sev === "all" ? "All" : sev.charAt(0).toUpperCase() + sev.slice(1);
+              return (
+                <button
+                  key={sev}
+                  onClick={() => { setSevF(sev); setPage(1); }}
+                  style={{
+                    fontSize: 11.5, fontWeight: 700, padding: "4px 10px", borderRadius: 999, cursor: "pointer",
+                    border: `1px solid ${active ? "#08805A" : "rgba(0,0,0,0.1)"}`,
+                    background: active ? "#08805A" : "#fff", color: active ? "#fff" : "#475569"
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <select value={typeF} onChange={(e) => { setTypeF(e.target.value); setPage(1); }} style={{ ...selectStyle, padding: "4px 8px", fontSize: 11.5 }}>
+            {TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+
+        {alerts.length > 0 && (
+          <button onClick={clearLog} style={{ fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 8, border: "1px solid rgba(220,38,38,0.2)", background: "rgba(220,38,38,0.06)", color: "#DC4141", cursor: "pointer" }}>
+            Clear log
+          </button>
+        )}
+      </div>
+
+      {/* Paginated Compact Alert Cards */}
+      <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+        {paginatedAlerts.map((a, i) => {
+          const s = IOT_ALERT_SEV[a.sev] || IOT_ALERT_SEV.medium;
+          const isExp = expandedId === `${a.deviceId}_${i}`;
+          return (
+            <div key={i} style={{ ...IOT_CARD, padding: "10px 14px", borderLeft: `4px solid ${s.c}`, transition: ".15s" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", cursor: "pointer" }} onClick={() => setExpandedId(isExp ? null : `${a.deviceId}_${i}`)}>
+                <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, color: s.c, background: s.bg, textTransform: "uppercase", letterSpacing: ".04em" }}>{s.label}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 750, color: "#1D1D1F" }}>{a.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: s.c }}>{a.value}</span>
+                <span style={{ fontSize: 11.5, color: "#86868B", marginLeft: "auto" }}>{a.deviceId}</span>
+                <span style={{ fontSize: 11.5, color: "#86868B" }}>{a.ts ? iotStamp(a.ts) : "—"}</span>
+                <span style={{ fontSize: 11, color: "#08805A", fontWeight: 700 }}>{isExp ? "▲ Less" : "▼ Details"}</span>
+              </div>
+              {isExp && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(0,0,0,0.06)", fontSize: 12, color: "#475569" }}>
+                  <div>{a.detail}</div>
+                  <div style={{ display: "flex", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
+                    <div><b style={{ color: "#08805A" }}>Action:</b> {a.action}</div>
+                    <div style={{ color: "#86868B" }}><b>Likely cause:</b> {a.cause}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {filtered.length === 0 && (
+          <div style={{ ...IOT_CARD, padding: 20, textAlign: "center", color: "#08805A", fontWeight: 600 }}>
+            ✓ No anomaly alerts match this filter.
+          </div>
+        )}
+      </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 4px", marginBottom: 14 }}>
+          <span style={{ fontSize: 12, color: "#86868B" }}>Showing {paginatedAlerts.length} of {filtered.length} alerts</span>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <button disabled={currentPage <= 1} onClick={() => setPage((p) => p - 1)} style={{ padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.1)", background: "#fff", cursor: currentPage <= 1 ? "default" : "pointer", opacity: currentPage <= 1 ? 0.5 : 1, fontSize: 12 }}>
+              ← Prev
+            </button>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#1D1D1F" }}>Page {currentPage} of {totalPages}</span>
+            <button disabled={currentPage >= totalPages} onClick={() => setPage((p) => p + 1)} style={{ padding: "4px 10px", borderRadius: 8, border: "1px solid rgba(0,0,0,0.1)", background: "#fff", cursor: currentPage >= totalPages ? "default" : "pointer", opacity: currentPage >= totalPages ? 0.5 : 1, fontSize: 12 }}>
+              Next →
+            </button>
+          </div>
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Severity</span>
-        {chip(sevF === "all", () => setSevF("all"), "All", alerts.length)}
-        {chip(sevF === "critical", () => setSevF("critical"), "Critical", bySev.critical)}
-        {chip(sevF === "high", () => setSevF("high"), "High", bySev.high)}
-        {chip(sevF === "medium", () => setSevF("medium"), "Medium", bySev.medium)}
-        <span style={{ width: 1, height: 22, background: "var(--border)", margin: "0 4px" }} />
-        <select value={typeF} onChange={(e) => setTypeF(e.target.value)} style={selectStyle}>{TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-        <div style={{ flex: 1, minWidth: 8 }} />
-        <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>{alerts.length} logged</span>
-        {alerts.length > 0 && <button onClick={clearLog} title="Clear the local anomaly log" style={{ fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 9, border: "1px solid var(--border)", background: "#fff", color: "#DC4141", cursor: "pointer" }}>Clear log</button>}
-      </div>
-      <div style={{ display: "grid", gap: 10 }}>
-        {shown.map((a, i) => { const s = IOT_ALERT_SEV[a.sev] || IOT_ALERT_SEV.medium; return (
-          <div key={i} style={{ ...IOT_CARD, padding: "12px 14px", borderLeft: `4px solid ${s.c}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 10.5, fontWeight: 800, padding: "2px 9px", borderRadius: 999, color: s.c, background: s.bg, textTransform: "uppercase", letterSpacing: ".04em" }}>{s.label}</span>
-              <span style={{ fontSize: 14, fontWeight: 800, color: "var(--f)" }}>{a.name}</span>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: s.c, fontVariantNumeric: "tabular-nums" }}>{a.value}</span>
-              {a.count > 1 && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", background: "var(--mint-2)", padding: "2px 8px", borderRadius: 999 }}>×{a.count}</span>}
-              <span style={{ flex: 1 }} />
-              <span style={{ fontSize: 12, fontFamily: "ui-monospace,monospace", color: "var(--muted)" }}>{a.deviceId}</span>
-              <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap" }}>{a.ts ? iotStamp(a.ts) : "—"}</span>
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--slate)", marginTop: 7, lineHeight: 1.5 }}>{a.detail}</div>
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 6 }}>
-              <div style={{ fontSize: 12, color: "var(--f)" }}><b style={{ color: "var(--teal)" }}>Action:</b> {a.action}</div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}><b>Likely cause:</b> {a.cause}</div>
-            </div>
-          </div>
-        ); })}
-        {shown.length === 0 && <div style={{ ...IOT_CARD, padding: "18px", textAlign: "center", color: "#0A7D53", fontWeight: 600 }}>✓ No anomalies match this filter — the fleet is clear.</div>}
-      </div>
-      <div style={{ ...IOT_CARD, padding: "14px 16px", marginTop: 18, background: "#F6FAF8" }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Understanding the signals</div>
-        <div style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.55, display: "grid", gap: 5 }}>
-          <div>• <b>TDS drifts with temperature</b> (~2%/°C) — a warm-afternoon TDS rise can be thermal, not contamination. The rules watch <b>rapid</b> spikes, not slow drift.</div>
-          <div>• <b>Acid intrusion signature:</b> pH crashing while TDS surges together (inverse-ion) is the strongest contamination flag — treated as Critical.</div>
-          <div>• <b>Low-TDS (RO) water has no buffer</b>, so its pH can swing from minor CO₂ absorption — pH volatility on low-TDS lines is often benign.</div>
-          <div>• A <b>flatline</b> (zero variance) usually means a frozen sensor, not perfect water — worth a reboot/recalibration.</div>
+
+      {/* Collapsible Understanding Signals Footer */}
+      <div style={{ ...IOT_CARD, padding: "10px 14px", background: "#F6FAF8" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setShowSignals(!showSignals)}>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Understanding Anomaly Signals</span>
+          <span style={{ fontSize: 11, color: "#08805A", fontWeight: 700 }}>{showSignals ? "▲ Hide" : "▼ Show Help Guide"}</span>
         </div>
+        {showSignals && (
+          <div style={{ fontSize: 12, color: "var(--slate)", lineHeight: 1.55, display: "grid", gap: 4, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+            <div>• <b>TDS drifts with temperature</b> (~2%/°C) — a warm-afternoon TDS rise can be thermal, not contamination.</div>
+            <div>• <b>Acid intrusion signature:</b> pH crashing while TDS surges together is treated as Critical.</div>
+            <div>• <b>Low-TDS water has no buffer:</b> pH volatility on low-TDS lines is often benign.</div>
+            <div>• A <b>flatline</b> (zero variance) usually means a frozen sensor, worth a reboot/recalibration.</div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1826,20 +1932,6 @@ export function IoTDevices() {
     prevAlertKeysRef.current = alertKeys;
   }, [alertKeys]);
 
-  // ---- Live consumption: diff cumulative totalVolumeLitres across the history window.
-  const winFirst = chrono[0], winLast = chrono[chrono.length - 1];
-  const winSecs = (winFirst && winLast) ? Math.max(0, (new Date(winLast.timestamp) - new Date(winFirst.timestamp)) / 1000) : 0;
-  const winLabel = winSecs >= 5400 ? `${(winSecs / 3600).toFixed(1)} h` : winSecs >= 60 ? `${Math.round(winSecs / 60)} min` : `${Math.round(winSecs)} s`;
-  const volOf = (rec, id) => { const c = (rec?.payload?.units?.[0]?.channels ?? []).find(x => x.channelId === id); return c == null ? null : Number(c.totalVolumeLitres); };
-  const consumption = chanIds.map(id => {
-    const first = volOf(winFirst, id), last = volOf(winLast, id);
-    const consumed = (first != null && last != null) ? Math.max(0, last - first) : 0; // clamp: meters only increase
-    const flow = Number((winLast?.payload?.units?.[0]?.channels ?? []).find(x => x.channelId === id)?.flowRateLpm || 0);
-    return { id, consumed, flowing: flow > 0, flow };
-  });
-  const totalConsumed = consumption.reduce((s, c) => s + c.consumed, 0);
-  const canMeasure = chrono.length > 1;
-
   // 12-hour consumption breakdown over the last 2 days (IST) for the selected device.
   const buckets2d = useMemo(() => iotBuckets12h(historyByDevice[selected]), [historyByDevice, selected]);
 
@@ -1947,8 +2039,7 @@ export function IoTDevices() {
         })}
       </div>
 
-      {/* ── Demand Analytics ───────────────────────────────────────────────── */}
-      <IoTDiurnalDemandChart avgTds={wqRange?.avgTds || 28} avgPh={wqRange?.avgPh || 7.4} style={{ marginBottom: 16 }} />
+      {/* ── status KPI cards ───────────────────────────────────────────────── */}
 
       {/* ── device list + detail ───────────────────────────────────────────── */}
       {(() => {
@@ -1981,77 +2072,52 @@ export function IoTDevices() {
           </div>
         );
 
-        if (isTank) {
-          return (
-            <div className="iot-monitor-grid" style={{ display: "grid", gridTemplateColumns: "230px minmax(340px, 520px) minmax(280px, 1fr)", gap: 16, alignItems: "stretch" }}>
-              {deviceListCard}
-              <IoTTankPanel device={device} tank={tank} refilling={tankRefilling} warming={tankWarming} dispensed={dispensed} range={range} setRange={setRange} />
-              <div style={{ ...IOT_CARD, padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                <IoTWaterQualityCard range={wqRange} title="Water Quality & Potability" subtitle="Live tank sensors" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
-                <div style={{ margin: "14px 0", borderTop: "1px solid rgba(0,0,0,0.06)" }} />
-                <IoTWaterQualityCard range={wqRange} keys={["pressure", "flowMLPM"]} title="Hydraulics & Pressure" subtitle="Line pressure & dispense flow rate" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
-              </div>
-            </div>
-          );
-        }
-
         return (
-          <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 18 }} className="iot-grid">
+          <div className="iot-monitor-grid" style={{ display: "grid", gridTemplateColumns: "230px minmax(340px, 520px) minmax(280px, 1fr)", gap: 16, alignItems: "stretch" }}>
             {deviceListCard}
-            <div style={{ minWidth: 0 }}>
-              {!device ? <div style={{ ...softShadow, padding: 22 }}><Empty msg="Select a device from the list." /></div> : <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-                  <div>
-                    <h2 style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.1, color: "#1D1D1F", margin: 0 }}>{device.deviceId}</h2>
-                    <div style={{ fontSize: 13, color: "#86868B", marginTop: 3 }}>{[device.roUnitId, device.deviceType].filter(Boolean).join(" · ") || "Device"} · Firmware {device.firmwareVersion || device.FIRMWARE_VERSION || "—"}</div>
-                  </div>
-                  <div style={{ ...softShadow, padding: "12px 18px", textAlign: "right" }}>
-                    <div style={{ fontSize: 11, color: "#86868B", fontWeight: 700, textTransform: "uppercase" }}>Last heartbeat</div>
-                    <div className="serif" style={{ fontSize: 20, fontWeight: 700, color: iotOnlineFor(device) ? "#08805A" : "#DC4141", margin: "2px 0" }}>{iotTimeAgo(device.timestamp)}</div>
-                    <div style={{ fontSize: 11, color: "#86868B" }}>alert if &gt; 120s</div>
-                  </div>
-                </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                  <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #08805A 0%, #065B3C 100%)", borderRadius: 18, boxShadow: "0 10px 25px rgba(8,128,90,0.28)", padding: 20 }}>
-                    <IoTWave kind="ecg" color="#7FE3BE" opacity={0.4} />
-                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4", position: "relative", zIndex: 1 }}>Water pressure</span>
-                    <div className="serif" style={{ fontSize: 32, color: "#fff", fontWeight: 700, margin: "7px 0 2px", lineHeight: 1 }}>{device.payload?.inputPressure ?? "—"} bar</div>
-                    <div style={{ fontSize: 12, color: "#E2F3EE" }}>input pressure</div>
-                    <Droplets size={22} color="#ffffff" style={{ position: "absolute", right: 18, top: 18, opacity: 0.9 }} />
-                  </div>
-                  <div style={{ ...softShadow, padding: 20, position: "relative" }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Unit health</span>
-                    <div className="serif" style={{ fontSize: 26, color: "#1D1D1F", fontWeight: 700, margin: "7px 0 2px", lineHeight: 1 }}>{device.payload?.units?.[0]?.health ?? "—"}</div>
-                    <div style={{ fontSize: 12, color: "#86868B" }}>device condition</div>
-                    <span style={{ position: "absolute", right: 18, top: 18, display: "grid", placeItems: "center", width: 36, height: 36, borderRadius: 10, background: "rgba(8,128,90,0.12)", color: "#08805A" }}><ShieldCheck size={18} /></span>
-                  </div>
-                </div>
+            {isTank ? (
+              <IoTTankPanel device={device} tank={tank} refilling={tankRefilling} warming={tankWarming} dispensed={dispensed} range={range} setRange={setRange} />
+            ) : (
+              <IoTJunctionBoxPanel device={device} channels={channels} />
+            )}
 
-                <div style={{ ...softShadow, padding: 22 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <div>
-                      <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Channels (Pipes)</h3>
-                      <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Each channel is a water pipe with its own valve and flow meter.</div>
-                    </div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A", cursor: "pointer", whiteSpace: "nowrap" }}>View all channels →</span>
+            <div style={{ ...IOT_CARD, padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              {isTank ? (
+                <>
+                  <IoTWaterQualityCard range={wqRange} title="Water Quality & Potability" subtitle="Live tank sensors" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
+                  <div style={{ margin: "14px 0", borderTop: "1px solid rgba(0,0,0,0.06)" }} />
+                  <IoTWaterQualityCard range={wqRange} keys={["pressure", "flowMLPM"]} title="Hydraulics & Pressure" subtitle="Line pressure & dispense flow rate" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
+                </>
+              ) : (
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+                    <h3 style={{ fontSize: 16, fontWeight: 720, color: "#1D1D1F", margin: 0 }}>Channels & Valve Actuators</h3>
+                    <span style={{ fontSize: 10.5, color: "#08805A", fontWeight: 700, background: "rgba(8,128,90,0.12)", padding: "2px 7px", borderRadius: 999 }}>{channels.length} Pipe Lines</span>
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
-                    {channels.map(ch => (
-                      <div key={ch.channelId} style={{ borderRadius: 14, border: "1px solid " + (ch.fault ? "rgba(152,99,21,0.2)" : "rgba(0,0,0,0.06)"), background: ch.fault ? "rgba(152,99,21,0.06)" : "rgba(8,128,90,0.06)", padding: 14 }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                          <span style={{ fontSize: 13.5, fontWeight: 700, color: "#1D1D1F" }}>{ch.channelId}</span>
+                  <div style={{ fontSize: 11.5, color: "#8b9a95", marginBottom: 12 }}>Active pipe valves & flow meters</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {channels.map((ch) => (
+                      <div key={ch.channelId} style={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.06)", background: ch.fault ? "rgba(152,99,21,0.06)" : "rgba(8,128,90,0.06)", padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#1D1D1F" }}>{ch.channelId}</span>
                           <ValveBadge state={ch.valveState} />
                         </div>
-                        <DefRow k="Flow rate" v={`${ch.flowRateLpm} L/min`} />
-                        <DefRow k="Total volume" v={`${ch.totalVolumeLitres} L`} />
-                        {ch.fault && <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 600, color: "#986315", background: "rgba(152,99,21,0.12)", borderRadius: 8, padding: "5px 9px" }}>⚠ Fault: {ch.fault}</div>}
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#475569", marginTop: 4 }}>
+                          <span>Flow:</span>
+                          <strong style={{ color: "#1D1D1F" }}>{ch.flowRateLpm} L/min</strong>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#475569", marginTop: 2 }}>
+                          <span>Volume:</span>
+                          <strong style={{ color: "#1D1D1F" }}>{ch.totalVolumeLitres} L</strong>
+                        </div>
+                        {ch.fault && <div style={{ marginTop: 6, fontSize: 10.5, fontWeight: 600, color: "#986315", background: "rgba(152,99,21,0.12)", borderRadius: 6, padding: "3px 7px" }}>⚠ {ch.fault}</div>}
                       </div>
                     ))}
-                    {channels.length === 0 && <div style={{ gridColumn: "1/-1" }}><Empty msg="No channels reported." /></div>}
+                    {channels.length === 0 && <Empty msg="No active channels reported." />}
                   </div>
                 </div>
-              </>}
+              )}
             </div>
           </div>
         );
@@ -2059,129 +2125,6 @@ export function IoTDevices() {
 
       {/* ── recent RO-tank readings (full width) ───────────────────────────── */}
       {device && isTank && <IoTTankReadings items={histRangeByDevice[selected] ?? wqItems} weather={weather} range={range} setRange={setRange} />}
-
-      {/* ── live consumption · pressure · flow (full width) ────────────────── */}
-      {device && !isTank && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 16 }}>
-          <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Live Consumption</h3>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>{canMeasure ? `Water drawn per channel over the live ${winLabel} window.` : "Gathering readings…"}</div>
-            {!canMeasure ? <div style={{ marginTop: 8 }}><Empty msg="Not enough heartbeats yet to measure consumption." /></div> : <>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "12px 0 12px", flexWrap: "wrap" }}>
-                <span className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", lineHeight: 1 }}>{iotVol(totalConsumed)} L</span>
-                <span style={{ fontSize: 12, color: "#86868B" }}>total across {consumption.length} channel{consumption.length !== 1 ? "s" : ""} · last {winLabel}</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {consumption.map(c => (
-                  <div key={c.id} style={{ borderRadius: 12, border: "1px solid rgba(8,128,90,0.15)", background: c.flowing ? "rgba(8,128,90,0.1)" : "rgba(8,128,90,0.05)", padding: "10px 12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: "#1D1D1F" }}>{c.id}</span>
-                      {c.flowing && <span className="iot-flow-dot" style={{ width: 7, height: 7, borderRadius: 999, background: "#08805A" }} />}
-                    </div>
-                    <div className="serif" style={{ fontSize: 18, fontWeight: 700, color: "#1D1D1F", marginTop: 4, lineHeight: 1 }}>{iotVol(c.consumed)} <span style={{ fontSize: 12, fontWeight: 600, color: "#86868B" }}>L</span></div>
-                    <div style={{ fontSize: 11, color: "#86868B", marginTop: 3 }}>now {c.flow} L/min</div>
-                  </div>
-                ))}
-              </div>
-            </>}
-          </div>
-
-          {/* Point 3: Pressure with Reference Area (1.5 - 3.5 bar normal band) */}
-          <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Pressure Over Time</h3>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2, marginBottom: 6 }}>Input pressure (shaded green = normal 1.5–3.5 bar range).</div>
-            {chartData.length > 1 ? (
-              <ResponsiveContainer width="100%" height={210}>
-                <LineChart data={chartData} margin={{ left: -8, right: 12, top: 6 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                  <XAxis dataKey="time" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
-                  <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={34} />
-                  <ReferenceArea y1={1.5} y2={3.5} fill="rgba(8,128,90,0.08)" stroke="none" />
-                  <Tooltip content={<TT />} />
-                  <Line type="monotone" dataKey="pressure" name="Pressure (bar)" stroke="#08805A" strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : <div style={{ height: 180, display: "grid", placeItems: "center" }}><Empty msg="Gathering readings…" /></div>}
-          </div>
-
-          <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Flow Rate Over Time</h3>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2, marginBottom: 6 }}>Litres per minute through each pipe.</div>
-            {chartData.length > 1 ? (
-              <ResponsiveContainer width="100%" height={210}>
-                <LineChart data={chartData} margin={{ left: -8, right: 12, top: 6 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                  <XAxis dataKey="time" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={40} />
-                  <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={40} />
-                  <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12, color: "#1D1D1F" }} />
-                  {chanIds.map((id, i) => (
-                    <Line key={id} type="monotone" dataKey={"flow_" + id} name={id} stroke={IOT_FLOW_COLORS[i % IOT_FLOW_COLORS.length]} strokeWidth={2.5} dot={false} isAnimationActive={false} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            ) : <div style={{ height: 180, display: "grid", placeItems: "center" }}><Empty msg="Gathering readings…" /></div>}
-          </div>
-        </div>
-      )}
-
-      {/* ── 24-Hour Diurnal Demand Pattern & Filter Health Analytics ─────────── */}
-      {device && !isTank && (
-        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 16, marginTop: 16 }}>
-          {/* Peak Hourly Demand Bar Chart */}
-          <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
-              <div>
-                <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>24-Hour Diurnal Demand Pattern</h3>
-                <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Hourly consumption profile (00:00–23:00) identifying peak morning & evening draw windows</div>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>
-                Peak: 08:00 AM (142 L)
-              </span>
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={[
-                { hr: "00:00", volume: 12 }, { hr: "02:00", volume: 8 }, { hr: "04:00", volume: 6 },
-                { hr: "06:00", volume: 45 }, { hr: "08:00", volume: 142 }, { hr: "10:00", volume: 98 },
-                { hr: "12:00", volume: 65 }, { hr: "14:00", volume: 42 }, { hr: "16:00", volume: 58 },
-                { hr: "18:00", volume: 115 }, { hr: "20:00", volume: 130 }, { hr: "22:00", volume: 38 }
-              ]} margin={{ left: -18, right: 12, top: 14 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                <XAxis dataKey="hr" tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} width={34} />
-                <Tooltip content={<TT />} />
-                <Bar dataKey="volume" name="Volume (L)" fill="#08805A" radius={[6, 6, 0, 0]}>
-                  <LabelList dataKey="volume" position="top" style={{ fontSize: 10, fill: "#08805A", fontWeight: 700 }} formatter={(v) => v > 80 ? `${v}L` : ""} />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
-          {/* Filter Health & Pressure Drop (ΔP) Maintenance Predictor */}
-          <div style={{ ...softShadow, padding: 22, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Filter Health & ΔP Predictor</h3>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(16,185,129,0.12)", color: "#10B981" }}>Healthy (94%)</span>
-              </div>
-              <div style={{ fontSize: 12.5, color: "#86868B", marginBottom: 14 }}>Real-time pressure drop differential (ΔP) across inlet membrane</div>
-
-              <div style={{ background: "rgba(8,128,90,0.06)", borderRadius: 14, padding: "14px 16px", marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#1D1D1F", fontWeight: 600 }}>
-                  <span>Inlet Pressure: {device.payload?.inputPressure ?? 2.8} bar</span>
-                  <span>Target: 2.5 bar</span>
-                </div>
-                <div style={{ height: 8, borderRadius: 999, background: "rgba(0,0,0,0.08)", marginTop: 8, overflow: "hidden" }}>
-                  <div style={{ width: "88%", height: "100%", borderRadius: 999, background: "#08805A" }} />
-                </div>
-              </div>
-
-              <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.5, background: "rgba(0,0,0,0.03)", padding: "10px 12px", borderRadius: 10 }}>
-                💡 <strong>Predictive Insight:</strong> Membrane pressure differential (ΔP = 0.3 bar) is within safe limits. Estimated next filter service in <strong>42 days</strong>.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── consumption · last 2 days (12-hour blocks) ────────────────────────── */}
       {device && !isTank && (
