@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.140**.
+> **Reflects:** `APP_VERSION` **2.29.161**.
 
 ---
 
@@ -325,8 +325,8 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   **Society** filter (`MultiSelectFilter`, options from the full unscoped lead set, same convention as
   Trend Analysis's Apartment filter) alongside the existing search/status/date-range controls.
 - **Trend Analysis (`sales_trend`, v2.29.92)** — a period-filterable read of the pipeline, sitting
-  after Apartment Leads. Reuses the same lead/stage data as Analytics > Sales
-  Insights (`SalesInsights`, see the Analytics section below), but scoped to a real date-range picker
+  after Apartment Leads. Reuses the same lead/stage data the Sales module's own screens read,
+  but scoped to a real date-range picker
   (`DateRangePicker` — Today/This Week/This Month/This Quarter/This Year/Yesterday/Previous Week/Previous
   Month/Previous Quarter/Previous Year/Custom) instead of just a society filter. Layout, top to bottom:
   **(1) KPI cards** — **Total Leads / Interested / Converted / Conversion Rate**, each with a
@@ -720,18 +720,11 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - Local-first: does **not** flag "Server Down".
 
 ### Analytics (`analytics`)
-Cross-module reporting. Sub-tabs: **Overview**, Referral, Sales, Earned Revenue, **Reconciliation**, **DP
+Cross-module reporting. Sub-tabs: **Overview**, Referral, Earned Revenue, **Reconciliation**, **DP
 Transaction**, AOP (admin/devops), Apartment Performance, **Renewal & Churn Risk**, Billing, Revenue (Net
-Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.0.)
-
-- **Sales Insights (`SalesInsights`, `an_sales`, v2.29.25)** — reads the Zoho leads like a funnel: KPI
-  cards (Total leads / conversion rate / plan value in view), a **Leads by status** breakdown table, a
-  **Total plan value by society** table (click a row to filter the status breakdown above), and the
-  **lead-conversion funnel** (Total leads → Contacted+ → Demo+ → Proposal+ → Converted, drop-off % per
-  step). Society-filterable. All deterministic, no LLM. (The "Business insights" panel this tab originally
-  shipped with — What happened/What's ongoing/Result + Positive/Negative + recommended actions — was
-  removed dashboard-wide in v2.29.97, see the note at the top of the Analytics section changelog / the
-  App.jsx VERSION_HISTORY entry for the full list of removed panels.)
+Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.0.
+The **Sales Insights** tab, `an_sales` — a leads funnel read that duplicated ground the Sales module's own
+Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
 
 - **Renewal & Churn Risk (`ChurnRiskRadar`, `an_churn`, v2.29.82)** — flags customers at risk of churn by
   joining three already-live signals onto one customer-level table: **subscription renewing within 30

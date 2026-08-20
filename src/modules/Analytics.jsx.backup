@@ -1,15 +1,14 @@
 /* ===========================================================================
    modules/Analytics.jsx — Analytics module.
-   AnalyticsOverview, CreditsAnalytics, NetRevenue, PenetrationTracker,
-   BillingAnalytics, AppLogs, EarnedRevenue, Reconciliation (an_reconciliation),
-   DPTransactions, AOP, ChurnRiskRadar, ApartmentPerformance + creditNoteApi/
-   appLogsApi and their config. Biggest and most complex module, extracted
-   last per plan. (Sales insights / an_sales removed in v2.29.141 — see
-   modules/Sales.jsx for the Sales module's own analytics.)
+   AnalyticsOverview, SalesInsights (an_sales — NOT the Sales module),
+   CreditsAnalytics, NetRevenue, PenetrationTracker, BillingAnalytics,
+   AppLogs, EarnedRevenue, Reconciliation (an_reconciliation), DPTransactions,
+   AOP, ChurnRiskRadar, ApartmentPerformance + creditNoteApi/appLogsApi and
+   their config. Biggest and most complex module, extracted last per plan.
    =========================================================================== */
 import React, { useState, useEffect, useRef } from "react";
 import {
-  AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Ban, Boxes,
+  AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Ban, Boxes, Briefcase,
   CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Coins, Download,
   Droplets, GitBranch, Hourglass, Info, Landmark, PlayCircle, Receipt,
   RefreshCw, Repeat, RotateCcw, Scale, ScrollText, Search, Target, Ticket,
@@ -36,6 +35,7 @@ import {
   btnGhost, btnPrimary, td, ftd, trStyle, grid4, axisTick, selectStyle,
   toastStyle, iconBtn, inp,
 } from "../shared/ui";
+import { salesApi, notHiddenLead } from "./Sales";
 
 /* ---- Apple HIG Status Badge Helper --------------------------------------- */
 export function renderHigStatusBadge(status) {
@@ -178,18 +178,19 @@ export function AnalyticsOverview({ isAdmin = false }) {
       customerApi.getCustomers().catch(() => []),
       billingApi.getSubscriptions().catch(() => []),
       billingApi.getInvoices().catch(() => []),
+      salesApi.getDeals().catch(() => []),
       api.getReferrers().catch(() => []),
       ticketApi.getTickets().catch(() => []),
       apartmentApi.getAll().catch(() => []),
     ])
-      .then(([customers, subs, invs, referrers, tickets, apartments]) =>
-        setData({ customers, subs, invs, referrers, tickets, apartments }))
+      .then(([customers, subs, invs, leads, referrers, tickets, apartments]) =>
+        setData({ customers, subs, invs, leads, referrers, tickets, apartments }))
       .catch(e => setErr(e.message || "Could not load analytics overview."));
   }, []);
   if (err) return <ApiError msg={err} />;
   if (!data) return <Loading />;
 
-  const { customers, subs, invs, referrers, tickets, apartments } = data;
+  const { customers, subs, invs, leads, referrers, tickets, apartments } = data;
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
   const now = new Date();
   const prev = prevRange(sel.preset, range);                   // like-for-like comparison window
@@ -4020,3 +4021,173 @@ export function ApartmentPerformance() {
   );
 }
 
+
+/* §9 — Analytics · Sales insights: lead-status numbers + plan value by society. */
+export function SalesInsights() {
+  const { user } = useAuth();
+  const [deals, setDeals] = useState(null);
+  const [society, setSociety] = useState(null);
+  const [sortSoc, setSortSoc] = useState({ key: "value", dir: "desc" });
+  useEffect(() => { api.logView(user.username, "Viewed Sales insights"); salesApi.getDeals().then(d => setDeals(d.filter(notHiddenLead))).catch(() => setDeals([])); }, []);
+  if (!deals) return <Loading />;
+
+  const societies = ["all", ...Array.from(new Set(deals.map(d => d.society).filter(Boolean))).sort()];
+  const scoped = society === null ? deals.filter(d => isRealSociety(d.society)) : deals.filter(d => society.includes(d.society));
+
+  // ── Conversion funnel (start from TOTAL leads → Won) + cohort trend ──
+  const STAGE_ORDER = ["new", "contacted", "demo", "proposal", "won"];
+  const rankOf = (st) => STAGE_ORDER.indexOf(st);
+  const total = scoped.length;
+  const wonN = scoped.filter(d => d.stage === "won").length;
+  const lostN = scoped.filter(d => d.stage === "lost").length;
+  const convPct = total ? (wonN / total) * 100 : 0;
+  const reached = (r) => scoped.filter(d => d.stage !== "lost" && rankOf(d.stage) >= r).length;
+  const funnel = [
+    { key: "all", label: "Total leads", n: total },
+    { key: "contacted", label: "Contacted+", n: reached(1) },
+    { key: "demo", label: "Demo+", n: reached(2) },
+    { key: "proposal", label: "Proposal+", n: reached(3) },
+    { key: "won", label: "Converted (Won)", n: wonN },
+  ];
+  const MONL = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const trendMap = {};
+  scoped.forEach(d => { const dt = new Date(d.created || d.updated); if (isNaN(dt)) return; const k = dt.getFullYear() + "-" + dt.getMonth(); (trendMap[k] = trendMap[k] || { y: dt.getFullYear(), m: dt.getMonth(), leads: 0, won: 0 }); trendMap[k].leads++; if (d.stage === "won") trendMap[k].won++; });
+  const trend = Object.values(trendMap).sort((a, b) => (a.y - b.y) || (a.m - b.m)).slice(-8).map(t => ({ label: `${MONL[t.m]} '${String(t.y).slice(2)}`, leads: t.leads, won: t.won, conv: t.leads ? Math.round((t.won / t.leads) * 100) : 0 }));
+
+  const byStatus = {};
+  scoped.forEach(d => { const s = d.rawStatus || "—"; if (!byStatus[s]) byStatus[s] = { status: s, count: 0, value: 0 }; byStatus[s].count++; byStatus[s].value += d.value || 0; });
+  const statusRows = Object.values(byStatus).sort((a, b) => b.count - a.count);
+  const totalCount = scoped.length;
+  const totalValue = scoped.reduce((s, d) => s + (d.value || 0), 0);
+
+  const bySociety = {};
+  deals.forEach(d => { const s = d.society || "—"; if (!bySociety[s]) bySociety[s] = { society: s, count: 0, value: 0 }; bySociety[s].count++; bySociety[s].value += d.value || 0; });
+  const toggleSoc = (k) => setSortSoc(s => s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: "desc" });
+  const socRows = Object.values(bySociety).sort((a, b) => (a[sortSoc.key] < b[sortSoc.key] ? -1 : 1) * (sortSoc.dir === "asc" ? 1 : -1));
+  const socTotal = socRows.reduce((a, r) => ({ count: a.count + r.count, value: a.value + r.value }), { count: 0, value: 0 });
+
+  const stats = [
+    { label: "Leads in view", value: totalCount, icon: Briefcase, sub: society === null ? "all societies" : society.join(", "), hero: true },
+    { label: "Plan value", value: inr(totalValue), icon: Wallet, sub: "in view" },
+    { label: "Societies", value: Object.keys(bySociety).length, icon: Boxes, sub: "with leads" },
+    { label: "Lead statuses", value: statusRows.length, icon: GitBranch, sub: "distinct" },
+  ];
+  const chartData = statusRows.slice(0, 10).map(r => ({ name: r.status, leads: r.count }));
+
+
+  return (
+    <div className="fade-up">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 600 }}>Society</span>
+        <MultiSelectFilter label="Society" options={societies.filter(s => s !== "all")} value={society} onChange={setSociety} width={240} />
+      </div>
+      <div style={{ marginBottom: 18 }}>
+        <Card title="Lead conversion funnel" sub={society === null ? "The real picture — total leads down to conversions" : society.join(", ")}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
+            {[
+              { l: "Total leads", v: String(total), c: "var(--f)" },
+              { l: "Converted (Won)", v: String(wonN), c: "#0A7D53" },
+              { l: "Conversion %", v: convPct.toFixed(1) + "%", c: convPct < 5 ? "#DC4141" : convPct < 15 ? "#a86e00" : "#0A7D53" },
+              { l: "Lost", v: String(lostN), c: "#DC4141" },
+            ].map((k, i) => (
+              <div key={i} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>{k.l}</div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: k.c, marginTop: 5, fontVariantNumeric: "tabular-nums" }}>{k.v}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {funnel.map((f, i) => {
+              const pct = total ? (f.n / total) * 100 : 0;
+              const col = ["#A9B3AC", "#2A86D6", "#986315", "#7A5AF8", "#08805A"][i];
+              return (
+                <div key={f.key} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 132, fontSize: 12.5, fontWeight: 700, color: "var(--f)", textAlign: "right", flexShrink: 0 }}>{f.label}</div>
+                  <div style={{ flex: 1, background: "#F1F4F3", borderRadius: 8, height: 30, position: "relative", overflow: "hidden" }}>
+                    <div style={{ width: Math.max(pct, 1.5) + "%", height: "100%", background: col, borderRadius: 8 }} />
+                    <div style={{ position: "absolute", top: 0, left: 10, height: 30, display: "flex", alignItems: "center", fontSize: 12.5, fontWeight: 800, color: pct > 14 ? "#fff" : "var(--f)" }}>{f.n}</div>
+                  </div>
+                  <div style={{ width: 50, fontSize: 12.5, fontWeight: 700, color: "var(--muted)", textAlign: "right", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>{Math.round(pct)}%</div>
+                </div>
+              );
+            })}
+          </div>
+          {trend.length > 1 && (
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--f)", marginBottom: 8 }}>Leads vs conversion % over time</div>
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart data={trend} margin={{ left: -12, right: 6, top: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
+                  <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="l" tick={axisTick} axisLine={false} tickLine={false} width={34} allowDecimals={false} />
+                  <YAxis yAxisId="r" orientation="right" tick={axisTick} axisLine={false} tickLine={false} width={40} tickFormatter={(v) => v + "%"} />
+                  <Tooltip content={<TT />} />
+                  <Bar yAxisId="l" dataKey="leads" fill="#2A86D6" radius={[5, 5, 0, 0]} maxBarSize={44} isAnimationActive={false} />
+                  <Line yAxisId="r" type="monotone" dataKey="conv" stroke="#0A7D53" strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </Card>
+      </div>
+      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+      <div style={{ marginTop: 18 }}>
+        <Card title="Leads by status" sub={society === null ? "Across all societies" : society.join(", ")}>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={chartData} margin={{ left: -10, right: 8, top: 18 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
+              <XAxis dataKey="name" tick={axisTick} axisLine={false} tickLine={false} interval={0} angle={-15} textAnchor="end" height={60} />
+              <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+              <Tooltip content={<TT />} />
+              <Bar dataKey="leads" fill="#2A86D6" radius={[5, 5, 0, 0]} maxBarSize={54} isAnimationActive={false}>
+                <LabelList dataKey="leads" position="top" style={{ fontSize: 11, fill: "var(--f)", fontWeight: 700 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div style={{ marginTop: 12 }}>
+            <Table head={["Status", "Leads", "%", "Plan value"]}>
+              {statusRows.map(r => (
+                <tr key={r.status} style={{ borderBottom: "1px solid var(--border)" }}>
+                  <td style={{ ...td, fontWeight: 600 }}>{renderHigStatusBadge(r.status)}</td>
+                  <td style={td}>{r.count}</td>
+                  <td style={td}>{totalCount ? Math.round((r.count / totalCount) * 100) : 0}%</td>
+                  <td style={{ ...td, fontWeight: 600 }}>{inr(r.value)}</td>
+                </tr>
+              ))}
+              {statusRows.length > 0 && (
+                <tr>
+                  <td style={{ ...ftd, textAlign: "center" }}>Total</td>
+                  <td style={ftd}>{totalCount}</td>
+                  <td style={ftd}>100%</td>
+                  <td style={ftd}>{inr(totalValue)}</td>
+                </tr>
+              )}
+            </Table>
+            {statusRows.length === 0 && <Empty msg="No leads in view." />}
+          </div>
+        </Card>
+      </div>
+      <div style={{ marginTop: 18 }}>
+        <Card pad={false} title="Total plan value by society" sub="Click a row to filter the status breakdown above.">
+          <Table head={["Society", <SortHeader key="c" label="Leads" k="count" sort={sortSoc} onSort={toggleSoc} />, <SortHeader key="v" label="Plan value" k="value" sort={sortSoc} onSort={toggleSoc} />]} maxHeight="calc(100vh - 300px)">
+            {socRows.map(r => (
+              <tr key={r.society} style={{ ...trStyle, background: society === r.society ? "var(--mint)" : "transparent" }} onClick={() => setSociety(society === r.society ? "all" : r.society)}>
+                <td style={{ ...td, fontWeight: 600, color: "var(--f)", textAlign: "center" }}>{r.society}</td>
+                <td style={td}>{r.count}</td>
+                <td style={{ ...td, fontWeight: 600 }}>{inr(r.value)}</td>
+              </tr>
+            ))}
+            {socRows.length > 0 && (
+              <tr>
+                <td style={{ ...ftd, textAlign: "center" }}>Total ({socRows.length})</td>
+                <td style={ftd}>{socTotal.count}</td>
+                <td style={ftd}>{inr(socTotal.value)}</td>
+              </tr>
+            )}
+          </Table>
+          {socRows.length === 0 && <Empty msg="No societies with leads." />}
+        </Card>
+      </div>
+    </div>
+  );
+}

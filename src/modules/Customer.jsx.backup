@@ -88,18 +88,9 @@ export function CustomerSocieties() {
     return dev.includes("uninstall") || st === "inactive" || dev === "inactive";
   };
 
-  // Base population (v2.29.159): restricted to customers with a Purifier ID
-  // assigned, same `withPur` gate Customer > All Customers uses — per
-  // explicit request to reconcile the two screens' totals, which previously
-  // diverged because this screen counted every get-all-customers record
-  // (Purifier ID or not) while All Customers only ever counted the subset
-  // that has one. A customer signed up but not yet linked to a purifier now
-  // reads the same on both screens (absent from both, not just one).
-  const withPur = rows.filter(c => c.purifier_id);
-
   // Status & Device Type filters narrow the population BEFORE grouping into societies
-  const statusOptions = Array.from(new Set(withPur.map(c => c.status).filter(Boolean))).sort();
-  const scopedRows = withPur.filter(c =>
+  const statusOptions = Array.from(new Set(rows.map(c => c.status).filter(Boolean))).sort();
+  const scopedRows = rows.filter(c =>
     (statusFilter === null || statusFilter.includes(c.status)) &&
     (deviceTypeFilter === null || deviceTypeFilter.includes(deviceType(c.purifier_id)))
   );
@@ -122,14 +113,9 @@ export function CustomerSocieties() {
   });
   const all = Object.values(groups);
 
-  // Society filter (v2.29.159, restored to match All Customers/the CRM-wide
-  // convention): explicit selection is used as-is; the default (unfiltered)
-  // view excludes blank/unknown society AND "Apartment (Testing)" via the
-  // shared isRealSociety() — pick either explicitly from the dropdown to
-  // still see it. The dropdown's own option list stays unrestricted (every
-  // group, including NONE/testing, remains pickable).
+  // Society filter — explicit selection is used as-is; default includes all societies without exclusion.
   const societyOptions = all.map(g => g.society).sort();
-  const visible = all.filter(g => societyFilter === null ? isRealSociety(g.society) : societyFilter.includes(g.society));
+  const visible = all.filter(g => societyFilter === null || societyFilter.includes(g.society));
 
   const hasActiveFilters = societyFilter !== null || statusFilter !== null || deviceTypeFilter !== null || q !== "";
   const handleResetFilters = () => {
@@ -139,12 +125,8 @@ export function CustomerSocieties() {
     setQ("");
   };
 
-  // "Named" KPI stats (Societies count / Avg per society / Largest society)
-  // stay isRealSociety-gated even if NONE/testing is explicitly selected —
-  // same convention as All Customers' `resultSocieties`.
-  const namedGroups = visible.filter(g => isRealSociety(g.society));
-  const namedSocieties = namedGroups.length;
-  const biggest = namedGroups.reduce((b, g) => g.count > (b?.count || 0) ? g : b, null);
+  const namedSocieties = visible.filter(g => g.society !== NONE).length;
+  const biggest = visible.filter(g => g.society !== NONE).reduce((b, g) => g.count > (b?.count || 0) ? g : b, null);
   const totalCustomers = visible.reduce((s, g) => s + g.count, 0);
 
   const filtered = visible.filter(g => g.society.toLowerCase().includes(q.toLowerCase()));
@@ -155,7 +137,7 @@ export function CustomerSocieties() {
   const stats = [
     { label: "Societies", value: namedSocieties, icon: Boxes, sub: "with at least one customer", hero: true },
     { label: "Customers", value: totalCustomers.toLocaleString("en-IN"), icon: UserRound, sub: "across visible societies" },
-    { label: "Avg / society", value: namedSocieties ? Math.round(namedGroups.reduce((s, g) => s + g.count, 0) / namedSocieties) : 0, icon: TrendingUp, sub: "customers per society" },
+    { label: "Avg / society", value: namedSocieties ? Math.round(visible.filter(g => g.society !== NONE).reduce((s, g) => s + g.count, 0) / namedSocieties) : 0, icon: TrendingUp, sub: "customers per society" },
     { label: "Largest society", value: biggest ? biggest.count : 0, icon: Award, sub: biggest ? biggest.society : "—" },
   ];
 
@@ -875,14 +857,9 @@ export function AllCustomers() {
     return {};
   };
 
-  // Faceted filter options: options list is computed dynamically per filter.
-  // Society clause restored to the CRM-wide default-exclusion convention
-  // (v2.29.137's isRealSociety — excludes blank/unknown society AND literal
-  // "Apartment (Testing)" from the DEFAULT/unfiltered view only; explicitly
-  // picking either from the dropdown still shows it) — a concurrent rewrite
-  // of this screen had silently dropped it (found + restored v2.29.158).
+  // Faceted filter options: options list is computed dynamically per filter
   const facetPop = (exclude) => withPur.filter(c =>
-    (exclude === "society" || (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society))) &&
+    (exclude === "society" || (societyFilter === null || societyFilter.includes(c.society))) &&
     (exclude === "status" || (statusFilter === null || statusFilter.includes(c.status))) &&
     (exclude === "stack" || (stackFilter === null || stackFilter.includes(stackOf(c)))) &&
     (exclude === "deviceType" || (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c)))) &&
@@ -895,7 +872,7 @@ export function AllCustomers() {
   const filterTypeOptions = Array.from(new Set(facetPop("filterType").map(filterTypeOf).filter(Boolean))).sort();
 
   const filtered = withPur.filter(c =>
-    (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
+    (societyFilter === null || societyFilter.includes(c.society)) &&
     (statusFilter === null || statusFilter.includes(c.status)) &&
     (stackFilter === null || stackFilter.includes(stackOf(c))) &&
     (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
@@ -921,7 +898,7 @@ export function AllCustomers() {
   const activeCount = results.filter(c => activeStatuses.includes(String(c.status || "").toLowerCase())).length;
 
   // Distinct societies in current view & DP / Zoho split
-  const resultSocieties = Array.from(new Set(results.map(c => c.society).filter(isRealSociety)));
+  const resultSocieties = Array.from(new Set(results.map(c => c.society).filter(Boolean)));
   const totalSocietiesCount = resultSocieties.length;
   const dpSocCount = resultSocieties.filter(soc => results.some(c => c.society === soc && c.isDpCustomer)).length;
   const zohoSocCount = resultSocieties.filter(soc => results.some(c => c.society === soc && !c.isDpCustomer)).length;
@@ -1512,7 +1489,7 @@ export function AllCustomers() {
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
             <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{activeCount.toLocaleString("en-IN")}</span>
-            <span style={{ fontSize: 12, color: "#86868B" }}>of {results.length.toLocaleString("en-IN")} total customers</span>
+            <span style={{ fontSize: 12, color: "#86868B" }}>of {withPur.length.toLocaleString("en-IN")} total customers</span>
           </div>
           <div style={{ fontSize: 11.5, color: "#86868B" }}>
             {(results.length - activeCount).toLocaleString("en-IN")} Inactive customers
