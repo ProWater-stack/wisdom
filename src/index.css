@@ -1,3 +1,10 @@
+/* Tailwind (v4, imported piece-by-piece to SKIP the "preflight" base-reset layer —
+   the box-sizing/margin reset below already covers that, and turning on Tailwind's
+   own preflight too would double-reset every element app-wide, not just the
+   sidebar this was added for). Used by the AppleSidebar in App.jsx's Home component. */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 /* Ink, darker step — matches --shell-0 in App.jsx; shows behind the app shell. */
 html, body, #root { margin: 0; padding: 0; width: 100%; min-height: 100vh; background: #06100B; }

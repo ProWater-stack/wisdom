@@ -731,9 +731,9 @@ export function AnalyticsOverview({ isAdmin = false }) {
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {[
-                  { h: "Apartment Name", a: "left" }, { h: "Total Flats", a: "center" }, { h: "Onboarded Flats", a: "center" },
+                  { h: "Apartment Name", a: "center" }, { h: "Total Flats", a: "center" }, { h: "Onboarded Flats", a: "center" },
                   { h: "Penetration %", a: "center" }, { h: "Active Customers", a: "center" }, { h: "Total Months", a: "center" },
-                  { h: `Revenue (${prevMonLabel})`, a: "right" }, { h: `Revenue (${currMonLabel})`, a: "right" },
+                  { h: `Revenue (${prevMonLabel})`, a: "center" }, { h: `Revenue (${currMonLabel})`, a: "center" },
                 ].map((c, i) => (
                   <th key={i} style={{ padding: "14px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#0a805a", fontWeight: 700, textAlign: c.a, whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{c.h}</th>
                 ))}
@@ -742,7 +742,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
             <tbody>
               {societies.map(s => (
                 <tr key={s.society} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                  <td style={{ padding: "14px 18px", fontSize: 13.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap" }}>{s.society}</td>
+                  <td style={{ padding: "14px 18px", fontSize: 13.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap", textAlign: "center" }}>{s.society}</td>
                   <td style={socTd}>{isAdmin
                     ? <GsTextCell value={s.totalFlats || ""} editable type="number" width={78} placeholder="0" onCommit={v => { setFlatsOverride(s.society, v); setFlatsTick(t => t + 1); }} />
                     : (s.totalFlats || "—")}</td>
@@ -750,20 +750,20 @@ export function AnalyticsOverview({ isAdmin = false }) {
                   <td style={socTd}>{s.penetration == null ? <span style={{ color: "#86868B" }}>—</span> : `${s.penetration}%`}</td>
                   <td style={socTd}>{s.active}</td>
                   <td style={socTd}>{s.months == null ? "—" : s.months}</td>
-                  <td style={{ ...socTd, textAlign: "right" }}>{inr(s.revPrev)}</td>
-                  <td style={{ ...socTd, textAlign: "right", fontWeight: 700, color: "#08805A" }}>{inr(s.revCurr)}</td>
+                  <td style={{ ...socTd, textAlign: "center" }}>{inr(s.revPrev)}</td>
+                  <td style={{ ...socTd, textAlign: "center", fontWeight: 700, color: "#08805A" }}>{inr(s.revCurr)}</td>
                 </tr>
               ))}
               {societies.length > 0 && (
                 <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                  <td style={{ ...socFt, textAlign: "left" }}>Total ({societies.length})</td>
+                  <td style={{ ...socFt, textAlign: "center" }}>Total ({societies.length})</td>
                   <td style={socFt}>{socTot.totalFlats || "—"}</td>
                   <td style={socFt}>{socTot.onboarded}</td>
                   <td style={socFt}>{socTotPen == null ? "—" : `${socTotPen}%`}</td>
                   <td style={socFt}>{socTot.active}</td>
                   <td style={socFt}>{socTot.months}</td>
-                  <td style={{ ...socFt, textAlign: "right" }}>{inr(socTot.revPrev)}</td>
-                  <td style={{ ...socFt, textAlign: "right" }}>{inr(socTot.revCurr)}</td>
+                  <td style={{ ...socFt, textAlign: "center" }}>{inr(socTot.revPrev)}</td>
+                  <td style={{ ...socFt, textAlign: "center" }}>{inr(socTot.revCurr)}</td>
                 </tr>
               )}
               {!societies.length && <tr><td colSpan={8}><Empty msg="No society data yet." /></td></tr>}
@@ -897,7 +897,7 @@ export function CreditsAnalytics() {
             <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{custCount} customers · {inr(totalDiscount)} given · {inr(totalBalance)} balance · {noteCount} credit notes</div>
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 380px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 700 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Customer", "Society", "Notes", "Discount Given", "Status / Balance", "Last Given"].map(h => (
@@ -1094,8 +1094,8 @@ export function NetRevenue() {
                 .map(days => ({ title: days.length === 1 ? days[0].dateLabel : `${days[0].dateLabel} – ${days[days.length - 1].dateLabel}`, days }));
             })().map((seg, si) => {
               const segTotal = seg.days.reduce((s, d) => s + d.revenue, 0);
-              const cellDate = { padding: "9px 16px", textAlign: "left", fontSize: 12.5, color: "var(--slate)", whiteSpace: "nowrap" };
-              const cellNum = { padding: "9px 16px", textAlign: "right", fontSize: 13, whiteSpace: "nowrap" };
+              const cellDate = { padding: "9px 16px", textAlign: "center", fontSize: 12.5, color: "var(--slate)", whiteSpace: "nowrap" };
+              const cellNum = { padding: "9px 16px", textAlign: "center", fontSize: 13, whiteSpace: "nowrap" };
               return (
                 <div key={si} style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", alignSelf: "start" }}>
                   <table style={{ borderCollapse: "collapse", width: "100%" }}>
@@ -1257,7 +1257,7 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
     matrix);
 
   const thBase = { fontWeight: 700, fontSize: 12, padding: "10px 14px", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" };
-  const tdNum = { padding: "10px 14px", textAlign: "right", fontSize: 13, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
+  const tdNum = { padding: "10px 14px", textAlign: "center", fontSize: 13, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
   const stickyL = (bg, left, z) => ({ position: "sticky", left, zIndex: z, background: bg });
 
 
@@ -1278,21 +1278,21 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
             <thead>
               {/* column totals across the top (only societies that reached that M) */}
               <tr style={{ background: "var(--mint-2)" }}>
-                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 0, 3), textAlign: "left", color: "var(--f)" }}>Total</th>
-                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 210, 3), textAlign: "left" }} />
-                {colTotals.map((t, i) => <th key={i} style={{ ...thBase, textAlign: "right", color: "var(--forest)", fontSize: 13 }}>{t}</th>)}
+                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 0, 3), textAlign: "center", color: "var(--f)" }}>Total</th>
+                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 210, 3), textAlign: "center" }} />
+                {colTotals.map((t, i) => <th key={i} style={{ ...thBase, textAlign: "center", color: "var(--forest)", fontSize: 13 }}>{t}</th>)}
               </tr>
               <tr>
-                <th style={{ ...thBase, ...stickyL("#fff", 0, 3), textAlign: "left", color: "var(--f)", minWidth: 210 }}>Society Name</th>
-                <th style={{ ...thBase, ...stickyL("#fff", 210, 3), textAlign: "left", color: "var(--muted)", minWidth: 88, borderRight: "1px solid var(--border)" }}>Launch</th>
-                {mCols.map(k => <th key={k} style={{ ...thBase, textAlign: "right", color: "var(--muted)", minWidth: 56 }}>M{k + 1}</th>)}
+                <th style={{ ...thBase, ...stickyL("#fff", 0, 3), textAlign: "center", color: "var(--f)", minWidth: 210 }}>Society Name</th>
+                <th style={{ ...thBase, ...stickyL("#fff", 210, 3), textAlign: "center", color: "var(--muted)", minWidth: 88, borderRight: "1px solid var(--border)" }}>Launch</th>
+                {mCols.map(k => <th key={k} style={{ ...thBase, textAlign: "center", color: "var(--muted)", minWidth: 56 }}>M{k + 1}</th>)}
               </tr>
             </thead>
             <tbody>
               {matrix.map((r, ri) => (
                 <tr key={ri} style={{ borderBottom: "1px solid #ECEEED" }}>
-                  <td style={{ ...stickyL("#fff", 0, 2), fontWeight: 600, color: "var(--f)", padding: "10px 14px", fontSize: 13, whiteSpace: "nowrap" }}>{r.society}</td>
-                  <td style={{ ...stickyL("#fff", 210, 2), padding: canEditLaunch ? "6px 14px" : "10px 14px", fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", borderRight: "1px solid var(--border)" }}>
+                  <td style={{ ...stickyL("#fff", 0, 2), fontWeight: 600, color: "var(--f)", padding: "10px 14px", fontSize: 13, whiteSpace: "nowrap", textAlign: "center" }}>{r.society}</td>
+                  <td style={{ ...stickyL("#fff", 210, 2), padding: canEditLaunch ? "6px 14px" : "10px 14px", fontSize: 12.5, color: "var(--muted)", whiteSpace: "nowrap", borderRight: "1px solid var(--border)", textAlign: "center" }}>
                     {canEditLaunch
                       ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                           <input type="month" value={idxToYm(r.launchIdx)} title="Set the launch month (admin only)"
@@ -1754,7 +1754,7 @@ useEffect(() => {
               <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{view.sub}</div>
             </div>
             <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "42vh" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 700 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                     {view.head.map(h => (
@@ -1909,7 +1909,7 @@ useEffect(() => {
             <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{revBySociety.length} societ{revBySociety.length !== 1 ? "ies" : "y"}</div>
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: 360 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 320 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 320 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Society", "Invoices", "Collected"].map(h => (
@@ -1940,7 +1940,7 @@ useEffect(() => {
             <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{ltCount} recharges · {inr(ltCash)} cash collected · {ltByTerm[3]} × 3mo · {ltByTerm[6]} × 6mo · {ltByTerm[12]} × 12mo</div>
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 470px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 800 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 800 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Customer", "Plan", "Term", "Total Paid", "Per Month", "Earned This Month", "Deferred"].map(h => (
@@ -1975,7 +1975,7 @@ useEffect(() => {
             <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{renewals.length} subscriptions · {due7.length} within 7 days · {inr(renewalValue)} expected</div>
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 470px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 800 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 800 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Customer", "Plan", "Amount", "Interval", "Renews On", "In", "Status"].map(h => (
@@ -2193,7 +2193,7 @@ export function AppLogs() {
               </div>} />
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 360px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 820 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 820 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["User", "Phone", "Apartment", "Purifier ID", "Device", "IP"].map(h => (
@@ -2573,7 +2573,7 @@ export function EarnedRevenue() {
             <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{rangeText} · {tableRows.length} invoices</div>
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 460px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 1200 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 1200 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Invoice #", "Reference Number", "Customer", "Apartment"].map(h => (
@@ -3455,18 +3455,18 @@ export function DPTransactions() {
                 </td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_start_date"] ? fmtDate(new Date(r["t.validity_start_date"])) : "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_end_date"] ? fmtDate(new Date(r["t.validity_end_date"])) : "—"}</td>
-                <td style={{ ...td, fontSize: 12.5, textAlign: "right" }}>{validityOf(r) != null ? Number(validityOf(r)).toLocaleString("en-IN") : "—"}</td>
-                <td style={{ ...td, fontSize: 12.5, textAlign: "right" }}>{litresOf(r) != null ? Number(litresOf(r)).toLocaleString("en-IN") : "—"}</td>
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{validityOf(r) != null ? Number(validityOf(r)).toLocaleString("en-IN") : "—"}</td>
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{litresOf(r) != null ? Number(litresOf(r)).toLocaleString("en-IN") : "—"}</td>
                 <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.Plan || "—"}</td>
-                <td style={{ ...td, fontWeight: 600, textAlign: "right" }}>{r.deposit_amount != null ? inr(r.deposit_amount) : "—"}</td>
-                <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600, textAlign: "right" }}>{r.revenue_amount != null ? inr(r.revenue_amount) : "—"}</td>
+                <td style={{ ...td, fontWeight: 600, textAlign: "center" }}>{r.deposit_amount != null ? inr(r.deposit_amount) : "—"}</td>
+                <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600, textAlign: "center" }}>{r.revenue_amount != null ? inr(r.revenue_amount) : "—"}</td>
               </tr>
             ))}
             {tableRows.length > 0 && (
               <tr>
                 <td style={{ ...ftd, textAlign: "center" }} colSpan={11}>Grand Total ({tableRows.length})</td>
-                <td style={{ ...ftd, textAlign: "right" }}>{inr(Math.round(grandDeposit))}</td>
-                <td style={{ ...ftd, textAlign: "right" }}>{inr(Math.round(grandRevenue))}</td>
+                <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandDeposit))}</td>
+                <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandRevenue))}</td>
               </tr>
             )}
             {tableRows.length === 0 && <tr><td colSpan={13} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
@@ -3515,23 +3515,23 @@ export function DPTransactions() {
                       {r.current_device ? <span style={{ display: "inline-block", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)" }}>{r.current_device}</span> : "—"}
                     </td>
                     <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.Plan || "—"}</td>
-                    <td style={{ ...td, fontWeight: 600, textAlign: "right" }}>{r.totalPaid ? inr(r.totalPaid) : "—"}</td>
-                    <td style={{ ...td, fontWeight: 600, textAlign: "right" }}>{r.recharge ? inr(r.recharge) : "—"}</td>
+                    <td style={{ ...td, fontWeight: 600, textAlign: "center" }}>{r.totalPaid ? inr(r.totalPaid) : "—"}</td>
+                    <td style={{ ...td, fontWeight: 600, textAlign: "center" }}>{r.recharge ? inr(r.recharge) : "—"}</td>
                     <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.tenureDays ? `${r.tenureDays}d` : "—"}</td>
                     <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.daysInPaidMonth ? `${r.daysInPaidMonth}d` : "—"}</td>
-                    <td style={{ ...td, color: "#08805A", fontWeight: 700, textAlign: "right" }}>{inr(Math.round(er))}</td>
-                    <td style={{ ...td, color: "#D97706", fontWeight: 600, textAlign: "right" }}>{remEr > 0 ? inr(Math.round(remEr)) : "—"}</td>
+                    <td style={{ ...td, color: "#08805A", fontWeight: 700, textAlign: "center" }}>{inr(Math.round(er))}</td>
+                    <td style={{ ...td, color: "#D97706", fontWeight: 600, textAlign: "center" }}>{remEr > 0 ? inr(Math.round(remEr)) : "—"}</td>
                   </tr>
                 );
               })}
               {tableRows.length > 0 && (
                 <tr>
                   <td style={{ ...ftd, textAlign: "center" }} colSpan={6}>Grand Total ({tableRows.length})</td>
-                  <td style={{ ...ftd, textAlign: "right" }}>{inr(Math.round(grandTotalPaid))}</td>
-                  <td style={{ ...ftd, textAlign: "right" }}>{inr(Math.round(grandRevenue))}</td>
+                  <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandTotalPaid))}</td>
+                  <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandRevenue))}</td>
                   <td style={{ ...ftd, textAlign: "center" }} colSpan={2}>—</td>
-                  <td style={{ ...ftd, textAlign: "right", color: "#08805A", fontWeight: 800 }}>{inr(Math.round(grandEarnedRevenue))}</td>
-                  <td style={{ ...ftd, textAlign: "right", color: "#D97706", fontWeight: 800 }}>{inr(Math.round(grandRemainingEarned))}</td>
+                  <td style={{ ...ftd, textAlign: "center", color: "#08805A", fontWeight: 800 }}>{inr(Math.round(grandEarnedRevenue))}</td>
+                  <td style={{ ...ftd, textAlign: "center", color: "#D97706", fontWeight: 800 }}>{inr(Math.round(grandRemainingEarned))}</td>
                 </tr>
               )}
               {tableRows.length === 0 && <tr><td colSpan={12} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
@@ -3648,7 +3648,7 @@ export function AOP({ accessLevel = "view" }) {
   const yc = aopColor(yearPct);
   const cellNum = { padding: "10px 12px", textAlign: "center", fontSize: 13, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" };
   const cellHead = { ...cellNum, fontWeight: 700, color: "var(--f)", background: "var(--mint-2)", borderBottom: "2px solid var(--border)", position: "sticky", top: 0 };
-  const rowLabel = { padding: "10px 14px", textAlign: "left", fontSize: 13, fontWeight: 700, color: "var(--f)", whiteSpace: "nowrap", position: "sticky", left: 0, background: "#fff", zIndex: 1 };
+  const rowLabel = { padding: "10px 14px", textAlign: "center", fontSize: 13, fontWeight: 700, color: "var(--f)", whiteSpace: "nowrap", position: "sticky", left: 0, background: "#fff", zIndex: 1 };
 
   return (
     <div className="fade-up">
@@ -3693,7 +3693,7 @@ export function AOP({ accessLevel = "view" }) {
             <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
               <thead>
                 <tr>
-                  <th style={{ ...cellHead, ...rowLabel, textAlign: "left", background: "var(--mint-2)", zIndex: 2 }}>Particulars</th>
+                  <th style={{ ...cellHead, ...rowLabel, textAlign: "center", background: "var(--mint-2)", zIndex: 2 }}>Particulars</th>
                   {rowData.map(r => <th key={r.key} style={cellHead}>{r.label}</th>)}
                 </tr>
               </thead>
@@ -3705,7 +3705,7 @@ export function AOP({ accessLevel = "view" }) {
                       {canEdit
                         ? <input type="text" inputMode="numeric" value={r.target ? r.target.toLocaleString("en-IN") : ""} placeholder="0"
                             onChange={e => setTarget(r.key, e.target.value)}
-                            style={{ ...inp, width: 100, padding: "6px 8px", fontSize: 12.5, textAlign: "right", marginBottom: 0 }} />
+                            style={{ ...inp, width: 100, padding: "6px 8px", fontSize: 12.5, textAlign: "center", marginBottom: 0 }} />
                         : (r.target ? inr(r.target) : "—")}
                     </td>
                   ))}
@@ -3848,7 +3848,7 @@ export function ChurnRiskRadar() {
           } />
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 460px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 700 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Customer", "Society", "Purifier ID", "Risk Level", "Reasons"].map(h => (
@@ -3973,7 +3973,7 @@ export function ApartmentPerformance() {
           right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 460px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 700 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 700 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {[mode === "apartment" ? "Apartment" : "Purifier ID", "Invoices", "Deposit", "Recharge", "Total"].map(h => (

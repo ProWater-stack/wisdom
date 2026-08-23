@@ -312,7 +312,7 @@ export function Login() {
   };
 
   return (
-    <div className="pw-login-wrapper" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative", background: "linear-gradient(135deg, #e6ebe8, #c9e2d7)", fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif' }}>
+    <div className="pw-login-wrapper" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative", background: "linear-gradient(135deg, #f5f8f6, #e4f1eb)", fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif' }}>
       <style>{`
         .pw-glow { position: absolute; border-radius: 50%; filter: blur(100px); animation: pw-float 12s infinite alternate; }
         .pw-glow.green { width: 450px; height: 450px; background: #00c896; top: -150px; right: -100px; opacity: .35; }

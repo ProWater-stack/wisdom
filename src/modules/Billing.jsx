@@ -200,7 +200,7 @@ export function Subscriptions() {
 
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 300px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {["Subscription", "Customer", "Plan", "Amount", "Interval", "Status", "Next Billing", ""].map(h => (
@@ -311,7 +311,7 @@ export function Invoices() {
 
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 300px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {["Invoice", "Customer", "Total", "Security Deposit", "Balance", "Status", "Date", "Due", ""].map(h => (
@@ -484,7 +484,7 @@ export function DepositRefunds() {
             right={<button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>} />
           
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: 520 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Customer", "Subscription", "Plan", "Deposit", "Status", "Action"].map(h => (
@@ -594,7 +594,7 @@ export function Plans() {
 
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 960 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 960 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {[

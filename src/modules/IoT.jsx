@@ -1169,7 +1169,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
         })}
       </div>
       <div className="scroll-thin" style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
               {[syncHead, "Tank", "pH", "TDS (mg/L)", "Temp (°C)", "Pressure (bar)", "Flow (L/min)", "Dispensed (L)"].map((h, idx) => (
@@ -1182,10 +1182,10 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
               const t = iotTank(it.tankLevel);
               const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp);
               const pr = iotWqNum(it.waterQuality?.pressure), fl = iotWqNum(it.waterQuality?.flowMLPM), disp = iotWqNum(it.waterQuality?.totalDispensed);
-              const cellTd = { padding: "12px 18px", fontVariantNumeric: "tabular-nums", textAlign: "right" };
+              const cellTd = { padding: "12px 18px", fontVariantNumeric: "tabular-nums", textAlign: "center" };
               return (
                 <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", transition: ".12s" }}>
-                  <td style={{ padding: "12px 18px", fontFamily: "-apple-system,SF Mono,monospace", fontSize: 12, color: "#86868B", whiteSpace: "nowrap", textAlign: "left" }}>{iotStamp(it.timestamp)}</td>
+                  <td style={{ padding: "12px 18px", fontFamily: "-apple-system,SF Mono,monospace", fontSize: 12, color: "#86868B", whiteSpace: "nowrap", textAlign: "center" }}>{iotStamp(it.timestamp)}</td>
                   <td style={{ ...cellTd, fontWeight: 700, ...iotBandText(iotTankBand(t.pct)) }}>{t.pct}%</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("tds", tds)) }}>{tds == null ? "—" : Math.round(tds)}</td>
@@ -2137,11 +2137,11 @@ export function IoTDevices() {
           </div>
           {!buckets2d ? <div style={{ padding: "0 20px 20px" }}><Empty msg="Not enough 2-day history yet to break down consumption." /></div> : (() => {
             const { chanIds: cids, rows, totals, grand, dailyAvg, days } = buckets2d;
-            const numTd = { padding: "14px 18px", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", textAlign: "right" };
+            const numTd = { padding: "14px 18px", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap", textAlign: "center" };
             const strong = { fontWeight: 700, color: "#1D1D1F" };
             return (
               <div className="scroll-thin" style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                       {["12-hour block (IST)", ...cids, "Total"].map((h, idx) => (
@@ -2154,19 +2154,19 @@ export function IoTDevices() {
                       const rowTot = cids.reduce((s, id) => s + r.byChan[id], 0);
                       return (
                         <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                          <td style={{ padding: "14px 18px", whiteSpace: "nowrap", textAlign: "left", color: "#1D1D1F" }}>{r.b.label}</td>
+                          <td style={{ padding: "14px 18px", whiteSpace: "nowrap", textAlign: "center", color: "#1D1D1F" }}>{r.b.label}</td>
                           {cids.map(id => <td key={id} style={numTd}>{iotVolL(r.byChan[id])}</td>)}
                           <td style={{ ...numTd, ...strong }}>{iotVolL(rowTot)}</td>
                         </tr>
                       );
                     })}
                     <tr style={{ borderTop: "2px solid rgba(0,0,0,.08)", background: "rgba(243,248,236,.6)" }}>
-                      <td style={{ padding: "14px 18px", ...strong, textAlign: "left" }}>Total · last 2 days</td>
+                      <td style={{ padding: "14px 18px", ...strong, textAlign: "center" }}>Total · last 2 days</td>
                       {cids.map(id => <td key={id} style={{ ...numTd, ...strong }}>{iotVolL(totals[id])}</td>)}
                       <td style={{ ...numTd, ...strong, color: "#08805A" }}>{iotVolL(grand)}</td>
                     </tr>
                     <tr style={{ background: "rgba(243,248,236,.4)" }}>
-                      <td style={{ padding: "14px 18px", fontWeight: 600, color: "#475569", textAlign: "left" }}>Average per day <span style={{ color: "#86868B", fontWeight: 400 }}>· over {days.toFixed(2)} days</span></td>
+                      <td style={{ padding: "14px 18px", fontWeight: 600, color: "#475569", textAlign: "center" }}>Average per day <span style={{ color: "#86868B", fontWeight: 400 }}>· over {days.toFixed(2)} days</span></td>
                       {cids.map(id => <td key={id} style={{ ...numTd, fontWeight: 600, color: "#475569" }}>{iotVolL(dailyAvg[id])}</td>)}
                       <td style={{ ...numTd, fontWeight: 700, color: "#08805A" }}>{iotVolL(cids.reduce((s, id) => s + dailyAvg[id], 0))}</td>
                     </tr>
@@ -2191,7 +2191,7 @@ export function IoTDevices() {
             </button>
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Device Heartbeat", ...chanIds.map(id => `${id} · Total Vol`), "Fault / Anomaly"].map((h, idx) => (
@@ -2212,7 +2212,7 @@ export function IoTDevices() {
                       <td style={{ padding: "14px 18px", fontFamily: "-apple-system,SF Mono,monospace", fontSize: 12, color: "#86868B", whiteSpace: "nowrap" }}>{iotStamp(item.timestamp)}</td>
                       {chanIds.map(id => {
                         const c = byId[id];
-                        return <td key={id} style={{ padding: "14px 18px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: c?.fault ? "#986315" : "#1D1D1F" }}>{iotVolL(c?.totalVolumeLitres)}</td>;
+                        return <td key={id} style={{ padding: "14px 18px", textAlign: "center", fontVariantNumeric: "tabular-nums", color: c?.fault ? "#986315" : "#1D1D1F" }}>{iotVolL(c?.totalVolumeLitres)}</td>;
                       })}
                       <td style={{ padding: "14px 18px", color: "#986315", fontWeight: 600 }}>
                         {fault ? <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "rgba(152,99,21,0.12)", color: "#986315" }}>⚠ {fault}</span> :

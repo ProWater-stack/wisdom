@@ -714,7 +714,7 @@ export function TaskPlanner({ initialView = "board" }) {
           <Table head={["Task", "Category", "Sprint", "Status", "Assignees", "Priority", "Start", "Due", "Files"]} maxHeight="calc(100vh - 380px)">
             {filtered.map(t => { const sm = planStatusMeta(t.status), pm = planPrioMeta(t.priority), cm = planCatMeta(t.category); return (
               <tr key={t.id} style={trStyle} onClick={() => setEditing(t)}>
-                <td style={{ ...td, textAlign: "left", fontWeight: 600, color: "var(--f)" }}>{t.title || <span style={{ color: "var(--muted)" }}>Untitled</span>}</td>
+                <td style={{ ...td, textAlign: "center", fontWeight: 600, color: "var(--f)" }}>{t.title || <span style={{ color: "var(--muted)" }}>Untitled</span>}</td>
                 <td style={td}><span style={{ fontSize: 11.5, fontWeight: 600, color: cm.color, background: `${cm.color}18`, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap" }}>{t.category || "—"}</span></td>
                 <td style={{ ...td, fontSize: 12.5, whiteSpace: "nowrap", color: t.sprint ? "var(--slate)" : "var(--muted)" }}>{t.sprint || "—"}</td>
                 <td style={td}><span style={{ fontSize: 12, fontWeight: 600, color: sm.color, background: sm.bg, borderRadius: 999, padding: "3px 10px", whiteSpace: "nowrap" }}>{t.status}</span></td>

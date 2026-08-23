@@ -212,11 +212,11 @@ export function OpsSparesTable({ tickets }) {
       </div>
       {rows.length === 0 ? <Empty msg="No spares (Parts_Used) recorded for the tickets in view." /> : (
         <div className="scroll-thin" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {["Issue Type", "Jobs w/ Spares", "Total Spares", "Avg / Job", "Top Spares"].map((h, idx) => (
-                  <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: idx === 4 ? "left" : "left", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -227,7 +227,7 @@ export function OpsSparesTable({ tickets }) {
                   <td style={{ padding: "14px 18px", color: "#475569" }}>{r.jobs}</td>
                   <td style={{ padding: "14px 18px", color: "#475569" }}>{r.total}</td>
                   <td style={{ padding: "14px 18px", color: "#475569" }}>{(r.total / r.jobs).toFixed(1)}</td>
-                  <td style={{ padding: "14px 18px", textAlign: "left", color: "#475569" }}>{topSpares(r.parts)}</td>
+                  <td style={{ padding: "14px 18px", textAlign: "center", color: "#475569" }}>{topSpares(r.parts)}</td>
                 </tr>
               ))}
             </tbody>
@@ -254,7 +254,7 @@ export function OpsTdsTable({ tickets }) {
       </div>
       {rows.length === 0 ? <Empty msg="No Water Quality tickets with TDS readings in view." /> : (
         <div className="scroll-thin" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {["Ticket", "Society", "Purifier ID", "Input TDS", "Output TDS", "Reduction"].map(h => (
@@ -281,7 +281,7 @@ export function OpsTdsTable({ tickets }) {
   );
 }
 
-export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns = [], hidePriorityFilter = false, dateFilterField, topContent, bottomContent }) {
+export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns = [], hidePriorityFilter = false, dateFilterField, topContent, bottomContent, clickable = true }) {
   const showCustomer = !hideColumns.includes("customer");
   const showSociety = !hideColumns.includes("society");
   const showPriority = !hideColumns.includes("priority");
@@ -347,17 +347,17 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
 
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 300px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                {["Ticket", ...(showCustomer ? ["Customer"] : []), ...(showSociety ? ["Society"] : []), "Purifier ID", "Issue Category", ...extraColumns.map(c => c.label), ...(showPriority ? ["Priority"] : []), ...(showStatus ? ["Status"] : []), "Created", ""].map((h, idx) => (
+                {["Ticket", ...(showCustomer ? ["Customer"] : []), ...(showSociety ? ["Society"] : []), "Purifier ID", "Issue Category", ...extraColumns.map(c => c.label), ...(showPriority ? ["Priority"] : []), ...(showStatus ? ["Status"] : []), "Created", ...(clickable ? [""] : [])].map((h, idx) => (
                   <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(t => (
-                <tr key={t.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", cursor: "pointer" }} onClick={() => setSel(t)}>
+                <tr key={t.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", cursor: clickable ? "pointer" : "default" }} onClick={clickable ? () => setSel(t) : undefined}>
                   <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{t.ticketNo}</td>
                   {showCustomer && <td style={{ padding: "14px 18px", color: "#475569" }}>{t.customer}</td>}
                   {showSociety && <td style={{ padding: "14px 18px", color: "#475569" }}>{t.society}</td>}
@@ -367,7 +367,7 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
                   {showPriority && <td style={{ padding: "14px 18px" }}><TicketBadge value={t.priority} kind="priority" /></td>}
                   {showStatus && <td style={{ padding: "14px 18px" }}><TicketBadge value={t.status} kind="status" /></td>}
                   <td style={{ padding: "14px 18px", fontSize: 12, color: "#86868B" }}>{fmtTime(t.created)}</td>
-                  <td style={{ padding: "14px 18px", textAlign: "center" }}><ChevronRight size={16} color="#86868B" /></td>
+                  {clickable && <td style={{ padding: "14px 18px", textAlign: "center" }}><ChevronRight size={16} color="#86868B" /></td>}
                 </tr>
               ))}
             </tbody>

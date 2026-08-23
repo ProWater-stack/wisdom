@@ -239,7 +239,7 @@ export function CustomerSocieties() {
           </>} />
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {[
@@ -441,12 +441,12 @@ export function CustSparesAnalysis({ tickets }) {
         <Table head={["Spare / part", "Times used"]}>
           {rows.map((r, i) => (
             <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-              <td style={{ ...td, textAlign: "left" }}>{r.name}</td>
+              <td style={{ ...td, textAlign: "center" }}>{r.name}</td>
               <td style={{ ...td, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{r.count}</td>
             </tr>
           ))}
           <tr style={{ borderTop: "2px solid var(--border)", background: "var(--mint-2)" }}>
-            <td style={{ ...td, fontWeight: 700, textAlign: "left" }}>Total</td>
+            <td style={{ ...td, fontWeight: 700, textAlign: "center" }}>Total</td>
             <td style={{ ...td, fontWeight: 800, color: "var(--forest)", fontVariantNumeric: "tabular-nums" }}>{total}</td>
           </tr>
         </Table>
@@ -1828,7 +1828,7 @@ export function Customers({ accessLevel = "view" }) {
 
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {[

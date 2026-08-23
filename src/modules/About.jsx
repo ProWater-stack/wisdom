@@ -435,8 +435,8 @@ export function AboutModule() {
                 {g.items.map((it, i) => (
                   <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
                     <td style={td}><span style={apiMethodBadge(it.m)}>{it.m}</span></td>
-                    <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, textAlign: "left", wordBreak: "break-all" }}>{it.path}</td>
-                    <td style={{ ...td, textAlign: "left", fontSize: 12.5 }}>{it.use}</td>
+                    <td style={{ ...td, fontFamily: "ui-monospace,monospace", fontSize: 12, textAlign: "center", wordBreak: "break-all" }}>{it.path}</td>
+                    <td style={{ ...td, textAlign: "center", fontSize: 12.5 }}>{it.use}</td>
                   </tr>
                 ))}
               </Table>

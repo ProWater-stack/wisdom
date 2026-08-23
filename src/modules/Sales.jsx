@@ -331,7 +331,7 @@ export function SalesLeads({ isAdmin }) {
           mockup; still in the CSV export above); Move To still isAdmin-gated. */}
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 400px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 720 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 720 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {["Full Name", "Phone", "Flat No", "Lead Status", "Society Name", "Plan Value", "Deposit", "To Collect"].map(h => (
@@ -900,13 +900,13 @@ export function SalesTrendAnalysis() {
               </div>
             </div>
             <div className="scroll-thin" style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                     <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a" }}>Channel</th>
                     <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Leads</th>
                     <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Won</th>
-                    <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "right" }}>Win Rate</th>
+                    <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Win Rate</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -917,7 +917,7 @@ export function SalesTrendAnalysis() {
                         <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1D1D1F" }}>{c.name}</td>
                         <td style={{ padding: "10px 12px", textAlign: "center", color: "#475569" }}>{c.leads}</td>
                         <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 700, color: "#08805A" }}>{c.won}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: "#08805A" }}>{wr}%</td>
+                        <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 700, color: "#08805A" }}>{wr}%</td>
                       </tr>
                     );
                   })}
@@ -927,7 +927,7 @@ export function SalesTrendAnalysis() {
                     <td style={{ padding: "10px 12px", color: "#1D1D1F" }}>Total</td>
                     <td style={{ padding: "10px 12px", textAlign: "center", color: "#1D1D1F" }}>{totalChannelLeads}</td>
                     <td style={{ padding: "10px 12px", textAlign: "center", color: "#08805A" }}>{totalChannelWon}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", color: "#08805A" }}>{totalChannelWinRate}%</td>
+                    <td style={{ padding: "10px 12px", textAlign: "center", color: "#08805A" }}>{totalChannelWinRate}%</td>
                   </tr>
                 </tfoot>
               </table>
@@ -946,13 +946,13 @@ export function SalesTrendAnalysis() {
               </div>
             </div>
             <div className="scroll-thin" style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                     <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a" }}>Society</th>
                     <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Leads</th>
                     <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Won</th>
-                    <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "right" }}>Conv %</th>
+                    <th style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Conv %</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -963,7 +963,7 @@ export function SalesTrendAnalysis() {
                         <td style={{ padding: "10px 12px", fontWeight: 600, color: "#1D1D1F" }}>{s.society}</td>
                         <td style={{ padding: "10px 12px", textAlign: "center", color: "#475569" }}>{s.leads}</td>
                         <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 700, color: "#08805A" }}>{s.won}</td>
-                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: "#08805A" }}>{rate}%</td>
+                        <td style={{ padding: "10px 12px", textAlign: "center", fontWeight: 700, color: "#08805A" }}>{rate}%</td>
                       </tr>
                     );
                   })}
@@ -973,7 +973,7 @@ export function SalesTrendAnalysis() {
                     <td style={{ padding: "10px 12px", color: "#1D1D1F" }}>Total (Top 5)</td>
                     <td style={{ padding: "10px 12px", textAlign: "center", color: "#1D1D1F" }}>{totalSocLeads}</td>
                     <td style={{ padding: "10px 12px", textAlign: "center", color: "#08805A" }}>{totalSocWon}</td>
-                    <td style={{ padding: "10px 12px", textAlign: "right", color: "#08805A" }}>{totalSocRate}%</td>
+                    <td style={{ padding: "10px 12px", textAlign: "center", color: "#08805A" }}>{totalSocRate}%</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1249,7 +1249,7 @@ export function ApartmentLeads() {
       {/* HIG Rounded Card Data Table */}
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", overflowY: "auto", maxHeight: "calc(100vh - 400px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: 13.5, minWidth: 780 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 780 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {["Apartment Name", "Manager Number", "Meeting Status", "POC", "Address", "Pincode", "Flats"].map(h => (

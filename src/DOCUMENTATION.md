@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.161**.
+> **Reflects:** `APP_VERSION` **2.29.181**.
 
 ---
 
@@ -58,7 +58,14 @@
   build-time env comes from repo **secrets** (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_EMAIL`,
   `VITE_API_ORIGIN`). Local `deploy` script uses `gh-pages -d dist`.
 - **UI:** no component library. Inline styles + CSS variables (brand tokens defined in a `<style>`
-  block near the top of `App.jsx`). Fonts: Playfair Display (headings) + DM Sans (body).
+  block near the top of `App.jsx`). v2.29.169 briefly redesigned the `Home` launcher's sidebar with
+  **Tailwind CSS v4** utility classes instead; v2.29.175 reverted that whole redesign back to the
+  original `App.jsx` (per explicit user request), so nothing in the app actually uses Tailwind
+  classes today. The dependency and build wiring from that attempt are still present and unused —
+  `tailwindcss`/`@tailwindcss/vite` in `package.json`, the `@tailwindcss/vite` plugin in
+  `vite.config.js`, and the `@import "tailwindcss/theme.css"`/`utilities.css` lines in
+  `src/index.css` — worth stripping out next time someone's in these files, but harmless to leave
+  as-is meanwhile. Fonts: Playfair Display (headings) + DM Sans (body).
   Charts: **Recharts**. Icons: **lucide-react**.
 - **State/routing:** React hooks only (no Redux). `useAuth()` context holds the logged-in `user`,
   the active `module` and `tab`. `MODULES` (registry) + `moduleTabs` (per-module sub-tabs) drive
