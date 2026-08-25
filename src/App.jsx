@@ -274,11 +274,23 @@ const TOKENS = `
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
   }
 
-  /* Floating Frosted Glass Sidebar v3 (available globally in Home and Shell) */
-  .pw-sidebar-v3{width:280px;height:96vh;margin:2vh 0 0 16px;position:sticky;top:2vh;display:flex;flex-direction:column;padding:16px 12px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,"Plus Jakarta Sans","SF Pro Display",sans-serif;box-sizing:border-box;transition:background .3s ease,border-color .3s ease,box-shadow .3s ease;z-index:40}
-  .pw-sidebar-v3[data-theme="dark"]{--pw-bg-surface:rgba(30,42,32,.92);--pw-border:rgba(255,255,255,.08);--pw-hover-bg:rgba(255,255,255,.09);--pw-card-bg:rgba(255,255,255,.04);--pw-text-main:#f1f5f9;--pw-text-muted:#a89f8d;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%);--pw-accent-glow:rgba(30, 158, 79,.35);--pw-shadow:0 20px 50px rgba(0,0,0,.4);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.1);--pw-badge-bg:rgba(245,158,11,.15);--pw-badge-text:#fbbf24;--pw-badge-border:rgba(245,158,11,.25)}
-  .pw-sidebar-v3[data-theme="light"]{--pw-bg-surface:rgba(247,245,239,.85);--pw-border:rgba(255,255,255,.8);--pw-hover-bg:rgba(255,255,255,.6);--pw-card-bg:rgba(255,255,255,.5);--pw-text-main:#1e293b;--pw-text-muted:#8a8375;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%);--pw-accent-glow:rgba(30, 158, 79,.25);--pw-shadow:0 20px 40px rgba(0,0,0,.06);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.9);--pw-badge-bg:rgba(217,119,6,.12);--pw-badge-text:#d97706;--pw-badge-border:rgba(217,119,6,.2)}
-  .pw-sidebar-v3{background:var(--pw-bg-surface);backdrop-filter:blur(24px) saturate(200%);-webkit-backdrop-filter:blur(24px) saturate(200%);border:1px solid var(--pw-border);box-shadow:var(--pw-shadow),var(--pw-inset-shadow);color:var(--pw-text-main)}
+  /* Floating Frosted Glass Sidebar v3 (available globally in Home and Shell).
+     Split across two elements so the dark card visually reaches the same
+     bottom edge as the module grid instead of a flat 96vh: .pw-sidebar-rail
+     (outer) is a plain grid item with no explicit height, so it stretches
+     to match whichever of the sidebar/main-content column is taller (the
+     grid's default align-items:stretch) — it carries the background/
+     border/radius/shadow and the theme CSS variables. .pw-sidebar-v3
+     (inner) is height:100% of that — NOT a fixed px cap, so it never
+     clips the nav list the way an earlier attempt at this did — plus
+     position:sticky so the nav content still tracks the viewport while
+     scrolling, with the user-card's margin-top:auto correctly pinning it
+     to the bottom of however tall the rail ends up being. */
+  .pw-sidebar-rail{margin:2vh 0 2vh 16px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,"Plus Jakarta Sans","SF Pro Display",sans-serif;transition:background .3s ease,border-color .3s ease,box-shadow .3s ease}
+  .pw-sidebar-rail[data-theme="dark"]{--pw-bg-surface:rgba(30,42,32,.92);--pw-border:rgba(255,255,255,.08);--pw-hover-bg:rgba(255,255,255,.09);--pw-card-bg:rgba(255,255,255,.04);--pw-text-main:#f1f5f9;--pw-text-muted:#a89f8d;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%);--pw-accent-glow:rgba(30, 158, 79,.35);--pw-shadow:0 20px 50px rgba(0,0,0,.4);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.1);--pw-badge-bg:rgba(245,158,11,.15);--pw-badge-text:#fbbf24;--pw-badge-border:rgba(245,158,11,.25)}
+  .pw-sidebar-rail[data-theme="light"]{--pw-bg-surface:rgba(247,245,239,.85);--pw-border:rgba(255,255,255,.8);--pw-hover-bg:rgba(255,255,255,.6);--pw-card-bg:rgba(255,255,255,.5);--pw-text-main:#1e293b;--pw-text-muted:#8a8375;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%);--pw-accent-glow:rgba(30, 158, 79,.25);--pw-shadow:0 20px 40px rgba(0,0,0,.06);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.9);--pw-badge-bg:rgba(217,119,6,.12);--pw-badge-text:#d97706;--pw-badge-border:rgba(217,119,6,.2)}
+  .pw-sidebar-rail{background:var(--pw-bg-surface);backdrop-filter:blur(24px) saturate(200%);-webkit-backdrop-filter:blur(24px) saturate(200%);border:1px solid var(--pw-border);box-shadow:var(--pw-shadow),var(--pw-inset-shadow);color:var(--pw-text-main)}
+  .pw-sidebar-v3{width:100%;height:100%;position:sticky;top:2vh;display:flex;flex-direction:column;padding:16px 12px;box-sizing:border-box;z-index:40}
   .pw-brand-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 18px;border-bottom:1px solid var(--pw-border);margin-bottom:12px}
   .pw-brand-content{display:flex;align-items:center;gap:12px}
   .pw-brand-logo{width:36px;height:36px;border-radius:10px;background:var(--pw-accent-gradient);display:grid;place-items:center;box-shadow:0 0 20px var(--pw-accent-glow);flex:0 0 auto}
@@ -298,7 +310,7 @@ const TOKENS = `
   .pw-user-card{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#1E2A20;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);transition:all .25s ease;overflow:hidden}
   .pw-user-card:hover{border-color:rgba(66,154,56,.4);box-shadow:0 6px 24px rgba(30,42,32,.4)}
   .pw-avatar-wrap{position:relative;display:flex;flex:0 0 auto}
-  .pw-avatar{width:38px;height:38px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1E9E4F,#C4E538);display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff;border:none;cursor:pointer;flex:0 0 auto;box-shadow:inset 0 1px 1px rgba(255,255,255,.3);transition:transform .2s ease}
+  .pw-root .pw-avatar{width:38px;height:38px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1E9E4F,#C4E538);display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff;border:none;cursor:pointer;flex:0 0 auto;box-shadow:inset 0 1px 1px rgba(255,255,255,.3);transition:transform .2s ease}
   .pw-avatar:hover{transform:scale(1.06)}
   .pw-status-dot{position:absolute;bottom:-2px;right:-2px;width:10px;height:10px;background:#8DC63F;border:2px solid #1E2A20;border-radius:50%}
   .pw-user-info{flex:1;display:flex;flex-direction:column;gap:2px;overflow:hidden;min-width:0}
@@ -306,23 +318,32 @@ const TOKENS = `
   .pw-name{font-size:13px;font-weight:700;color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .pw-tag{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 5px;background:rgba(141,198,63,.15);color:#8DC63F;border-radius:4px;border:1px solid rgba(141,198,63,.3);font-family:ui-monospace,monospace;flex:0 0 auto}
   .pw-role{font-size:11px;color:rgba(232,245,233,.6);text-transform:capitalize}
-  .pw-action-btn{background:rgba(255,92,92,.1);border:1px solid rgba(255,92,92,.2);color:#ff8080;cursor:pointer;width:32px;height:32px;padding:0;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;transition:all .2s ease}
-  .pw-action-btn:hover{color:#ffffff;background:#ff5c5c;border-color:#ff5c5c}
+  .pw-sidebar-footer{text-align:center;font-size:9px;color:rgba(232,245,233,.4);margin-top:10px;line-height:1.5}
+  .pw-sidebar-footer div:last-child{margin-top:1px}
+  .pw-root .pw-action-btn{background:rgba(255,92,92,.1);border:1px solid rgba(255,92,92,.2);color:#ff8080;cursor:pointer;width:32px;height:32px;padding:0;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;transition:all .2s ease}
+  .pw-root .pw-action-btn:hover{color:#ffffff;background:#ff5c5c;border-color:#ff5c5c}
   /* Topbar header row (greeting + session timer + avatar + logout) — used by
      both Home's greeting row and Shell's topbar cluster, on the light main
-     canvas (so a lighter palette than the dark sidebar's pw-avatar/pw-tag). */
-  .pw-top-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-  .pw-greeting{margin:0;font-size:24px;font-weight:800;color:#1A2E26;letter-spacing:-.02em}
-  .pw-header-actions{display:flex;align-items:center;gap:10px}
-  .pw-session-badge{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;background:#EAF4EE;border:1px solid #D6E8DC;color:#27543E;font-weight:600;font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+     canvas (so a lighter palette than the dark sidebar's pw-avatar/pw-tag).
+     .pw-top-header itself (the card shell) is Home-only — Shell's topbar is
+     a separate full-width sticky bar (.pw-topbar) that isn't card-ified. */
+  .pw-top-header{display:flex;justify-content:space-between;align-items:center;padding:8px 34px;background:linear-gradient(135deg,#ffffff 0%,#f4fff1 100%);border-radius:26px;border:1px solid rgba(30,158,79,.15);box-shadow:0 15px 40px rgba(30,158,79,.12);margin-bottom:16px}
+  .pw-greeting{margin:0;font-size:30px;font-weight:750;letter-spacing:-.7px;color:#102a18}
+  .pw-greeting span{background:linear-gradient(90deg,#1E9E4F,#C4E538);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .pw-header-actions{display:flex;align-items:center;gap:14px}
+  .pw-session-badge{display:flex;align-items:center;gap:12px;padding:10px 18px;background:#ffffff;border-radius:18px;border:1px solid rgba(30,158,79,.15);white-space:nowrap}
+  .pw-session-icon{width:38px;height:38px;display:flex;justify-content:center;align-items:center;border-radius:14px;background:linear-gradient(135deg,#1E9E4F,#C4E538);color:#fff;flex:0 0 auto}
+  .pw-session-badge small{display:block;font-size:11px;color:#718096}
+  .pw-session-badge strong{color:#102a18;font-size:15px;font-variant-numeric:tabular-nums}
   /* Solid brand gradient + white text (not the earlier pale mint-on-cream)
      so this reads as a clear button against the light topbar/canvas instead
      of nearly disappearing into it. */
-  .pw-avatar-btn{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#1E9E4F,#C4E538);color:#ffffff;border:none;font-size:12px;font-weight:700;display:grid;place-items:center;cursor:pointer;padding:0;overflow:hidden;box-shadow:0 2px 6px rgba(30, 158, 79,.3)}
-  .pw-camera-dot{position:absolute;bottom:-2px;right:-2px;width:15px;height:15px;border-radius:50%;background:linear-gradient(135deg,#1E9E4F,#C4E538);border:2px solid #fff;color:#fff;display:grid;place-items:center;cursor:pointer}
+  .pw-root .pw-avatar-btn{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#1E9E4F,#7ED321);color:#ffffff;border:none;font-size:20px;font-weight:700;display:grid;place-items:center;cursor:pointer;padding:0;overflow:hidden;box-shadow:0 8px 22px rgba(30,158,79,.35)}
+  .pw-camera-dot{position:absolute;bottom:0;right:0;width:19px;height:19px;border-radius:50%;background:#C4E538;border:2px solid #fff;color:#14532d;display:grid;place-items:center;cursor:pointer}
   /* Logout button — used by both Home's greeting row and Shell's topbar. */
-  .pw-logout-btn{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;background:transparent;border:1px solid transparent;color:#D9534F;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s ease}
-  .pw-logout-btn:hover{background:rgba(217,83,79,.08);border-color:rgba(217,83,79,.2)}
+  .pw-root .pw-logout-btn{display:flex;align-items:center;gap:8px;padding:13px 22px;border-radius:16px;background:linear-gradient(135deg,#1E9E4F,#16753b);border:none;color:#ffffff;font-size:14px;font-weight:650;cursor:pointer;transition:all .25s ease}
+  .pw-root .pw-logout-btn:hover{background:linear-gradient(135deg,#ef4444,#dc2626);color:#ffffff;transform:translateY(-2px);box-shadow:0 12px 25px rgba(220,38,38,.35)}
+  .pw-root .pw-logout-btn:active{transform:scale(.97)}
   /* Collapse/expand toggle + collapsed state — moved here from Home's own
      local <style> block (v2.29.219) since it was only ever mounted while
      Home was on screen, so the identical .pw-sidebar-v3.collapsed class
@@ -343,15 +364,17 @@ const TOKENS = `
      visible/interactive so its own toggle button works too — both ways to
      expand it (the rail's own button and the topbar's) call the same
      toggleSidebarCollapsed, so either one un-hides it. */
-  .pw-sidebar-toggle-btn{width:26px;height:26px;border-radius:8px;background:var(--pw-card-bg);border:1px solid var(--pw-border);color:var(--pw-text-muted);display:grid;place-items:center;cursor:pointer;transition:all .2s ease;flex:0 0 auto}
-  .pw-sidebar-toggle-btn:hover{color:var(--pw-text-main);background:var(--pw-hover-bg);box-shadow:0 2px 8px rgba(0,0,0,.1)}
-  .pw-sidebar-v3.collapsed{width:72px!important;min-width:72px!important;padding:16px 10px!important;align-items:center}
-  .pw-sidebar-v3.collapsed .pw-brand-header{flex-direction:column;gap:10px;padding:0 0 14px;justify-content:center;border-bottom:1px solid var(--pw-border);width:100%}
-  .pw-sidebar-v3.collapsed .pw-brand-content{flex-direction:column;gap:8px}
-  .pw-sidebar-v3.collapsed .pw-nav-container{width:100%;align-items:center}
-  .pw-sidebar-v3.collapsed .pw-item{justify-content:center;padding:10px 0;width:44px}
+  .pw-root .pw-sidebar-toggle-btn{width:26px;height:26px;border-radius:8px;background:var(--pw-card-bg);border:1px solid var(--pw-border);color:var(--pw-text-muted);display:grid;place-items:center;cursor:pointer;transition:all .2s ease;flex:0 0 auto}
+  .pw-root .pw-sidebar-toggle-btn:hover{color:var(--pw-text-main);background:var(--pw-hover-bg);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+  .pw-sidebar-v3.collapsed{width:52px!important;min-width:52px!important;padding:14px 4px!important;align-items:center}
+  .pw-sidebar-v3.collapsed .pw-brand-header{flex-direction:column;gap:8px;padding:0 0 12px;justify-content:center;align-items:center;border-bottom:1px solid var(--pw-border);width:100%;margin-bottom:8px}
+  .pw-sidebar-v3.collapsed .pw-brand-content{justify-content:center;width:100%}
+  .pw-sidebar-v3.collapsed .pw-nav-container{width:100%;align-items:center;gap:2px}
+  .pw-sidebar-v3.collapsed .pw-item{justify-content:center;padding:9px 0;width:40px;min-width:40px;border-radius:10px;gap:0}
   .pw-sidebar-v3.collapsed .pw-category-title{display:none}
-  .pw-sidebar-v3.collapsed .pw-user-card{flex-direction:column;padding:10px 4px;gap:8px;width:100%}
+  .pw-sidebar-v3.collapsed .pw-user-card{flex-direction:column;padding:8px 4px;gap:6px;width:44px;min-width:44px;justify-content:center;align-items:center;border-radius:12px}
+  .pw-sidebar-v3.collapsed .pw-sidebar-footer{display:none}
+  .pw-sidebar-v3.collapsed .pw-version-pill{display:none}
 
   .pw-root{font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--slate);
     background:var(--mint);min-height:100vh;width:100%;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;letter-spacing:-.003em}
@@ -361,6 +384,13 @@ const TOKENS = `
   .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--muted)}
   .lime-word{color:var(--lime-d)}
   ::selection{background:var(--lime);color:var(--forest)}
+  /* NOTE: .pw-root button (0,1,1 specificity — a class plus an element) beats
+     any single-class button rule like .pw-item's background regardless of
+     source order, silently zeroing it out. Any new button component style
+     that sets its own background must be scoped as .pw-root .some-btn
+     (0,2,0) to survive this reset — found this the hard way when
+     .pw-avatar, .pw-action-btn, .pw-avatar-btn, .pw-logout-btn, and
+     .pw-sidebar-toggle-btn all silently lost their backgrounds to this rule. */
   .pw-root button{font-family:inherit;cursor:pointer;border:none;background:none;transition:transform .12s ease, filter .14s ease, box-shadow .16s ease, background .14s ease}
   .pw-root button:disabled{cursor:not-allowed}
   .pw-root button:not(:disabled):hover{filter:brightness(1.03)}
@@ -845,9 +875,9 @@ function Home({ onPick }) {
   };
 
   return (
-    <div className="premium-home" style={{ gridTemplateColumns: sidebarCollapsed ? "72px minmax(0, 1fr)" : "290px minmax(0, 1fr)", transition: "grid-template-columns .25s ease" }}>
+    <div className="premium-home" style={{ gridTemplateColumns: sidebarCollapsed ? "52px minmax(0, 1fr)" : "290px minmax(0, 1fr)", transition: "grid-template-columns .25s ease" }}>
       <style>{`
-        .premium-home{min-height:100vh;background:linear-gradient(135deg,#FBFAF7 0%,#F7F5EF 55%,#F3F0E8 100%);display:grid;grid-template-columns:290px minmax(0,1fr);color:var(--f);position:relative;overflow:hidden}
+        .premium-home{background:linear-gradient(135deg,#FBFAF7 0%,#F7F5EF 55%,#F3F0E8 100%);display:grid;align-items:stretch;min-height:100vh;grid-template-columns:290px minmax(0,1fr);color:var(--f);position:relative;overflow:hidden}
         .pw-app-glow{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;animation:pw-app-float 14s ease-in-out infinite alternate}
         .pw-app-glow.green{width:500px;height:500px;background:#1E9E4F;top:-120px;right:-80px;opacity:.10}
         .pw-app-glow.blue{width:460px;height:460px;background:#C4E538;bottom:-140px;left:20%;opacity:.08;animation-delay:4s}
@@ -863,12 +893,20 @@ function Home({ onPick }) {
            Sidebar v3" block near the top of TOKENS) — one source of truth,
            identical size everywhere. pw-home-logout-btn moved there too. */
 
+        /* Override sidebar rail margin inside Home so its top/bottom edges
+           align exactly with the white card: 18px top = premium-content
+           padding-top; 26px bottom = premium-content padding-bottom. */
+        .premium-home .pw-sidebar-rail{margin:18px 0 26px 16px}
+
         .premium-main{min-width:0;display:flex;flex-direction:column;position:relative;z-index:10}
-        .premium-content{padding:18px 32px 26px;max-width:1550px;width:100%;margin:0 auto;position:relative;z-index:10}
-        .premium-section{background:rgba(255,255,255,.72)!important;backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.85)!important;border-radius:22px!important;padding:22px 24px!important;box-shadow:0 20px 50px rgba(10,26,18,.06),inset 0 1px 0 rgba(255,255,255,.9)!important;position:relative;z-index:10}
+        /* Make the content column and card stretch so they always match
+           the sidebar rail height — flex:1 propagates the full column
+           height down to the white card. */
+        .premium-content{flex:1;display:flex;flex-direction:column;padding:0 32px 0;max-width:1550px;width:100%;margin:0 auto;position:relative;z-index:10}
+        .premium-section{flex:1;background:rgba(255,255,255,.72)!important;backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.85)!important;border-radius:22px!important;padding:22px 24px!important;box-shadow:0 20px 50px rgba(10,26,18,.06),inset 0 1px 0 rgba(255,255,255,.9)!important;position:relative;z-index:10}
         .premium-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
         @media(min-width:1550px){.premium-module-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-        .premium-module{position:relative;min-height:86px!important;padding:13px 15px!important;border:1px solid rgba(255,255,255,.85)!important;border-radius:16px!important;background:rgba(255,255,255,.78)!important;backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);box-shadow:0 7px 20px rgba(10,26,18,.04),inset 0 1px 0 #ffffff!important;text-align:left;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transition:all .2s cubic-bezier(.16,1,.3,1)}
+        .premium-module{position:relative;min-height:15px!important;padding:13px 15px!important;border:1px solid rgba(255,255,255,.85)!important;border-radius:16px!important;background:rgba(255,255,255,.78)!important;backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);box-shadow:0 7px 20px rgba(10,26,18,.04),inset 0 1px 0 #ffffff!important;text-align:left;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transition:all .2s cubic-bezier(.16,1,.3,1)}
         .premium-module:before{content:"";position:absolute;width:80px;height:80px;border-radius:50%;right:-34px;top:-34px;background:var(--module-color);opacity:.09;transition:transform .2s ease}
         .premium-module:hover{transform:translateY(-3px) scale(1.018);border-color:var(--module-color)!important;box-shadow:0 18px 38px rgba(30, 158, 79,.2),inset 0 1px 0 #ffffff!important;background:rgba(255,255,255,.95)!important}
         .premium-module:hover:before{transform:scale(1.4);opacity:.22}
@@ -898,8 +936,10 @@ function Home({ onPick }) {
       <div className="pw-app-glow blue" />
       <div className="pw-app-glow mint" />
 
-      {/* Floating Frosted Glass Sidebar */}
-      <aside className={`pw-sidebar-v3 ${sidebarCollapsed ? "collapsed" : ""} ${mobileNav ? "open" : ""}`} data-theme={sidebarEffectiveTheme}>
+      {/* Floating Frosted Glass Sidebar — outer <aside> stretches to match
+          the content column's height, inner div is height:100% of that. */}
+      <aside className="pw-sidebar-rail" data-theme={sidebarEffectiveTheme}>
+      <div className={`pw-sidebar-v3 ${sidebarCollapsed ? "collapsed" : ""} ${mobileNav ? "open" : ""}`}>
         <div className="pw-brand-header">
           <div className="pw-brand-content" style={{ display: "flex", alignItems: "center" }}>
             <ProWaterLogo size={sidebarCollapsed ? 30 : 38} badge={true} />
@@ -964,48 +1004,32 @@ function Home({ onPick }) {
             </button>
           )}
         </div>
+        {!sidebarCollapsed && (
+          <div className="pw-sidebar-footer">
+            <div>© {new Date().getFullYear()} ProWater Internal Systems</div>
+            <div>Wisdom 2.0</div>
+          </div>
+        )}
+      </div>
       </aside>
 
       <main className="premium-main">
-        <div className="premium-content">
+        <div className="premium-content" style={{ paddingTop: 18, paddingBottom: 26 }}>
           <div className="pw-top-header">
-            <h1 className="pw-greeting fade-up">{greeting}, {firstName}.</h1>
+            <div>
+              <h1 className="pw-greeting fade-up">{greeting}, <span>{firstName}</span></h1>
+            </div>
             <div className="pw-header-actions">
-              {sidebarCollapsed && (
-                <button
-                  onClick={toggleSidebarCollapsed}
-                  className="pw-topbar-sidebar-toggle"
-                  title="Show sidebar"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "7px 12px",
-                    borderRadius: 10,
-                    background: "var(--teal)",
-                    border: "1px solid var(--border)",
-                    color: "#ffffff",
-                    fontWeight: 700,
-                    fontSize: 12.5,
-                    cursor: "pointer",
-                    flex: "0 0 auto",
-                    transition: "all .2s ease",
-                    boxShadow: "0 4px 14px rgba(30, 158, 79, 0.3)"
-                  }}
-                >
-                  <PanelLeftOpen size={16} />
-                  <span style={{ fontSize: 12 }}>Show Sidebar</span>
-                </button>
-              )}
               <div className="pw-session-badge" title="Session duration">
-                <Hourglass size={14} /> <span>{fmtElapsed(elapsed)}</span>
+                <div className="pw-session-icon"><Clock size={18} /></div>
+                <div><small>Session</small><strong>{fmtElapsed(elapsed)}</strong></div>
               </div>
               <div className="pw-avatar-wrap">
                 <button className="pw-avatar-btn" onClick={() => setPhotoOpen(true)} title="Update profile photo">
                   {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
                 </button>
                 <span className="pw-camera-dot" onClick={() => setPhotoOpen(true)} title="Update profile photo">
-                  <Camera size={8} />
+                  <Camera size={10} />
                 </span>
               </div>
               <button onClick={() => setUser(null)} className="pw-logout-btn" title="Sign Out">
@@ -1053,10 +1077,6 @@ function Home({ onPick }) {
           </section>
         </div>
       </main>
-
-      <footer style={{ textAlign: "center", padding: "8px 32px 14px", fontSize: 11, color: "var(--muted)", position: "relative", zIndex: 10 }}>
-        © {new Date().getFullYear()} ProWater Internal Systems · Wisdom 2.0 · Build {APP_VERSION}
-      </footer>
 
       {photoOpen && <PhotoUploader username={user.username} current={photo}
         onClose={() => setPhotoOpen(false)}
@@ -1296,11 +1316,13 @@ const doRefresh = async () => {
   const signOut = async () => { await api.logout(user.username); setUser(null); };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: sidebarCollapsed ? "72px 1fr" : "312px 1fr", transition: "grid-template-columns .25s ease", minHeight: "100vh", width: "100%" }} className="shell-grid">
+    <div style={{ display: "grid", gridTemplateColumns: sidebarCollapsed ? "52px 1fr" : "312px 1fr", transition: "grid-template-columns .25s ease", minHeight: "100vh", width: "100%" }} className="shell-grid">
       <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-sidebar-v3{position:fixed;z-index:40;height:100vh;margin:0;border-radius:0;transform:translateX(-105%);transition:transform .22s ease}.pw-sidebar-v3.open{transform:none}.pw-topbar-burger{display:inline-flex!important}.iot-apt-badge{display:none!important}}`}</style>
 
-      {/* sidebar */}
-      <aside className={`pw-sidebar-v3 ${sidebarCollapsed ? "collapsed" : ""} ${mobileNav ? "open" : ""}`} data-theme={sidebarEffectiveTheme}>
+      {/* sidebar — outer <aside> stretches to match the content column's
+          height (see the matching comment in Home()). */}
+      <aside className="pw-sidebar-rail" data-theme={sidebarEffectiveTheme}>
+      <div className={`pw-sidebar-v3 ${sidebarCollapsed ? "collapsed" : ""} ${mobileNav ? "open" : ""}`}>
         <div className="pw-brand-header">
           <div className="pw-brand-content" style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <ProWaterLogo size={sidebarCollapsed ? 30 : 36} badge={true} />
@@ -1368,6 +1390,13 @@ const doRefresh = async () => {
             </button>
           )}
         </div>
+        {!sidebarCollapsed && (
+          <div className="pw-sidebar-footer">
+            <div>© {new Date().getFullYear()} ProWater Internal Systems</div>
+            <div>Wisdom 2.0</div>
+          </div>
+        )}
+      </div>
       </aside>
 
       {/* main */}
@@ -1396,17 +1425,19 @@ const doRefresh = async () => {
             <RefreshCw size={15} style={{ animation: refreshing ? "pw-spin .8s linear infinite" : "none" }} /> Refresh
           </button>}
           <div className="pw-session-badge">
-            <Clock size={14} /> <span>{fmtClock(now)}</span>
+            <div className="pw-session-icon"><Clock size={18} /></div>
+            <div><small>Time</small><strong>{fmtClock(now)}</strong></div>
           </div>
           <div className="pw-session-badge" title="Session duration">
-            <Hourglass size={14} /> <span>{fmtElapsed(elapsed)}</span>
+            <div className="pw-session-icon"><Hourglass size={18} /></div>
+            <div><small>Session</small><strong>{fmtElapsed(elapsed)}</strong></div>
           </div>
           <div className="pw-avatar-wrap">
             <button className="pw-avatar-btn" onClick={() => setPhotoOpen(true)} title="Update profile photo">
               {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : String(user.name || "P").trim().charAt(0).toUpperCase()}
             </button>
             <span className="pw-camera-dot" onClick={() => setPhotoOpen(true)} title="Update profile photo">
-              <Camera size={8} />
+              <Camera size={10} />
             </span>
           </div>
           <button onClick={signOut} className="pw-logout-btn" title="Sign Out">
