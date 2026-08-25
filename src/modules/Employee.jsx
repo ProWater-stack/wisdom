@@ -67,7 +67,7 @@ export function UsersAdmin({ accessLevel = "view" }) {
 
   const refresh = () => api.getUsers().then(setRows);
   useEffect(() => { api.logView(user.username, "Viewed User Management"); refresh(); }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Employees" subtitle="Synchronizing dashboard user accounts…" />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2600); };
 

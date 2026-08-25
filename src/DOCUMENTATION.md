@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.181**.
+> **Reflects:** `APP_VERSION` **2.29.229**.
 
 ---
 

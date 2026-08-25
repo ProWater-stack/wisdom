@@ -167,7 +167,7 @@ export function MaintenanceSchedule() {
     customerApi.getCustomers().then(setData).catch(e => setErr(e.message || "Could not load customers."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Maintenance Schedule" subtitle="Synchronizing field service jobs…" />;
 
   const now = Date.now();
   const MS_DAY = 86400000;
@@ -272,7 +272,7 @@ export function WaterQuality() {
     customerApi.getCustomers().then(setData).catch(e => setErr(e.message || "Could not load devices."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Water Quality" subtitle="Synchronizing water quality readings…" />;
 
   const now = Date.now();
   const MS_DAY = 86400000;

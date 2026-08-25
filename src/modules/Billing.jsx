@@ -39,7 +39,7 @@ export function BillingOverview() {
       .catch(e => setErr(e.message || "Could not load billing data."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Billing Overview" subtitle="Synchronizing invoices, plans and renewals…" />;
 
   const { subs, invs } = data;
   const activeSubs = subs.filter(s => s.status === "active").length;
@@ -82,7 +82,7 @@ export function BillingOverview() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -163,7 +163,7 @@ export function Subscriptions() {
   const [sel, setSel] = useState(null);
 
   useEffect(() => { api.logView(user.username, "Viewed Subscriptions"); billingApi.getSubscriptions().then(setRows).catch(() => setRows([])); }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Subscriptions" subtitle="Synchronizing active subscription plans…" />;
 
   const filtered = rows.filter(s =>
     (`${s.customerName} ${s.email} ${s.phone} ${s.id} ${s.plan} ${s.customerNumber}`).toLowerCase().includes(q.toLowerCase())
@@ -268,7 +268,7 @@ export function Invoices() {
       .then(([inv, cust]) => { setRows(inv); setCusts(cust); })
       .catch(() => setRows([]));
   }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Invoices" subtitle="Synchronizing invoice records…" />;
 
   const custBy = {};
   custs.forEach(c => [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber].forEach(k => { if (k) custBy[k] = c; }));
@@ -385,7 +385,7 @@ export function DepositRefunds() {
       .catch(e => setErr(e.message || "Could not load subscriptions."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Deposit Refunds" subtitle="Synchronizing deposit refund records…" />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
@@ -450,7 +450,7 @@ export function DepositRefunds() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 18 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",

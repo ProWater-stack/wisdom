@@ -150,7 +150,7 @@ export function SalesLeads({ isAdmin }) {
   const refresh = () => salesApi.getDeals().then(d => setDeals(d.filter(notHiddenLead))).catch(() => setDeals([]));
   useEffect(() => { api.logView(user.username, "Viewed Sales leads"); refresh(); }, []);
   useEffect(() => { setPage(1); }, [q, statusFilter, societyFilter, range]);
-  if (!deals) return <Loading />;
+  if (!deals) return <Loading title="Loading Leads & Deals" subtitle="Synchronizing pipeline records…" />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2200); };
   const move = async (id, newStage) => { await salesApi.updateStage(user.username, id, newStage); await refresh(); flash("Stage updated"); };
@@ -217,7 +217,7 @@ export function SalesLeads({ isAdmin }) {
           (not clickable) — filtering happens via the status dropdown below,
           whose options mirror these cards. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: "linear-gradient(135deg,#0a3a2a 0%,#045a3f 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
+        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
           <div style={{ position: "absolute", right: -10, top: -10, width: 90, height: 90, background: "rgba(255,255,255,.06)", borderRadius: "50%", pointerEvents: "none" }} />
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -235,13 +235,13 @@ export function SalesLeads({ isAdmin }) {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "#64748b" }}>Interested</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#007AFF", background: "rgba(0,122,255,.1)", padding: "3px 8px", borderRadius: 6 }}>{interestedPct}%</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#E8A93A", background: "rgba(232, 169, 58,.1)", padding: "3px 8px", borderRadius: 6 }}>{interestedPct}%</span>
             </div>
             <div style={{ fontSize: 36, fontWeight: 800, color: "#0d2119", letterSpacing: "-.03em", lineHeight: 1 }}>{interestedCount}</div>
           </div>
           <div style={{ marginTop: 14 }}>
             <div style={{ height: 6, width: "100%", background: "#e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-              <div style={{ width: `${interestedPct}%`, height: "100%", background: "#007AFF", borderRadius: 10 }} />
+              <div style={{ width: `${interestedPct}%`, height: "100%", background: "#E8A93A", borderRadius: 10 }} />
             </div>
           </div>
         </div>
@@ -410,7 +410,7 @@ export function SalesTrendAnalysis() {
   const { sel, setSel, range } = useDateRange("this_month");
   const [apt, setApt] = useState(null); // apartment/society multi-select — null = all
   useEffect(() => { api.logView(user.username, "Viewed Sales Trend Analysis"); salesApi.getDeals().then(d => setDeals(d.filter(notHiddenLead))).catch(() => setDeals([])); }, []);
-  if (!deals) return <Loading />;
+  if (!deals) return <Loading title="Loading Trend Analysis" subtitle="Synchronizing sales trend data…" />;
 
   const aptOptions = Array.from(new Set(deals.map(d => d.society).filter(Boolean))).sort();
   const scoped = apt === null ? deals.filter(d => isRealSociety(d.society)) : deals.filter(d => apt.includes(d.society));
@@ -590,7 +590,7 @@ export function SalesTrendAnalysis() {
 
   const kpiCard = ({ label, value, valueColor, icon: Icon, iconBg, iconColor, delta, hero }) => (
     <div style={{
-      background: hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255,255,255,.85)",
+      background: hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255,255,255,.85)",
       color: hero ? "#fff" : "#1D1D1F",
       backdropFilter: hero ? undefined : "blur(20px)",
       WebkitBackdropFilter: hero ? undefined : "blur(20px)",
@@ -995,7 +995,7 @@ export function SalesErrorCorrection({ isAdmin }) {
   const [toast, setToast] = useState("");
   const refresh = () => salesApi.getDeals().then(d => setDeals(d.filter(notHiddenLead))).catch(() => setDeals([]));
   useEffect(() => { api.logView(user.username, "Viewed Sales error correction"); refresh(); }, []);
-  if (!deals) return <Loading />;
+  if (!deals) return <Loading title="Loading Error Correction" subtitle="Synchronizing flagged lead records…" />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2200); };
   const move = async (id, stage) => { await salesApi.updateStage(user.username, id, stage); await refresh(); flash("Stage updated"); };
@@ -1066,7 +1066,7 @@ export function ApartmentLeads() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Apartment Leads" subtitle="Synchronizing society-level lead data…" />;
 
   const handleQChange = (e) => { setQ(e.target.value); setPage(1); };
   const handleStatusChange = (e) => { setStatusF(e.target.value); setPage(1); };
@@ -1136,8 +1136,8 @@ export function ApartmentLeads() {
       bg = "rgba(255,149,0,.12)";
       color = "#c97000";
     } else if (s.includes("proposal") || s.includes("qualified") || s.includes("contacted") || s.includes("in progress") || s.includes("negotiation")) {
-      bg = "rgba(0,122,255,.12)";
-      color = "#007AFF";
+      bg = "rgba(232, 169, 58,.12)";
+      color = "#E8A93A";
     } else if (s.includes("lost") || s.includes("cancelled") || s.includes("rejected") || s.includes("not interested") || s.includes("junk")) {
       bg = "rgba(220,38,38,.1)";
       color = "#dc2626";
@@ -1154,7 +1154,7 @@ export function ApartmentLeads() {
     <div className="fade-up">
       {/* KPI Header Cards — matching Apple HIG grid style in SalesLeads */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: "linear-gradient(135deg,#0a3a2a 0%,#045a3f 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
+        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
           <div style={{ position: "absolute", right: -10, top: -10, width: 90, height: 90, background: "rgba(255,255,255,.06)", borderRadius: "50%", pointerEvents: "none" }} />
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -1172,7 +1172,7 @@ export function ApartmentLeads() {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "#64748b" }}>Total Flat Inventory</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#007AFF", background: "rgba(0,122,255,.1)", padding: "3px 8px", borderRadius: 6 }}>Units</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#E8A93A", background: "rgba(232, 169, 58,.1)", padding: "3px 8px", borderRadius: 6 }}>Units</span>
             </div>
             <div style={{ fontSize: 36, fontWeight: 800, color: "#0d2119", letterSpacing: "-.03em", lineHeight: 1 }}>{totalFlats.toLocaleString()}</div>
           </div>

@@ -43,7 +43,7 @@ export function Overview() {
       .catch(e => setErr(e.message || "Could not load data."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Referral Overview" subtitle="Synchronizing referral program data…" />;
 
   const totalRefs = data.refs.length;
   const totalReees = data.rees.length;
@@ -123,7 +123,7 @@ export function Referrers() {
     refresh();
     api.getReferees().then(setReferees);
   }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Referrers" subtitle="Synchronizing referrer records…" />;
 
   const filtered = rows.filter(r => (r.name + r.email + r.code).toLowerCase().includes(q.toLowerCase()));
 
@@ -214,7 +214,7 @@ export function Referees() {
     api.getReferees().then(setRows).catch(() => setRows([]));
     api.getReferrers().then(setRefs);
   }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Referees" subtitle="Synchronizing referee records…" />;
 
   const nameOf = id => refs.find(r => r.id === id)?.name || "—";
   const filtered = rows.filter(r =>
@@ -287,7 +287,7 @@ export function Credits() {
 
   const refresh = () => api.getCredits().then(setRows).catch(() => setRows([]));
   useEffect(() => { refresh(); api.getReferrers().then(setRefs); }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Referral Credits" subtitle="Synchronizing the credit ledger…" />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2600); };
   const nameOf = id => refs.find(r => r.id === id)?.name || "—";
@@ -459,7 +459,7 @@ export function Analytics() {
       .catch(e => setErr(e.message || "Could not load data."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Referral Analytics" subtitle="Synchronizing referral performance data…" />;
 
   const searchPhone = () => {
     const digits = phone.replace(/\D/g, "");
@@ -588,7 +588,7 @@ export function Backtrack() {
 
   const refresh = () => api.getUndoable().then(setRows).catch(() => setRows([]));
   useEffect(() => { refresh(); }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Backtrack" subtitle="Synchronizing reverted referral actions…" />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2600); };
 
@@ -709,7 +709,7 @@ export function Tracker() {
     return () => cancelAnimationFrame(raf);
   }, [match, targetPct]);
 
-  if (!refs) return <Loading />;
+  if (!refs) return <Loading title="Loading Referral Tracker" subtitle="Synchronizing the referral funnel…" />;
 
 
   return (

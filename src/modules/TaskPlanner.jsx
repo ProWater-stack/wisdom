@@ -785,7 +785,7 @@ export function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",

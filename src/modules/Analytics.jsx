@@ -57,8 +57,8 @@ export function renderHigStatusBadge(status) {
     s.includes("contacted") || s.includes("medium risk") || s.includes("open") ||
     s.includes("trial")
   ) {
-    bg = "rgba(0,122,255,0.12)";
-    color = "#007AFF";
+    bg = "rgba(232, 169, 58,0.12)";
+    color = "#E8A93A";
   } else if (
     s.includes("scheduled") || s.includes("demo") || s.includes("warning") ||
     s.includes("in progress") || s.includes("review") || s.includes("proposal") ||
@@ -187,7 +187,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
       .catch(e => setErr(e.message || "Could not load analytics overview."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Analytics Overview" subtitle="Synchronizing cross-module performance data…" />;
 
   const { customers, subs, invs, referrers, tickets, apartments } = data;
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
@@ -489,7 +489,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
 
       {/* ── Executive Business Health & Briefing Banner ─────────────────────── */}
       <div style={{
-        background: "linear-gradient(135deg, #064E3B 0%, #08805A 60%, #065B3C 100%)",
+        background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)",
         borderRadius: 20, padding: "18px 24px", color: "#fff", marginBottom: 18,
         boxShadow: "0 12px 30px rgba(8,128,90,0.25)", display: "flex", alignItems: "center",
         justifyContent: "space-between", flexWrap: "wrap", gap: 16
@@ -540,7 +540,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
           const hero = k.hero;
           return (
             <div key={k.label} style={{
-              background: hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255,255,255,0.85)",
+              background: hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255,255,255,0.85)",
               color: hero ? "#ffffff" : "#1D1D1F",
               backdropFilter: hero ? undefined : "blur(20px)",
               WebkitBackdropFilter: hero ? undefined : "blur(20px)",
@@ -810,7 +810,7 @@ export function CreditsAnalytics() {
       .catch(e => setErr(e.message || "Could not load credit notes."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!customers) return <Loading />;
+  if (!customers) return <Loading title="Loading Credits Analytics" subtitle="Synchronizing referral credit records…" />;
 
   // Join credit notes -> customer (by Zoho customer id) for name / society.
   const custByKey = {};
@@ -955,7 +955,7 @@ export function NetRevenue() {
     .catch(e => setErr(e.message || "Could not load revenue."));
 }, []);
   if (err) return <ApiError msg={err} />;
-  if (!invs || !custs) return <Loading />;
+  if (!invs || !custs) return <Loading title="Loading Net Revenue" subtitle="Synchronizing invoices and customer records…" />;
 
   // Join invoices → customer society (customer_id == customer zoho_customer_id),
   // so the apartment filter can scope revenue to a single society.
@@ -1126,7 +1126,7 @@ export function NetRevenue() {
               );
             })}
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16, padding: "14px 18px", background: "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)", color: "#fff", borderRadius: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16, padding: "14px 18px", background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", color: "#fff", borderRadius: 12 }}>
             <span style={{ fontWeight: 700, fontSize: 14 }}>Grand total · {periodName} ({rangeLabel(range)})</span>
             <span style={{ fontWeight: 800, fontSize: 20 }}>{inr(periodTotal)}</span>
           </div>
@@ -1177,7 +1177,7 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
       .catch(e => setErr(e.message || "Could not load subscriptions."));
   }, [provided, subsData, custsData]);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Penetration Tracker" subtitle="Synchronizing subscriber and society data…" />;
 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const keyLc = (x) => String(x || "").toLowerCase().trim();
@@ -1347,7 +1347,7 @@ useEffect(() => {
     .catch(e => setErr(e.message || "Could not load billing analytics."));
 }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Billing Analytics" subtitle="Synchronizing billing and revenue records…" />;
 
   // VLOOKUP table: Zoho customer id -> { society, name, credits }. Customers
   // carry society + unused_credits; invoices/subscriptions expose customer_id
@@ -1697,7 +1697,7 @@ useEffect(() => {
         <input type="date" value={toDraft} onChange={e => setToDraft(e.target.value)}
           style={{ ...selectStyle, padding: "6px 10px" }} />
         <button onClick={() => { setRange({ from: fromDraft, to: toDraft }); setDrill(null); }}
-          style={{ ...btnPrimary, background: "linear-gradient(135deg, #08805A 0%, #065B3C 100%)", border: "none", padding: "7px 18px", fontSize: 12.5, boxShadow: "0 6px 16px rgba(8,128,90,0.25)" }}>Update</button>
+          style={{ ...btnPrimary, background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", border: "none", padding: "7px 18px", fontSize: 12.5, boxShadow: "0 6px 16px rgba(8,128,90,0.25)" }}>Update</button>
         {(range.from || range.to) && (
           <button onClick={() => { setFromDraft(""); setToDraft(""); setRange({ from: "", to: "" }); }}
             style={{ ...btnGhost, padding: "4px 12px", fontSize: 12 }}>Clear dates</button>
@@ -1715,7 +1715,7 @@ useEffect(() => {
           <div key={s.key} onClick={() => setDrill(drill === s.key ? null : s.key)}
             style={{
               cursor: "pointer",
-              background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+              background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
               backdropFilter: s.hero ? "none" : "blur(20px)",
               WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
               border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -2118,7 +2118,7 @@ export function AppLogs() {
   // Reset to page 1 whenever the filters change.
   useEffect(() => { setPage(1); }, [q, filter, range]);
   if (err) return <ApiError msg={err} />;
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading App Logs" subtitle="Synchronizing the activity audit trail…" />;
 
   // Date range scopes everything (KPIs + table) by login time.
   const inR = rangeFilter(range);
@@ -2265,7 +2265,7 @@ export function EarnedRevenue() {
       .then(([inv, subs, mods, cust]) => setData({ inv, subs, mods, cust }))
       .catch(() => setData({ inv: [], subs: [], mods: [], cust: [] }));
   }, []);
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Earned Revenue" subtitle="Synchronizing recognized revenue data…" />;
 
   const subByCustomer = {};
   data.subs.forEach(s => { [s.customerNumber, s.zohoCustomerId, s.zohoId].filter(Boolean).forEach(k => { subByCustomer[k] = s; }); });
@@ -2498,7 +2498,7 @@ export function EarnedRevenue() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -2686,7 +2686,7 @@ export function Reconciliation() {
       .then(([inv, cust]) => setData({ inv, cust }))
       .catch(() => setData({ inv: [], cust: [] }));
   }, []);
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Reconciliation" subtitle="Synchronizing payment reconciliation records…" />;
 
   const custByZoho = {};
   (data.cust || []).forEach(c => { [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber].forEach(k => { if (k) custByZoho[k] = c; }); });
@@ -3028,7 +3028,7 @@ export function DPTransactions() {
   }, []);
   useEffect(() => { setPage(1); }, [search, rowType, txnType, apt, sel]);
   if (err) return <ApiError msg={err} />;
-  if (!state) return <Loading />;
+  if (!state) return <Loading title="Loading DrinkPrime Transactions" subtitle="Synchronizing partner transaction records…" />;
 
   // Admin-only bulk import — upload a .json file, validate it client-side,
   // then POST it (as multipart/form-data, field "file") to the /add endpoint.
@@ -3326,7 +3326,7 @@ export function DPTransactions() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -3599,7 +3599,7 @@ export function AOP({ accessLevel = "view" }) {
       .then(([inv, subs, cust]) => setData({ inv, subs, cust }))
       .catch(() => setData({ inv: [], subs: [], cust: [] }));
   }, []);
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Annual Operating Plan" subtitle="Synchronizing budget and target data…" />;
 
   // Recharge cash collected per calendar month (paid invoices, recharge portion —
   // the same split Earned Revenue uses: total − real per-apartment/device deposit).
@@ -3757,7 +3757,7 @@ export function ChurnRiskRadar() {
       .catch(() => setData({ customers: [], subs: [], invs: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Churn Risk Radar" subtitle="Synchronizing subscriber churn signals…" />;
   const { customers, subs, invs } = data;
 
   const MS_DAY = 86400000;
@@ -3896,7 +3896,7 @@ export function ApartmentPerformance() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Apartment Performance" subtitle="Synchronizing society-level performance data…" />;
 
   const handleQChange = (e) => { setQ(e.target.value); setPage(1); };
   const handleModeChange = (v) => { setMode(v); setPage(1); };

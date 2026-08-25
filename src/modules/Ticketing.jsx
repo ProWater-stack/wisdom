@@ -39,7 +39,7 @@ export function TicketOverview() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState(null);
   useEffect(() => { api.logView(user.username, "Viewed Ticketing overview"); ticketApi.getTickets().then(setTickets).catch(() => setTickets([])); }, []);
-  if (!tickets) return <Loading />;
+  if (!tickets) return <Loading title="Loading Ticket Overview" subtitle="Synchronizing support ticket data…" />;
 
   const openCount = tickets.filter(t => !zdIsClosed(t.status)).length;
   const urgent = tickets.filter(t => String(t.priority).toLowerCase() === "urgent" && !zdIsClosed(t.status)).length;
@@ -76,7 +76,7 @@ export function TicketOverview() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -164,7 +164,7 @@ export function OpsKpis({ tickets }) {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 18 }}>
       {stats.map((s, i) => (
         <div key={i} style={{
-          background: s.hero ? "linear-gradient(135deg, #08805A 0%, #065B3C 100%)" : "rgba(255, 255, 255, 0.85)",
+          background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
           backdropFilter: s.hero ? "none" : "blur(20px)",
           WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
           border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -297,7 +297,7 @@ export function TicketList({ isAdmin, preFilter, extraColumns = [], hideColumns 
 
   const refresh = () => ticketApi.getTickets().then(list => setTickets(preFilter ? list.filter(preFilter) : list)).catch(() => setTickets([]));
   useEffect(() => { api.logView(user.username, "Viewed Tickets"); refresh(); }, []);
-  if (!tickets) return <Loading />;
+  if (!tickets) return <Loading title="Loading Tickets" subtitle="Synchronizing ticket records…" />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2200); };
   const move = async (id, s) => { await ticketApi.updateStatus(user.username, id, s); await refresh(); setSel(p => p ? { ...p, status: s } : p); flash("Ticket updated"); };

@@ -96,7 +96,7 @@ export function Logs() {
 
   const refresh = () => api.getLogs().then(setRows);
   useEffect(() => { refresh(); }, []);
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Logs Tracker" subtitle="Synchronizing the audit trail across modules…" />;
 
   const types = ["all", ...Array.from(new Set(rows.map(r => r.type)))];
   const filtered = rows.filter(r =>

@@ -367,7 +367,7 @@ export function AboutModule() {
               <div key={h.v} className="cl-card" style={{
                 flex: "0 0 232px", height: 196, display: "flex", flexDirection: "column",
                 scrollSnapAlign: "start", borderRadius: 14, padding: 14, position: "relative", overflow: "hidden",
-                background: latest ? "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)" : "#fff",
+                background: latest ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "#fff",
                 color: latest ? "#E2F3EE" : "inherit", border: latest ? "none" : "1px solid var(--border)", boxShadow: "var(--shadow)"
               }}>
                 {latest && <div style={{ position: "absolute", right: -18, top: -18, width: 80, height: 80, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.4),transparent 70%)" }} />}

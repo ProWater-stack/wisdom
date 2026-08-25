@@ -76,7 +76,7 @@ export function CustomerSocieties() {
     return n;
   });
   useEffect(() => { api.logView(user.username, "Viewed Societies"); Promise.all([customerApi.getCustomers(), billingApi.getInvoices().catch(() => [])]).then(([c, i]) => { setRows(c); setInvs(i || []); }).catch(() => setRows([])); }, []);
-  if (!rows) return <Loading title="Loading Societies" subtitle="Synchronizing apartment society records…" />;
+  if (!rows) return <Loading />;
 
   // Churned (v2.29.130) — either signal counts: device Un-Installed
   // (DP-stack `deviceStatus`) or status Inactive (either stack), same
@@ -198,7 +198,7 @@ export function CustomerSocieties() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #00c896 0%, #007aff 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -1180,7 +1180,7 @@ export function AllCustomers() {
                     {(dpTxns || []).length} Collections
                   </span>
                 </div>
-                {dpTxnsLoading && <Loading title="Loading Collections History" subtitle="Synchronizing DrinkPrime payment records…" showSkeleton={false} />}
+                {dpTxnsLoading && <Loading />}
                 {!dpTxnsLoading && (
                   <>
                     <Table head={["Date", "Transaction Key", "Amount", "Litres", "Valid Period", "Payment Mode", "Status"]} maxHeight="calc(100vh - 340px)">
@@ -1314,7 +1314,7 @@ export function AllCustomers() {
           <>
             {/* Hero KPI Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 14, marginBottom: 18 }}>
-              <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", borderRadius: 16, padding: 16, color: "#fff", boxShadow: "0 8px 20px rgba(8,128,90,0.25)" }}>
+              <div style={{ background: "linear-gradient(135deg, #00c896 0%, #007aff 100%)", borderRadius: 16, padding: 16, color: "#fff", boxShadow: "0 8px 20px rgba(8,128,90,0.25)" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Referrals Made</div>
                 <div className="serif" style={{ fontSize: 26, fontWeight: 700, marginTop: 4 }}>{referralsDone}</div>
               </div>
@@ -1375,7 +1375,7 @@ export function AllCustomers() {
             </div>
 
             <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden" }}>
-              {syncHistoryLoading && <Loading title="Loading Sync History" subtitle="Synchronizing IoT meter sync records…" showSkeleton={false} />}
+              {syncHistoryLoading && <Loading />}
               {!syncHistoryLoading && (
                 <>
                   <Table head={["Sync Time", "Network", "Consumed Litres", "Total Litres", "Balance Litres", "Paid Upto"]} maxHeight="calc(100vh - 340px)">
@@ -1415,7 +1415,7 @@ export function AllCustomers() {
       {/* Dynamic KPI Cards Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16, marginBottom: 16 }}>
         {/* 1. Total Societies Card with DP / Zoho split */}
-        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
+        <div style={{ background: "linear-gradient(135deg, #00c896 0%, #007aff 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Total Societies</span>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "grid", placeItems: "center" }}>
@@ -1584,7 +1584,7 @@ export function Customers({ accessLevel = "view" }) {
     billingApi.getSubscriptions().catch(() => []),
   ]).then(([custs, s]) => { setRows(custs); setSubs(s); }).catch(() => setRows([]));
   useEffect(() => { api.logView(user.username, "Viewed Customers"); refresh(); }, []);
-  if (!rows) return <Loading title="Loading Customers" subtitle="Synchronizing the customer directory…" />;
+  if (!rows) return <Loading />;
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2400); };
   const canEditAnything = ["supervisor", "admin", "devops"].includes(accessLevel);
@@ -1686,7 +1686,7 @@ export function Customers({ accessLevel = "view" }) {
 
       {/* Active-customers KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
+        <div style={{ background: "linear-gradient(135deg, #00c896 0%, #007aff 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Active Customers</span>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "grid", placeItems: "center" }}>

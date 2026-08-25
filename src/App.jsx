@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo, useRef, createContext, useContext 
 import { createPortal } from "react-dom";
 import {
   LayoutDashboard, Users, GitBranch, BarChart3, ScrollText, UserCog,
-  LogOut, Search, Plus, Eye, EyeOff, Shield, ShieldCheck, Filter,
+  LogOut, Search, Plus, Eye, EyeOff, ShieldCheck, Filter,
   TrendingUp, Award, Wallet, ChevronRight, X, CheckCircle2, Clock,
   AlertCircle, Download, Lock, ArrowUpRight, Trash2, KeyRound, Menu,
-  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical, Gauge, Waves, Upload, PlayCircle
+  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical, Gauge, Waves, Upload, PlayCircle, Monitor, PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -15,13 +15,13 @@ import {
 import { ApiUsageTracker, makeCache } from "./lib/apiUsageTracker";
 import {
   API_BASE, API_ORIGIN, API_USAGE_LIMITS, APP_VERSION, Auth, BILLING_CYCLES,
-  CACHE_MS, CUSTOMER_FIELDS, DATE_PRESETS, DEVICE_TYPE_STYLE, EMAIL_DOMAIN,
+  CACHE_MS, CUSTOMER_FIELDS, DATE_PRESETS, DEVICE_TYPE_STYLE,
   EXISTING_CREDIT, IS_LOCAL, LOGS_EPOCH, LS, MODULES, MODULE_SOURCES,
   NEW_CREDIT, PERSIST_TTL, PLANS, PRESET_UNIT, RANGE_MONTHS, SEED_CUSTOMERS,
   SESSION_IDLE_MS, TAB_SOURCES, THEMES, VERSION_DATE, ZOHO_MAX_CONCURRENT, ZOHO_MIN_GAP_MS,
   _apiCache, _apiCacheAt, _creditOverrides, _currentModule, setCurrentModule, _custCache, _customers,
   _dpCache, _emptySession, _failureListeners, _failures, _inflight,
-  _logs, _manualCredits, _memCache, _notifyFailureListeners, _otpStore, _photos,
+  _logs, _manualCredits, _memCache, _notifyFailureListeners, _photos,
   _rateLimitedUntil, _sampleListeners, _sampleSources, _session, _undoStack, _users,
   _zohoAcquire, _zohoActive, _zohoNextAt, _zohoQueue, _zohoRelease, addDays,
   allAccess, api, apiTracker, applyTheme, authHeaders, bucketKeyOf,
@@ -51,7 +51,7 @@ import {
   PIE_LABEL_OFFSET, Person, PhotoUploader, SortHeader, Stat, Status,
   TT, Table, Toolbar, WowMomTT, axisTick, btnGhost,
   btnPrimary, ftd, grid4, iconBtn, inp, overlay,
-  pieLabelLine, renderPieLabel, selectStyle, td, toastStyle, trStyle, GsTextCell, MODULE_ICONS
+  pieLabelLine, renderPieLabel, selectStyle, td, toastStyle, trStyle, GsTextCell, MODULE_ICONS, ProWaterLogo
 } from "./shared/ui";
 import { AssetLifecycle } from "./modules/ERP";
 import { UsersAdmin } from "./modules/Employee";
@@ -101,12 +101,12 @@ const TOKENS = `
     --brand:#0A9D6E;        /* brand green — primary actions, positive series */
     --green:#08805A;        /* green · text — success text, strong accents      */
     --deep:#0B6F52;         /* deep green — dark accents, second green series   */
-    --mint:#EEF7F3;         /* mint — app background                            */
+    --mint:#F7F5EF;         /* warm sand — app background (#F7F5EF)            */
     --f:#0A1A12;            /* ink · text — headings                            */
     --slate:#0A1A12;        /* ink · text — body                                */
-    --muted:#7D8A83;        /* muted text — labels / captions                   */
-    --faint:#A9B3AC;        /* faint text — disabled / placeholder              */
-    --border:#ECEEED;       /* hairline                                         */
+    --muted:#8A8375;        /* muted text — labels / captions (warm-neutral)    */
+    --faint:#B3AC9C;        /* faint text — disabled / placeholder (warm-neutral)*/
+    --border:#ECE6D8;       /* hairline — warm-tinted                           */
     --white:#FFFFFF;        /* surface                                          */
     --amber:#986315;        /* amber · warn — the brand amber (#E0921F) darkened
                                to the same hue/sat until it passes AA as text     */
@@ -114,7 +114,7 @@ const TOKENS = `
     --blue:#2A86D6;         /* blue · progress                                  */
 
     /* derived — washes for status rows/badges and their borders */
-    --mint-2:#E2F0EA;
+    --mint-2:#EFE9DC;
     --green-t:#E2F3EE; --amber-t:#FBF0E0; --danger-t:#FBE8E8; --blue-t:#E5F0FA;
     --green-b:#B5E2D4; --amber-b:#F6DEBC; --danger-b:#F5BFBF;
 
@@ -128,20 +128,22 @@ const TOKENS = `
     --teal:var(--brand); --teal-d:var(--green);
     --lime:var(--brand); --lime-d:var(--green);
 
-    --grad:linear-gradient(135deg,#0A9D6E 0%, #0B6F52 140%);
-    --grad-btn:linear-gradient(120deg,#0A9D6E 0%, #08805A 130%);
+    --grad:linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%);
+    --grad-btn:linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%);
     --shadow:0 1px 2px rgba(10,26,18,.04), 0 8px 24px -12px rgba(10,26,18,.16);
     --shadow-lg:0 24px 60px -20px rgba(10,26,18,.28);
     --radius:16px;
+    --pw-topbar-bg:rgba(247,245,239,.95);
   }
-  /* ---- Dark theme (neutral black; keeps the green accent) ---- */
-  :root[data-theme="dark"]{
-    --mint:#0c0d0f; --mint-2:#191b1f;
-    --f:#eaeef2; --slate:#dfe4ea; --muted:#8b95a1; --faint:#5f6874;
-    --border:#262a31; --white:#15171b;
-    --green-t:#14231b; --amber-t:#2a2213; --danger-t:#2a1616; --blue-t:#132231;
-    --shell:#0e0f12; --shell-2:#181a1e; --shell-0:#060607;
-    --forest:#0e0f12; --forest-2:#181a1e;
+  /* ---- Dark theme (rich executive dark mode; matching Home & Modules) ---- */
+  :root[data-theme="dark"], html[data-theme="dark"], body[data-theme="dark"]{
+    --mint:#161310; --mint-2:#211c16;
+    --f:#f8f6f1; --slate:#e8e2d6; --muted:#a89f8d; --faint:#6e675a;
+    --border:rgba(255,255,255,0.12); --white:#1e1913;
+    --green-t:#1a2620; --amber-t:#2c2214; --danger-t:#2c1616; --blue-t:#13263a;
+    --shell:#161310; --shell-2:#211c16; --shell-0:#0d0b08;
+    --forest:#161310; --forest-2:#211c16;
+    --pw-topbar-bg:rgba(22,19,16,0.85);
   }
   /* ---- Aesthetic theme (violet accent on white; no green) ---- */
   :root[data-theme="aesthetic"]{
@@ -153,11 +155,203 @@ const TOKENS = `
     --grad-btn:linear-gradient(120deg,#6D5EF0 0%,#5A49E0 130%);
     --shell:#241F45; --shell-2:#332A63; --shell-0:#171334;
     --forest:#241F45; --forest-2:#332A63;
+    --pw-topbar-bg:rgba(246,245,252,0.92);
   }
   *{box-sizing:border-box}
   html,body,#root{margin:0;padding:0;width:100%;min-height:100vh}
-  body{margin:0;padding:0;background:var(--shell-0)}
-#root{margin:0;padding:0;background:var(--shell-0);min-height:100vh;width:100%}
+  body{margin:0;padding:0;background:var(--mint);color:var(--slate)}
+  #root{margin:0;padding:0;background:var(--mint);min-height:100vh;width:100%}
+
+  /* Global Dark Mode Contrast, Card Backgrounds & Typography */
+  html[data-theme="dark"] body,
+  html[data-theme="dark"] #root,
+  html[data-theme="dark"] .pw-root,
+  html[data-theme="dark"] .premium-home,
+  html[data-theme="dark"] .shell-grid,
+  html[data-theme="dark"] main {
+    background-color: #161310 !important;
+    color: #f8f6f1;
+  }
+
+  /* Dark mode card container surfaces (prevents white cards from blinding in dark mode) */
+  html[data-theme="dark"] .pw-card,
+  html[data-theme="dark"] .premium-module,
+  html[data-theme="dark"] .premium-section,
+  html[data-theme="dark"] [style*="background: #fff"],
+  html[data-theme="dark"] [style*="background: white"],
+  html[data-theme="dark"] [style*="background:#fff"],
+  html[data-theme="dark"] [style*="background: #ffffff"],
+  html[data-theme="dark"] [style*="background: rgba(255, 255, 255"],
+  html[data-theme="dark"] [style*="background: rgba(255,255,255"],
+  html[data-theme="dark"] [style*="background: #f8fbf9"],
+  html[data-theme="dark"] [style*="background: #eef4f0"],
+  html[data-theme="dark"] [style*="background: #F6FAF8"],
+  html[data-theme="dark"] [style*="background: #f0f7f4"],
+  html[data-theme="dark"] [style*="rgb(255, 255, 255)"],
+  html[data-theme="dark"] [style*="rgb(248, 252, 250)"],
+  html[data-theme="dark"] [style*="linear-gradient(rgb(255, 255, 255)"],
+  html[data-theme="dark"] [style*="linear-gradient(180deg,#fff"] {
+    background: #1e1913 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    color: #f8f6f1 !important;
+  }
+
+  html[data-theme="dark"] .pw-topbar {
+    background-color: rgba(22, 19, 16, 0.85) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  }
+  html[data-theme="dark"] h1,
+  html[data-theme="dark"] h2,
+  html[data-theme="dark"] h3,
+  html[data-theme="dark"] h4,
+  html[data-theme="dark"] .serif,
+  html[data-theme="dark"] .premium-topbar-title,
+  html[data-theme="dark"] .premium-greeting {
+    color: #f8f6f1 !important;
+  }
+  html[data-theme="dark"] p:not([class*="tag"]):not([class*="pill"]):not([class*="badge"]),
+  html[data-theme="dark"] label:not([class*="tag"]):not([class*="pill"]):not([class*="badge"]) {
+    color: #e8e2d6;
+  }
+  html[data-theme="dark"] .eyebrow {
+    color: #a89f8d !important;
+  }
+
+  /* Table styling in dark mode */
+  html[data-theme="dark"] table {
+    background-color: #1e1913 !important;
+    color: #f8f6f1 !important;
+  }
+  html[data-theme="dark"] th,
+  html[data-theme="dark"] td {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #f8f6f1 !important;
+  }
+  html[data-theme="dark"] tr {
+    background-color: transparent !important;
+  }
+  html[data-theme="dark"] tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  html[data-theme="dark"] thead th {
+    background-color: #2a2318 !important;
+    color: #d6cfc0 !important;
+  }
+  html[data-theme="dark"] input,
+  html[data-theme="dark"] select,
+  html[data-theme="dark"] textarea {
+    background-color: #241f17 !important;
+    color: #f8f6f1 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+  }
+
+  /* High-Contrast Recharts, SVG Graphs & Data Labels in Dark Mode */
+  html[data-theme="dark"] .recharts-cartesian-axis-tick text,
+  html[data-theme="dark"] .recharts-text,
+  html[data-theme="dark"] .recharts-legend-item-text,
+  html[data-theme="dark"] svg text {
+    fill: #e8e2d6 !important;
+    color: #e8e2d6 !important;
+    font-weight: 600 !important;
+    font-size: 11px;
+  }
+  html[data-theme="dark"] .recharts-label,
+  html[data-theme="dark"] text[class*="recharts-line-dot"],
+  html[data-theme="dark"] text.recharts-label {
+    fill: #ffffff !important;
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+  html[data-theme="dark"] .recharts-cartesian-grid line {
+    stroke: rgba(255, 255, 255, 0.1) !important;
+  }
+  html[data-theme="dark"] .recharts-default-tooltip {
+    background-color: #2a2318 !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  /* Floating Frosted Glass Sidebar v3 (available globally in Home and Shell) */
+  .pw-sidebar-v3{width:280px;height:96vh;margin:2vh 0 0 16px;position:sticky;top:2vh;display:flex;flex-direction:column;padding:16px 12px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,"Plus Jakarta Sans","SF Pro Display",sans-serif;box-sizing:border-box;transition:background .3s ease,border-color .3s ease,box-shadow .3s ease;z-index:40}
+  .pw-sidebar-v3[data-theme="dark"]{--pw-bg-surface:rgba(43,31,22,.92);--pw-border:rgba(255,255,255,.08);--pw-hover-bg:rgba(255,255,255,.09);--pw-card-bg:rgba(255,255,255,.04);--pw-text-main:#f1f5f9;--pw-text-muted:#a89f8d;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#0A9D6E 0%,#E8A93A 100%);--pw-accent-glow:rgba(10, 157, 110,.35);--pw-shadow:0 20px 50px rgba(0,0,0,.4);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.1);--pw-badge-bg:rgba(245,158,11,.15);--pw-badge-text:#fbbf24;--pw-badge-border:rgba(245,158,11,.25)}
+  .pw-sidebar-v3[data-theme="light"]{--pw-bg-surface:rgba(247,245,239,.85);--pw-border:rgba(255,255,255,.8);--pw-hover-bg:rgba(255,255,255,.6);--pw-card-bg:rgba(255,255,255,.5);--pw-text-main:#1e293b;--pw-text-muted:#8a8375;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#0A9D6E 0%,#E8A93A 100%);--pw-accent-glow:rgba(10, 157, 110,.25);--pw-shadow:0 20px 40px rgba(0,0,0,.06);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.9);--pw-badge-bg:rgba(217,119,6,.12);--pw-badge-text:#d97706;--pw-badge-border:rgba(217,119,6,.2)}
+  .pw-sidebar-v3{background:var(--pw-bg-surface);backdrop-filter:blur(24px) saturate(200%);-webkit-backdrop-filter:blur(24px) saturate(200%);border:1px solid var(--pw-border);box-shadow:var(--pw-shadow),var(--pw-inset-shadow);color:var(--pw-text-main)}
+  .pw-brand-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 18px;border-bottom:1px solid var(--pw-border);margin-bottom:12px}
+  .pw-brand-content{display:flex;align-items:center;gap:12px}
+  .pw-brand-logo{width:36px;height:36px;border-radius:10px;background:var(--pw-accent-gradient);display:grid;place-items:center;box-shadow:0 0 20px var(--pw-accent-glow);flex:0 0 auto}
+  .pw-brand-title{font-size:15px;font-weight:700;color:var(--pw-text-main)}
+  .pw-version-pill{font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;background:var(--pw-badge-bg);color:var(--pw-badge-text);border:1px solid var(--pw-badge-border)}
+  .pw-theme-switcher{display:flex;background:var(--pw-card-bg);border:1px solid var(--pw-border);border-radius:12px;padding:3px;margin-bottom:12px;gap:2px}
+  .pw-theme-btn{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 0;border:none;background:transparent;color:var(--pw-text-muted);font-size:11px;font-weight:600;border-radius:8px;cursor:pointer;transition:all .2s ease}
+  .pw-theme-btn:hover{color:var(--pw-text-main)}
+  .pw-theme-btn.active{background:var(--pw-hover-bg);color:var(--pw-text-main);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+  .pw-category-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--pw-text-muted);padding:10px 10px 4px}
+  .pw-nav-container{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:3px;scrollbar-width:none;-ms-overflow-style:none;min-height:0}
+  .pw-nav-container::-webkit-scrollbar{display:none;width:0;height:0}
+  .pw-item{width:100%;display:flex;align-items:center;gap:12px;padding:10px 12px;border:none;background:transparent;border-radius:10px;color:var(--pw-text-muted);font-size:13px;font-weight:500;text-align:left;cursor:pointer;transition:all .2s ease;transform-origin:left center}
+  .pw-item:hover{background:var(--pw-hover-bg);color:var(--pw-text-main);transform:translateX(2px) scale(1.04)}
+  .pw-item.active:hover{transform:translateX(2px) scale(1.02)}
+  .pw-item.active{background:var(--pw-accent-gradient);color:var(--pw-text-active);font-weight:600;box-shadow:0 8px 20px var(--pw-accent-glow)}
+  .pw-user-card{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#2B1F16;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);transition:all .25s ease;overflow:hidden}
+  .pw-user-card:hover{border-color:rgba(66,154,56,.4);box-shadow:0 6px 24px rgba(43,31,22,.4)}
+  .pw-avatar-wrap{position:relative;display:flex;flex:0 0 auto}
+  .pw-avatar{width:38px;height:38px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1B633C,#429A38);display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff;border:none;cursor:pointer;flex:0 0 auto;box-shadow:inset 0 1px 1px rgba(255,255,255,.3);transition:transform .2s ease}
+  .pw-avatar:hover{transform:scale(1.06)}
+  .pw-status-dot{position:absolute;bottom:-2px;right:-2px;width:10px;height:10px;background:#8DC63F;border:2px solid #2B1F16;border-radius:50%}
+  .pw-user-info{flex:1;display:flex;flex-direction:column;gap:2px;overflow:hidden;min-width:0}
+  .pw-name-badge{display:flex;align-items:center;gap:6px}
+  .pw-name{font-size:13px;font-weight:700;color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pw-tag{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:1px 5px;background:rgba(141,198,63,.15);color:#8DC63F;border-radius:4px;border:1px solid rgba(141,198,63,.3);font-family:ui-monospace,monospace;flex:0 0 auto}
+  .pw-role{font-size:11px;color:rgba(232,245,233,.6);text-transform:capitalize}
+  .pw-action-btn{background:rgba(255,92,92,.1);border:1px solid rgba(255,92,92,.2);color:#ff8080;cursor:pointer;width:32px;height:32px;padding:0;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;transition:all .2s ease}
+  .pw-action-btn:hover{color:#ffffff;background:#ff5c5c;border-color:#ff5c5c}
+  /* Topbar header row (greeting + session timer + avatar + logout) — used by
+     both Home's greeting row and Shell's topbar cluster, on the light main
+     canvas (so a lighter palette than the dark sidebar's pw-avatar/pw-tag). */
+  .pw-top-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .pw-greeting{margin:0;font-size:24px;font-weight:800;color:#1A2E26;letter-spacing:-.02em}
+  .pw-header-actions{display:flex;align-items:center;gap:10px}
+  .pw-session-badge{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;background:#EAF4EE;border:1px solid #D6E8DC;color:#27543E;font-weight:600;font-size:12.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  /* Solid brand gradient + white text (not the earlier pale mint-on-cream)
+     so this reads as a clear button against the light topbar/canvas instead
+     of nearly disappearing into it. */
+  .pw-avatar-btn{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#0A9D6E,#E8A93A);color:#ffffff;border:none;font-size:12px;font-weight:700;display:grid;place-items:center;cursor:pointer;padding:0;overflow:hidden;box-shadow:0 2px 6px rgba(10,157,110,.3)}
+  .pw-camera-dot{position:absolute;bottom:-2px;right:-2px;width:15px;height:15px;border-radius:50%;background:linear-gradient(135deg,#387B5E,#D4A93E);border:2px solid #fff;color:#fff;display:grid;place-items:center;cursor:pointer}
+  /* Logout button — used by both Home's greeting row and Shell's topbar. */
+  .pw-logout-btn{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;background:transparent;border:1px solid transparent;color:#D9534F;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s ease}
+  .pw-logout-btn:hover{background:rgba(217,83,79,.08);border-color:rgba(217,83,79,.2)}
+  /* Collapse/expand toggle + collapsed state — moved here from Home's own
+     local <style> block (v2.29.219) since it was only ever mounted while
+     Home was on screen, so the identical .pw-sidebar-v3.collapsed class
+     toggled by Shell (module views) had no matching rule and did nothing —
+     that's why "Hide/Show Sidebar" silently failed inside every module.
+     .pw-sidebar-toggle-btn was missing from here for the same reason, so
+     that button also rendered as a bare unstyled default <button> in Shell.
+
+     v2.29.220: "collapsed" is a narrow ICON RAIL, not width:0/opacity:0 —
+     per explicit correction ("i should be able to see the icon on the left
+     side when it hides i should be able to expand it... at the same time i
+     should be able to unhide it also"). The old width:0 + pointer-events:
+     none + opacity:0 treatment threw away JSX that was already built for
+     exactly this icon-only mode (labels hidden, hover tooltips added via
+     title= on every nav button when collapsed) — it just made the whole
+     thing, toggle button included, invisible and unclickable, leaving only
+     the separate topbar button as a way back in. Now the rail itself stays
+     visible/interactive so its own toggle button works too — both ways to
+     expand it (the rail's own button and the topbar's) call the same
+     toggleSidebarCollapsed, so either one un-hides it. */
+  .pw-sidebar-toggle-btn{width:26px;height:26px;border-radius:8px;background:var(--pw-card-bg);border:1px solid var(--pw-border);color:var(--pw-text-muted);display:grid;place-items:center;cursor:pointer;transition:all .2s ease;flex:0 0 auto}
+  .pw-sidebar-toggle-btn:hover{color:var(--pw-text-main);background:var(--pw-hover-bg);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+  .pw-sidebar-v3.collapsed{width:72px!important;min-width:72px!important;padding:16px 10px!important;align-items:center}
+  .pw-sidebar-v3.collapsed .pw-brand-header{flex-direction:column;gap:10px;padding:0 0 14px;justify-content:center;border-bottom:1px solid var(--pw-border);width:100%}
+  .pw-sidebar-v3.collapsed .pw-brand-content{flex-direction:column;gap:8px}
+  .pw-sidebar-v3.collapsed .pw-nav-container{width:100%;align-items:center}
+  .pw-sidebar-v3.collapsed .pw-item{justify-content:center;padding:10px 0;width:44px}
+  .pw-sidebar-v3.collapsed .pw-category-title{display:none}
+  .pw-sidebar-v3.collapsed .pw-user-card{flex-direction:column;padding:10px 4px;gap:8px;width:100%}
 
   .pw-root{font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:var(--slate);
     background:var(--mint);min-height:100vh;width:100%;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;letter-spacing:-.003em}
@@ -410,7 +604,54 @@ function sectionOverride(user, moduleId, tabId) {
 // colours; violet aesthetic was disliked). Light only until a proper themeable
 // refactor is agreed. The dormant theme CSS stays but never matches.
 
-export default function App() {
+
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false }; }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  componentDidCatch(error, info) { console.error("ErrorBoundary caught error:", error, info); }
+  resetSession = () => {
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem("pw_recent_modules");
+      localStorage.removeItem("pw_sidebar_theme");
+    } catch {}
+    window.location.href = window.location.origin + window.location.pathname;
+  };
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8faf9", fontFamily: "system-ui, sans-serif", padding: 20 }}>
+          <div style={{ maxWidth: 460, width: "100%", background: "#ffffff", padding: 36, borderRadius: 24, boxShadow: "0 20px 50px rgba(0,0,0,0.08)", border: "1px solid rgba(0,0,0,0.06)", textAlign: "center" }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(10, 157, 110,0.1)", color: "#0A9D6E", display: "grid", placeItems: "center", margin: "0 auto 18px" }}>
+              <RefreshCw size={28} />
+            </div>
+            <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1D1D1F", margin: "0 0 8px" }}>Workspace Auto-Recovery</h2>
+            <p style={{ fontSize: 13.5, color: "#86868B", lineHeight: 1.5, margin: "0 0 24px" }}>
+              Your session state has been updated. Click below to launch your ProWater workspace.
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+              <button onClick={this.resetSession} style={{ padding: "12px 24px", borderRadius: 14, background: "linear-gradient(135deg, #0A9D6E, #E8A93A)", border: "none", fontSize: 14, fontWeight: 700, color: "#ffffff", cursor: "pointer", boxShadow: "0 8px 22px rgba(10, 157, 110,0.3)" }}>
+                Launch ProWater Workspace ↗
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function AppWrapper() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+function App() {
   const [user, setUser] = useState(() => {
     try {
       const expiry = Number(sessionStorage.getItem("pw_tokenExpiry"));
@@ -506,10 +747,22 @@ export default function App() {
     api.ensureSession();
   }, [user]);
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("pw_sidebar_collapsed") === "true"; }
+    catch { return false; }
+  });
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem("pw_sidebar_collapsed", String(next)); } catch {}
+      return next;
+    });
+  };
+
   return (
     <div className="pw-root">
       <style>{TOKENS}</style>
-      <Auth.Provider value={{ user, setUser: onSetUser, activeModule, setActiveModule: onSetActiveModule }}>
+      <Auth.Provider value={{ user, setUser: onSetUser, activeModule, setActiveModule: onSetActiveModule, sidebarCollapsed, setSidebarCollapsed, toggleSidebarCollapsed }}>
         {sessionWarning && user && (
           <div style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
@@ -540,23 +793,37 @@ export default function App() {
 /* ---------- Home (module launcher) ---------- */
 
 function Home({ onPick }) {
-  const { user, setUser } = useAuth();
+  const { user, setUser, sidebarCollapsed, toggleSidebarCollapsed } = useAuth();
+  if (!user) return null;
   const access = user.access || (user.role === "admin" ? allAccess("admin") : { referral: "view", analytics: "view" });
   const visible = MODULES.filter(m => (access[m.id] || "none") !== "none");
   const [query, setQuery] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
   const [now, setNow] = useState(new Date());
-  const [photo, setPhoto] = useState(() => api.getPhoto(user.username));
+  const [loginAt] = useState(() => Date.now());        // session start for the timer
+  const [elapsed, setElapsed] = useState(0);            // seconds since login
+  const [photo, setPhoto] = useState(() => user ? api.getPhoto(user.username) : "");
   const [photoOpen, setPhotoOpen] = useState(false);
   const [recentIds, setRecentIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem("pw_recent_modules") || "[]"); }
     catch { return []; }
   });
+  // Sidebar is a fixed dark rail (SaaS convention: dark nav + light canvas) —
+  // the old light/dark/system toggle (v2.29.183) was already removed from the
+  // UI in v2.29.217, and its leftover state kept re-flipping the GLOBAL
+  // `data-theme` attribute to dark on every load (defaulted to "dark"), which
+  // fought the app's deliberate light-only theme (`THEMES=["light"]` in
+  // `shared/core.js`) and was the actual cause of the sidebar/app randomly
+  // rendering dark — not a real toggle, since nothing could set it back.
+  const sidebarEffectiveTheme = "dark";
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60 * 1000);
+    const timer = setInterval(() => {
+      setNow(new Date());
+      setElapsed(Math.floor((Date.now() - loginAt) / 1000));
+    }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [loginAt]);
 
   const openModule = (moduleItem) => {
     const next = [moduleItem.id, ...recentIds.filter(id => id !== moduleItem.id)].slice(0, 4);
@@ -566,282 +833,230 @@ function Home({ onPick }) {
   };
 
   const filtered = visible.filter(m => `${m.label} ${m.desc}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const recentModules = recentIds.map(id => visible.find(m => m.id === id)).filter(Boolean);
-  const elevatedCount = visible.filter(m => ["admin", "devops"].includes(access[m.id])).length;
-  const readyCount = visible.filter(m => m.built && !m.soon).length;
   const firstName = String(user.name || user.username || "there").split(" ")[0];
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const dateLabel = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const initials = String(user.name || user.username || "PW").split(" ").map(s => s[0]).slice(0, 2).join("").toUpperCase();
-  const primaryModule = recentModules[0] || visible[0];
+  const initials = String(user.name || user.username || "P").trim().charAt(0).toUpperCase();
+  const fmtElapsed = (s) => {
+    const h = String(Math.floor(s / 3600)).padStart(2, "0");
+    const m = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    const sec = String(s % 60).padStart(2, "0");
+    return `${h}:${m}:${sec}`;
+  };
 
   return (
-    <div className="premium-home">
+    <div className="premium-home" style={{ gridTemplateColumns: sidebarCollapsed ? "72px minmax(0, 1fr)" : "290px minmax(0, 1fr)", transition: "grid-template-columns .25s ease" }}>
       <style>{`
-        .premium-home{min-height:100vh;background:#f3f7f5;display:grid;grid-template-columns:272px minmax(0,1fr);color:var(--f)}
-        .premium-sidebar{position:sticky;top:0;height:100vh;padding:24px 16px 18px;background:
-          radial-gradient(circle at 18% 0%,rgba(10,157,110,.20),transparent 28%),
-          linear-gradient(180deg,#07150e 0%,#0a1a12 55%,#0d2418 100%);display:flex;flex-direction:column;overflow:hidden;z-index:40}
-        .premium-brand{display:flex;align-items:center;gap:12px;padding:0 8px 22px;border-bottom:1px solid rgba(255,255,255,.08)}
-        .premium-brand-mark{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(145deg,#16b985,#087451);box-shadow:0 12px 28px -12px rgba(10,157,110,.9)}
-        .premium-side-label{padding:22px 12px 8px;color:#71857a;font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase}
-        .premium-modules-scroll{scrollbar-width:none;-ms-overflow-style:none}
-        .premium-modules-scroll::-webkit-scrollbar{display:none;width:0;height:0}
-        .premium-side-item{width:100%;display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:12px;color:#b8c9c0;font-size:13.5px;font-weight:550;text-align:left;transition:background .16s ease,color .16s ease,transform .16s ease}
-        .premium-side-item:hover{background:rgba(255,255,255,.07);color:#fff;transform:translateX(2px)}
-        .premium-side-item.active{background:linear-gradient(135deg,rgba(10,157,110,.24),rgba(10,157,110,.10));color:#fff;border:1px solid rgba(42,210,158,.18);box-shadow:inset 0 1px rgba(255,255,255,.04)}
-        .premium-side-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:rgba(255,255,255,.055);flex:0 0 auto}
-        .premium-profile{margin-top:auto;padding:14px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);border-radius:16px}
-        .premium-avatar{width:40px;height:40px;border-radius:12px;overflow:hidden;display:grid;place-items:center;background:linear-gradient(145deg,#1bb987,#087753);color:#fff;font-size:13px;font-weight:800;box-shadow:0 8px 18px -10px #000}
-        .premium-main{min-width:0;display:flex;flex-direction:column}
-        .premium-topbar{height:76px;padding:0 32px;display:flex;align-items:center;gap:16px;background:rgba(255,255,255,.84);border-bottom:1px solid rgba(10,26,18,.07);backdrop-filter:blur(18px);position:sticky;top:0;z-index:30}
-        .premium-content{padding:28px 32px 38px;max-width:1600px;width:100%;margin:0 auto}
-        .premium-hero{position:relative;padding:11px 20px;border-radius:16px;margin-bottom:20px;max-width:calc(100% - 340px);overflow:hidden;background:
-          radial-gradient(circle at 85% 5%,rgba(72,227,174,.23),transparent 30%),
-          radial-gradient(circle at 62% 120%,rgba(42,134,214,.20),transparent 34%),
-          linear-gradient(135deg,#07160f 0%,#0d2b1e 55%,#0b4c37 100%);box-shadow:0 28px 60px -32px rgba(4,28,18,.65);color:#fff;display:block}
-        .premium-hero:after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(to left,#000,transparent 75%);pointer-events:none}
-        .premium-hero-copy,.premium-hero-panel{position:relative;z-index:1}
-        .premium-hero h1{font-family:'DM Sans',system-ui,sans-serif!important;color:#fff!important;font-size:clamp(17px,2vw,22px);letter-spacing:-.03em;line-height:1.1;margin:4px 0 4px;max-width:760px}
-        .premium-hero p{max-width:680px;color:#b9cbc2;font-size:11.8px;line-height:1.45}
-        .premium-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;background:rgba(30,206,147,.12);border:1px solid rgba(63,223,169,.18);color:#75e3bd;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
-        .premium-hero-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:18px}
-        .premium-cta{display:inline-flex;align-items:center;gap:8px;padding:12px 17px;border-radius:12px;background:#fff;color:#0a1a12;font-size:13.5px;font-weight:750;box-shadow:0 10px 24px -14px #000}
-        .premium-cta.secondary{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);color:#dceae3;box-shadow:none}
-        .premium-hero-panel{padding:20px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.065);backdrop-filter:blur(14px);border-radius:18px;box-shadow:inset 0 1px rgba(255,255,255,.06)}
-        .premium-progress{height:7px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden;margin-top:11px}
-        .premium-progress span{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,#13b880,#5cddb6);box-shadow:0 0 16px rgba(69,221,170,.45)}
-        .premium-stats{display:grid;grid-template-columns:1fr;gap:12px}
-        .premium-stat{background:#fff;border:1px solid rgba(10,26,18,.07);border-radius:17px;padding:17px 18px;box-shadow:0 10px 30px -24px rgba(8,37,24,.55);display:flex;align-items:center;gap:13px;transition:transform .16s ease,box-shadow .18s ease,border-color .16s ease}
-        .premium-stat:hover{transform:translateY(-3px) scale(1.02);border-color:var(--lime-d);box-shadow:0 20px 38px -22px rgba(5,48,30,.5)}
-        .premium-stat-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:#edf7f3;color:#07815b;flex:0 0 auto}
-        .premium-stat-value{font-size:22px;font-weight:800;letter-spacing:-.035em;line-height:1;color:#0a1a12}
-        .premium-stat-label{font-size:11.5px;color:#7d8a83;margin-top:5px}
-        .premium-dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
-        .premium-section{background:#fff;border:1px solid rgba(10,26,18,.07);border-radius:20px;padding:20px;box-shadow:0 18px 44px -34px rgba(8,37,24,.55)}
-        .premium-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:17px}
-        .premium-section-title{font-family:'DM Sans',system-ui,sans-serif!important;font-size:18px!important;font-weight:800!important;letter-spacing:-.025em!important}
-        .premium-search{position:relative;min-width:250px}
-        .premium-search input{width:100%;height:40px;padding:0 13px 0 38px;border:1px solid #e3e9e6;border-radius:11px;background:#f8faf9;color:#0a1a12;font-size:13px;outline:none}
-        .premium-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-        .premium-module{position:relative;min-height:138px;padding:13px;border:1px solid #e9eeeb;border-radius:14px;background:linear-gradient(180deg,#fff 0%,#fbfcfb 100%);text-align:left;display:flex;flex-direction:column;overflow:hidden;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
-        .premium-module:before{content:"";position:absolute;width:78px;height:78px;border-radius:50%;right:-36px;top:-36px;background:var(--module-color);opacity:.075;transition:transform .2s ease,opacity .2s ease}
-        .premium-module:hover{transform:translateY(-4px) scale(1.02);border-color:var(--module-color);box-shadow:0 22px 40px -22px rgba(5,48,30,.6)}
-        .premium-module:hover:before{transform:scale(1.4);opacity:.18}
-        .premium-module-icon{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,var(--module-color) 11%,white);color:var(--module-color);margin-bottom:10px}
-        .premium-module-name{font-size:13.5px;font-weight:800;letter-spacing:-.015em;color:#0a1a12;line-height:1.25;padding-right:22px}
-        .premium-module-desc{font-size:11.3px;color:#7d8a83;line-height:1.4;margin-top:5px}
-        .premium-module-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:auto;padding-top:11px}
-        .premium-access{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#78877f}
-        .premium-module-chev{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:#f1f5f3;color:#577166}
-        .premium-greeting{font-family:'DM Sans',system-ui,sans-serif!important;font-size:23px!important;font-weight:800!important;letter-spacing:-.025em;color:var(--f);margin:0 0 18px}
-        .premium-group{margin-bottom:20px}
+        .premium-home{min-height:100vh;background:linear-gradient(135deg,#FBFAF7 0%,#F7F5EF 55%,#F3F0E8 100%);display:grid;grid-template-columns:290px minmax(0,1fr);color:var(--f);position:relative;overflow:hidden}
+        .pw-app-glow{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;animation:pw-app-float 14s ease-in-out infinite alternate}
+        .pw-app-glow.green{width:500px;height:500px;background:#0A9D6E;top:-120px;right:-80px;opacity:.10}
+        .pw-app-glow.blue{width:460px;height:460px;background:#E8A93A;bottom:-140px;left:20%;opacity:.08;animation-delay:4s}
+        .pw-app-glow.mint{width:400px;height:400px;background:#E8A93A;top:45%;right:15%;opacity:.07;animation-delay:8s}
+        @keyframes pw-app-float{0%{transform:translateY(0) scale(1)}50%{transform:translateY(45px) scale(1.08)}100%{transform:translateY(-25px) scale(.95)}}
+
+        /* The sidebar (pw-sidebar-v3 and every pw-brand, pw-item and pw-user
+           class it contains) used to have its OWN copy here, sized slightly
+           smaller than the shared global TOKENS stylesheet Shell relies on —
+           that's why the sidebar looked a different size on Home vs. inside
+           a module. Removed entirely so Home renders from the same single
+           global definition as Shell (see the "Floating Frosted Glass
+           Sidebar v3" block near the top of TOKENS) — one source of truth,
+           identical size everywhere. pw-home-logout-btn moved there too. */
+
+        .premium-main{min-width:0;display:flex;flex-direction:column;position:relative;z-index:10}
+        .premium-content{padding:18px 32px 26px;max-width:1550px;width:100%;margin:0 auto;position:relative;z-index:10}
+        .premium-section{background:rgba(255,255,255,.72)!important;backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.85)!important;border-radius:22px!important;padding:22px 24px!important;box-shadow:0 20px 50px rgba(10,26,18,.06),inset 0 1px 0 rgba(255,255,255,.9)!important;position:relative;z-index:10}
+        .premium-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+        @media(min-width:1550px){.premium-module-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+        .premium-module{position:relative;min-height:86px!important;padding:13px 15px!important;border:1px solid rgba(255,255,255,.85)!important;border-radius:16px!important;background:rgba(255,255,255,.78)!important;backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);box-shadow:0 7px 20px rgba(10,26,18,.04),inset 0 1px 0 #ffffff!important;text-align:left;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transition:all .2s cubic-bezier(.16,1,.3,1)}
+        .premium-module:before{content:"";position:absolute;width:80px;height:80px;border-radius:50%;right:-34px;top:-34px;background:var(--module-color);opacity:.09;transition:transform .2s ease}
+        .premium-module:hover{transform:translateY(-3px) scale(1.018);border-color:var(--module-color)!important;box-shadow:0 18px 38px rgba(10, 157, 110,.2),inset 0 1px 0 #ffffff!important;background:rgba(255,255,255,.95)!important}
+        .premium-module:hover:before{transform:scale(1.4);opacity:.22}
+        .premium-module-icon{width:37px;height:37px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--module-color) 14%,white);color:var(--module-color);flex:0 0 auto}
+        .premium-module-name{font-size:14px;font-weight:800;letter-spacing:-.015em;color:#0a1a12;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .premium-module-desc{font-size:11.5px;color:#64748b;line-height:1.3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .premium-module-chev{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:rgba(10, 157, 110,.08);color:var(--brand);flex:0 0 auto;transition:all .2s ease}
+        .premium-module:hover .premium-module-chev{background:var(--brand);color:#fff;transform:translateX(3px)}
+        .premium-greeting{font-family:'DM Sans',system-ui,sans-serif!important;font-size:23px!important;font-weight:800!important;letter-spacing:-.025em;color:var(--f);margin:0 0 14px!important;display:flex;align-items:center;justify-content:space-between}
+        .premium-group{margin-bottom:16px}
         .premium-group:last-child{margin-bottom:0}
-        .premium-group-title{font-size:13px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--brand);margin:0 0 13px;padding:9px 15px;border-radius:10px;background:linear-gradient(90deg,color-mix(in srgb,var(--brand) 22%,transparent) 0%,color-mix(in srgb,var(--brand) 6%,transparent) 45%,transparent 82%)}
-        .premium-side-stack{display:flex;flex-direction:column;gap:14px}
-        /* theme picker (top-right of the topbar) */
-        .premium-theme-picker{display:inline-flex;gap:2px;padding:3px;border-radius:11px;background:var(--mint-2);border:1px solid var(--border)}
-        .premium-theme-btn{width:30px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
-        .premium-theme-btn:hover{color:var(--f)}
-        .premium-theme-btn.active{background:var(--white);color:var(--brand);box-shadow:0 2px 6px -3px rgba(0,0,0,.35)}
+        .premium-group-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin:0 0 9px;padding:4px 11px;border-radius:7px;background:linear-gradient(90deg,rgba(10, 157, 110,.14) 0%,rgba(232, 169, 58,.06) 100%);border:1px solid rgba(10, 157, 110,.2);display:inline-flex;align-items:center;gap:5px}
 
-        /* ---- Dark theme chrome (variables come from :root[data-theme=dark]) ---- */
-        :root[data-theme="dark"] .premium-home{background:var(--mint);color:var(--f)}
-        :root[data-theme="dark"] .premium-sidebar{background:linear-gradient(180deg,#0a0b0d 0%,#0e0f12 55%,#121317 100%)}
-        :root[data-theme="dark"] .premium-topbar{background:rgba(16,18,21,.86);border-bottom-color:rgba(255,255,255,.06)}
-        :root[data-theme="dark"] .premium-section{background:var(--white);border-color:var(--border)}
-        :root[data-theme="dark"] .premium-module{background:linear-gradient(180deg,#191c20 0%,#141619 100%);border-color:var(--border)}
-        :root[data-theme="dark"] .premium-module-name{color:var(--f)}
-        :root[data-theme="dark"] .premium-module-desc,:root[data-theme="dark"] .premium-access{color:var(--muted)}
-        :root[data-theme="dark"] .premium-module-icon{background:color-mix(in srgb,var(--module-color) 22%,#101114)}
-        :root[data-theme="dark"] .premium-module-chev{background:#1c1f24;color:#9aa6ad}
-        :root[data-theme="dark"] .premium-quick-item:hover{background:rgba(255,255,255,.05)}
-
-        /* ---- Aesthetic theme chrome (violet accent, white surfaces) ---- */
-        :root[data-theme="aesthetic"] .premium-home{background:var(--mint);color:var(--f)}
-        :root[data-theme="aesthetic"] .premium-sidebar{background:radial-gradient(circle at 18% 0%,rgba(109,94,240,.30),transparent 30%),linear-gradient(180deg,#1a1540 0%,#241f52 55%,#2d2668 100%)}
-        :root[data-theme="aesthetic"] .premium-brand-mark{background:linear-gradient(145deg,#8878ff,#5a49e0)}
-        :root[data-theme="aesthetic"] .premium-side-item.active{background:linear-gradient(135deg,rgba(109,94,240,.30),rgba(109,94,240,.12));border-color:rgba(140,124,255,.28)}
-        :root[data-theme="aesthetic"] .premium-module-icon{background:color-mix(in srgb,var(--module-color) 13%,white)}
-        .premium-quick-item{width:100%;display:flex;align-items:center;gap:11px;padding:10px;border-radius:12px;text-align:left;transition:background .14s ease}
-        .premium-quick-item:hover{background:#f4f8f6}
-        .premium-quick-icon{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;flex:0 0 auto}
-        .premium-access-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #edf0ee;font-size:12.5px}
-        .premium-access-row:last-child{border-bottom:none}
-        .premium-mobile-menu{display:none;width:38px;height:38px;border-radius:10px;background:#f0f5f2;color:#0a1a12;place-items:center}
-        .premium-overlay{display:none}
-        @media(max-width:1180px){.premium-module-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.premium-dashboard-grid{grid-template-columns:minmax(0,1fr) 290px}}
-        @media(max-width:980px){.premium-home{grid-template-columns:1fr}.premium-sidebar{position:fixed;left:0;top:0;bottom:0;width:272px;transform:translateX(-105%);transition:transform .22s ease}.premium-sidebar.open{transform:none}.premium-mobile-menu{display:grid}.premium-overlay.open{display:block;position:fixed;inset:0;background:rgba(3,16,10,.45);backdrop-filter:blur(3px);z-index:35}.premium-topbar{padding:0 20px}.premium-content{padding:22px 20px 32px}}
-        @media(max-width:820px){.premium-hero{max-width:none}.premium-dashboard-grid{grid-template-columns:1fr}.premium-side-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
-        @media(max-width:620px){.premium-topbar{height:68px}.premium-content{padding:16px 14px 28px}.premium-hero{padding:20px;border-radius:18px}.premium-hero h1{font-size:29px}.premium-stats{gap:10px}.premium-stat{padding:14px;align-items:flex-start;flex-direction:column}.premium-section{padding:15px;border-radius:17px}.premium-section-head{flex-direction:column}.premium-search{width:100%;min-width:0}.premium-module-grid{grid-template-columns:1fr}.premium-module{min-height:128px}.premium-side-stack{grid-template-columns:1fr}.premium-topbar-date{display:none}}
+        /* ---- Dark theme chrome ---- */
+        .premium-home[data-theme="dark"]{
+          --f:#f8fafc; --muted:#94a3b8; --border:rgba(255,255,255,0.12);
+        }
+        .premium-home[data-theme="dark"]{background:linear-gradient(135deg,#090e17 0%,#0d1524 50%,#0b111d 100%);color:var(--f)}
+        .premium-home[data-theme="dark"] .premium-section{background:rgba(20,26,36,.75)!important;border-color:rgba(255,255,255,.12)!important;box-shadow:0 30px 80px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.1)!important}
+        .premium-home[data-theme="dark"] .premium-module{background:rgba(20,26,36,.78)!important;border-color:rgba(255,255,255,.1)!important;box-shadow:0 10px 30px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.08)!important}
+        .premium-home[data-theme="dark"] .premium-module-name{color:var(--f)}
+        .premium-home[data-theme="dark"] .premium-module-desc,.premium-home[data-theme="dark"] .premium-access{color:var(--muted)}
+        .premium-home[data-theme="dark"] .premium-module-icon{background:color-mix(in srgb,var(--module-color) 25%,#141a24)}
       `}</style>
 
-      <div className={`premium-overlay ${mobileNav ? "open" : ""}`} onClick={() => setMobileNav(false)} />
+      <div className="pw-app-glow green" />
+      <div className="pw-app-glow blue" />
+      <div className="pw-app-glow mint" />
 
-      <aside className={`premium-sidebar ${mobileNav ? "open" : ""}`}>
-        <div className="premium-brand">
-          <div className="premium-brand-mark"><Droplets size={22} color="#fff" /></div>
-          <div>
-            <div style={{ color: "#fff", fontSize: 15.5, fontWeight: 800, letterSpacing: "-.02em" }}>ProWater</div>
-            <div style={{ color: "#6f8a7c", fontSize: 9.5, fontWeight: 800, letterSpacing: ".14em", textTransform: "uppercase", marginTop: 2 }}>Wisdom 2.0</div>
+      {/* Floating Frosted Glass Sidebar */}
+      <aside className={`pw-sidebar-v3 ${sidebarCollapsed ? "collapsed" : ""} ${mobileNav ? "open" : ""}`} data-theme={sidebarEffectiveTheme}>
+        <div className="pw-brand-header">
+          <div className="pw-brand-content" style={{ display: "flex", alignItems: "center" }}>
+            <ProWaterLogo size={sidebarCollapsed ? 30 : 38} badge={true} />
           </div>
+          <button onClick={toggleSidebarCollapsed} className="pw-sidebar-toggle-btn" title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          </button>
         </div>
 
-        <div className="premium-side-label">Workspace</div>
-        <button className="premium-side-item active" onClick={() => setMobileNav(false)}>
-          <span className="premium-side-icon"><LayoutDashboard size={16} /></span>
-          <span style={{ flex: 1 }}>Overview</span>
-          <span style={{ width: 6, height: 6, borderRadius: 999, background: "#3ed3a1", boxShadow: "0 0 0 4px rgba(62,211,161,.10)" }} />
-        </button>
+        <div className="pw-nav-container">
+          {!sidebarCollapsed && <div className="pw-category-title">Main Menu</div>}
+          <button className="pw-item active" onClick={() => setMobileNav(false)} title={sidebarCollapsed ? "Overview" : undefined}>
+            <LayoutDashboard size={16} />
+            {!sidebarCollapsed && <span>Overview</span>}
+          </button>
 
-        <div className="premium-side-label">Your modules</div>
-        <div className="premium-modules-scroll" style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
+          {!sidebarCollapsed && <div className="pw-category-title">Modules</div>}
           {visible.map(m => {
             const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
             return (
-              <button key={m.id} className="premium-side-item" onClick={() => openModule(m)}>
-                <span className="premium-side-icon"><Icon size={16} /></span>
-                <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
-                {m.soon && <span style={{ color: "#d3a760", fontSize: 8.5, fontWeight: 800, letterSpacing: ".08em" }}>BETA</span>}
+              <button
+                key={m.id}
+                onClick={() => { openModule(m); setMobileNav(false); }}
+                className="pw-item"
+                title={sidebarCollapsed ? m.label : undefined}
+              >
+                <Icon size={16} />
+                {!sidebarCollapsed && <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>}
+                {!sidebarCollapsed && m.soon && <span className="pw-version-pill">BETA</span>}
               </button>
             );
           })}
         </div>
 
-        <div className="premium-profile">
-          <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <button className="premium-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo" style={{ position: "relative", flex: "0 0 auto" }}>
-              {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
-              <span style={{ position: "absolute", right: -3, bottom: -3, width: 16, height: 16, borderRadius: 999, background: "var(--brand)", border: "2px solid #0a1a12", display: "grid", placeItems: "center", color: "#fff" }}><Camera size={8} /></span>
-            </button>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ color: "#fff", fontSize: 13, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, color: "#7ee0bd", fontSize: 10.5, textTransform: "capitalize", marginTop: 3 }}>
-                <ShieldCheck size={11} /> {user.role} workspace
-              </div>
-            </div>
+        {!sidebarCollapsed && (
+          <div style={{ textAlign: "center", marginBottom: 8 }}>
+            <span className="pw-version-pill">v{APP_VERSION}</span>
           </div>
-          <button onClick={() => setUser(null)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 13, padding: "9px 10px", borderRadius: 10, background: "rgba(255,255,255,.06)", color: "#bdcbc4", fontSize: 12.5, fontWeight: 650 }}>
-            <LogOut size={14} /> Sign out
-          </button>
+        )}
+        <div className="pw-user-card" title={sidebarCollapsed ? `${user.name} (${user.role})` : undefined}>
+          <div className="pw-avatar-wrap">
+            <button className="pw-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo">
+              {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
+            </button>
+            <span className="pw-status-dot" />
+          </div>
+          {!sidebarCollapsed && (
+            <div className="pw-user-info">
+              <div className="pw-name-badge">
+                <span className="pw-name">{user.name}</span>
+                <span className="pw-tag">
+                  {user.role === "admin" ? <ShieldCheck size={10} /> : <Eye size={10} />}
+                  {String(user.role || "").toUpperCase()}
+                </span>
+              </div>
+              <div className="pw-role">{user.role} workspace</div>
+            </div>
+          )}
+          {!sidebarCollapsed && (
+            <button className="pw-action-btn" onClick={() => setUser(null)} title="Sign out">
+              <LogOut size={15} />
+            </button>
+          )}
         </div>
       </aside>
 
       <main className="premium-main">
-        <header className="premium-topbar">
-          <button className="premium-mobile-menu" onClick={() => setMobileNav(true)} aria-label="Open navigation"><Menu size={19} /></button>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="premium-topbar-title" style={{ fontSize: 14, fontWeight: 800, color: "var(--f)", letterSpacing: "-.01em" }}>Operations Command Center</div>
-            <div className="premium-topbar-date" style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>{dateLabel}</div>
-          </div>
-          <div className="premium-ready" style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 10px", borderRadius: 10, background: "var(--mint-2)", border: "1px solid var(--border)" }}>
-            <span style={{ width: 7, height: 7, borderRadius: 999, background: "var(--brand)", boxShadow: "0 0 0 4px rgba(10,157,110,.10)" }} />
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--brand)" }}>Workspace ready</span>
-          </div>
-          <button onClick={() => setPhotoOpen(true)} className="premium-avatar" style={{ width: 38, height: 38, borderRadius: 11, background: "var(--grad-btn)" }}>
-            {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
-          </button>
-        </header>
-
         <div className="premium-content">
-          <h1 className="premium-greeting fade-up">{greeting}, {firstName}.</h1>
-
-          <div className="premium-dashboard-grid">
-            <section className="premium-section" id="module-directory">
-              <div className="premium-section-head">
-                <div>
-                  <p className="eyebrow" style={{ color: "var(--brand)", marginBottom: 5 }}>Workspace directory</p>
-                  <h2 className="premium-section-title">Choose where to work</h2>
-                  <p style={{ color: "var(--muted)", fontSize: 12.5, marginTop: 5 }}>Only modules assigned to your account are shown.</p>
-                </div>
-              </div>
-
-              {MODULE_GROUPS.map(group => {
-                const mods = visible.filter(m => group.ids.includes(m.id));
-                if (!mods.length) return null;
-                return (
-                  <div key={group.title} className="premium-group">
-                    <div className="premium-group-title">{group.title}</div>
-                    <div className="premium-module-grid">
-                      {mods.map(m => {
-                        const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
-                        const lvl = access[m.id];
-                        return (
-                          <button key={m.id} className="premium-module" onClick={() => openModule(m)} style={{ "--module-color": m.color }}>
-                            <div className="premium-module-icon"><Icon size={17} /></div>
-                            <div className="premium-module-name">{m.label}</div>
-                            <div className="premium-module-desc">{m.desc}</div>
-                            <div className="premium-module-foot">
-                              <span className="premium-access">{lvl} access</span>
-                              <span className="premium-module-chev"><ChevronRight size={15} /></span>
-                            </div>
-                            {m.soon && <span style={{ position: "absolute", right: 13, top: 13, padding: "3px 7px", borderRadius: 999, background: "#fbf0e0", color: "#986315", fontSize: 8.5, fontWeight: 850, letterSpacing: ".07em" }}>BETA</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {visible.length === 0 && (
-                <div style={{ padding: "52px 20px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 15, color: "var(--muted)" }}>
-                  No modules are assigned to your account yet.
-                </div>
-              )}
-            </section>
-
-            <aside className="premium-side-stack">
-              <section className="premium-section">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 9 }}>
-                  <div>
-                    <p className="eyebrow" style={{ color: "var(--brand)", marginBottom: 4 }}>Quick access</p>
-                    <h3 className="premium-section-title" style={{ fontSize: "16px!important" }}>Recent modules</h3>
-                  </div>
-                  <Clock size={17} color="#8a9991" />
-                </div>
-                {(recentModules.length ? recentModules : visible.slice(0, 3)).map(m => {
-                  const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
-                  return (
-                    <button className="premium-quick-item" key={m.id} onClick={() => openModule(m)}>
-                      <span className="premium-quick-icon" style={{ background: `${m.color}14`, color: m.color }}><Icon size={17} /></span>
-                      <span style={{ minWidth: 0, flex: 1 }}>
-                        <span style={{ display: "block", color: "var(--f)", fontSize: 12.5, fontWeight: 750, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.label}</span>
-                        <span style={{ display: "block", color: "var(--muted)", fontSize: 10.5, marginTop: 2 }}>{access[m.id]} access</span>
-                      </span>
-                      <ChevronRight size={15} color="#9aa69f" />
-                    </button>
-                  );
-                })}
-              </section>
-
-              <section className="premium-section">
-                <p className="eyebrow" style={{ color: "var(--brand)", marginBottom: 5 }}>Account controls</p>
-                <h3 className="premium-section-title" style={{ fontSize: "16px!important", marginBottom: 8 }}>Access summary</h3>
-                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Role</span><strong style={{ textTransform: "capitalize", color: "var(--f)" }}>{user.role}</strong></div>
-                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Admin modules</span><strong style={{ color: "var(--f)" }}>{elevatedCount}</strong></div>
-                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Standard modules</span><strong style={{ color: "var(--f)" }}>{Math.max(visible.length - elevatedCount, 0)}</strong></div>
-                <div className="premium-access-row"><span style={{ color: "var(--muted)" }}>Session</span><span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--brand)", fontWeight: 750 }}><span style={{ width: 6, height: 6, borderRadius: 999, background: "var(--brand)" }} /> Secure</span></div>
-              </section>
-
-              <section className="premium-section" style={{ background: "linear-gradient(145deg,#e9f7f1,#f7fbf9)", borderColor: "#d8eee5" }}>
-                <div style={{ width: 38, height: 38, borderRadius: 12, display: "grid", placeItems: "center", background: "#fff", color: "var(--brand)", boxShadow: "0 9px 20px -15px rgba(5,67,42,.8)", marginBottom: 13 }}><Info size={18} /></div>
-                <div style={{ fontSize: 13.5, fontWeight: 800, color: "#163729" }}>Wisdom 2.0 workspace</div>
-                <p style={{ fontSize: 11.5, lineHeight: 1.55, color: "#668074", marginTop: 6 }}>A unified internal platform for managing the full ProWater operating lifecycle.</p>
-                <button onClick={() => visible.find(m => m.id === "about") && openModule(visible.find(m => m.id === "about"))} disabled={!visible.some(m => m.id === "about")} style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 12, color: "#087955", fontSize: 11.5, fontWeight: 800, opacity: visible.some(m => m.id === "about") ? 1 : .5 }}>
-                  View release notes <ArrowUpRight size={13} />
+          <div className="pw-top-header">
+            <h1 className="pw-greeting fade-up">{greeting}, {firstName}.</h1>
+            <div className="pw-header-actions">
+              {sidebarCollapsed && (
+                <button
+                  onClick={toggleSidebarCollapsed}
+                  className="pw-topbar-sidebar-toggle"
+                  title="Show sidebar"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 12px",
+                    borderRadius: 10,
+                    background: "var(--teal)",
+                    border: "1px solid var(--border)",
+                    color: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: 12.5,
+                    cursor: "pointer",
+                    flex: "0 0 auto",
+                    transition: "all .2s ease",
+                    boxShadow: "0 4px 14px rgba(10, 157, 110, 0.3)"
+                  }}
+                >
+                  <PanelLeftOpen size={16} />
+                  <span style={{ fontSize: 12 }}>Show Sidebar</span>
                 </button>
-              </section>
-            </aside>
+              )}
+              <div className="pw-session-badge" title="Session duration">
+                <Hourglass size={14} /> <span>{fmtElapsed(elapsed)}</span>
+              </div>
+              <div className="pw-avatar-wrap">
+                <button className="pw-avatar-btn" onClick={() => setPhotoOpen(true)} title="Update profile photo">
+                  {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
+                </button>
+                <span className="pw-camera-dot" onClick={() => setPhotoOpen(true)} title="Update profile photo">
+                  <Camera size={8} />
+                </span>
+              </div>
+              <button onClick={() => setUser(null)} className="pw-logout-btn" title="Sign Out">
+                <LogOut size={14} /> <span>Logout</span>
+              </button>
+            </div>
           </div>
 
-          <footer style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "24px 4px 0", color: "#8a9790", fontSize: 10.5 }}>
-            <span>© {new Date().getFullYear()} ProWater Internal Systems</span>
-            <span>Wisdom 2.0 · Build {APP_VERSION}</span>
-          </footer>
+          <section className="premium-section" id="module-directory">
+            {MODULE_GROUPS.map(group => {
+              const mods = visible.filter(m => group.ids.includes(m.id));
+              if (!mods.length) return null;
+              return (
+                <div key={group.title} className="premium-group">
+                  <div className="premium-group-title">{group.title}</div>
+                  <div className="premium-module-grid">
+                    {mods.map(m => {
+                      const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
+                      return (
+                        <button key={m.id} className="premium-module" onClick={() => openModule(m)} style={{ "--module-color": m.color }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
+                              <div className="premium-module-icon"><Icon size={18} /></div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div className="premium-module-name">{m.label}</div>
+                                <div className="premium-module-desc">{m.desc}</div>
+                              </div>
+                            </div>
+                            <span className="premium-module-chev"><ChevronRight size={15} /></span>
+                          </div>
+                          {m.soon && <span style={{ position: "absolute", right: 8, top: 8, padding: "2px 6px", borderRadius: 999, background: "var(--amber-t)", color: "var(--amber)", fontSize: 8, fontWeight: 850, letterSpacing: ".07em" }}>BETA</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {visible.length === 0 && (
+              <div style={{ padding: "30px 20px", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 12, color: "var(--muted)" }}>
+                No modules are assigned to your account yet.
+              </div>
+            )}
+          </section>
         </div>
       </main>
+
+      <footer style={{ textAlign: "center", padding: "8px 32px 14px", fontSize: 11, color: "var(--muted)", position: "relative", zIndex: 10 }}>
+        © {new Date().getFullYear()} ProWater Internal Systems · Wisdom 2.0 · Build {APP_VERSION}
+      </footer>
 
       {photoOpen && <PhotoUploader username={user.username} current={photo}
         onClose={() => setPhotoOpen(false)}
@@ -886,7 +1101,7 @@ function SampleDataBanner() {
 }
 
 function Shell({ module = "referral", onHome }) {
-  const { user, setUser } = useAuth();
+  const { user, setUser, sidebarCollapsed, toggleSidebarCollapsed } = useAuth();
   const moduleMeta = MODULES.find(m => m.id === module) || MODULES.find(m => m.id === "referral");
   const moduleAccess = (user.access && user.access[module]) || (user.role === "admin" ? "admin" : "view");
   const isModuleAdmin = moduleAccess === "admin" || moduleAccess === "devops";
@@ -1064,90 +1279,107 @@ const doRefresh = async () => {
     ] : []),
   ]).filter(n => sectionOverride(user, module, n.id) !== "hidden"); // per-user section visibility
 
-  // Effective View/Edit for the CURRENT section: a "view" override forces
-  // read-only even on an admin module; an "edit" override grants editing even on
-  // a view-only module; no override inherits the module level.
   const secOv = sectionOverride(user, module, tab);
   const tabIsAdmin = secOv === "edit" ? true : secOv === "view" ? false : isModuleAdmin;
   const tabAccess = secOv === "edit" ? (isModuleAdmin ? moduleAccess : "admin")
     : secOv === "view" ? "view"
     : moduleAccess;
 
-  // If the landing/last tab was hidden for this user, fall back to the first
-  // section they can see (keeps the content area from rendering blank).
   useEffect(() => {
     if (nav.length && !nav.some(n => n.id === tab)) setTab(nav[0].id);
   }, [module, nav.length, tab]);
 
+  // Sidebar is a fixed dark rail — see the matching comment in Home() for why
+  // the old light/dark/system toggle state was removed instead of reused.
+  const sidebarEffectiveTheme = "dark";
+
   const signOut = async () => { await api.logout(user.username); setUser(null); };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "260px 1fr", minHeight: "100vh", width: "100%" }} className="shell-grid">
-      <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-side{position:fixed;z-index:40;height:100%;transform:translateX(-100%);transition:.25s}.pw-side.open{transform:none}.pw-topbar-burger{display:inline-flex!important}.iot-apt-badge{display:none!important}}`}</style>
+    <div style={{ display: "grid", gridTemplateColumns: sidebarCollapsed ? "72px 1fr" : "312px 1fr", transition: "grid-template-columns .25s ease", minHeight: "100vh", width: "100%" }} className="shell-grid">
+      <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-sidebar-v3{position:fixed;z-index:40;height:100vh;margin:0;border-radius:0;transform:translateX(-105%);transition:transform .22s ease}.pw-sidebar-v3.open{transform:none}.pw-topbar-burger{display:inline-flex!important}.iot-apt-badge{display:none!important}}`}</style>
 
       {/* sidebar */}
-      <aside className={`pw-side ${mobileNav ? "open" : ""}`} style={{
-        background: "linear-gradient(180deg,var(--forest) 0%, var(--forest-2) 100%)",
-        color: "#B5E2D4", padding: "22px 16px", display: "flex", flexDirection: "column", gap: 6
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "4px 8px 14px" }}>
-          <Drop />
-          <div style={{ lineHeight: 1.1 }}>
-            <div style={{ fontWeight: 700, color: "#fff", fontSize: 15 }}>ProWater</div>
-            <div style={{ fontSize: 10.5, letterSpacing: ".12em", textTransform: "uppercase", color: "var(--brand)" }}>{moduleMeta.label}</div>
+      <aside className={`pw-sidebar-v3 ${sidebarCollapsed ? "collapsed" : ""} ${mobileNav ? "open" : ""}`} data-theme={sidebarEffectiveTheme}>
+        <div className="pw-brand-header">
+          <div className="pw-brand-content" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <ProWaterLogo size={sidebarCollapsed ? 30 : 36} badge={true} />
+            {!sidebarCollapsed && (
+              <div style={{ fontSize: 10, fontWeight: 750, color: "var(--pw-text-muted)", letterSpacing: ".06em", textTransform: "uppercase", borderLeft: "1.5px solid var(--pw-border)", paddingLeft: 8 }}>
+                {moduleMeta.label}
+              </div>
+            )}
           </div>
+          <button onClick={toggleSidebarCollapsed} className="pw-sidebar-toggle-btn" title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          </button>
         </div>
 
-        <button onClick={onHome} style={{
-          display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 11,
-          color: "#B5E2D4", fontWeight: 500, background: "rgba(255,255,255,.05)", textAlign: "left", fontSize: 14, marginBottom: 6
-        }}>
-          <HomeIcon size={18} /> All modules
-        </button>
-
-        {nav.map(n => (
-          <button key={n.id} onClick={() => { setTab(n.id); setMobileNav(false); }}
-            style={{
-              display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 11,
-              color: tab === n.id ? "var(--shell)" : "var(--green-b)", fontWeight: tab === n.id ? 600 : 500,
-              background: tab === n.id ? "var(--brand)" : "transparent", textAlign: "left", fontSize: 14, transition: ".15s"
-            }}>
-            <n.icon size={18} /> {n.label}
+        <div className="pw-nav-container">
+          {!sidebarCollapsed && <div className="pw-category-title">Navigation</div>}
+          <button onClick={onHome} className="pw-item" style={{ marginBottom: 4 }} title={sidebarCollapsed ? "All Modules" : undefined}>
+            <HomeIcon size={18} />
+            {!sidebarCollapsed && <span>All Modules</span>}
           </button>
-        ))}
 
-        <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,.08)", paddingTop: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px 12px" }}>
-            <button onClick={() => setPhotoOpen(true)} title="Update profile photo"
-              style={{ position: "relative", width: 34, height: 34, borderRadius: 999, overflow: "hidden", background: "var(--grad)", display: "grid", placeItems: "center", color: "#fff", fontWeight: 700, fontSize: 13, flexShrink: 0, cursor: "pointer" }}>
-              {photo
-                ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                : user.name.split(" ").map(s => s[0]).slice(0, 2).join("")}
-              <span style={{ position: "absolute", bottom: 0, right: 0, background: "rgba(13,40,24,.85)", borderRadius: "6px 0 0 0", padding: "1px 2px", display: "grid", placeItems: "center" }}><Camera size={9} color="#fff" /></span>
+          {!sidebarCollapsed && <div className="pw-category-title">{moduleMeta.label} Sections</div>}
+          {nav.map(n => (
+            <button
+              key={n.id}
+              onClick={() => { setTab(n.id); setMobileNav(false); }}
+              className={`pw-item ${tab === n.id ? "active" : ""}`}
+              title={sidebarCollapsed ? n.label : undefined}
+            >
+              <n.icon size={18} />
+              {!sidebarCollapsed && <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.label}</span>}
             </button>
-            <div style={{ lineHeight: 1.2, minWidth: 0 }}>
-              <div style={{ color: "#fff", fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{user.name}</div>
-              <div style={{ fontSize: 11, color: "var(--lime)", display: "flex", alignItems: "center", gap: 4 }}>
-                {user.role === "admin" ? <ShieldCheck size={12} /> : <Shield size={12} />}{user.role}
+          ))}
+        </div>
+
+        {!sidebarCollapsed && (
+          <div style={{ textAlign: "center", marginBottom: 8 }}>
+            <span className="pw-version-pill">v{APP_VERSION}</span>
+          </div>
+        )}
+        <div className="pw-user-card" title={sidebarCollapsed ? `${user.name} (${user.role})` : undefined}>
+          <div className="pw-avatar-wrap">
+            <button className="pw-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo">
+              {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : String(user.name || "P").trim().charAt(0).toUpperCase()}
+            </button>
+            <span className="pw-status-dot" />
+          </div>
+          {!sidebarCollapsed && (
+            <div className="pw-user-info">
+              <div className="pw-name-badge">
+                <span className="pw-name">{user.name}</span>
+                <span className="pw-tag">
+                  {user.role === "admin" ? <ShieldCheck size={10} /> : <Eye size={10} />}
+                  {String(user.role || "").toUpperCase()}
+                </span>
+              </div>
+              <div className="pw-role" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                {user.role === "admin" ? <ShieldCheck size={11} /> : <Eye size={11} />}{user.role} workspace
               </div>
             </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "0 8px 8px", color: "#B5E2D4", fontSize: 11.5, fontVariantNumeric: "tabular-nums" }}>
-            <Clock size={13} /> Session {fmtElapsed(elapsed)}
-          </div>
-          <button onClick={signOut} style={{ display: "flex", alignItems: "center", gap: 9, color: "#B5E2D4", fontSize: 13, padding: "8px 8px" }}>
-            <LogOut size={16} /> Sign out
-          </button>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,.08)", marginTop: 8, paddingTop: 10, padding: "10px 8px 2px", color: "#7D8A83", fontSize: 10.5, lineHeight: 1.4 }}>
-            © 2026 ProWater Internal Systems · v{APP_VERSION}
-          </div>
+          )}
+          {!sidebarCollapsed && (
+            <button className="pw-action-btn" onClick={signOut} title="Sign out">
+              <LogOut size={16} />
+            </button>
+          )}
         </div>
       </aside>
 
       {/* main */}
-      <main style={{ minWidth: 0 }}>
-        <div className="pw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px", borderBottom: "1px solid var(--border)", background: "rgba(243,248,236,.92)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
+      <main style={{ minWidth: 0, background: "linear-gradient(135deg, #FBFAF7 0%, #F7F5EF 55%, #F3F0E8 100%)", minHeight: "100vh", position: "relative", overflow: "hidden" }}>
+        <div className="pw-app-glow green" />
+        <div className="pw-app-glow blue" />
+        <div className="pw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px", borderBottom: "1px solid var(--border)", background: "var(--pw-topbar-bg)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
           <button className="pw-topbar-burger" onClick={() => setMobileNav(s => !s)} style={{ display: "none", color: "var(--f)" }}><Menu /></button>
+          <button onClick={toggleSidebarCollapsed} className="pw-topbar-sidebar-toggle" title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, background: sidebarCollapsed ? "var(--teal)" : "var(--mint-2)", border: "1px solid var(--border)", color: sidebarCollapsed ? "#ffffff" : "var(--teal)", fontWeight: 700, fontSize: 12.5, cursor: "pointer", flex: "0 0 auto", transition: "all .2s ease", boxShadow: sidebarCollapsed ? "0 4px 14px rgba(10, 157, 110, 0.3)" : "none" }}>
+            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+            <span style={{ fontSize: 12 }}>{sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}</span>
+          </button>
           {module === "iot" && (
             <div className="iot-apt-badge" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", borderRadius: 999, background: "var(--mint-2)", border: "1px solid var(--border)", boxShadow: "0 1px 2px rgba(16,40,28,.05)", pointerEvents: "none", whiteSpace: "nowrap" }}>
               <MapPin size={15} color="var(--teal)" />
@@ -1163,9 +1395,23 @@ const doRefresh = async () => {
             style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 10, border: "1.5px solid var(--border)", background: "#fff", color: "var(--teal)", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: refreshing ? .6 : 1 }}>
             <RefreshCw size={15} style={{ animation: refreshing ? "pw-spin .8s linear infinite" : "none" }} /> Refresh
           </button>}
-          <div style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 10, background: "var(--mint-2)", color: "var(--forest)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
-            <Clock size={15} /> {fmtClock(now)}
+          <div className="pw-session-badge">
+            <Clock size={14} /> <span>{fmtClock(now)}</span>
           </div>
+          <div className="pw-session-badge" title="Session duration">
+            <Hourglass size={14} /> <span>{fmtElapsed(elapsed)}</span>
+          </div>
+          <div className="pw-avatar-wrap">
+            <button className="pw-avatar-btn" onClick={() => setPhotoOpen(true)} title="Update profile photo">
+              {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : String(user.name || "P").trim().charAt(0).toUpperCase()}
+            </button>
+            <span className="pw-camera-dot" onClick={() => setPhotoOpen(true)} title="Update profile photo">
+              <Camera size={8} />
+            </span>
+          </div>
+          <button onClick={signOut} className="pw-logout-btn" title="Sign Out">
+            <LogOut size={14} /> <span>Logout</span>
+          </button>
         </div>
         <div style={{ padding: "28px 40px", maxWidth: "100%", margin: "0 auto" }}>
           {moduleMeta.built && <SampleDataBanner />}

@@ -211,7 +211,7 @@ export function AutoGSSociety({ accessLevel = "view" }) {
     );
   };
 
-  if (!rows) return <Loading />;
+  if (!rows) return <Loading title="Loading Recurring Schedules" subtitle="Synchronizing society service schedules…" />;
 
   const createTicketFor = async (society) => {
     setBusy(society);
@@ -390,7 +390,7 @@ export function IoTAlerts() {
     customerApi.getCustomers().then(setData).catch(e => setErr(e.message || "Could not load devices."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading IoT Alerts" subtitle="Synchronizing device alert history…" />;
 
   const now = Date.now();
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2400); };

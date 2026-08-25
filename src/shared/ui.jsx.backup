@@ -125,7 +125,7 @@ export function Stat({ label, value, icon: Icon, sub, hero, delta }) {
     : (up ? "#08805A" : down ? "#DC4141" : "#7D8A83");
   return (
     <div style={{
-      background: hero ? "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)" : "#fff",
+      background: hero ? "linear-gradient(135deg, #00c896 0%, #007aff 100%)" : "#fff",
       color: hero ? "#E2F3EE" : "inherit", border: hero ? "none" : "1px solid var(--border)",
       borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden"
     }}>
@@ -312,7 +312,7 @@ export function Login() {
   };
 
   return (
-    <div className="pw-login-wrapper" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative", background: "linear-gradient(135deg, #f5f8f6, #e4f1eb)", fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif' }}>
+    <div className="pw-login-wrapper" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative", background: "linear-gradient(135deg, #e6ebe8, #c9e2d7)", fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif' }}>
       <style>{`
         .pw-glow { position: absolute; border-radius: 50%; filter: blur(100px); animation: pw-float 12s infinite alternate; }
         .pw-glow.green { width: 450px; height: 450px; background: #00c896; top: -150px; right: -100px; opacity: .35; }
@@ -646,10 +646,123 @@ export const WowMomTT = ({ active, payload, label }) => {
     </div>
   );
 };
-export const Loading = () => <div style={{ display: "grid", placeItems: "center", padding: 80, color: "var(--muted)" }}>
-  <div style={{ width: 32, height: 32, border: "3px solid var(--border)", borderTopColor: "var(--teal)", borderRadius: 999, animation: "spin 1s linear infinite" }} />
-  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-</div>;
+export function ProWaterLogo({ size = 36, style = {}, className = "", badge = false }) {
+  const logoImg = (
+    <img
+      src="prowater_logo_transparent_1200x1200.png"
+      alt="ProWater Logo"
+      className={`pw-official-logo ${className}`}
+      style={{
+        height: size,
+        width: "auto",
+        maxHeight: size,
+        objectFit: "contain",
+        display: "block",
+        filter: "drop-shadow(0 2px 8px rgba(0,200,150,0.25))",
+        ...style
+      }}
+    />
+  );
+
+  if (!badge) return logoImg;
+
+  return (
+    <div className={`pw-logo-badge ${className}`} style={{
+      background: "rgba(255, 255, 255, 0.94)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+      borderRadius: Math.round(size * (10 / 36)),
+      padding: "3px 8px",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 4px 14px rgba(0, 200, 150, 0.25), inset 0 1px 0 #ffffff",
+      border: "1px solid rgba(255, 255, 255, 0.8)",
+      flex: "0 0 auto",
+      ...style
+    }}>
+      {logoImg}
+    </div>
+  );
+}
+
+export const Loading = ({ title = "Loading Workspace Data", subtitle = "Synchronizing live records & telemetry…", showSkeleton = true }) => (
+  <div className="fade-up ov-sans" style={{ minHeight: "calc(100vh - 200px)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "50px 20px" }}>
+    <style>{`
+      @keyframes pw-ripple {
+        0% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(0, 200, 150, 0.4); }
+        50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 0 20px rgba(0, 200, 150, 0); }
+        100% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(0, 200, 150, 0); }
+      }
+      @keyframes pw-spin-ring {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes pw-shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .pw-skeleton-bar {
+        background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+        background-size: 200% 100%;
+        animation: pw-shimmer 1.8s infinite ease-in-out;
+        border-radius: 8px;
+      }
+    `}</style>
+
+    {/* Main Animated Water Droplet Spinner Emblem with ProWater Logo */}
+    <div style={{ position: "relative", width: 84, height: 84, display: "grid", placeItems: "center", marginBottom: 24 }}>
+      {/* Outer Rotating Dotted Ring */}
+      <div style={{ position: "absolute", inset: -10, borderRadius: "50%", border: "2px dashed rgba(0, 200, 150, 0.3)", animation: "pw-spin-ring 12s linear infinite" }} />
+
+      {/* Conic Gradient Spinner Ring */}
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        background: "conic-gradient(from 0deg, #00c896, #036EA9, #00c896 80%, transparent 100%)",
+        WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
+        mask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
+        animation: "pw-spin-ring 1.2s linear infinite",
+      }} />
+
+      {/* Center Glowing Orb with Official ProWater Logo */}
+      <div style={{
+        width: 58, height: 58, borderRadius: "50%",
+        background: "rgba(255,255,255,0.95)",
+        boxShadow: "0 8px 24px rgba(0, 200, 150, 0.38)",
+        display: "grid", placeItems: "center",
+        animation: "pw-ripple 2.4s infinite ease-in-out",
+        padding: 6
+      }}>
+        <ProWaterLogo size={38} badge={false} />
+      </div>
+    </div>
+
+    {/* Text Readout & Sync Status */}
+    <div style={{ textAlign: "center", marginBottom: showSkeleton ? 32 : 0 }}>
+      <h3 style={{ fontSize: 17, fontWeight: 750, color: "var(--f, #1D1D1F)", margin: 0, letterSpacing: "-.02em" }}>
+        {title}
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--muted, #86868B)", marginTop: 5, marginBottom: 0 }}>
+        {subtitle}
+      </p>
+    </div>
+
+    {/* HIG Skeleton Layout Preview */}
+    {showSkeleton && (
+      <div style={{ width: "100%", maxWidth: 860, background: "rgba(255,255,255,0.72)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid var(--border, rgba(0,0,0,0.06))", borderRadius: 20, padding: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.03)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+          <div className="pw-skeleton-bar" style={{ height: 60 }} />
+          <div className="pw-skeleton-bar" style={{ height: 60 }} />
+          <div className="pw-skeleton-bar" style={{ height: 60 }} />
+        </div>
+        <div className="pw-skeleton-bar" style={{ height: 38, marginBottom: 12, width: "100%" }} />
+        <div className="pw-skeleton-bar" style={{ height: 24, marginBottom: 8, width: "95%" }} />
+        <div className="pw-skeleton-bar" style={{ height: 24, marginBottom: 8, width: "88%" }} />
+        <div className="pw-skeleton-bar" style={{ height: 24, width: "92%" }} />
+      </div>
+    )}
+  </div>
+);
 export const Empty = ({ msg }) => <div style={{ padding: "28px", textAlign: "center", color: "var(--muted)", fontSize: 13.5 }}>{msg}</div>;
 export const ApiError = ({ msg }) => (
   <div style={{ padding: "40px 28px", textAlign: "center", color: "var(--slate)" }}>

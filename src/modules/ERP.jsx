@@ -32,7 +32,7 @@ export function AssetLifecycle() {
     customerApi.getCustomers().then(setData).catch(e => setErr(e.message || "Could not load assets."));
   }, []);
   if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading />;
+  if (!data) return <Loading title="Loading Asset Lifecycle" subtitle="Synchronizing inventory and asset records…" />;
 
   const now = Date.now();
   const MS_MONTH = 86400000 * 30.44;

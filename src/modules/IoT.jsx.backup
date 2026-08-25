@@ -1729,7 +1729,7 @@ function IoTDiurnalDemandChart({ avgTds = 28, avgPh = 7.4, style = {} }) {
 
   const PERIOD_COLORS = {
     night: { bg: "linear-gradient(180deg, #6366F1, #4338CA)", text: "#4338CA" },
-    morning: { bg: "linear-gradient(135deg, #0A9D6E, #E8A93A)", text: "#08805A" },
+    morning: { bg: "linear-gradient(135deg, #00c896, #007aff)", text: "#08805A" },
     afternoon: { bg: "linear-gradient(180deg, #F59E0B, #D97706)", text: "#D97706" },
     evening: { bg: "linear-gradient(180deg, #38BDF8, #0284C7)", text: "#0284C7" },
   };
@@ -2044,7 +2044,7 @@ export function IoTDevices() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {kpiCards.map((k) => {
           const hero = k.hero, off = k.offline, flt = k.faulty;
-          const bg = hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : off ? "rgba(220, 38, 38, 0.05)" : flt ? "rgba(152, 99, 21, 0.05)" : "rgba(255, 255, 255, 0.85)";
+          const bg = hero ? "linear-gradient(135deg, #00c896 0%, #007aff 100%)" : off ? "rgba(220, 38, 38, 0.05)" : flt ? "rgba(152, 99, 21, 0.05)" : "rgba(255, 255, 255, 0.85)";
           const bd = hero ? "none" : off ? "1px solid rgba(220, 38, 38, 0.18)" : flt ? "1px solid rgba(152, 99, 21, 0.18)" : "1px solid rgba(0,0,0,0.08)";
           const labelC = hero ? "#B5E2D4" : off ? "#DC4141" : flt ? "#986315" : "#86868B";
           const valueC = hero ? "#ffffff" : off ? "#DC4141" : flt ? "#986315" : "#1D1D1F";

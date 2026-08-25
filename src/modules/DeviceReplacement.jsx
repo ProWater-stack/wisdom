@@ -222,7 +222,7 @@ export function DeviceReplacement() {
             </tr>
           ))}
         </Table>
-        {records.length === 0 && (loading ? <Loading /> : <Empty msg="No replacements recorded yet. Click “New Entry” to start." />)}
+        {records.length === 0 && (loading ? <Loading title="Loading Device Replacements" subtitle="Synchronizing replacement records…" /> : <Empty msg="No replacements recorded yet. Click “New Entry” to start." />)}
       </Card>
 
       {/* Wizard popup — 2 short steps */}

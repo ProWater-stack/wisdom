@@ -15,7 +15,7 @@ import {
   LayoutGrid,
 } from "lucide-react";
 import {
-  APP_VERSION, DATE_PRESETS, DEVICE_TYPE_STYLE, EMAIL_DOMAIN, api, deviceType,
+  APP_VERSION, DATE_PRESETS, DEVICE_TYPE_STYLE, api, deviceType,
   pluralise, useAuth,
 } from "./core";
 
@@ -125,7 +125,7 @@ export function Stat({ label, value, icon: Icon, sub, hero, delta }) {
     : (up ? "#08805A" : down ? "#DC4141" : "#7D8A83");
   return (
     <div style={{
-      background: hero ? "linear-gradient(150deg,var(--forest) 0%, var(--teal-d) 100%)" : "#fff",
+      background: hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "#fff",
       color: hero ? "#E2F3EE" : "inherit", border: hero ? "none" : "1px solid var(--border)",
       borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden"
     }}>
@@ -285,15 +285,12 @@ export function Login() {
   // password — the browser's own (OS-encrypted) password manager handles that.
   const rememberedId = (() => { try { return localStorage.getItem("pw_rememberId") || ""; } catch { return ""; } })();
   const [username, setUsername] = useState(rememberedId);
-  const [usernames, setUsernames] = useState([]);
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [forgot, setForgot] = useState(false); // open the reset modal
   const [remember, setRemember] = useState(Boolean(rememberedId));
-
-  useEffect(() => { api.getUsernames().then(setUsernames); }, []);
 
   const submit = async (e) => {
     if (e) e.preventDefault();
@@ -312,11 +309,11 @@ export function Login() {
   };
 
   return (
-    <div className="pw-login-wrapper" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative", background: "linear-gradient(135deg, #e6ebe8, #c9e2d7)", fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif' }}>
+    <div className="pw-login-wrapper" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative", background: "linear-gradient(135deg, #f5f0e6, #e8dcc3)", fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif' }}>
       <style>{`
         .pw-glow { position: absolute; border-radius: 50%; filter: blur(100px); animation: pw-float 12s infinite alternate; }
-        .pw-glow.green { width: 450px; height: 450px; background: #00c896; top: -150px; right: -100px; opacity: .35; }
-        .pw-glow.blue { width: 420px; height: 420px; background: #78c8ff; bottom: -150px; left: -120px; opacity: .35; }
+        .pw-glow.green { width: 450px; height: 450px; background: #0A9D6E; top: -150px; right: -100px; opacity: .35; }
+        .pw-glow.blue { width: 420px; height: 420px; background: #E8A93A; bottom: -150px; left: -120px; opacity: .35; }
         @keyframes pw-float { from { transform: translateY(0); } to { transform: translateY(70px); } }
 
         .pw-bubble { position: absolute; border-radius: 50%; background: rgba(255,255,255,.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: pw-rise 18s infinite; }
@@ -330,7 +327,7 @@ export function Login() {
 
         .pw-login-logo { width: 170px; margin: 0 auto 20px; position: relative; display: flex; align-items: center; justify-content: center; }
         .pw-login-logo img { width: 100%; display: block; mix-blend-mode: multiply; filter: drop-shadow(0 12px 24px rgba(0,0,0,.12)); }
-        .pw-login-logo:before { content: ""; position: absolute; width: 140px; height: 140px; background: rgba(0,200,150,.25); filter: blur(50px); z-index: -1; }
+        .pw-login-logo:before { content: ""; position: absolute; width: 140px; height: 140px; background: rgba(10, 157, 110,.25); filter: blur(50px); z-index: -1; }
 
         .pw-login-h1 { margin: 10px 0 8px; font-size: 38px; letter-spacing: -.05em; color: #1d1d1f; font-weight: 800; text-align: center; }
         .pw-login-desc { font-size: 15px; color: #86868b; margin-bottom: 35px; text-align: center; }
@@ -338,7 +335,7 @@ export function Login() {
         .pw-login-field { margin-bottom: 22px; }
         .pw-login-label { font-size: 13px; font-weight: 700; display: block; margin-bottom: 8px; color: #1d1d1f; }
         .pw-login-box { height: 56px; display: flex; align-items: center; background: rgba(255,255,255,.75); border-radius: 18px; border: 1px solid rgba(0,0,0,.06); transition: .3s; position: relative; }
-        .pw-login-box:focus-within { border-color: #00c896; box-shadow: 0 0 0 5px rgba(0,200,150,.15); background: #ffffff; }
+        .pw-login-box:focus-within { border-color: #0A9D6E; box-shadow: 0 0 0 5px rgba(10, 157, 110,.15); background: #ffffff; }
 
         .pw-login-box input { width: 100%; height: 100%; border: 0; outline: 0; background: none!important; padding: 0 15px; font-size: 16px; color: #1d1d1f!important; font-family: inherit; }
         .pw-login-box input:-webkit-autofill,
@@ -349,14 +346,14 @@ export function Login() {
         .pw-login-remember { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #1d1d1f; cursor: pointer; user-select: none; }
         
         .pw-login-switch { width: 44px; height: 25px; border-radius: 20px; background: #e5e5ea; position: relative; cursor: pointer; transition: background .25s; display: inline-block; }
-        .pw-login-switch.active { background: #00c896; }
+        .pw-login-switch.active { background: #0A9D6E; }
         .pw-login-switch:after { content: ""; position: absolute; width: 21px; height: 21px; background: white; border-radius: 50%; left: 2px; top: 2px; transition: transform .25s, left .25s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         .pw-login-switch.active:after { left: 21px; }
 
-        .pw-login-forgot { color: #00c896; font-weight: 600; font-size: 14px; background: none; border: none; cursor: pointer; padding: 0; }
+        .pw-login-forgot { color: #0A9D6E; font-weight: 600; font-size: 14px; background: none; border: none; cursor: pointer; padding: 0; }
 
-        .pw-root button.pw-login-btn, button.pw-login-btn, .pw-login-btn { height: 58px!important; width: 100%!important; border: 0!important; border-radius: 20px!important; background: linear-gradient(135deg, #00c896, #007aff)!important; color: white!important; font-size: 17px!important; font-weight: 700!important; cursor: pointer!important; box-shadow: 0 15px 35px rgba(0,122,255,.3)!important; transition: .25s!important; display: flex!important; align-items: center!important; justify-content: center!important; gap: 8px!important; }
-        .pw-root button.pw-login-btn:hover, button.pw-login-btn:hover, .pw-login-btn:hover { transform: translateY(-3px)!important; box-shadow: 0 20px 40px rgba(0,122,255,.4)!important; }
+        .pw-root button.pw-login-btn, button.pw-login-btn, .pw-login-btn { height: 58px!important; width: 100%!important; border: 0!important; border-radius: 20px!important; background: linear-gradient(135deg, #0A9D6E, #E8A93A)!important; color: white!important; font-size: 17px!important; font-weight: 700!important; cursor: pointer!important; box-shadow: 0 15px 35px rgba(232, 169, 58,.3)!important; transition: .25s!important; display: flex!important; align-items: center!important; justify-content: center!important; gap: 8px!important; }
+        .pw-root button.pw-login-btn:hover, button.pw-login-btn:hover, .pw-login-btn:hover { transform: translateY(-3px)!important; box-shadow: 0 20px 40px rgba(232, 169, 58,.4)!important; }
         .pw-root button.pw-login-btn:active, button.pw-login-btn:active, .pw-login-btn:active { transform: scale(.97)!important; }
 
         @media(max-width:500px){ .pw-login-card { padding: 30px; } .pw-login-h1 { font-size: 32px; } }
@@ -429,34 +426,44 @@ export function Login() {
         )}
       </div>
 
-      {forgot && <ForgotPassword usernames={usernames} onClose={() => setForgot(false)} />}
+      {forgot && <ForgotPassword initialUsername={username} onClose={() => setForgot(false)} />}
     </div>
   );
 }
-export function ForgotPassword({ usernames, onClose }) {
-  const [step, setStep] = useState(1); // 1=email, 2=otp+newpw, 3=done
-  const [username, setUsername] = useState("");
-  const [sentOtp, setSentOtp] = useState(""); // shown on-screen since email is simulated
-  const [otp, setOtp] = useState("");
+export function ForgotPassword({ initialUsername = "", onClose }) {
+  const [step, setStep] = useState(1); // 1=id+password+confirm, 2=done
+  const [username, setUsername] = useState(initialUsername);
   const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [countdown, setCountdown] = useState(3); // 3,2,1 → auto-return to sign in
 
-  const sendCode = async () => {
-    if (!username) { setErr("Select your email."); return; }
-    setErr(""); setBusy(true);
-    try { const code = await api.requestOtp(username); setSentOtp(code); setStep(2); }
-    catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
-  };
   const doReset = async () => {
-    if (otp.length !== 4) { setErr("Enter the 4-digit code."); return; }
+    if (!username.trim()) { setErr("Enter your User ID."); return; }
     if (newPw.length < 6) { setErr("New password must be at least 6 characters."); return; }
+    if (newPw !== confirmPw) { setErr("Passwords don't match."); return; }
     setErr(""); setBusy(true);
-    try { await api.resetPasswordWithOtp(username, otp, newPw); setStep(3); }
+    try { await api.resetPassword(username.trim(), newPw); setStep(2); }
     catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   };
+
+  // Step 2 success screen counts down 3→2→1 and then returns to sign in on
+  // its own, so the user isn't stuck needing to click anything.
+  useEffect(() => {
+    if (step !== 2) return;
+    setCountdown(3);
+    const t = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) { clearInterval(t); onClose(); return 0; }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(13,40,24,.45)", backdropFilter: "blur(3px)", display: "grid", placeItems: "center", zIndex: 60, padding: 20 }}>
@@ -467,41 +474,41 @@ export function ForgotPassword({ usernames, onClose }) {
         </div>
 
         {step === 1 && <>
-          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>Enter your login ID and we'll send a 4-digit verification code to your registered email.</p>
-          <Field label="Email">
-            <div style={{ display: "flex" }}>
-              <input value={username} onChange={e => setUsername(e.target.value.replace(/[@\s]/g, ""))}
-                onKeyDown={e => e.key === "Enter" && sendCode()} placeholder="your-id"
-                style={{ ...inp, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }} />
-              <span style={{ display: "flex", alignItems: "center", padding: "0 12px", background: "var(--mint-2)", border: "1px solid var(--border)", borderLeft: "none", borderTopRightRadius: 11, borderBottomRightRadius: 11, color: "var(--slate)", fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap" }}>{EMAIL_DOMAIN}</span>
-            </div>
-          </Field>
-          {err && <div style={{ color: "#DC4141", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
-          <button onClick={sendCode} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Sending…" : "Send code"}</button>
-        </>}
-
-        {step === 2 && <>
-          <div style={{ fontSize: 13, background: "var(--mint-2)", borderRadius: 10, padding: "10px 12px", marginBottom: 16, color: "var(--forest)" }}>
-            A code was sent to <strong>{username}{EMAIL_DOMAIN}</strong>.<br />
-            <span style={{ color: "var(--muted)" }}>Demo mode — your code is</span> <strong style={{ letterSpacing: 2, fontSize: 16 }}>{sentOtp}</strong>
-          </div>
-          <Field label="4-digit code">
-            <input value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="0000" inputMode="numeric"
-              style={{ ...inp, letterSpacing: 8, fontSize: 18, textAlign: "center", fontWeight: 700 }} />
+          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>Enter your User ID and a new password.</p>
+          <Field label="User ID">
+            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="your-id" style={inp} />
           </Field>
           <Field label="New password">
-            <input type="text" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters" style={inp} />
+            <div style={{ display: "flex" }}>
+              <input type={showPw ? "text" : "password"} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters"
+                style={{ ...inp, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }} />
+              <span onClick={() => setShowPw(s => !s)} style={{ display: "flex", alignItems: "center", padding: "0 12px", background: "var(--mint-2)", border: "1px solid var(--border)", borderLeft: "none", borderTopRightRadius: 11, borderBottomRightRadius: 11, color: "var(--muted)", cursor: "pointer" }}>
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </span>
+            </div>
           </Field>
+          <Field label="Confirm new password">
+            <input type={showPw ? "text" : "password"} value={confirmPw} onChange={e => setConfirmPw(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && doReset()} placeholder="Re-enter the same password" style={inp} />
+          </Field>
+          {newPw && confirmPw && newPw !== confirmPw && (
+            <div style={{ color: "#986315", fontSize: 12.5, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={14} />Passwords don't match yet.</div>
+          )}
           {err && <div style={{ color: "#DC4141", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
           <button onClick={doReset} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Resetting…" : "Reset password"}</button>
-          <button onClick={() => { setStep(1); setOtp(""); setErr(""); }} style={{ width: "100%", marginTop: 8, fontSize: 12.5, color: "var(--muted)" }}>Use a different email</button>
         </>}
 
-        {step === 3 && <div style={{ textAlign: "center", padding: "10px 0" }}>
+        {step === 2 && <div style={{ textAlign: "center", padding: "10px 0" }}>
           <div style={{ display: "inline-flex", width: 52, height: 52, borderRadius: 999, background: "#E2F3EE", color: "#08805A", alignItems: "center", justifyContent: "center", marginBottom: 12 }}><CheckCircle2 size={26} /></div>
           <h4 style={{ fontSize: 18, marginBottom: 6 }}>Password updated</h4>
           <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>You can now sign in with your new password.</p>
-          <button onClick={onClose} style={{ ...btnPrimary, width: "100%" }}>Back to sign in</button>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 999, background: "var(--mint-2)", color: "var(--forest)", display: "grid", placeItems: "center", fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+              {countdown}
+            </div>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>Returning to sign in…</span>
+          </div>
+          <button onClick={onClose} style={{ ...btnPrimary, width: "100%" }}>Back to sign in now</button>
         </div>}
       </div>
     </div>
@@ -646,10 +653,123 @@ export const WowMomTT = ({ active, payload, label }) => {
     </div>
   );
 };
-export const Loading = () => <div style={{ display: "grid", placeItems: "center", padding: 80, color: "var(--muted)" }}>
-  <div style={{ width: 32, height: 32, border: "3px solid var(--border)", borderTopColor: "var(--teal)", borderRadius: 999, animation: "spin 1s linear infinite" }} />
-  <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-</div>;
+export function ProWaterLogo({ size = 36, style = {}, className = "", badge = false }) {
+  const logoImg = (
+    <img
+      src="prowater_logo_transparent_1200x1200.png"
+      alt="ProWater Logo"
+      className={`pw-official-logo ${className}`}
+      style={{
+        height: size,
+        width: "auto",
+        maxHeight: size,
+        objectFit: "contain",
+        display: "block",
+        filter: "drop-shadow(0 2px 8px rgba(10, 157, 110,0.25))",
+        ...style
+      }}
+    />
+  );
+
+  if (!badge) return logoImg;
+
+  return (
+    <div className={`pw-logo-badge ${className}`} style={{
+      background: "rgba(255, 255, 255, 0.94)",
+      backdropFilter: "blur(12px)",
+      WebkitBackdropFilter: "blur(12px)",
+      borderRadius: Math.round(size * (10 / 36)),
+      padding: "3px 8px",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 4px 14px rgba(10, 157, 110, 0.25), inset 0 1px 0 #ffffff",
+      border: "1px solid rgba(255, 255, 255, 0.8)",
+      flex: "0 0 auto",
+      ...style
+    }}>
+      {logoImg}
+    </div>
+  );
+}
+
+export const Loading = ({ title = "Loading Workspace Data", subtitle = "Synchronizing live records & telemetry…", showSkeleton = true }) => (
+  <div className="fade-up ov-sans" style={{ minHeight: "calc(100vh - 200px)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "50px 20px" }}>
+    <style>{`
+      @keyframes pw-ripple {
+        0% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(10, 157, 110, 0.4); }
+        50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 0 20px rgba(10, 157, 110, 0); }
+        100% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(10, 157, 110, 0); }
+      }
+      @keyframes pw-spin-ring {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      @keyframes pw-shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .pw-skeleton-bar {
+        background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%);
+        background-size: 200% 100%;
+        animation: pw-shimmer 1.8s infinite ease-in-out;
+        border-radius: 8px;
+      }
+    `}</style>
+
+    {/* Main Animated Water Droplet Spinner Emblem with ProWater Logo */}
+    <div style={{ position: "relative", width: 84, height: 84, display: "grid", placeItems: "center", marginBottom: 24 }}>
+      {/* Outer Rotating Dotted Ring */}
+      <div style={{ position: "absolute", inset: -10, borderRadius: "50%", border: "2px dashed rgba(10, 157, 110, 0.3)", animation: "pw-spin-ring 12s linear infinite" }} />
+
+      {/* Conic Gradient Spinner Ring */}
+      <div style={{
+        position: "absolute", inset: 0, borderRadius: "50%",
+        background: "conic-gradient(from 0deg, #0A9D6E, #036EA9, #0A9D6E 80%, transparent 100%)",
+        WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
+        mask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
+        animation: "pw-spin-ring 1.2s linear infinite",
+      }} />
+
+      {/* Center Glowing Orb with Official ProWater Logo */}
+      <div style={{
+        width: 58, height: 58, borderRadius: "50%",
+        background: "rgba(255,255,255,0.95)",
+        boxShadow: "0 8px 24px rgba(10, 157, 110, 0.38)",
+        display: "grid", placeItems: "center",
+        animation: "pw-ripple 2.4s infinite ease-in-out",
+        padding: 6
+      }}>
+        <ProWaterLogo size={38} badge={false} />
+      </div>
+    </div>
+
+    {/* Text Readout & Sync Status */}
+    <div style={{ textAlign: "center", marginBottom: showSkeleton ? 32 : 0 }}>
+      <h3 style={{ fontSize: 17, fontWeight: 750, color: "var(--f, #1D1D1F)", margin: 0, letterSpacing: "-.02em" }}>
+        {title}
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--muted, #86868B)", marginTop: 5, marginBottom: 0 }}>
+        {subtitle}
+      </p>
+    </div>
+
+    {/* HIG Skeleton Layout Preview */}
+    {showSkeleton && (
+      <div style={{ width: "100%", maxWidth: 860, background: "rgba(255,255,255,0.72)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid var(--border, rgba(0,0,0,0.06))", borderRadius: 20, padding: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.03)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+          <div className="pw-skeleton-bar" style={{ height: 60 }} />
+          <div className="pw-skeleton-bar" style={{ height: 60 }} />
+          <div className="pw-skeleton-bar" style={{ height: 60 }} />
+        </div>
+        <div className="pw-skeleton-bar" style={{ height: 38, marginBottom: 12, width: "100%" }} />
+        <div className="pw-skeleton-bar" style={{ height: 24, marginBottom: 8, width: "95%" }} />
+        <div className="pw-skeleton-bar" style={{ height: 24, marginBottom: 8, width: "88%" }} />
+        <div className="pw-skeleton-bar" style={{ height: 24, width: "92%" }} />
+      </div>
+    )}
+  </div>
+);
 export const Empty = ({ msg }) => <div style={{ padding: "28px", textAlign: "center", color: "var(--muted)", fontSize: 13.5 }}>{msg}</div>;
 export const ApiError = ({ msg }) => (
   <div style={{ padding: "40px 28px", textAlign: "center", color: "var(--slate)" }}>
