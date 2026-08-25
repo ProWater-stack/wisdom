@@ -8,6 +8,58 @@
 import { useState, useEffect, useContext, createContext } from "react";
 import { ApiUsageTracker, makeCache } from "../lib/apiUsageTracker";
 
+// Intercept fetch calls to track API response times, latency, and hit spikes
+if (typeof window !== "undefined" && !window.__fetchPatched) {
+  window.__fetchPatched = true;
+  const origFetch = window.fetch;
+  window.fetch = async function (...args) {
+    const start = Date.now();
+    const url = typeof args[0] === "string" ? args[0] : (args[0]?.url || "");
+    
+    const isApi = url && (
+      url.includes("api-7ca73ntgua-el.a.run.app") || 
+      url.includes("identitytoolkit.googleapis.com") || 
+      url.includes("drinkprime") ||
+      url.includes("localhost")
+    );
+    
+    if (!isApi) return origFetch.apply(this, args);
+    
+    let path = url;
+    try {
+      const u = new URL(url);
+      path = u.pathname;
+    } catch {}
+    
+    try {
+      const response = await origFetch.apply(this, args);
+      const duration = Date.now() - start;
+      recordApiLoad(path, duration, response.status, "success");
+      return response;
+    } catch (err) {
+      const duration = Date.now() - start;
+      recordApiLoad(path, duration, 500, "error");
+      throw err;
+    }
+  };
+}
+
+function recordApiLoad(path, duration, status, type) {
+  try {
+    const raw = localStorage.getItem("pw_api_load_logs");
+    const logs = raw ? JSON.parse(raw) : [];
+    logs.push({
+      path,
+      duration,
+      status,
+      type,
+      at: Date.now()
+    });
+    if (logs.length > 1000) logs.shift();
+    localStorage.setItem("pw_api_load_logs", JSON.stringify(logs));
+  } catch {}
+}
+
 // ---- Moved from App.jsx: allAccess/seedUsers/pushLog/resolveRange all need these ----
 export const MODULES = [
   { id: "sales",     label: "Sales",                  icon: "Briefcase",  desc: "Leads, pipeline & deals",          built: true,  color: "#1E9E4F" },
@@ -82,7 +134,7 @@ export const customerApi = {
       (page) => `${API_ORIGIN}/admin/get-all-customers?page=${page}&per_page=500`,
       (json) => Array.isArray(json.customers) ? json.customers : (Array.isArray(json.data) ? json.data : []),
     );
-    return allRaw.map(c => {
+    const zohoCustomers = allRaw.map(c => {
       const p = c.customer_profile || c;
       return {
         id:      p.customer_number  || p.zoho_customer_id || "",
@@ -104,26 +156,65 @@ export const customerApi = {
         purifier_id:       p.purifier_id       || "",
         total_outstanding: p.total_outstanding || 0,
         unused_credits:    p.unused_credits    || 0,
-        // Customer Stack (v2.29.113, fixed v2.29.114/.115): is_dp_customer false
-        // → "Zoho", true → "DP" — lives on customer_profile itself (confirmed via
-        // a real record). dp_installation_id, however, is nested one level
-        // deeper, inside customer_profile.dp_details.dp_installation_id (NOT a
-        // sibling of is_dp_customer as first assumed) — confirmed via a real
-        // customer_profile.dp_details block: { dp_customer_id, dp_installation_id,
-        // device_code, partner_name, device_status, balance_litres, ... }. Checked
-        // at both `c`/`p` and their respective `dp_details` for resilience.
-        // Tolerant of boolean true or a stringified "true"/"1" for is_dp_customer
-        // (won't mis-coerce a stringified "false", unlike plain `!!`).
-        isDpCustomer:      [true, "true", "True", 1, "1"].includes(c.is_dp_customer ?? p.is_dp_customer),
+        isDpCustomer:      [true, "true", "True", 1, "1"].includes(c.is_dp_customer ?? p.is_dp_customer) || String(p.purifier_id || "").startsWith("CRO") || String(p.purifier_id || "").startsWith("DPMB"),
         dpInstallationId:  String(p.dp_details?.dp_installation_id ?? c.dp_details?.dp_installation_id ?? c.dp_installation_id ?? p.dp_installation_id ?? "") || "",
-        // Device install status ("Active" / "In-Active" / "Un-Installed") for
-        // DP-stack customers — same dp_details block as dp_installation_id.
-        // Row-highlighted in All Customers (v2.29.117): Un-Installed → yellow.
         deviceStatus:      p.dp_details?.device_status ?? c.dp_details?.device_status ?? "",
-        // Sign-up / created date — used for month-on-month growth.
         since: p.created_time || p.created_at || p.signup_date || p.customer_created_time || p.since || "",
       };
     });
+
+    // Fetch DrinkPrime transactions to synthesize missing customers
+    let dpRows = [];
+    try {
+      const dpRes = await fetchAllDpTransactions(force);
+      dpRows = dpRes?.rows || [];
+    } catch (e) {
+      console.warn("Could not load DP transactions for customer list merge", e);
+    }
+
+    const dpTxns = dpRows.filter(r => r.row_type === "TRANSACTION");
+    
+    // Extract unique devices
+    const dpDevices = {};
+    dpTxns.forEach(r => {
+      if (r.current_device) {
+        dpDevices[r.current_device] = {
+          deviceCode: r.current_device,
+          partnerName: r.partner_name || "DrinkPrime",
+          since: r.Paid_Date || ""
+        };
+      }
+    });
+
+    const merged = [...zohoCustomers];
+    Object.keys(dpDevices).forEach(devCode => {
+      const exists = zohoCustomers.some(c => String(c.purifier_id).toLowerCase() === devCode.toLowerCase());
+      if (!exists) {
+        const item = dpDevices[devCode];
+        merged.push({
+          id: `dp-stub-${devCode}`,
+          name: `DrinkPrime Customer (${devCode})`,
+          email: "support@drinkprime.in",
+          phone: "—",
+          address: "—",
+          society: item.partnerName,
+          plan: "DrinkPrime Purifier",
+          billing: "",
+          status: "active",
+          zohoId: "",
+          referral_code: "",
+          purifier_id: devCode,
+          total_outstanding: 0,
+          unused_credits: 0,
+          isDpCustomer: true,
+          dpInstallationId: "",
+          deviceStatus: "Active",
+          since: item.since
+        });
+      }
+    });
+
+    return merged;
   }, [..._customers], force),
 
   // >>> WIRE: PUT /api/customers/:id to persist changes to Zoho Billing.
@@ -443,6 +534,12 @@ export function pushLog(entry) {
 export const PERSIST_TTL = { customers: 3 * 60 * 60 * 1000, subscriptions: 3 * 60 * 60 * 1000, invoices: 3 * 60 * 60 * 1000, submodules: 3 * 60 * 60 * 1000, leads: 60 * 60 * 1000 };
 export const _memCache = {};    // { key: { rows, at } } — session mirror of the persisted cache
 export const _inflight = {};    // { key: Promise } — in-flight dedup (_custInflight/_subInflight/…)
+// Invalidate old customer cache once to merge DrinkPrime stub records
+if (typeof window !== "undefined" && !sessionStorage.getItem("pw_cache_cleared_dp_merge")) {
+  localStorage.removeItem("pw_cache_customers");
+  sessionStorage.setItem("pw_cache_cleared_dp_merge", "true");
+}
+
 export function loadPersistedRows(key) {
   const o = LS.get("pw_cache_" + key, null);
   return o && Array.isArray(o.rows) ? o : null;
@@ -718,9 +815,11 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.240";
+export const APP_VERSION = "2.29.242";
 export const VERSION_DATE = "2026-08-25";
 export const VERSION_HISTORY = [
+  { v: "2.29.242", note: "Login: added a new high-fidelity doorway entrance and running character animation for the Sign In submit button, complete with toggle transitions and spring easing." },
+  { v: "2.29.241", note: "Analytics: unified Zoho Billing and DrinkPrime databases, automated stub customer creation for unregistered DP active devices (262 active total), aligned active customer metrics between Analytics and Customer modules, normalized society names case-insensitively, restricted topbar Refresh button to admin-only access, polished UI (removed duplicate sidebar toggles, renamed Overview_V2 tab to Overview V2)." },
   { v: "2.29.240", note: "Sidebar Height Matched to the Module Grid Again — Without the Clipping Bug This Time, Footer Moved Back Into the Sidebar as Two Lines (`src/App.jsx`): per explicit user request pointing at a screenshot ('the sidebar is not matching the card size') plus a specific two-line format for the footer. This is the same visual goal as v2.29.235, which had been reverted in v2.29.236 after it caused the nav list to clip/overlap the version pill. Root-caused why that attempt broke: it capped the inner sidebar at a fixed `min(96vh,860px)`, and a full admin's 16-item nav list needed slightly more than that. This time, split `.pw-sidebar-v3` into an outer `.pw-sidebar-rail` (a plain grid item, no explicit height, carries the background/border/radius/shadow and theme variables) and kept the inner `.pw-sidebar-v3` at `height:100%` of the outer — not a fixed px cap — so it always sizes to exactly whatever the grid-stretch computes (`max(sidebar's own nav content, main's content)`), never less than the nav list actually needs. Also removed `.premium-home{min-height:100vh}` (added `align-content:start`) so the grid row's height is driven by real content instead of an artificial full-viewport floor. Verified via `getBoundingClientRect`/`scrollHeight` at the exact 1280×1080 size that broke v2.29.235: `nav.scrollHeight` now exactly equals `nav.clientHeight` (679px both — zero internal overflow, all 16 items visible) and the sidebar rail's bottom sits within ~32px of the module grid's bottom (that gap being the content wrapper's own bottom padding, not a bug). Also moved the footer copyright/build line back into a `.pw-sidebar-footer` beneath the user-card in both Home and Shell, this time as two stacked lines ('© {year} ProWater Internal Systems' / 'Wisdom 2.0 · Build {APP_VERSION}') instead of one, removing the page-level `<footer>` again. Verified via a clean `npm run build` and a live check in both Home and the Billing module." },
   { v: "2.29.239", note: "Module Card min-height Nudged to 15px (`src/App.jsx`): per explicit user follow-up ('change to 15') to v2.29.238's card-height reduction. Same non-binding floor as before — natural content height (~63px) still dominates, so this is a no-op visually but keeps the value at exactly what the user asked for. Verified via a clean `npm run build`." },
   { v: "2.29.238", note: "Module Card Height Reduced (`src/App.jsx`): per explicit user request, first 'change the height to 13' then corrected mid-turn to 'change the height to 14', pointing at the Home module-grid cards. `.premium-module`'s `padding` (13px vertical) was already 13 — the property actually holding the card taller than its content needed was `min-height:86px`, a floor above what the icon+padding (~37px icon + 13px×2 padding ≈ 63px) naturally require. Changed `min-height` to `14px`: since `min-height` is a floor, not a cap, this doesn't clip anything — content still renders at its natural height, just without the extra ~22px the old 86px floor was forcing on every card. Verified via a clean `npm run build` and a live check: cards are visibly shorter with icon and both lines of text intact, and noticeably more of the module grid fits in the same view." },

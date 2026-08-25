@@ -13,7 +13,7 @@ import {
   CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Coins, Download,
   Droplets, GitBranch, Hourglass, Info, Landmark, PlayCircle, Receipt,
   RefreshCw, Repeat, RotateCcw, Scale, ScrollText, Search, Target, Ticket,
-  TrendingUp, Upload, Users, Wallet, X,
+  TrendingUp, Upload, Users, Wallet, X, Cpu, Clock, Zap,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -164,13 +164,14 @@ export const setFlatsOverride = (society, val) => {
   LS.set("pw_flats_overrides", _flatsOverrides);
 };
 
-export function AnalyticsOverview({ isAdmin = false }) {
+export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [, setFlatsTick] = useState(0);   // re-render after a Total-Flats edit
   const { sel, setSel, range } = useDateRange("this_month");   // working date filter
   const [selSoc, setSelSoc] = useState(null);                  // society filter (null = all)
+  const [selSource, setSelSource] = useState(null);            // revenue source filter (null = all)
   useEffect(() => {
     api.logView(user.username, "Viewed Analytics overview");
     // Each source fails soft (→ []) so one dead endpoint doesn't blank the page.
@@ -181,15 +182,16 @@ export function AnalyticsOverview({ isAdmin = false }) {
       api.getReferrers().catch(() => []),
       ticketApi.getTickets().catch(() => []),
       apartmentApi.getAll().catch(() => []),
+      combined ? fetchAllDpTransactions().catch(() => []) : Promise.resolve({ rows: [] }),
     ])
-      .then(([customers, subs, invs, referrers, tickets, apartments]) =>
-        setData({ customers, subs, invs, referrers, tickets, apartments }))
+      .then(([customers, subs, invs, referrers, tickets, apartments, dpResult]) =>
+        setData({ customers, subs, invs, referrers, tickets, apartments, dpRows: dpResult?.rows || [] }))
       .catch(e => setErr(e.message || "Could not load analytics overview."));
-  }, []);
+  }, [combined]);
   if (err) return <ApiError msg={err} />;
   if (!data) return <Loading title="Loading Analytics Overview" subtitle="Synchronizing cross-module performance data…" />;
 
-  const { customers, subs, invs, referrers, tickets, apartments } = data;
+  const { customers, subs, invs, referrers, tickets, apartments, dpRows } = data;
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
   const now = new Date();
   const prev = prevRange(sel.preset, range);                   // like-for-like comparison window
@@ -217,7 +219,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
 
   // ---- society-filtered base sets -------------------------------------------
   const fInvs = invs.filter(i => socOk(societyOf(i)));
-  const fCustomers = customers.filter(c => socOk(c.society || "Unknown"));
+  const fCustomers = customers.filter(c => c.purifier_id && socOk(c.society || "Unknown"));
   const fPaid = fInvs.filter(i => i.status === "paid");
 
   // ---- range slices (current period vs previous equal period) ---------------
@@ -247,7 +249,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
   const earnedRevenue = Math.round(sum(paidCur, earnedOf));
   const earnedPrev = Math.round(sum(paidPrev, earnedOf));
 
-  const activeCustomers = fCustomers.filter(c => c.status === "active").length;
+  const activeCustomers = fCustomers.filter(c => !c.isDpCustomer && ["active", "in-active", "dunning"].includes(String(c.status || "").toLowerCase())).length;
   const newThisMonth = fCustomers.filter(c => inR(c.since, range)).length;
   const newPrev = fCustomers.filter(c => inR(c.since, prev)).length;
   const custBase = Math.max(0, activeCustomers - newThisMonth);
@@ -375,6 +377,8 @@ export function AnalyticsOverview({ isAdmin = false }) {
     const pctChange = p > 0 ? Math.round(((x.collected - p) / p) * 1000) / 10 : null;
     return {
       label: monthShort(x.y, x.m),
+      y: x.y,
+      m: x.m,
       collected: Math.round(x.collected),
       pct: pctChange
     };
@@ -452,6 +456,204 @@ export function AnalyticsOverview({ isAdmin = false }) {
     { label: "Tickets Open", value: ticketsOpen.toLocaleString("en-IN"), icon: Ticket },
   ];
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // DP + COMBINED ANALYTICS — computed from dpRows (TRANSACTION rows only)
+  // ──────────────────────────────────────────────────────────────────────────
+  const dpTxns = (dpRows || []).filter(r => r.row_type === "TRANSACTION");
+
+  // Date-slice helper for DP rows (uses Paid_Date)
+  const dpInR = (r, rg) => {
+    if (!r.Paid_Date) return false;
+    const d = new Date(r.Paid_Date);
+    return !isNaN(d) && d >= rg.from && d <= rg.to;
+  };
+
+  const dpCur = dpTxns.filter(r => dpInR(r, range));
+  const dpPrv = dpTxns.filter(r => dpInR(r, prev));
+
+  // Totals for current period
+  const dpRechargeCur  = dpCur.reduce((s, r) => s + (Number(r.revenue_amount)  || 0), 0);
+  const dpDepositCur   = dpCur.reduce((s, r) => s + (Number(r.deposit_amount)   || 0), 0);
+  const dpTotalCur     = dpRechargeCur + dpDepositCur;
+
+  const dpRechargePrv  = dpPrv.reduce((s, r) => s + (Number(r.revenue_amount)  || 0), 0);
+  const dpDepositPrv   = dpPrv.reduce((s, r) => s + (Number(r.deposit_amount)   || 0), 0);
+  const dpTotalPrv     = dpRechargePrv + dpDepositPrv;
+
+  // Combined (Zoho Billing + DP) revenue for current period
+  const combinedRevCur  = collections + dpTotalCur;
+  const combinedRevPrv  = collectionsPrev + dpTotalPrv;
+  const combinedRechargeCur = netRevenue + dpRechargeCur;
+  const combinedDepositCur  = depositCollected + dpDepositCur;
+
+  // Unique DP devices / customers
+  const dpUniqueDevices = fCustomers.filter(c => c.isDpCustomer && ["active", "in-active", "dunning"].includes(String(c.status || "").toLowerCase())).length;
+  const dpUniqueApts    = new Set(dpTxns.map(r => r.partner_name).filter(Boolean)).size;
+
+  // Combined SaaS metrics
+  const totalCombinedCustomers = activeCustomers + dpUniqueDevices;
+  const arpu = totalCombinedCustomers > 0 ? (combinedRechargeCur / totalCombinedCustomers) : 0;
+  const ltv = arpu / 0.015; // 1.5% monthly churn rate
+
+  // DP Apartment-level breakdown (current period)
+  const dpAptAgg = {};
+  dpCur.forEach(r => {
+    const apt = r.partner_name || "Unknown";
+    if (!dpAptAgg[apt]) dpAptAgg[apt] = { apt, recharge: 0, deposit: 0, txns: 0, devices: new Set() };
+    dpAptAgg[apt].recharge += Number(r.revenue_amount) || 0;
+    dpAptAgg[apt].deposit  += Number(r.deposit_amount)  || 0;
+    dpAptAgg[apt].txns     += 1;
+    if (r.current_device) dpAptAgg[apt].devices.add(r.current_device);
+  });
+  const dpAptRows = Object.values(dpAptAgg)
+    .map(a => ({ ...a, total: a.recharge + a.deposit, devices: a.devices.size }))
+    .sort((a, b) => b.total - a.total);
+
+  // Helper to normalize and match Zoho and DrinkPrime apartment/society names case-insensitively
+  const cleanAptName = (n) => {
+    if (!n) return "";
+    let s = String(n).trim();
+    s = s.replace(/^cro[_\s]+/i, ""); // strip leading "CRO_" or "CRO "
+    s = s.replace(/\s*\[[^\]]+\]/g, ""); // strip trailing brackets like "[ Thubarahalli ]"
+    return s.trim();
+  };
+
+  // Combined Zoho + DP Apartment-level breakdown (current period)
+  const combinedAptAgg = {};
+  societies.forEach(s => {
+    const name = cleanAptName(s.society);
+    if (name) {
+      combinedAptAgg[name] = {
+        name,
+        zohoRecharge: 0,
+        zohoDeposit: 0,
+        dpRecharge: 0,
+        dpDeposit: 0,
+        totalCollected: 0,
+        devices: 0,
+        deviceSet: new Set()
+      };
+    }
+  });
+
+  paidCur.forEach(i => {
+    const rawSoc = societyOf(i); if (!rawSoc) return;
+    const soc = cleanAptName(rawSoc);
+    if (!combinedAptAgg[soc]) {
+      combinedAptAgg[soc] = {
+        name: soc,
+        zohoRecharge: 0,
+        zohoDeposit: 0,
+        dpRecharge: 0,
+        dpDeposit: 0,
+        totalCollected: 0,
+        devices: 0,
+        deviceSet: new Set()
+      };
+    }
+    const depVal = depositForCustomer(custOf(i), i.plan, i.total, i.planCode);
+    const rechVal = Math.max(0, i.total - depVal);
+    combinedAptAgg[soc].zohoRecharge += rechVal;
+    combinedAptAgg[soc].zohoDeposit += depVal;
+    combinedAptAgg[soc].totalCollected += i.total;
+  });
+
+  dpCur.forEach(r => {
+    const rawName = r.partner_name || "Unknown";
+    const name = cleanAptName(rawName);
+    if (!combinedAptAgg[name]) {
+      combinedAptAgg[name] = {
+        name,
+        zohoRecharge: 0,
+        zohoDeposit: 0,
+        dpRecharge: 0,
+        dpDeposit: 0,
+        totalCollected: 0,
+        devices: 0,
+        deviceSet: new Set()
+      };
+    }
+    const rechVal = Number(r.revenue_amount) || 0;
+    const depVal = Number(r.deposit_amount) || 0;
+    combinedAptAgg[name].dpRecharge += rechVal;
+    combinedAptAgg[name].dpDeposit += depVal;
+    combinedAptAgg[name].totalCollected += (rechVal + depVal);
+    if (r.current_device) {
+      combinedAptAgg[name].deviceSet.add(r.current_device);
+    }
+  });
+
+  // Calculate actual unique device sizes
+  Object.values(combinedAptAgg).forEach(apt => {
+    apt.devices = apt.deviceSet ? apt.deviceSet.size : 0;
+  });
+
+  const allAptRows = Object.values(combinedAptAgg)
+    .filter(r => r.totalCollected > 0)
+    .sort((a, b) => b.totalCollected - a.totalCollected);
+
+  // Plan Distribution calculation (Zoho plan subscriptions + DP active purifiers)
+  const planCounts = {};
+  subs.forEach(s => {
+    if (["live", "active", "in_trial"].includes(String(s.status || "").toLowerCase())) {
+      const p = s.plan || "Zoho Standard";
+      planCounts[p] = (planCounts[p] || 0) + 1;
+    }
+  });
+  planCounts["DrinkPrime Purifier"] = dpUniqueDevices;
+  const planDistributionData = Object.entries(planCounts).map(([name, value]) => ({
+    name,
+    value
+  })).sort((a, b) => b.value - a.value);
+
+  // Under-penetrated apartments calculation (Connection Density)
+  const penetrationRisk = [];
+  Object.values(combinedAptAgg).forEach(apt => {
+    const zSoc = societies.find(s => cleanAptName(s.society).toLowerCase() === apt.name.toLowerCase());
+    const flats = zSoc ? (zSoc.totalFlats || 0) : 0;
+    const activeDp = apt.devices || 0;
+    const activeZoho = zSoc ? (zSoc.active || 0) : 0;
+    const totalActive = activeZoho + activeDp;
+    const pctVal = flats > 0 ? Math.round((totalActive / flats) * 100) : 0;
+    
+    if (flats > 0) {
+      penetrationRisk.push({
+        name: apt.name,
+        flats,
+        active: totalActive,
+        pct: pctVal
+      });
+    }
+  });
+  const underPenetratedApts = penetrationRisk
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, 5);
+
+  // Revenue by Source donut (for current period)
+  const revBySource = [
+    { name: "Zoho Recharge", value: Math.round(netRevenue),      fill: "#08805A" },
+    { name: "Zoho Deposit",  value: Math.round(depositCollected), fill: "#34d399" },
+    { name: "DP Recharge",   value: Math.round(dpRechargeCur),   fill: "#1E9E4F" },
+    { name: "DP Deposit",    value: Math.round(dpDepositCur),    fill: "#86efac" },
+  ].filter(x => x.value > 0);
+
+  // 7-month stacked chart: Zoho collected + DP collected per month
+  const dpM7 = m7.map(x => {
+    const dpCol = dpTxns.filter(r => {
+      if (!r.Paid_Date) return false;
+      const d = new Date(r.Paid_Date);
+      return !isNaN(d) && d.getFullYear() === x.y && d.getMonth() === x.m;
+    }).reduce((s, r) => s + (Number(r.revenue_amount) || 0) + (Number(r.deposit_amount) || 0), 0);
+    return { label: monthShort(x.y, x.m), y: x.y, m: x.m, zoho: Math.round(x.collected), dp: Math.round(dpCol), total: Math.round(x.collected + dpCol) };
+  });
+
+  // DP MoM trend
+  const dpMoM = dpM7.map((x, i) => ({
+    ...x,
+    dpPct: i > 0 && dpM7[i - 1].dp > 0
+      ? Math.round(((x.dp - dpM7[i - 1].dp) / dpM7[i - 1].dp) * 100) : null
+  }));
+
   // ---- controls --------------------------------------------------------------
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
@@ -487,8 +689,10 @@ export function AnalyticsOverview({ isAdmin = false }) {
         </div>
       </div>
 
-      {/* ── Executive Business Health & Briefing Banner ─────────────────────── */}
-      <div style={{
+      {!combined && (
+        <>
+          {/* ── Executive Business Health & Briefing Banner ─────────────────────── */}
+          <div style={{
         background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)",
         borderRadius: 20, padding: "18px 24px", color: "#fff", marginBottom: 18,
         boxShadow: "0 12px 30px rgba(8,128,90,0.25)", display: "flex", alignItems: "center",
@@ -700,7 +904,25 @@ export function AnalyticsOverview({ isAdmin = false }) {
         </div>
         <div style={{ height: 270 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={momData} margin={{ left: 8, right: 12, top: 26, bottom: 0 }}>
+            <ComposedChart
+              data={momData}
+              margin={{ left: 8, right: 12, top: 26, bottom: 0 }}
+              style={{ cursor: "pointer" }}
+              onClick={(state) => {
+                if (state && state.activePayload && state.activePayload.length) {
+                  const p = state.activePayload[0].payload;
+                  if (p.y != null && p.m != null) {
+                    const fromDate = new Date(p.y, p.m, 1);
+                    const toDate = new Date(p.y, p.m + 1, 0);
+                    setSel({
+                      preset: "custom",
+                      from: isoDay(fromDate),
+                      to: isoDay(toDate)
+                    });
+                  }
+                }
+              }}
+            >
               <defs>
                 <linearGradient id="momBarGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#08805A" />
@@ -740,20 +962,32 @@ export function AnalyticsOverview({ isAdmin = false }) {
               </tr>
             </thead>
             <tbody>
-              {societies.map(s => (
-                <tr key={s.society} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                  <td style={{ padding: "14px 18px", fontSize: 13.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap", textAlign: "center" }}>{s.society}</td>
-                  <td style={socTd}>{isAdmin
-                    ? <GsTextCell value={s.totalFlats || ""} editable type="number" width={78} placeholder="0" onCommit={v => { setFlatsOverride(s.society, v); setFlatsTick(t => t + 1); }} />
-                    : (s.totalFlats || "—")}</td>
-                  <td style={socTd}>{s.onboarded}</td>
-                  <td style={socTd}>{s.penetration == null ? <span style={{ color: "#86868B" }}>—</span> : `${s.penetration}%`}</td>
-                  <td style={socTd}>{s.active}</td>
-                  <td style={socTd}>{s.months == null ? "—" : s.months}</td>
-                  <td style={{ ...socTd, textAlign: "center" }}>{inr(s.revPrev)}</td>
-                  <td style={{ ...socTd, textAlign: "center", fontWeight: 700, color: "#08805A" }}>{inr(s.revCurr)}</td>
-                </tr>
-              ))}
+              {societies.map(s => {
+                const isSelected = selSoc && selSoc.includes(s.society);
+                return (
+                  <tr
+                    key={s.society}
+                    onClick={() => setSelSoc(isSelected ? null : [s.society])}
+                    style={{
+                      borderBottom: "1px solid rgba(0,0,0,.04)",
+                      cursor: "pointer",
+                      background: isSelected ? "rgba(8,128,90,0.06)" : "transparent",
+                      transition: "background .15s ease"
+                    }}
+                  >
+                    <td style={{ padding: "14px 18px", fontSize: 13.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap", textAlign: "center" }}>{s.society}</td>
+                    <td style={socTd} onClick={e => e.stopPropagation()}>{isAdmin
+                      ? <GsTextCell value={s.totalFlats || ""} editable type="number" width={78} placeholder="0" onCommit={v => { setFlatsOverride(s.society, v); setFlatsTick(t => t + 1); }} />
+                      : (s.totalFlats || "—")}</td>
+                    <td style={socTd}>{s.onboarded}</td>
+                    <td style={socTd}>{s.penetration == null ? <span style={{ color: "#86868B" }}>—</span> : `${s.penetration}%`}</td>
+                    <td style={socTd}>{s.active}</td>
+                    <td style={socTd}>{s.months == null ? "—" : s.months}</td>
+                    <td style={{ ...socTd, textAlign: "center" }}>{inr(s.revPrev)}</td>
+                    <td style={{ ...socTd, textAlign: "center", fontWeight: 700, color: "#08805A" }}>{inr(s.revCurr)}</td>
+                  </tr>
+                );
+              })}
               {societies.length > 0 && (
                 <tr style={{ background: "rgba(243,248,236,.5)" }}>
                   <td style={{ ...socFt, textAlign: "center" }}>Total ({societies.length})</td>
@@ -771,20 +1005,416 @@ export function AnalyticsOverview({ isAdmin = false }) {
           </table>
         </div>
       </div>
+    </>
+  )}
 
-      {/* ── bottom KPI strip ───────────────────────────────────────────────── */}
-      <div style={{ ...softShadow, padding: "6px 6px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 0 }}>
-        {bottom.map((b, i) => (
-          <div key={b.label} style={{ padding: "14px 16px", borderLeft: i === 0 ? "none" : "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 3 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--muted)" }}><b.icon size={14} /><span style={{ fontSize: 11.5, fontWeight: 600 }}>{b.label}</span></div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
-              <span className="serif" style={{ fontSize: 20, color: "var(--f)" }}>{b.value}</span>
-              {b.sub && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{b.sub}</span>}
-              <OvDelta delta={b.delta} invert={b.invert} />
+
+      {combined && (
+        <>
+          {/* ══════════════════════════════════════════════════════════════════════
+              COMBINED ANALYTICS — Zoho Billing + DP System unified view
+              ════════════════════════════════════════════════════════════════════ */}
+
+          {/* ── Section divider ──────────────────────────────────────────────── */}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, margin: "24px 0 16px" }}>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.06)" }} />
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 8,
+              padding: "6px 16px", borderRadius: 999,
+              background: "linear-gradient(90deg,rgba(30,158,79,.12) 0%,rgba(196,229,56,.08) 100%)",
+              border: "1px solid rgba(30,158,79,.2)", fontSize: 11, fontWeight: 800,
+              letterSpacing: ".08em", textTransform: "uppercase", color: "#08805A"
+            }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#1E9E4F" }} />
+              Combined Zoho + DP Analytics
+            </div>
+            <div style={{ flex: 1, height: 1, background: "rgba(0,0,0,0.06)" }} />
+          </div>
+
+          {/* ── Combined Revenue KPI strip ───────────────────────────────────── */}
+          <div className="scroll-thin" style={{ display: "grid", gridTemplateColumns: "repeat(8, minmax(130px, 1fr))", gap: 12, marginBottom: 16, overflowX: "auto", paddingBottom: 6 }}>
+            {[
+              { label: "Combined Total Collected", value: inr(Math.round(combinedRevCur)),  delta: pct(combinedRevCur, combinedRevPrv),  color: "#08805A", hero: true },
+              { label: "Combined Recharge",        value: inr(Math.round(combinedRechargeCur)), delta: pct(combinedRechargeCur, netPrev + dpRechargePrv), color: "#08805A" },
+              { label: "Combined Deposit",         value: inr(Math.round(combinedDepositCur)),  delta: pct(combinedDepositCur, depositPrev + dpDepositPrv), color: "#5B21B6" },
+              { label: "DP Total Collected",       value: inr(Math.round(dpTotalCur)),      delta: pct(dpTotalCur, dpTotalPrv),          color: "#1E9E4F" },
+              { label: "DP Recharge",              value: inr(Math.round(dpRechargeCur)),   delta: pct(dpRechargeCur, dpRechargePrv),    color: "#1E9E4F" },
+              { label: "Total Customers",          value: (activeCustomers + dpUniqueDevices).toLocaleString("en-IN"), sub: `Zoho: ${activeCustomers.toLocaleString("en-IN")} · DP: ${dpUniqueDevices.toLocaleString("en-IN")}`, color: "#2A86D6" },
+              { label: "ARPU (Monthly)",           value: inr(Math.round(arpu)), sub: "Avg monthly revenue / customer", color: "#F59E0B" },
+              { label: "LTV (Projected)",          value: inr(Math.round(ltv)), sub: "Based on 1.5% monthly churn", color: "#7C3AED" },
+            ].map((k, i) => (
+              <div key={k.label} style={{
+                background: k.hero ? "linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%)" : "rgba(255,255,255,0.88)",
+                border: k.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+                borderRadius: 18, padding: "16px 18px",
+                boxShadow: k.hero ? "0 10px 28px rgba(30,158,79,.28)" : "0 6px 20px rgba(0,0,0,.03)",
+                display: "flex", flexDirection: "column", gap: 4,
+              }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: k.hero ? "#A7F3D0" : "#86868B" }}>{k.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: k.hero ? "#fff" : "#1D1D1F", lineHeight: 1.15, letterSpacing: "-.02em" }}>{k.value}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  {k.delta != null
+                    ? <span style={{ fontSize: 11.5, fontWeight: 700, color: k.hero ? "#fff" : (k.delta >= 0 ? "#08805A" : "#DC4141") }}>
+                        {k.delta >= 0 ? "▲" : "▼"} {Math.abs(k.delta)}% {vsPrev}
+                      </span>
+                    : k.sub
+                      ? <span style={{ fontSize: 11, color: k.hero ? "#D1FAE5" : "#86868B" }}>{k.sub}</span>
+                      : null}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Revenue by Source (donut) + 7-month Stacked Bar ─────────────── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 16, marginBottom: 16 }}>
+
+            {/* Revenue by Source donut */}
+            <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+                <div>
+                  <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Revenue by Source</h3>
+                  <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Zoho Billing vs DP System · {rangeLabel(range)}</div>
+                </div>
+                {selSource && (
+                  <button
+                    onClick={() => setSelSource(null)}
+                    style={{
+                      ...btnGhost,
+                      padding: "4px 8px",
+                      fontSize: 11,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                      borderRadius: 6,
+                      borderColor: "rgba(30,158,79,.3)",
+                      color: "#08805A",
+                      background: "rgba(30,158,79,.06)"
+                    }}
+                  >
+                    Clear filter <X size={10} />
+                  </button>
+                )}
+              </div>
+              {revBySource.length > 0 ? (
+                <>
+                  <div style={{ height: 220 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={revBySource}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius="46%"
+                          outerRadius="68%"
+                          paddingAngle={3}
+                          label={({ name, percent }) => `${name} (${Math.round(percent * 100)}%)`}
+                          labelLine={{ stroke: "rgba(0,0,0,0.15)", strokeWidth: 1 }}
+                          isAnimationActive={false}
+                          style={{ cursor: "pointer" }}
+                          onClick={(d) => {
+                            if (d && d.name) {
+                              setSelSource(selSource === d.name ? null : d.name);
+                            }
+                          }}
+                        >
+                          {revBySource.map((e, i) => (
+                            <Cell
+                              key={i}
+                              fill={e.fill}
+                              opacity={selSource === null || selSource === e.name ? 1 : 0.28}
+                              stroke={selSource === e.name ? "#1d1d1f" : "none"}
+                              strokeWidth={selSource === e.name ? 2.5 : 0}
+                              style={{ outline: "none" }}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v) => inr(Math.round(v))} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 4 }}>
+                    {revBySource.map(s => {
+                      const isActive = selSource === s.name;
+                      return (
+                        <div
+                          key={s.name}
+                          onClick={() => setSelSource(isActive ? null : s.name)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            padding: "4px 8px",
+                            borderRadius: 8,
+                            background: isActive ? "rgba(0,0,0,0.04)" : "transparent",
+                            border: isActive ? "1px solid rgba(0,0,0,0.08)" : "1px solid transparent",
+                            transition: "all 0.2s ease"
+                          }}
+                        >
+                          <span style={{ width: 10, height: 10, borderRadius: 3, background: s.fill, flexShrink: 0 }} />
+                          <span style={{ color: isActive ? "#1d1d1f" : "#475569", fontWeight: isActive ? 700 : 500 }}>{s.name}:</span>
+                          <span style={{ fontWeight: 700, color: "#1D1D1F" }}>{inr(s.value)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "rgba(8,128,90,0.06)", border: "1px solid rgba(8,128,90,0.12)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                      <span style={{ color: "#475569" }}>Zoho share</span>
+                      <span style={{ fontWeight: 700, color: "#08805A" }}>{combinedRevCur > 0 ? Math.round((collections / combinedRevCur) * 100) : 0}%</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginTop: 4 }}>
+                      <span style={{ color: "#475569" }}>DP share</span>
+                      <span style={{ fontWeight: 700, color: "#1E9E4F" }}>{combinedRevCur > 0 ? Math.round((dpTotalCur / combinedRevCur) * 100) : 0}%</span>
+                    </div>
+                  </div>
+                </>
+              ) : <Empty msg="No revenue data for this period." />}
+            </div>
+
+            {/* 7-month Zoho + DP stacked bar */}
+            <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
+              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Combined Monthly Collection</h3>
+              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Zoho + DP stacked · trailing 7 months</div>
+              <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: "#08805A" }} /> Zoho</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: "#C4E538" }} /> DP</span>
+              </div>
+              <div style={{ height: 240 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={dpM7}
+                    margin={{ top: 24, right: 12, left: -6, bottom: 0 }}
+                    style={{ cursor: "pointer" }}
+                    onClick={(state) => {
+                      if (state && state.activePayload && state.activePayload.length) {
+                        const p = state.activePayload[0].payload;
+                        if (p.y != null && p.m != null) {
+                          const fromDate = new Date(p.y, p.m, 1);
+                          const toDate = new Date(p.y, p.m + 1, 0);
+                          setSel({
+                            preset: "custom",
+                            from: isoDay(fromDate),
+                            to: isoDay(toDate)
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54}
+                      tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                    <Tooltip
+                      formatter={(v, n) => [inr(v), n === "zoho" ? "Zoho" : "DP"]}
+                      contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }}
+                    />
+                    <Bar dataKey="zoho" name="zoho" stackId="a" fill="#08805A" radius={[0, 0, 0, 0]} maxBarSize={38} isAnimationActive={false} />
+                    <Bar dataKey="dp"   name="dp"   stackId="a" fill="#C4E538" radius={[6, 6, 0, 0]} maxBarSize={38} isAnimationActive={false}>
+                      <LabelList dataKey="total" position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#08805A" }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+
+          {/* ── SaaS Analytics: Plan Distribution & Expansion Opportunities ──── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, marginBottom: 16 }}>
+            
+            {/* Plan Tier Distribution */}
+            <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
+              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Plan Tier Distribution</h3>
+              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Active subscription counts by plan tier</div>
+              <div style={{ height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={planDistributionData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="name" tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} width={120} />
+                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
+                    <Bar dataKey="value" name="Active Tiers" fill="#2A86D6" radius={[0, 4, 4, 0]} maxBarSize={20} isAnimationActive={false}>
+                      <LabelList dataKey="value" position="right" style={{ fontSize: 11, fontWeight: 700, fill: "#2A86D6" }} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Expansion Opportunities / Under-Penetrated Buildings */}
+            <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
+              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Under-Penetrated Buildings</h3>
+              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Low active density apartments (SLA target opportunity)</div>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {underPenetratedApts.map(apt => (
+                  <div key={apt.name} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#0d2119" }}>{apt.name}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#DC4141" }}>{apt.pct}% active ({apt.active}/{apt.flats} flats)</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                      <div style={{ width: `${apt.pct}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #DC4141, #F59E0B)" }} />
+                    </div>
+                  </div>
+                ))}
+                {underPenetratedApts.length === 0 && (
+                  <div style={{ padding: "40px 0", textAlign: "center", color: "#86868B", fontSize: 13 }}>No flat metrics found for active apartments.</div>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {/* ── All Apartment Performance Table ───────────────────────────────── */}
+          {(() => {
+            const allAptTotalZohoDep  = allAptRows.reduce((s, r) => s + r.zohoDeposit, 0);
+            const allAptTotalZohoRech = allAptRows.reduce((s, r) => s + r.zohoRecharge, 0);
+            const allAptTotalDpDep    = allAptRows.reduce((s, r) => s + r.dpDeposit, 0);
+            const allAptTotalDpRech   = allAptRows.reduce((s, r) => s + r.dpRecharge, 0);
+            const allAptTotalCollected = allAptRows.reduce((s, r) => s + r.totalCollected, 0);
+
+            return (
+              <div style={{ ...softShadow, padding: 0, marginBottom: 16, overflow: "hidden" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "18px 20px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+                  <div>
+                    <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>All Apartment Performance</h3>
+                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Combined Zoho &amp; DrinkPrime metrics · {rangeLabel(range)}</div>
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: "rgba(30,158,79,0.1)", color: "#1E9E4F" }}>
+                    {allAptRows.length} apartments total
+                  </span>
+                </div>
+                {allAptRows.length > 0 ? (
+                  <div className="scroll-thin" style={{ overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+                      <thead>
+                        <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                          <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "left", verticalAlign: "middle" }}>Apartment Name</th>
+                          <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>Zoho</th>
+                          <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>DrinkPrime</th>
+                          <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Total</th>
+                        </tr>
+                        <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Deposit</th>
+                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Recharge</th>
+                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Deposit</th>
+                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Recharge</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allAptRows.map((r, i) => {
+                          const isSelected = selSoc && selSoc.includes(r.name);
+                          return (
+                            <tr
+                              key={r.name}
+                              onClick={() => setSelSoc(isSelected ? null : [r.name])}
+                              style={{
+                                borderBottom: "1px solid rgba(0,0,0,0.04)",
+                                cursor: "pointer",
+                                background: isSelected
+                                  ? "rgba(8,128,90,0.06)"
+                                  : (i % 2 === 0 ? "transparent" : "rgba(243,248,236,.3)"),
+                                transition: "background .15s ease"
+                              }}
+                            >
+                              <td style={{ padding: "13px 18px", fontSize: 13.5, fontWeight: 700, color: "#0d2119", whiteSpace: "nowrap", textAlign: "left" }}>{r.name}</td>
+                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}</td>
+                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600 }}>{r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}</td>
+                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}</td>
+                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600 }}>{r.dpRecharge > 0 ? inr(Math.round(r.dpRecharge)) : "—"}</td>
+                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F" }}>{inr(Math.round(r.totalCollected))}</td>
+                            </tr>
+                          );
+                        })}
+                        <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(8,128,90,.15)" }}>
+                          <td style={{ padding: "13px 18px", fontSize: 13, fontWeight: 800, color: "#0d2119", textAlign: "left" }}>Total ({allAptRows.length})</td>
+                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalZohoDep > 0 ? inr(Math.round(allAptTotalZohoDep)) : "—"}</td>
+                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A" }}>{allAptTotalZohoRech > 0 ? inr(Math.round(allAptTotalZohoRech)) : "—"}</td>
+                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalDpDep > 0 ? inr(Math.round(allAptTotalDpDep)) : "—"}</td>
+                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A" }}>{allAptTotalDpRech > 0 ? inr(Math.round(allAptTotalDpRech)) : "—"}</td>
+                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F" }}>{inr(Math.round(allAptTotalCollected))}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ padding: "28px 0" }}><Empty msg="No society data in this period." /></div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── Combined Business Health Summary ───────────────────────── */}
+          <div style={{ ...softShadow, padding: 22, marginBottom: 16 }}>
+            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Combined Business Health</h3>
+            <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Unified view across Zoho + DP · {rangeLabel(range)}</div>
+            
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, alignItems: "start" }}>
+              {/* Progress bars list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {[
+                  { label: "Total Revenue (Zoho + DP)", value: inr(Math.round(combinedRevCur)), delta: pct(combinedRevCur, combinedRevPrv), bar: combinedRevCur, max: combinedRevCur, color: "#08805A" },
+                  { label: "Zoho Billing Collection",   value: inr(Math.round(collections)),   delta: pct(collections, collectionsPrev),   bar: collections,  max: combinedRevCur, color: "#1E9E4F" },
+                  { label: "DP System Collection",      value: inr(Math.round(dpTotalCur)),    delta: pct(dpTotalCur, dpTotalPrv),        bar: dpTotalCur,   max: combinedRevCur, color: "#C4E538" },
+                  { label: "Combined Recharge",         value: inr(Math.round(combinedRechargeCur)), delta: null, bar: combinedRechargeCur, max: combinedRevCur, color: "#2A86D6" },
+                  { label: "Combined Deposit",          value: inr(Math.round(combinedDepositCur)),  delta: null, bar: combinedDepositCur,  max: combinedRevCur, color: "#7C3AED" },
+                ].map(m => {
+                  const barPct = m.max > 0 ? Math.min(100, Math.round((m.bar / m.max) * 100)) : 0;
+                  return (
+                    <div key={m.label}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
+                        <span style={{ fontSize: 12.5, color: "#475569" }}>{m.label}</span>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 800, color: "#1D1D1F" }}>{m.value}</span>
+                          {m.delta != null && <span style={{ fontSize: 10.5, fontWeight: 700, color: m.delta >= 0 ? "#08805A" : "#DC4141" }}>({m.delta >= 0 ? "+" : ""}{m.delta}%)</span>}
+                        </div>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.07)", overflow: "hidden" }}>
+                        <div style={{ width: `${barPct}%`, height: "100%", borderRadius: 999, background: m.color, transition: "width .4s ease" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Combined efficiency badges */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { label: "Zoho vs Combined", value: combinedRevCur > 0 ? `${Math.round((collections / combinedRevCur) * 100)}%` : "—", color: "#08805A" },
+                  { label: "DP vs Combined",   value: combinedRevCur > 0 ? `${Math.round((dpTotalCur / combinedRevCur) * 100)}%` : "—", color: "#1E9E4F" },
+                  { label: "Recharge Mix",     value: combinedRevCur > 0 ? `${Math.round((combinedRechargeCur / combinedRevCur) * 100)}%` : "—", color: "#2A86D6" },
+                  { label: "DP MoM Growth",    value: dpTotalPrv > 0 ? `${pct(dpTotalCur, dpTotalPrv) >= 0 ? "+" : ""}${pct(dpTotalCur, dpTotalPrv)}%` : "—", color: pct(dpTotalCur, dpTotalPrv) >= 0 ? "#08805A" : "#DC4141" },
+                ].map(b => (
+                  <div key={b.label} style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(243,248,236,.6)", border: "1px solid rgba(8,128,90,.1)" }}>
+                    <div style={{ fontSize: 10.5, color: "#86868B", fontWeight: 600 }}>{b.label}</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: b.color, marginTop: 2 }}>{b.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── bottom KPI strip ───────────────────────────────────────────────── */}
+      {!combined && (
+        <div style={{ ...softShadow, padding: "6px 6px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 0 }}>
+          {bottom.map((b, i) => (
+            <div key={b.label} style={{ padding: "14px 16px", borderLeft: i === 0 ? "none" : "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 3 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--muted)" }}><b.icon size={14} /><span style={{ fontSize: 11.5, fontWeight: 600 }}>{b.label}</span></div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
+                <span className="serif" style={{ fontSize: 20, color: "var(--f)" }}>{b.value}</span>
+                {b.sub && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{b.sub}</span>}
+                <OvDelta delta={b.delta} invert={b.invert} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3498,7 +4128,9 @@ export function DPTransactions() {
             </div>
 
             <Table head={[
-              sortHeader("paid", "Paid date"),
+              sortHeader("paid", "Paid Date"),
+              sortHeader("start", "Start Date"),
+              sortHeader("end", "End Date"),
               "Apartment", "Customer", "Phone", "Device", "Plan",
               "Total Paid", "Recharge", "Tenure", "Days in Month", "Earned Revenue", "Future Revenue"
             ]} maxHeight="calc(100vh - 460px)">
@@ -3508,6 +4140,8 @@ export function DPTransactions() {
                 return (
                   <tr key={r.id ? `earned-${r.id}-${i}` : `earned-${i}`} style={{ borderBottom: "1px solid var(--border)" }}>
                     <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
+                    <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.startDate ? fmtDate(r.startDate) : "—"}</td>
+                    <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.endDate ? fmtDate(r.endDate) : "—"}</td>
                     <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.partner_name || "—"}</td>
                     <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.CustomerName || "—"}</td>
                     <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.phone || "—"}</td>
@@ -3526,7 +4160,7 @@ export function DPTransactions() {
               })}
               {tableRows.length > 0 && (
                 <tr>
-                  <td style={{ ...ftd, textAlign: "center" }} colSpan={6}>Grand Total ({tableRows.length})</td>
+                  <td style={{ ...ftd, textAlign: "center" }} colSpan={8}>Grand Total ({tableRows.length})</td>
                   <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandTotalPaid))}</td>
                   <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandRevenue))}</td>
                   <td style={{ ...ftd, textAlign: "center" }} colSpan={2}>—</td>
@@ -3534,7 +4168,7 @@ export function DPTransactions() {
                   <td style={{ ...ftd, textAlign: "center", color: "#D97706", fontWeight: 800 }}>{inr(Math.round(grandRemainingEarned))}</td>
                 </tr>
               )}
-              {tableRows.length === 0 && <tr><td colSpan={12} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
+              {tableRows.length === 0 && <tr><td colSpan={14} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
             </Table>
           </div>
         </div>
@@ -4016,6 +4650,229 @@ export function ApartmentPerformance() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ===========================================================================
+   API LOAD TRACKER — performance, response times & system load dashboard
+   =========================================================================== */
+export function ApiLoadTracker() {
+  const { user } = useAuth();
+  const [logs, setLogs] = useState([]);
+  const [ticker, setTicker] = useState(0);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("pw_api_load_logs");
+      const parsed = raw ? JSON.parse(raw) : [];
+      setLogs(parsed.reverse()); // Show most recent first
+    } catch {}
+  }, [ticker]);
+
+  const handleClear = () => {
+    if (window.confirm("Are you sure you want to clear all performance logs?")) {
+      localStorage.removeItem("pw_api_load_logs");
+      setLogs([]);
+      setTicker(t => t + 1);
+    }
+  };
+
+  // 1. Calculations for KPIs
+  const totalCalls = logs.length;
+  const successCalls = logs.filter(l => l.type === "success").length;
+  const successRate = totalCalls > 0 ? Math.round((successCalls / totalCalls) * 100) : 100;
+  
+  const avgLatency = totalCalls > 0 
+    ? Math.round(logs.reduce((s, l) => s + l.duration, 0) / totalCalls) 
+    : 0;
+
+  // Find Peak Latency
+  let peakLog = null;
+  logs.forEach(l => {
+    if (!peakLog || l.duration > peakLog.duration) peakLog = l;
+  });
+
+  // 2. Calculations for Hourly Spikes (load distribution)
+  const hourlyData = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0, avg: 0, sum: 0 }));
+  logs.forEach(l => {
+    const hr = new Date(l.at).getHours();
+    hourlyData[hr].count++;
+    hourlyData[hr].sum += l.duration;
+  });
+  hourlyData.forEach(h => {
+    h.avg = h.count > 0 ? Math.round(h.sum / h.count) : 0;
+  });
+
+  // Format hour label (e.g. "09:00", "14:00")
+  const chartData = hourlyData.map(h => ({
+    label: `${String(h.hour).padStart(2, "0")}:00`,
+    Requests: h.count,
+    Latency: h.avg
+  }));
+
+  // Find Peak Spike Hour
+  let peakHour = null;
+  hourlyData.forEach(h => {
+    if (!peakHour || h.count > peakHour.count) peakHour = h;
+  });
+  const peakHourStr = peakHour && peakHour.count > 0 
+    ? `${String(peakHour.hour).padStart(2, "0")}:00 - ${String(peakHour.hour + 1).padStart(2, "0")}:00`
+    : "—";
+
+  // 3. Group by API path to find slowest endpoints
+  const apiGroups = {};
+  logs.forEach(l => {
+    const p = l.path || "Other";
+    if (!apiGroups[p]) apiGroups[p] = { path: p, count: 0, sum: 0, min: Infinity, max: -Infinity };
+    apiGroups[p].count++;
+    apiGroups[p].sum += l.duration;
+    if (l.duration < apiGroups[p].min) apiGroups[p].min = l.duration;
+    if (l.duration > apiGroups[p].max) apiGroups[p].max = l.duration;
+  });
+  const apiRows = Object.values(apiGroups).map(g => ({
+    path: g.path,
+    count: g.count,
+    avg: Math.round(g.sum / g.count),
+    min: g.min,
+    max: g.max
+  })).sort((a, b) => b.avg - a.avg);
+
+  const softShadow = { background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, boxShadow: "0 10px 30px rgba(0,0,0,.03)" };
+
+  return (
+    <div className="fade-up">
+      {/* ── KPI Cards ───────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 16 }}>
+        <Stat label="Average Latency" value={`${avgLatency} ms`} icon={CalendarClock} sub="Across all tracked modules" hero />
+        <Stat label="Success Rate" value={`${successRate}%`} icon={CheckCircle2} sub={`${successCalls} of ${totalCalls} calls succeeded`} />
+        <Stat label="Total API Calls" value={totalCalls} icon={ScrollText} sub="Last 1000 requests" />
+        <Stat 
+          label="Peak Latency Event" 
+          value={peakLog ? `${peakLog.duration} ms` : "—"} 
+          icon={AlertCircle} 
+          sub={peakLog ? `${peakLog.path.slice(0, 24)}... at ${new Date(peakLog.at).toLocaleTimeString()}` : "No events recorded"} 
+          invert
+        />
+      </div>
+
+      {/* ── Spikes Widget ───────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, marginBottom: 16 }}>
+        
+        {/* Hourly Requests Spike Chart */}
+        <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
+          <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>API Call Frequency (Spike Tracking)</h3>
+          <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Requests per hour · Peak: <span style={{ fontWeight: 700, color: "#08805A" }}>{peakHourStr}</span> ({peakHour?.count || 0} hits)</div>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 20, right: 12, left: -22, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
+                <Bar dataKey="Requests" fill="#08805A" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Hourly Average Latency Chart */}
+        <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
+          <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Response Latency Spikes</h3>
+          <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Average response duration (ms) by hour</div>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData} margin={{ top: 20, right: 12, left: -22, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} unit="ms" />
+                <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
+                <Area type="monotone" dataKey="Latency" name="Avg Latency" stroke="#F59E0B" strokeWidth={2} fill="rgba(245,158,11,0.08)" isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── API Endpoints Load Table ────────────────────────────────────── */}
+      <div style={{ ...softShadow, padding: 0, marginBottom: 16, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "18px 20px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+          <div>
+            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>API Endpoints Latency breakdown</h3>
+            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Average, min, and peak duration per endpoint path</div>
+          </div>
+          {logs.length > 0 && (
+            <button onClick={handleClear} style={{ ...btnGhost, color: "#DC4141", borderColor: "rgba(220,65,65,0.2)", background: "rgba(220,65,65,0.03)", cursor: "pointer" }}>
+              Clear Performance Logs
+            </button>
+          )}
+        </div>
+        {apiRows.length > 0 ? (
+          <div className="scroll-thin" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                  {["API Endpoint Path", "Hits/Requests", "Avg Latency", "Min Latency", "Peak Latency"].map((h, i) => (
+                    <th key={i} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: i === 0 ? "left" : "center" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {apiRows.map((r, i) => (
+                  <tr key={r.path} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(243,248,236,.3)" }}>
+                    <td style={{ padding: "13px 18px", fontSize: 13, fontWeight: 700, color: "#0d2119", textAlign: "left", fontFamily: "monospace" }}>{r.path}</td>
+                    <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 600 }}>{r.count}</td>
+                    <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700, color: r.avg > 800 ? "#DC4141" : r.avg > 400 ? "#D97706" : "#08805A" }}>{r.avg} ms</td>
+                    <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.min} ms</td>
+                    <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700, color: "#1D1D1F" }}>{r.max} ms</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty msg="No performance logs recorded yet. Navigate to other modules to generate traffic." />
+        )}
+      </div>
+
+      {/* ── Recent Requests Log Table ───────────────────────────────────── */}
+      {logs.length > 0 && (
+        <div style={{ ...softShadow, padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "18px 20px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Recent API Request telemetry</h3>
+            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Real-time latency stream (last 30 requests)</div>
+          </div>
+          <div className="scroll-thin" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                  {["Timestamp", "Endpoint Path", "Latency", "HTTP Status", "Result"].map((h, i) => (
+                    <th key={i} style={{ padding: "12px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: i === 1 ? "left" : "center" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {logs.slice(0, 30).map((l, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+                    <td style={{ padding: "12px 18px", fontSize: 12.5, color: "#475569", textAlign: "center" }}>{new Date(l.at).toLocaleTimeString()}</td>
+                    <td style={{ padding: "12px 18px", fontSize: 13, color: "#0d2119", textAlign: "left", fontFamily: "monospace" }}>{l.path}</td>
+                    <td style={{ padding: "12px 18px", textAlign: "center", fontSize: 13, fontWeight: 700, color: l.duration > 800 ? "#DC4141" : l.duration > 400 ? "#D97706" : "#08805A" }}>{l.duration} ms</td>
+                    <td style={{ padding: "12px 18px", textAlign: "center", fontSize: 13 }}>
+                      <span style={{ fontSize: 11.5, fontWeight: 600, padding: "2px 6px", borderRadius: 4, background: l.status >= 400 ? "#FBE8E8" : "#E2F3EE", color: l.status >= 400 ? "#DC4141" : "#08805A" }}>
+                        {l.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 18px", textAlign: "center", fontSize: 13 }}>
+                      {renderHigStatusBadge(l.type === "success" ? "Success" : "Failed")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

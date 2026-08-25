@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.240**.
+> **Reflects:** `APP_VERSION` **2.29.242**.
 
 ---
 
@@ -411,7 +411,7 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 
 ### Customer (`customer`)
 - **Purpose:** Zoho Billing customer accounts, plans, credits.
-- **How:** `GET /admin/get-all-customers` (paginated, `per_page=300`). Searchable list; plan/billing
+- **How:** `GET /admin/get-all-customers` (paginated, `per_page=500`) merged dynamically in the core data layer with missing active DrinkPrime devices from the transactions feed to form a unified Zoho + DP CRM directory (262 active customers total). Searchable list; plan/billing
   editable per role; grand-total row. **Societies** sub-tab groups customers by society with
   count/active/device-mix (Own/Normal/Hot&Cold from the purifier-ID prefix), expandable per society.
   The Overview "Active Customers" figure and Top-Societies "Active" column come from this active-status logic.
@@ -749,29 +749,14 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   test customer with dunning status + an overdue invoice + a renewal due in 7 days) — correctly scored
   High with all three reasons listed, then the test data was removed.
 
-- **Overview (`AnalyticsOverview`, `an_overview`)** — a filtered command dashboard. Loads customers,
-  subscriptions, invoices, leads, **referrers**, tickets, apartments. Two filters scope the page:
-  a **date-range picker** (This Month/Quarter/Year/Custom, compared vs the previous equal period) and
-  a **Society multi-select**. Every chart honours both filters.
-  - **KPI row:** Total Collection, Earned Revenue, Recharge collected, Deposit collected,
-    **Active Customers** (cumulative sign-ups the Penetration-Tracker way, as of the period end, delta
-    = MoM increase), **Active Referrers** (referrers from the referral API, matches the Referral page).
-  - **Revenue Overview:** current vs previous period, bucketed by day/month, ₹ value labels on
-    non-zero points.
-  - **Revenue by Plan:** the **MRR-by-plan** chart (same as Billing analytics) — active subs ×
-    `monthlyOf`, scoped to selected societies as of the period end.
-  - **Penetration Tracker (embedded):** the cohort matrix, filter-aware (society filter + as-of date).
-  - **Ops Appointments:** technician-visit counts for **D0…D3** (today, +1, +2, +3) from the ticket
-    "Technician Visit Date" — **fixed to the real current date, ignores the page filters**.
-  - **Forecast vs Actual:** linear fit over recent months, ₹ data labels.
-  - **Week-over-Week:** collected over the last 8 weeks (Mon start), society-filtered, anchored to the
-    period end.
-  - **Top Performing Societies (table):** Apartment Name · Total Flats (apartments feed, joined by
-    society name; **admin/devops-editable override** → `pw_flats_overrides`) · Onboarded Flats
-    (customers in society) · Penetration % (`round(onboarded/flats×100)`) · Active Customers
-    (active-status) · **Total Months** (calendar months from the society's **launch month** — earliest
-    subscription sign-up or the admin launch override — to the current month, inclusive) ·
-    Revenue (prev month) · Revenue (curr month) (recharge collected per calendar month). Plus a Total row.
+- **Overview V2 (`AnalyticsOverview`, `an_overview_v2`)** — a unified, filtered command dashboard for Zoho Billing + DrinkPrime. Loads customers, subscriptions, invoices, leads, **referrers**, tickets, apartments, and DrinkPrime transaction logs. Two filters scope the page: a **date-range picker** (This Month/Quarter/Year/Custom, compared vs the previous equal period) and a **Society multi-select**. Every chart honours both filters.
+  - **KPI row:** Displays 8 cards in a single scrollable row: Combined Total Collected, Combined Recharge, Combined Deposit, DP Total Collected, DP Recharge, Total Customers (Zoho + DP split reconciled to 262 active), and SaaS unit economics: **ARPU (Monthly Average Revenue Per User)** and **LTV (Projected Lifetime Value)** based on a 1.5% monthly churn rate.
+  - **Revenue by Source:** Pie Chart with percentage data labels showing Zoho Recharge, Zoho Deposit, DP Recharge, and DP Deposit shares.
+  - **Combined Monthly Collection:** stacked Zoho + DP collection trends bar chart (trailing 7 months).
+  - **Plan Tier Distribution:** horizontal bar chart showing active subscriptions grouped by plan tier.
+  - **Under-Penetrated Buildings:** active connection density progress tracker highlighting the top 5 apartments with the lowest active density.
+  - **All Apartment Performance:** unified society metrics table detailing deposits and recharges for both Zoho and DrinkPrime (excluding empty rows).
+  - **Refresh Security:** The top-bar Refresh button is authorized for **admin-only** access (`tabIsAdmin`).
 - **Penetration Tracker (`PenetrationTracker`, `an_penetration`)** — cohort matrix of cumulative
   customers per society, aligned to each society's own **M1 = launch month** (month of its first
   subscription `created_at`, joined to society via `customer_id → zoho_customer_id`). Cells are

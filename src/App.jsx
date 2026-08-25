@@ -71,6 +71,7 @@ import {
   AnalyticsOverview, CreditsAnalytics, NetRevenue,
   PenetrationTracker, BillingAnalytics, AppLogs, EarnedRevenue,
   Reconciliation, DPTransactions, AOP, ChurnRiskRadar, ApartmentPerformance,
+  ApiLoadTracker,
 } from "./modules/Analytics";
 
 /* ============================================================================
@@ -904,21 +905,21 @@ function Home({ onPick }) {
            height down to the white card. */
         .premium-content{flex:1;display:flex;flex-direction:column;padding:0 32px 0;max-width:1550px;width:100%;margin:0 auto;position:relative;z-index:10}
         .premium-section{flex:1;background:rgba(255,255,255,.72)!important;backdrop-filter:blur(28px) saturate(190%);-webkit-backdrop-filter:blur(28px) saturate(190%);border:1px solid rgba(255,255,255,.85)!important;border-radius:22px!important;padding:22px 24px!important;box-shadow:0 20px 50px rgba(10,26,18,.06),inset 0 1px 0 rgba(255,255,255,.9)!important;position:relative;z-index:10}
-        .premium-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+        .premium-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
         @media(min-width:1550px){.premium-module-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
-        .premium-module{position:relative;min-height:15px!important;padding:13px 15px!important;border:1px solid rgba(255,255,255,.85)!important;border-radius:16px!important;background:rgba(255,255,255,.78)!important;backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);box-shadow:0 7px 20px rgba(10,26,18,.04),inset 0 1px 0 #ffffff!important;text-align:left;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transition:all .2s cubic-bezier(.16,1,.3,1)}
-        .premium-module:before{content:"";position:absolute;width:80px;height:80px;border-radius:50%;right:-34px;top:-34px;background:var(--module-color);opacity:.09;transition:transform .2s ease}
+        .premium-module{position:relative;min-height:72px!important;padding:18px 20px!important;border:1px solid rgba(255,255,255,.85)!important;border-radius:18px!important;background:rgba(255,255,255,.78)!important;backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);box-shadow:0 7px 20px rgba(10,26,18,.04),inset 0 1px 0 #ffffff!important;text-align:left;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transition:all .2s cubic-bezier(.16,1,.3,1)}
+        .premium-module:before{content:"";position:absolute;width:100px;height:100px;border-radius:50%;right:-38px;top:-38px;background:var(--module-color);opacity:.09;transition:transform .2s ease}
         .premium-module:hover{transform:translateY(-3px) scale(1.018);border-color:var(--module-color)!important;box-shadow:0 18px 38px rgba(30, 158, 79,.2),inset 0 1px 0 #ffffff!important;background:rgba(255,255,255,.95)!important}
         .premium-module:hover:before{transform:scale(1.4);opacity:.22}
-        .premium-module-icon{width:37px;height:37px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--module-color) 14%,white);color:var(--module-color);flex:0 0 auto}
-        .premium-module-name{font-size:14px;font-weight:800;letter-spacing:-.015em;color:#0a1a12;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .premium-module-desc{font-size:11.5px;color:#64748b;line-height:1.3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .premium-module-chev{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:rgba(30, 158, 79,.08);color:var(--brand);flex:0 0 auto;transition:all .2s ease}
+        .premium-module-icon{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:color-mix(in srgb,var(--module-color) 14%,white);color:var(--module-color);flex:0 0 auto}
+        .premium-module-name{font-size:15px;font-weight:800;letter-spacing:-.015em;color:#0a1a12;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .premium-module-desc{font-size:12px;color:#64748b;line-height:1.4;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .premium-module-chev{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;background:rgba(30, 158, 79,.08);color:var(--brand);flex:0 0 auto;transition:all .2s ease}
         .premium-module:hover .premium-module-chev{background:var(--brand);color:#fff;transform:translateX(3px)}
         .premium-greeting{font-family:'DM Sans',system-ui,sans-serif!important;font-size:23px!important;font-weight:800!important;letter-spacing:-.025em;color:var(--f);margin:0 0 14px!important;display:flex;align-items:center;justify-content:space-between}
-        .premium-group{margin-bottom:16px}
+        .premium-group{margin-bottom:20px}
         .premium-group:last-child{margin-bottom:0}
-        .premium-group-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin:0 0 9px;padding:4px 11px;border-radius:7px;background:linear-gradient(90deg,rgba(30, 158, 79,.14) 0%,rgba(196, 229, 56,.06) 100%);border:1px solid rgba(30, 158, 79,.2);display:inline-flex;align-items:center;gap:5px}
+        .premium-group-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin:0 0 10px;padding:4px 11px;border-radius:7px;background:linear-gradient(90deg,rgba(30, 158, 79,.14) 0%,rgba(196, 229, 56,.06) 100%);border:1px solid rgba(30, 158, 79,.2);display:inline-flex;align-items:center;gap:5px}
 
         /* ---- Dark theme chrome ---- */
         .premium-home[data-theme="dark"]{
@@ -1050,15 +1051,15 @@ function Home({ onPick }) {
                       const Icon = MODULE_ICONS[m.icon] || LayoutGrid;
                       return (
                         <button key={m.id} className="premium-module" onClick={() => openModule(m)} style={{ "--module-color": m.color }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-                              <div className="premium-module-icon"><Icon size={18} /></div>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 13, minWidth: 0, flex: 1 }}>
+                              <div className="premium-module-icon"><Icon size={22} /></div>
                               <div style={{ minWidth: 0, flex: 1 }}>
                                 <div className="premium-module-name">{m.label}</div>
                                 <div className="premium-module-desc">{m.desc}</div>
                               </div>
                             </div>
-                            <span className="premium-module-chev"><ChevronRight size={15} /></span>
+                            <span className="premium-module-chev"><ChevronRight size={17} /></span>
                           </div>
                           {m.soon && <span style={{ position: "absolute", right: 8, top: 8, padding: "2px 6px", borderRadius: 999, background: "var(--amber-t)", color: "var(--amber)", fontSize: 8, fontWeight: 850, letterSpacing: ".07em" }}>BETA</span>}
                         </button>
@@ -1128,7 +1129,7 @@ function Shell({ module = "referral", onHome }) {
   const defaultTab =
     module === "sales" ? "sales_leads"
     : module === "planner" ? "plan_weekly"
-    : module === "analytics" ? "an_overview"
+    : module === "analytics" ? "an_overview_v2"
     : module === "employee" ? "emp_users"
     : module === "devicereplace" ? "dr_list"
     : module === "about" ? "about_docs"
@@ -1226,7 +1227,8 @@ const doRefresh = async () => {
       ...(isModuleAdmin ? [{ id: "plan_admin", label: "Modify Tasks", icon: PencilLine }] : []),
     ],
     analytics: [
-      { id: "an_overview", label: "Overview", icon: LayoutGrid },
+      // { id: "an_overview", label: "Overview", icon: LayoutGrid },
+      { id: "an_overview_v2", label: "Overview V2", icon: Sparkles },
       { id: "analytics", label: "Referral", icon: BarChart3 },
       { id: "an_earned", label: "Earned Revenue", icon: Scale },
       { id: "an_reconciliation", label: "Reconciliation", icon: ArrowLeftRight },
@@ -1282,6 +1284,7 @@ const doRefresh = async () => {
       { id: "about_docs", label: "About", icon: Info },
       { id: "about_app_rel", label: "App Releases", icon: Rocket },
       { id: "about_tech_rel", label: "Technician Releases", icon: Wrench },
+      { id: "about_system_load", label: "System Load", icon: Cpu },
     ],
     logtracker: [
       { id: "log_all", label: "All Logs", icon: ScrollText },
@@ -1405,10 +1408,6 @@ const doRefresh = async () => {
         <div className="pw-app-glow blue" />
         <div className="pw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px", borderBottom: "1px solid var(--border)", background: "var(--pw-topbar-bg)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
           <button className="pw-topbar-burger" onClick={() => setMobileNav(s => !s)} style={{ display: "none", color: "var(--f)" }}><Menu /></button>
-          <button onClick={toggleSidebarCollapsed} className="pw-topbar-sidebar-toggle" title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, background: sidebarCollapsed ? "var(--teal)" : "var(--mint-2)", border: "1px solid var(--border)", color: sidebarCollapsed ? "#ffffff" : "var(--teal)", fontWeight: 700, fontSize: 12.5, cursor: "pointer", flex: "0 0 auto", transition: "all .2s ease", boxShadow: sidebarCollapsed ? "0 4px 14px rgba(30, 158, 79, 0.3)" : "none" }}>
-            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-            <span style={{ fontSize: 12 }}>{sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}</span>
-          </button>
           {module === "iot" && (
             <div className="iot-apt-badge" style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", display: "flex", alignItems: "center", gap: 8, padding: "7px 16px", borderRadius: 999, background: "var(--mint-2)", border: "1px solid var(--border)", boxShadow: "0 1px 2px rgba(16,40,28,.05)", pointerEvents: "none", whiteSpace: "nowrap" }}>
               <MapPin size={15} color="var(--teal)" />
@@ -1420,7 +1419,7 @@ const doRefresh = async () => {
             <p className="eyebrow">{moduleMeta.label} · {tabIsAdmin ? "Admin access" : "View access"}</p>
             <h2 style={{ fontSize: 22, lineHeight: 1 }}>{moduleMeta.built ? (nav.find(n => n.id === tab)?.label || moduleMeta.label) : moduleMeta.label}</h2>
           </div>
-          {moduleMeta.built && <button onClick={doRefresh} disabled={refreshing} title="Refresh data"
+          {moduleMeta.built && tabIsAdmin && <button onClick={doRefresh} disabled={refreshing} title="Refresh data"
             style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 10, border: "1.5px solid var(--border)", background: "#fff", color: "var(--teal)", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: refreshing ? .6 : 1 }}>
             <RefreshCw size={15} style={{ animation: refreshing ? "pw-spin .8s linear infinite" : "none" }} /> Refresh
           </button>}
@@ -1458,7 +1457,8 @@ const doRefresh = async () => {
             {tab === "referees" && <Referees key={refreshKey} />}
             {tab === "credits" && <Credits key={refreshKey} />}
             {tab === "tracker" && <Tracker key={refreshKey} />}
-            {tab === "an_overview" && <AnalyticsOverview key={refreshKey} isAdmin={tabIsAdmin} />}
+            {tab === "an_overview" && <AnalyticsOverview key={refreshKey} isAdmin={tabIsAdmin} combined={false} />}
+            {tab === "an_overview_v2" && <AnalyticsOverview key={refreshKey} isAdmin={tabIsAdmin} combined={true} />}
             {tab === "analytics" && <ReferralAnalyticsTab key={refreshKey} />}
             {tab === "an_earned" && <EarnedRevenue key={refreshKey} />}
             {tab === "an_reconciliation" && <Reconciliation key={refreshKey} />}
@@ -1471,6 +1471,7 @@ const doRefresh = async () => {
             {tab === "an_penetration" && <PenetrationTracker key={refreshKey} />}
             {tab === "an_credits" && <CreditsAnalytics key={refreshKey} />}
             {tab === "an_applogs" && <AppLogs key={refreshKey} />}
+            {tab === "about_system_load" && <ApiLoadTracker key={refreshKey} />}
             {tab === "plan_board" && <TaskPlanner key={`board-${refreshKey}`} />}
             {tab === "plan_weekly" && <TaskPlanner key={`weekly-${refreshKey}`} initialView="weekly" />}
             {tab === "plan_admin" && isModuleAdmin && <TaskAdmin key={refreshKey} />}
