@@ -57,8 +57,8 @@ export function renderHigStatusBadge(status) {
     s.includes("contacted") || s.includes("medium risk") || s.includes("open") ||
     s.includes("trial")
   ) {
-    bg = "rgba(232, 169, 58,0.12)";
-    color = "#E8A93A";
+    bg = "rgba(196, 229, 56,0.12)";
+    color = "#C4E538";
   } else if (
     s.includes("scheduled") || s.includes("demo") || s.includes("warning") ||
     s.includes("in progress") || s.includes("review") || s.includes("proposal") ||
@@ -489,7 +489,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
 
       {/* ── Executive Business Health & Briefing Banner ─────────────────────── */}
       <div style={{
-        background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)",
+        background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)",
         borderRadius: 20, padding: "18px 24px", color: "#fff", marginBottom: 18,
         boxShadow: "0 12px 30px rgba(8,128,90,0.25)", display: "flex", alignItems: "center",
         justifyContent: "space-between", flexWrap: "wrap", gap: 16
@@ -540,7 +540,7 @@ export function AnalyticsOverview({ isAdmin = false }) {
           const hero = k.hero;
           return (
             <div key={k.label} style={{
-              background: hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255,255,255,0.85)",
+              background: hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255,255,255,0.85)",
               color: hero ? "#ffffff" : "#1D1D1F",
               backdropFilter: hero ? undefined : "blur(20px)",
               WebkitBackdropFilter: hero ? undefined : "blur(20px)",
@@ -1071,7 +1071,7 @@ export function NetRevenue() {
             <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--muted)" }} axisLine={false} tickLine={false} interval={0} />
             <YAxis tick={axisTick} axisLine={false} tickLine={false} width={48} tickFormatter={v => v >= 1000 ? `${v/1000}K` : v} />
-            <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(10,157,110,.08)" }} />
+            <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(30, 158, 79,.08)" }} />
             <Bar dataKey="revenue" name="Net Revenue" radius={[4, 4, 0, 0]} fill="#08805A" maxBarSize={26} isAnimationActive={false}>
               <LabelList dataKey="revenue" position="top" formatter={labelFmt} style={{ fontSize: 8.5, fill: "var(--muted)" }} />
             </Bar>
@@ -1126,7 +1126,7 @@ export function NetRevenue() {
               );
             })}
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16, padding: "14px 18px", background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", color: "#fff", borderRadius: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16, padding: "14px 18px", background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", color: "#fff", borderRadius: 12 }}>
             <span style={{ fontWeight: 700, fontSize: 14 }}>Grand total · {periodName} ({rangeLabel(range)})</span>
             <span style={{ fontWeight: 800, fontSize: 20 }}>{inr(periodTotal)}</span>
           </div>
@@ -1697,7 +1697,7 @@ useEffect(() => {
         <input type="date" value={toDraft} onChange={e => setToDraft(e.target.value)}
           style={{ ...selectStyle, padding: "6px 10px" }} />
         <button onClick={() => { setRange({ from: fromDraft, to: toDraft }); setDrill(null); }}
-          style={{ ...btnPrimary, background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", border: "none", padding: "7px 18px", fontSize: 12.5, boxShadow: "0 6px 16px rgba(8,128,90,0.25)" }}>Update</button>
+          style={{ ...btnPrimary, background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", border: "none", padding: "7px 18px", fontSize: 12.5, boxShadow: "0 6px 16px rgba(8,128,90,0.25)" }}>Update</button>
         {(range.from || range.to) && (
           <button onClick={() => { setFromDraft(""); setToDraft(""); setRange({ from: "", to: "" }); }}
             style={{ ...btnGhost, padding: "4px 12px", fontSize: 12 }}>Clear dates</button>
@@ -1715,7 +1715,7 @@ useEffect(() => {
           <div key={s.key} onClick={() => setDrill(drill === s.key ? null : s.key)}
             style={{
               cursor: "pointer",
-              background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+              background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
               backdropFilter: s.hero ? "none" : "blur(20px)",
               WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
               border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -1819,7 +1819,7 @@ useEffect(() => {
               <defs>
                 <linearGradient id="mrrGrad" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
-                  <stop offset="100%" stopColor="#0A9D6E" stopOpacity={0.7} />
+                  <stop offset="100%" stopColor="#1E9E4F" stopOpacity={0.7} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
@@ -1888,7 +1888,7 @@ useEffect(() => {
                 <defs>
                   <linearGradient id="socGrad" x1="0" y1="0" x2="1" y2="0">
                     <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
-                    <stop offset="100%" stopColor="#0A9D6E" stopOpacity={0.7} />
+                    <stop offset="100%" stopColor="#1E9E4F" stopOpacity={0.7} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
@@ -2498,7 +2498,7 @@ export function EarnedRevenue() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -3326,7 +3326,7 @@ export function DPTransactions() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",

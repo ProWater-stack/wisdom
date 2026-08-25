@@ -217,7 +217,7 @@ export function SalesLeads({ isAdmin }) {
           (not clickable) — filtering happens via the status dropdown below,
           whose options mirror these cards. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
+        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
           <div style={{ position: "absolute", right: -10, top: -10, width: 90, height: 90, background: "rgba(255,255,255,.06)", borderRadius: "50%", pointerEvents: "none" }} />
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -235,13 +235,13 @@ export function SalesLeads({ isAdmin }) {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "#64748b" }}>Interested</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#E8A93A", background: "rgba(232, 169, 58,.1)", padding: "3px 8px", borderRadius: 6 }}>{interestedPct}%</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#C4E538", background: "rgba(196, 229, 56,.1)", padding: "3px 8px", borderRadius: 6 }}>{interestedPct}%</span>
             </div>
             <div style={{ fontSize: 36, fontWeight: 800, color: "#0d2119", letterSpacing: "-.03em", lineHeight: 1 }}>{interestedCount}</div>
           </div>
           <div style={{ marginTop: 14 }}>
             <div style={{ height: 6, width: "100%", background: "#e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-              <div style={{ width: `${interestedPct}%`, height: "100%", background: "#E8A93A", borderRadius: 10 }} />
+              <div style={{ width: `${interestedPct}%`, height: "100%", background: "#C4E538", borderRadius: 10 }} />
             </div>
           </div>
         </div>
@@ -590,7 +590,7 @@ export function SalesTrendAnalysis() {
 
   const kpiCard = ({ label, value, valueColor, icon: Icon, iconBg, iconColor, delta, hero }) => (
     <div style={{
-      background: hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255,255,255,.85)",
+      background: hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255,255,255,.85)",
       color: hero ? "#fff" : "#1D1D1F",
       backdropFilter: hero ? undefined : "blur(20px)",
       WebkitBackdropFilter: hero ? undefined : "blur(20px)",
@@ -1136,8 +1136,8 @@ export function ApartmentLeads() {
       bg = "rgba(255,149,0,.12)";
       color = "#c97000";
     } else if (s.includes("proposal") || s.includes("qualified") || s.includes("contacted") || s.includes("in progress") || s.includes("negotiation")) {
-      bg = "rgba(232, 169, 58,.12)";
-      color = "#E8A93A";
+      bg = "rgba(196, 229, 56,.12)";
+      color = "#C4E538";
     } else if (s.includes("lost") || s.includes("cancelled") || s.includes("rejected") || s.includes("not interested") || s.includes("junk")) {
       bg = "rgba(220,38,38,.1)";
       color = "#dc2626";
@@ -1154,7 +1154,7 @@ export function ApartmentLeads() {
     <div className="fade-up">
       {/* KPI Header Cards — matching Apple HIG grid style in SalesLeads */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
+        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
           <div style={{ position: "absolute", right: -10, top: -10, width: 90, height: 90, background: "rgba(255,255,255,.06)", borderRadius: "50%", pointerEvents: "none" }} />
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -1172,7 +1172,7 @@ export function ApartmentLeads() {
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "#64748b" }}>Total Flat Inventory</span>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#E8A93A", background: "rgba(232, 169, 58,.1)", padding: "3px 8px", borderRadius: 6 }}>Units</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#C4E538", background: "rgba(196, 229, 56,.1)", padding: "3px 8px", borderRadius: 6 }}>Units</span>
             </div>
             <div style={{ fontSize: 36, fontWeight: 800, color: "#0d2119", letterSpacing: "-.03em", lineHeight: 1 }}>{totalFlats.toLocaleString()}</div>
           </div>

@@ -72,18 +72,18 @@ export function Overview() {
             <AreaChart data={data.tr} margin={{ left: -18, right: 6, top: 8 }}>
               <defs>
                 <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0A9D6E" stopOpacity={.35} /><stop offset="100%" stopColor="#0A9D6E" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#1E9E4F" stopOpacity={.35} /><stop offset="100%" stopColor="#1E9E4F" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0A9D6E" stopOpacity={.5} /><stop offset="100%" stopColor="#0A9D6E" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#1E9E4F" stopOpacity={.5} /><stop offset="100%" stopColor="#1E9E4F" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#ECEEED" vertical={false} />
               <XAxis dataKey="month" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={36} />
               <Tooltip content={<TT />} />
-              <Area type="monotone" dataKey="referrals" stroke="#0A9D6E" strokeWidth={2.5} fill="url(#g1)" isAnimationActive={false} />
-              <Area type="monotone" dataKey="conversions" stroke="#0A9D6E" strokeWidth={2.5} fill="url(#g2)" isAnimationActive={false} />
+              <Area type="monotone" dataKey="referrals" stroke="#1E9E4F" strokeWidth={2.5} fill="url(#g1)" isAnimationActive={false} />
+              <Area type="monotone" dataKey="conversions" stroke="#1E9E4F" strokeWidth={2.5} fill="url(#g2)" isAnimationActive={false} />
             </AreaChart>
           </ResponsiveContainer>
         </Card>
@@ -544,7 +544,7 @@ export function Analytics() {
               <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
               <YAxis tick={axisTick} axisLine={false} tickLine={false} width={46} allowDecimals={false} />
               <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="rewards" name="free months" radius={[6, 6, 0, 0]} fill="#0A9D6E" maxBarSize={90} isAnimationActive={false} />
+              <Bar dataKey="rewards" name="free months" radius={[6, 6, 0, 0]} fill="#1E9E4F" maxBarSize={90} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -568,7 +568,7 @@ export function Analytics() {
               <XAxis type="number" tick={axisTick} axisLine={false} tickLine={false} allowDecimals={false} />
               <YAxis type="category" dataKey="plan" tick={axisTick} axisLine={false} tickLine={false} width={150} />
               <Tooltip content={<TT />} cursor={{ fill: "rgba(168,217,64,.08)" }} />
-              <Bar dataKey="amount" name="free months" radius={[0, 6, 6, 0]} fill="#0A9D6E" isAnimationActive={false} />
+              <Bar dataKey="amount" name="free months" radius={[0, 6, 6, 0]} fill="#1E9E4F" isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </Card>

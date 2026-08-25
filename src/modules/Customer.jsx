@@ -198,7 +198,7 @@ export function CustomerSocieties() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -985,7 +985,7 @@ export function AllCustomers() {
       .filter(e => !isNaN(e._ts))
       .sort((a, b) => b._ts - a._ts);
     const timelineCfg = {
-      payment: { icon: Wallet, color: "#0A9D6E", label: "Payment" },
+      payment: { icon: Wallet, color: "#1E9E4F", label: "Payment" },
       ticket: { icon: Ticket, color: "#986315", label: "Ticket" },
       referral: { icon: GitBranch, color: "#2A86D6", label: "Referral" },
       discount: { icon: Receipt, color: "#7D8A83", label: "Discount" },
@@ -1314,7 +1314,7 @@ export function AllCustomers() {
           <>
             {/* Hero KPI Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 14, marginBottom: 18 }}>
-              <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", borderRadius: 16, padding: 16, color: "#fff", boxShadow: "0 8px 20px rgba(8,128,90,0.25)" }}>
+              <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", borderRadius: 16, padding: 16, color: "#fff", boxShadow: "0 8px 20px rgba(8,128,90,0.25)" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Referrals Made</div>
                 <div className="serif" style={{ fontSize: 26, fontWeight: 700, marginTop: 4 }}>{referralsDone}</div>
               </div>
@@ -1415,7 +1415,7 @@ export function AllCustomers() {
       {/* Dynamic KPI Cards Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16, marginBottom: 16 }}>
         {/* 1. Total Societies Card with DP / Zoho split */}
-        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
+        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Total Societies</span>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "grid", placeItems: "center" }}>
@@ -1686,7 +1686,7 @@ export function Customers({ accessLevel = "view" }) {
 
       {/* Active-customers KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={{ background: "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
+        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Active Customers</span>
             <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "grid", placeItems: "center" }}>

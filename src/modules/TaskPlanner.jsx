@@ -49,7 +49,7 @@ export const PLAN_PRIORITIES = [
 export const PLAN_SPRINTS_DEFAULT = ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Backlog"];
 // Legacy priority labels → P-scale (for tasks created before the switch).
 export const PLAN_PRIO_MIGRATE = { Low: "P3", Medium: "P2", High: "P1", Urgent: "P0" };
-export const PLAN_AVATAR_COLORS = ["#0A9D6E", "#0B6F52", "#0B6F52", "#986315", "#DC4141", "#2A86D6", "#2A86D6", "#2A86D6", "#DC4141", "#2A86D6"];
+export const PLAN_AVATAR_COLORS = ["#1E9E4F", "#0B6F52", "#0B6F52", "#986315", "#DC4141", "#2A86D6", "#2A86D6", "#2A86D6", "#DC4141", "#2A86D6"];
 // "The Group" tag means exactly these five people (not the vendors / Arun).
 export const PLAN_GROUP = ["Anis", "Sujan", "Harsh", "Sri", "Arjun"];
 // Business-requirement categories every task is filed under.
@@ -76,14 +76,14 @@ export const PLAN_CATEGORIES_DEFAULT = [
   { key: "Zoho FSM",          color: "#0B6F52" },
   { key: "Freshdesk",         color: "#2A86D6" },
   { key: "Bug Fixes",         color: "#DC4141" },
-  { key: "Form",              color: "#0A9D6E" },
+  { key: "Form",              color: "#1E9E4F" },
   { key: "Wisdom",            color: "#2A86D6" },
 ];
 
 /* ---- Editable task config (admins manage via the "Modify Tasks" panel) ------
    Statuses, Sprints and Categories start from the defaults above but can be
    extended/edited by an admin; overrides persist to localStorage. */
-export const PLAN_PALETTE = ["#2A86D6", "#2A86D6", "#986315", "#0B6F52", "#2A86D6", "#986315", "#DC4141", "#08805A", "#0B6F52", "#128c7e", "#DC4141", "#0A9D6E", "#2A86D6", "#08805A"];
+export const PLAN_PALETTE = ["#2A86D6", "#2A86D6", "#986315", "#0B6F52", "#2A86D6", "#986315", "#DC4141", "#08805A", "#0B6F52", "#128c7e", "#DC4141", "#1E9E4F", "#2A86D6", "#08805A"];
 export const planPickColor = (i) => PLAN_PALETTE[(i >= 0 ? i : 0) % PLAN_PALETTE.length];
 // A light background tint of a status colour (for the board column bg).
 export const planTint = (hex) => {
@@ -785,7 +785,7 @@ export function TaskWeeklyView({ tasks, onOpen, isOverdue }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",

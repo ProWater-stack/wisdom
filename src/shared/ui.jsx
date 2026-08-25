@@ -19,7 +19,7 @@ import {
   pluralise, useAuth,
 } from "./core";
 
-export const CHART_PALETTE = ["#0A9D6E", "#2A86D6", "#986315", "#DC4141", "#0B6F52", "#7D8A83", "#A9B3AC"];
+export const CHART_PALETTE = ["#1E9E4F", "#2A86D6", "#986315", "#DC4141", "#0B6F52", "#7D8A83", "#A9B3AC"];
 export const PIE_LABEL_OFFSET = 14;
 export const renderPieLabel = ({ cx, cy, midAngle, outerRadius, value, percent }) => {
   if (!value) return null;
@@ -121,11 +121,11 @@ export function Stat({ label, value, icon: Icon, sub, hero, delta }) {
   const hasDelta = delta != null && Number.isFinite(delta);
   const up = hasDelta && delta > 0, down = hasDelta && delta < 0;
   const deltaColor = hero
-    ? (up ? "#0A9D6E" : down ? "#F5BFBF" : "#B5E2D4")
+    ? (up ? "#1E9E4F" : down ? "#F5BFBF" : "#B5E2D4")
     : (up ? "#08805A" : down ? "#DC4141" : "#7D8A83");
   return (
     <div style={{
-      background: hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "#fff",
+      background: hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "#fff",
       color: hero ? "#E2F3EE" : "inherit", border: hero ? "none" : "1px solid var(--border)",
       borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden"
     }}>
@@ -312,8 +312,8 @@ export function Login() {
     <div className="pw-login-wrapper" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative", background: "linear-gradient(135deg, #f5f0e6, #e8dcc3)", fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif' }}>
       <style>{`
         .pw-glow { position: absolute; border-radius: 50%; filter: blur(100px); animation: pw-float 12s infinite alternate; }
-        .pw-glow.green { width: 450px; height: 450px; background: #0A9D6E; top: -150px; right: -100px; opacity: .35; }
-        .pw-glow.blue { width: 420px; height: 420px; background: #E8A93A; bottom: -150px; left: -120px; opacity: .35; }
+        .pw-glow.green { width: 450px; height: 450px; background: #1E9E4F; top: -150px; right: -100px; opacity: .35; }
+        .pw-glow.blue { width: 420px; height: 420px; background: #C4E538; bottom: -150px; left: -120px; opacity: .35; }
         @keyframes pw-float { from { transform: translateY(0); } to { transform: translateY(70px); } }
 
         .pw-bubble { position: absolute; border-radius: 50%; background: rgba(255,255,255,.35); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: pw-rise 18s infinite; }
@@ -327,7 +327,7 @@ export function Login() {
 
         .pw-login-logo { width: 170px; margin: 0 auto 20px; position: relative; display: flex; align-items: center; justify-content: center; }
         .pw-login-logo img { width: 100%; display: block; mix-blend-mode: multiply; filter: drop-shadow(0 12px 24px rgba(0,0,0,.12)); }
-        .pw-login-logo:before { content: ""; position: absolute; width: 140px; height: 140px; background: rgba(10, 157, 110,.25); filter: blur(50px); z-index: -1; }
+        .pw-login-logo:before { content: ""; position: absolute; width: 140px; height: 140px; background: rgba(30, 158, 79,.25); filter: blur(50px); z-index: -1; }
 
         .pw-login-h1 { margin: 10px 0 8px; font-size: 38px; letter-spacing: -.05em; color: #1d1d1f; font-weight: 800; text-align: center; }
         .pw-login-desc { font-size: 15px; color: #86868b; margin-bottom: 35px; text-align: center; }
@@ -335,7 +335,7 @@ export function Login() {
         .pw-login-field { margin-bottom: 22px; }
         .pw-login-label { font-size: 13px; font-weight: 700; display: block; margin-bottom: 8px; color: #1d1d1f; }
         .pw-login-box { height: 56px; display: flex; align-items: center; background: rgba(255,255,255,.75); border-radius: 18px; border: 1px solid rgba(0,0,0,.06); transition: .3s; position: relative; }
-        .pw-login-box:focus-within { border-color: #0A9D6E; box-shadow: 0 0 0 5px rgba(10, 157, 110,.15); background: #ffffff; }
+        .pw-login-box:focus-within { border-color: #1E9E4F; box-shadow: 0 0 0 5px rgba(30, 158, 79,.15); background: #ffffff; }
 
         .pw-login-box input { width: 100%; height: 100%; border: 0; outline: 0; background: none!important; padding: 0 15px; font-size: 16px; color: #1d1d1f!important; font-family: inherit; }
         .pw-login-box input:-webkit-autofill,
@@ -346,14 +346,14 @@ export function Login() {
         .pw-login-remember { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #1d1d1f; cursor: pointer; user-select: none; }
         
         .pw-login-switch { width: 44px; height: 25px; border-radius: 20px; background: #e5e5ea; position: relative; cursor: pointer; transition: background .25s; display: inline-block; }
-        .pw-login-switch.active { background: #0A9D6E; }
+        .pw-login-switch.active { background: #1E9E4F; }
         .pw-login-switch:after { content: ""; position: absolute; width: 21px; height: 21px; background: white; border-radius: 50%; left: 2px; top: 2px; transition: transform .25s, left .25s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         .pw-login-switch.active:after { left: 21px; }
 
-        .pw-login-forgot { color: #0A9D6E; font-weight: 600; font-size: 14px; background: none; border: none; cursor: pointer; padding: 0; }
+        .pw-login-forgot { color: #1E9E4F; font-weight: 600; font-size: 14px; background: none; border: none; cursor: pointer; padding: 0; }
 
-        .pw-root button.pw-login-btn, button.pw-login-btn, .pw-login-btn { height: 58px!important; width: 100%!important; border: 0!important; border-radius: 20px!important; background: linear-gradient(135deg, #0A9D6E, #E8A93A)!important; color: white!important; font-size: 17px!important; font-weight: 700!important; cursor: pointer!important; box-shadow: 0 15px 35px rgba(232, 169, 58,.3)!important; transition: .25s!important; display: flex!important; align-items: center!important; justify-content: center!important; gap: 8px!important; }
-        .pw-root button.pw-login-btn:hover, button.pw-login-btn:hover, .pw-login-btn:hover { transform: translateY(-3px)!important; box-shadow: 0 20px 40px rgba(232, 169, 58,.4)!important; }
+        .pw-root button.pw-login-btn, button.pw-login-btn, .pw-login-btn { height: 58px!important; width: 100%!important; border: 0!important; border-radius: 20px!important; background: linear-gradient(135deg, #1E9E4F, #C4E538)!important; color: white!important; font-size: 17px!important; font-weight: 700!important; cursor: pointer!important; box-shadow: 0 15px 35px rgba(196, 229, 56,.3)!important; transition: .25s!important; display: flex!important; align-items: center!important; justify-content: center!important; gap: 8px!important; }
+        .pw-root button.pw-login-btn:hover, button.pw-login-btn:hover, .pw-login-btn:hover { transform: translateY(-3px)!important; box-shadow: 0 20px 40px rgba(196, 229, 56,.4)!important; }
         .pw-root button.pw-login-btn:active, button.pw-login-btn:active, .pw-login-btn:active { transform: scale(.97)!important; }
 
         @media(max-width:500px){ .pw-login-card { padding: 30px; } .pw-login-h1 { font-size: 32px; } }
@@ -644,7 +644,7 @@ export const WowMomTT = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   const p = payload[0]?.payload || {};
   const pct = p.pct;
-  const pctColor = pct == null ? "#fff" : pct > 0 ? "#0A9D6E" : pct < 0 ? "#F5BFBF" : "#fff";
+  const pctColor = pct == null ? "#fff" : pct > 0 ? "#1E9E4F" : pct < 0 ? "#F5BFBF" : "#fff";
   return (
     <div style={{ background: "var(--forest)", color: "#fff", padding: "9px 12px", borderRadius: 9, fontSize: 12, boxShadow: "var(--shadow-lg)" }}>
       <div style={{ fontWeight: 700, marginBottom: 4 }}>{label}</div>
@@ -665,7 +665,7 @@ export function ProWaterLogo({ size = 36, style = {}, className = "", badge = fa
         maxHeight: size,
         objectFit: "contain",
         display: "block",
-        filter: "drop-shadow(0 2px 8px rgba(10, 157, 110,0.25))",
+        filter: "drop-shadow(0 2px 8px rgba(30, 158, 79,0.25))",
         ...style
       }}
     />
@@ -683,7 +683,7 @@ export function ProWaterLogo({ size = 36, style = {}, className = "", badge = fa
       display: "inline-flex",
       alignItems: "center",
       justifyContent: "center",
-      boxShadow: "0 4px 14px rgba(10, 157, 110, 0.25), inset 0 1px 0 #ffffff",
+      boxShadow: "0 4px 14px rgba(30, 158, 79, 0.25), inset 0 1px 0 #ffffff",
       border: "1px solid rgba(255, 255, 255, 0.8)",
       flex: "0 0 auto",
       ...style
@@ -697,9 +697,9 @@ export const Loading = ({ title = "Loading Workspace Data", subtitle = "Synchron
   <div className="fade-up ov-sans" style={{ minHeight: "calc(100vh - 200px)", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: "50px 20px" }}>
     <style>{`
       @keyframes pw-ripple {
-        0% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(10, 157, 110, 0.4); }
-        50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 0 20px rgba(10, 157, 110, 0); }
-        100% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(10, 157, 110, 0); }
+        0% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(30, 158, 79, 0.4); }
+        50% { transform: scale(1.08); opacity: 1; box-shadow: 0 0 0 20px rgba(30, 158, 79, 0); }
+        100% { transform: scale(0.88); opacity: 0.85; box-shadow: 0 0 0 0 rgba(30, 158, 79, 0); }
       }
       @keyframes pw-spin-ring {
         0% { transform: rotate(0deg); }
@@ -720,12 +720,12 @@ export const Loading = ({ title = "Loading Workspace Data", subtitle = "Synchron
     {/* Main Animated Water Droplet Spinner Emblem with ProWater Logo */}
     <div style={{ position: "relative", width: 84, height: 84, display: "grid", placeItems: "center", marginBottom: 24 }}>
       {/* Outer Rotating Dotted Ring */}
-      <div style={{ position: "absolute", inset: -10, borderRadius: "50%", border: "2px dashed rgba(10, 157, 110, 0.3)", animation: "pw-spin-ring 12s linear infinite" }} />
+      <div style={{ position: "absolute", inset: -10, borderRadius: "50%", border: "2px dashed rgba(30, 158, 79, 0.3)", animation: "pw-spin-ring 12s linear infinite" }} />
 
       {/* Conic Gradient Spinner Ring */}
       <div style={{
         position: "absolute", inset: 0, borderRadius: "50%",
-        background: "conic-gradient(from 0deg, #0A9D6E, #036EA9, #0A9D6E 80%, transparent 100%)",
+        background: "conic-gradient(from 0deg, #1E9E4F, #036EA9, #1E9E4F 80%, transparent 100%)",
         WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
         mask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4px))",
         animation: "pw-spin-ring 1.2s linear infinite",
@@ -735,7 +735,7 @@ export const Loading = ({ title = "Loading Workspace Data", subtitle = "Synchron
       <div style={{
         width: 58, height: 58, borderRadius: "50%",
         background: "rgba(255,255,255,0.95)",
-        boxShadow: "0 8px 24px rgba(10, 157, 110, 0.38)",
+        boxShadow: "0 8px 24px rgba(30, 158, 79, 0.38)",
         display: "grid", placeItems: "center",
         animation: "pw-ripple 2.4s infinite ease-in-out",
         padding: 6

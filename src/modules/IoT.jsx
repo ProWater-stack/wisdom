@@ -455,7 +455,7 @@ export const IOT_TANK_CSS = `
 .iot-ecg-track{display:flex;width:200%;height:52px;animation:iotEcgScroll 3s linear infinite}
 .iot-ecg.dead .iot-ecg-track{animation-duration:6.5s}
 .iot-ecg-seg{width:50%;height:100%;flex:none}
-.iot-ecg.alive .iot-ecg-seg{filter:drop-shadow(0 0 5px rgba(10,157,110,.5))}
+.iot-ecg.alive .iot-ecg-seg{filter:drop-shadow(0 0 5px rgba(30, 158, 79,.5))}
 .iot-ecg.dead .iot-ecg-seg{filter:drop-shadow(0 0 4px rgba(220,65,65,.38));opacity:.8}
 @keyframes iotEcgScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .pw-refill-tag{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:8;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#0a6f8f;background:#e2f4fb;border:1px solid #b9e3f2;box-shadow:0 3px 8px rgba(10,111,143,.16)}
@@ -472,7 +472,7 @@ export const ValveBadge = ({ state }) => (
 );
 
 
-export const IOT_FLOW_COLORS = ["#0B6F52", "#0A9D6E", "#2A86D6", "#986315", "#2A86D6", "#DC4141"];
+export const IOT_FLOW_COLORS = ["#0B6F52", "#1E9E4F", "#2A86D6", "#986315", "#2A86D6", "#DC4141"];
 
 export function IoTWave({ kind, color, opacity = 0.5 }) {
   if (kind === "bars") {
@@ -868,7 +868,7 @@ export function IoTMetricGauge({ metricKey, label, unit, value, active, onClick 
   const span = (g.max - g.min) || 1;
   const pct = value == null ? null : Math.max(0, Math.min(100, ((value - g.min) / span) * 100));
   return (
-    <div onClick={onClick} title={onClick ? `Show ${label} trend` : undefined} style={{ background: "#fff", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), boxShadow: active ? "0 0 0 2px rgba(10,157,110,.18), 0 6px 16px rgba(16,40,28,.08)" : "0 1px 2px rgba(16,40,28,.04), 0 6px 16px rgba(16,40,28,.06)", borderRadius: 14, padding: "12px 14px", cursor: onClick ? "pointer" : "default", transition: "box-shadow .15s ease, border-color .15s ease" }}>
+    <div onClick={onClick} title={onClick ? `Show ${label} trend` : undefined} style={{ background: "#fff", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), boxShadow: active ? "0 0 0 2px rgba(30, 158, 79,.18), 0 6px 16px rgba(16,40,28,.08)" : "0 1px 2px rgba(16,40,28,.04), 0 6px 16px rgba(16,40,28,.06)", borderRadius: 14, padding: "12px 14px", cursor: onClick ? "pointer" : "default", transition: "box-shadow .15s ease, border-color .15s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: active ? "var(--forest)" : "#6b8577" }}>{label}</span>
         <span style={{ fontSize: 30, fontWeight: 800, color: numCol, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value == null ? "—" : value.toFixed(g.dp)}<span style={{ fontSize: 12.5, color: "#8aa398", fontWeight: 600 }}>{unit ? " " + unit : ""}</span></span>
@@ -931,7 +931,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const anomReadings = Object.values(scan.perMetric).reduce((s, v) => s + v, 0);
 
   const hm = (ms) => { const d = new Date(ms); let h = d.getHours(); const ap = h < 12 ? "AM" : "PM"; h = h % 12 || 12; return h + ":" + String(d.getMinutes()).padStart(2, "0") + " " + ap; };
-  const renderDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const out = payload.out; return <circle key={index} cx={cx} cy={cy} r={out ? 4 : 2} fill={out ? "#e0453f" : "#0A9D6E"} stroke="#fff" strokeWidth={out ? 1.4 : 0.8} />; };
+  const renderDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const out = payload.out; return <circle key={index} cx={cx} cy={cy} r={out ? 4 : 2} fill={out ? "#e0453f" : "#1E9E4F"} stroke="#fff" strokeWidth={out ? 1.4 : 0.8} />; };
   const TT = ({ active, payload }) => {
     if (!active || !payload || !payload.length) return null;
     const d = payload[0].payload;
@@ -999,7 +999,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const wxStory = useMemo(() => (wxCorr ? iotWeatherNarrative(wxCorr, weather, chrono) : null), [wxCorr, weather, chrono]);
   const WXLVL = { strong: "#0A7D53", moderate: "#a86e00", weak: "#6b8577", none: "#8aa398" };
   const WX_SERIES = [
-    { key: "wtemp", oorKey: "oorTemp", label: "Water temp", unit: "°C", color: "#0A9D6E", dp: 1 },
+    { key: "wtemp", oorKey: "oorTemp", label: "Water temp", unit: "°C", color: "#1E9E4F", dp: 1 },
     { key: "tds", oorKey: "oorTds", label: "TDS", unit: "mg/L", color: "#2A86D6", dp: 0 },
     { key: "ph", oorKey: "oorPh", label: "pH", unit: "", color: "#7A5AF8", dp: 1 },
     { key: "tank", oorKey: "oorTank", label: "Tank", unit: "%", color: "#986315", dp: 0 },
@@ -1008,14 +1008,14 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const bigTT = (props) => {
     const { active, payload } = props; if (!active || !payload || !payload.length) return null; const d = payload[0].payload;
     const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "mg/L" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}{bad ? " · out of range" : ""}</div>;
-    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#0A9D6E")}{row("TDS", d.tds, "mg/L", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}{row("Tank", d.tank, "%", d.oorTank, "#986315")}</div>);
+    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#1E9E4F")}{row("TDS", d.tds, "mg/L", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}{row("Tank", d.tank, "%", d.oorTank, "#986315")}</div>);
   };
   // Flashing red ring at timestamps where taste is likely affected (temp+TDS+pH).
   const tasteDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload || !payload.taste) return null; return (<g key={index}><circle cx={cx} cy={cy} r={5} fill="none" stroke="#e0453f" strokeWidth={2}><animate attributeName="r" values="5;9;5" dur="1.1s" repeatCount="indefinite" /><animate attributeName="opacity" values="1;0.15;1" dur="1.1s" repeatCount="indefinite" /></circle><circle cx={cx} cy={cy} r={2.6} fill="#e0453f"><animate attributeName="opacity" values="1;0.25;1" dur="1.1s" repeatCount="indefinite" /></circle></g>); };
   const RCOL = { strong: "#0A7D53", mod: "#a86e00", weak: "#6b8577", none: "#6b8577", na: "#8aa398" };
   const rLabel = (r) => r == null ? "—" : (r >= 0 ? "+" : "") + r.toFixed(2);
   const rStrength = (r) => { if (r == null) return { t: "insufficient data", c: "na" }; const a = Math.abs(r), dir = r > 0 ? "positive" : "inverse"; if (a >= 0.7) return { t: `strong ${dir}`, c: "strong" }; if (a >= 0.4) return { t: `moderate ${dir}`, c: "mod" }; if (a >= 0.2) return { t: `weak ${dir}`, c: "weak" }; return { t: "little / no link", c: "none" }; };
-  const WxTT = ({ active, payload }) => { if (!active || !payload || !payload.length) return null; const d = payload[0].payload; return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "7px 10px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 2 }}>{iotStamp(d.t)}</div><div style={{ color: "#d1830a", fontWeight: 700 }}>Outdoor {d.out != null ? d.out.toFixed(1) : "—"} °C</div><div style={{ color: "#0A9D6E", fontWeight: 700 }}>Water {d.wtemp != null ? d.wtemp.toFixed(1) : "—"} °C</div></div>); };
+  const WxTT = ({ active, payload }) => { if (!active || !payload || !payload.length) return null; const d = payload[0].payload; return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "7px 10px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 2 }}>{iotStamp(d.t)}</div><div style={{ color: "#d1830a", fontWeight: 700 }}>Outdoor {d.out != null ? d.out.toFixed(1) : "—"} °C</div><div style={{ color: "#1E9E4F", fontWeight: 700 }}>Water {d.wtemp != null ? d.wtemp.toFixed(1) : "—"} °C</div></div>); };
 
   return (
     <div style={{ ...IOT_CARD, marginTop: 16, overflow: "hidden" }}>
@@ -1068,14 +1068,14 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
               <ReferenceArea y1={M.ideal[0]} y2={M.ideal[1]} fill="#12a150" fillOpacity={0.08} ifOverflow="extendDomain" />
               <ReferenceLine y={M.ideal[0]} stroke="#12a150" strokeOpacity={0.4} strokeDasharray="4 4" />
               <ReferenceLine y={M.ideal[1]} stroke="#12a150" strokeOpacity={0.4} strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="v" stroke={anomOnly ? "transparent" : "#0A9D6E"} strokeWidth={anomOnly ? 0 : 2} dot={renderDot} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />
+              <Line type="monotone" dataKey="v" stroke={anomOnly ? "transparent" : "#1E9E4F"} strokeWidth={anomOnly ? 0 : 2} dot={renderDot} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls />
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
           <Empty msg={all.length ? (anomOnly ? "No out-of-range readings for " + M.label + " in this window." : "No " + M.label + " readings yet.") : "No readings yet."} />
         )}
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", padding: "4px 8px 0", fontSize: 11, color: "var(--muted)" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#0A9D6E", borderRadius: 2 }} /> {M.label}</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#1E9E4F", borderRadius: 2 }} /> {M.label}</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#e0453f" }} /> out of range</span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 10, background: "#12a150", opacity: 0.18, borderRadius: 2 }} /> ideal band ({M.ideal[0]}–{M.ideal[1]}{M.unit ? " " + M.unit : ""})</span>
         </div>
@@ -1161,7 +1161,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
               </div>
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "6px 4px 0", fontSize: 11, color: "var(--muted)" }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#d1830a", borderRadius: 2 }} /> outdoor temp</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#0A9D6E", borderRadius: 2 }} /> water temp</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#1E9E4F", borderRadius: 2 }} /> water temp</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#2A86D6", borderRadius: 2 }} /> TDS</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#7A5AF8", borderRadius: 2 }} /> pH</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#986315", borderRadius: 2 }} /> tank</span>
@@ -1255,7 +1255,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
 export const IOT_ECG_ALIVE = "M0 30 H20 l3 0 l3 -2 l3 4 l4 -22 l4 34 l4 -15 l3 2 l3 0 H66 l3 0 l3 -2 l3 4 l4 -22 l4 34 l4 -15 l3 2 l3 0 H120";
 export const IOT_ECG_DEAD = "M0 30 H120";
 export function IoTEcg({ alive }) {
-  const color = alive ? "#0A9D6E" : "#DC4141";
+  const color = alive ? "#1E9E4F" : "#DC4141";
   const d = alive ? IOT_ECG_ALIVE : IOT_ECG_DEAD;
   const seg = (
     <svg className="iot-ecg-seg" viewBox="0 0 120 46" preserveAspectRatio="none" aria-hidden>
@@ -1729,7 +1729,7 @@ function IoTDiurnalDemandChart({ avgTds = 28, avgPh = 7.4, style = {} }) {
 
   const PERIOD_COLORS = {
     night: { bg: "linear-gradient(180deg, #6366F1, #4338CA)", text: "#4338CA" },
-    morning: { bg: "linear-gradient(135deg, #0A9D6E, #E8A93A)", text: "#08805A" },
+    morning: { bg: "linear-gradient(135deg, #1E9E4F, #C4E538)", text: "#08805A" },
     afternoon: { bg: "linear-gradient(180deg, #F59E0B, #D97706)", text: "#D97706" },
     evening: { bg: "linear-gradient(180deg, #38BDF8, #0284C7)", text: "#0284C7" },
   };
@@ -2044,7 +2044,7 @@ export function IoTDevices() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {kpiCards.map((k) => {
           const hero = k.hero, off = k.offline, flt = k.faulty;
-          const bg = hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : off ? "rgba(220, 38, 38, 0.05)" : flt ? "rgba(152, 99, 21, 0.05)" : "rgba(255, 255, 255, 0.85)";
+          const bg = hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : off ? "rgba(220, 38, 38, 0.05)" : flt ? "rgba(152, 99, 21, 0.05)" : "rgba(255, 255, 255, 0.85)";
           const bd = hero ? "none" : off ? "1px solid rgba(220, 38, 38, 0.18)" : flt ? "1px solid rgba(152, 99, 21, 0.18)" : "1px solid rgba(0,0,0,0.08)";
           const labelC = hero ? "#B5E2D4" : off ? "#DC4141" : flt ? "#986315" : "#86868B";
           const valueC = hero ? "#ffffff" : off ? "#DC4141" : flt ? "#986315" : "#1D1D1F";

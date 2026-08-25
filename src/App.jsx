@@ -98,7 +98,7 @@ const TOKENS = `
      hue over Surface, tint-borders ≈ 30%). Don't introduce new hues — map to a
      token instead, so a palette change stays a one-file edit. */
   :root{
-    --brand:#0A9D6E;        /* brand green — primary actions, positive series */
+    --brand:#1E9E4F;        /* brand green — primary actions, positive series */
     --green:#08805A;        /* green · text — success text, strong accents      */
     --deep:#0B6F52;         /* deep green — dark accents, second green series   */
     --mint:#F7F5EF;         /* warm sand — app background (#F7F5EF)            */
@@ -128,8 +128,8 @@ const TOKENS = `
     --teal:var(--brand); --teal-d:var(--green);
     --lime:var(--brand); --lime-d:var(--green);
 
-    --grad:linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%);
-    --grad-btn:linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%);
+    --grad:linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%);
+    --grad-btn:linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%);
     --shadow:0 1px 2px rgba(10,26,18,.04), 0 8px 24px -12px rgba(10,26,18,.16);
     --shadow-lg:0 24px 60px -20px rgba(10,26,18,.28);
     --radius:16px;
@@ -276,8 +276,8 @@ const TOKENS = `
 
   /* Floating Frosted Glass Sidebar v3 (available globally in Home and Shell) */
   .pw-sidebar-v3{width:280px;height:96vh;margin:2vh 0 0 16px;position:sticky;top:2vh;display:flex;flex-direction:column;padding:16px 12px;border-radius:20px;font-family:-apple-system,BlinkMacSystemFont,"Plus Jakarta Sans","SF Pro Display",sans-serif;box-sizing:border-box;transition:background .3s ease,border-color .3s ease,box-shadow .3s ease;z-index:40}
-  .pw-sidebar-v3[data-theme="dark"]{--pw-bg-surface:rgba(43,31,22,.92);--pw-border:rgba(255,255,255,.08);--pw-hover-bg:rgba(255,255,255,.09);--pw-card-bg:rgba(255,255,255,.04);--pw-text-main:#f1f5f9;--pw-text-muted:#a89f8d;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#0A9D6E 0%,#E8A93A 100%);--pw-accent-glow:rgba(10, 157, 110,.35);--pw-shadow:0 20px 50px rgba(0,0,0,.4);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.1);--pw-badge-bg:rgba(245,158,11,.15);--pw-badge-text:#fbbf24;--pw-badge-border:rgba(245,158,11,.25)}
-  .pw-sidebar-v3[data-theme="light"]{--pw-bg-surface:rgba(247,245,239,.85);--pw-border:rgba(255,255,255,.8);--pw-hover-bg:rgba(255,255,255,.6);--pw-card-bg:rgba(255,255,255,.5);--pw-text-main:#1e293b;--pw-text-muted:#8a8375;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#0A9D6E 0%,#E8A93A 100%);--pw-accent-glow:rgba(10, 157, 110,.25);--pw-shadow:0 20px 40px rgba(0,0,0,.06);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.9);--pw-badge-bg:rgba(217,119,6,.12);--pw-badge-text:#d97706;--pw-badge-border:rgba(217,119,6,.2)}
+  .pw-sidebar-v3[data-theme="dark"]{--pw-bg-surface:rgba(30,42,32,.92);--pw-border:rgba(255,255,255,.08);--pw-hover-bg:rgba(255,255,255,.09);--pw-card-bg:rgba(255,255,255,.04);--pw-text-main:#f1f5f9;--pw-text-muted:#a89f8d;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%);--pw-accent-glow:rgba(30, 158, 79,.35);--pw-shadow:0 20px 50px rgba(0,0,0,.4);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.1);--pw-badge-bg:rgba(245,158,11,.15);--pw-badge-text:#fbbf24;--pw-badge-border:rgba(245,158,11,.25)}
+  .pw-sidebar-v3[data-theme="light"]{--pw-bg-surface:rgba(247,245,239,.85);--pw-border:rgba(255,255,255,.8);--pw-hover-bg:rgba(255,255,255,.6);--pw-card-bg:rgba(255,255,255,.5);--pw-text-main:#1e293b;--pw-text-muted:#8a8375;--pw-text-active:#ffffff;--pw-accent-gradient:linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%);--pw-accent-glow:rgba(30, 158, 79,.25);--pw-shadow:0 20px 40px rgba(0,0,0,.06);--pw-inset-shadow:inset 0 1px 0 rgba(255,255,255,.9);--pw-badge-bg:rgba(217,119,6,.12);--pw-badge-text:#d97706;--pw-badge-border:rgba(217,119,6,.2)}
   .pw-sidebar-v3{background:var(--pw-bg-surface);backdrop-filter:blur(24px) saturate(200%);-webkit-backdrop-filter:blur(24px) saturate(200%);border:1px solid var(--pw-border);box-shadow:var(--pw-shadow),var(--pw-inset-shadow);color:var(--pw-text-main)}
   .pw-brand-header{display:flex;align-items:center;justify-content:space-between;padding:8px 10px 18px;border-bottom:1px solid var(--pw-border);margin-bottom:12px}
   .pw-brand-content{display:flex;align-items:center;gap:12px}
@@ -295,12 +295,12 @@ const TOKENS = `
   .pw-item:hover{background:var(--pw-hover-bg);color:var(--pw-text-main);transform:translateX(2px) scale(1.04)}
   .pw-item.active:hover{transform:translateX(2px) scale(1.02)}
   .pw-item.active{background:var(--pw-accent-gradient);color:var(--pw-text-active);font-weight:600;box-shadow:0 8px 20px var(--pw-accent-glow)}
-  .pw-user-card{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#2B1F16;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);transition:all .25s ease;overflow:hidden}
-  .pw-user-card:hover{border-color:rgba(66,154,56,.4);box-shadow:0 6px 24px rgba(43,31,22,.4)}
+  .pw-user-card{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;background:#1E2A20;border:1px solid rgba(255,255,255,.08);border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);transition:all .25s ease;overflow:hidden}
+  .pw-user-card:hover{border-color:rgba(66,154,56,.4);box-shadow:0 6px 24px rgba(30,42,32,.4)}
   .pw-avatar-wrap{position:relative;display:flex;flex:0 0 auto}
-  .pw-avatar{width:38px;height:38px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1B633C,#429A38);display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff;border:none;cursor:pointer;flex:0 0 auto;box-shadow:inset 0 1px 1px rgba(255,255,255,.3);transition:transform .2s ease}
+  .pw-avatar{width:38px;height:38px;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#1E9E4F,#C4E538);display:grid;place-items:center;font-weight:700;font-size:14px;color:#fff;border:none;cursor:pointer;flex:0 0 auto;box-shadow:inset 0 1px 1px rgba(255,255,255,.3);transition:transform .2s ease}
   .pw-avatar:hover{transform:scale(1.06)}
-  .pw-status-dot{position:absolute;bottom:-2px;right:-2px;width:10px;height:10px;background:#8DC63F;border:2px solid #2B1F16;border-radius:50%}
+  .pw-status-dot{position:absolute;bottom:-2px;right:-2px;width:10px;height:10px;background:#8DC63F;border:2px solid #1E2A20;border-radius:50%}
   .pw-user-info{flex:1;display:flex;flex-direction:column;gap:2px;overflow:hidden;min-width:0}
   .pw-name-badge{display:flex;align-items:center;gap:6px}
   .pw-name{font-size:13px;font-weight:700;color:#ffffff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -318,8 +318,8 @@ const TOKENS = `
   /* Solid brand gradient + white text (not the earlier pale mint-on-cream)
      so this reads as a clear button against the light topbar/canvas instead
      of nearly disappearing into it. */
-  .pw-avatar-btn{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#0A9D6E,#E8A93A);color:#ffffff;border:none;font-size:12px;font-weight:700;display:grid;place-items:center;cursor:pointer;padding:0;overflow:hidden;box-shadow:0 2px 6px rgba(10,157,110,.3)}
-  .pw-camera-dot{position:absolute;bottom:-2px;right:-2px;width:15px;height:15px;border-radius:50%;background:linear-gradient(135deg,#387B5E,#D4A93E);border:2px solid #fff;color:#fff;display:grid;place-items:center;cursor:pointer}
+  .pw-avatar-btn{width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#1E9E4F,#C4E538);color:#ffffff;border:none;font-size:12px;font-weight:700;display:grid;place-items:center;cursor:pointer;padding:0;overflow:hidden;box-shadow:0 2px 6px rgba(30, 158, 79,.3)}
+  .pw-camera-dot{position:absolute;bottom:-2px;right:-2px;width:15px;height:15px;border-radius:50%;background:linear-gradient(135deg,#1E9E4F,#C4E538);border:2px solid #fff;color:#fff;display:grid;place-items:center;cursor:pointer}
   /* Logout button — used by both Home's greeting row and Shell's topbar. */
   .pw-logout-btn{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;background:transparent;border:1px solid transparent;color:#D9534F;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s ease}
   .pw-logout-btn:hover{background:rgba(217,83,79,.08);border-color:rgba(217,83,79,.2)}
@@ -366,7 +366,7 @@ const TOKENS = `
   .pw-root button:not(:disabled):hover{filter:brightness(1.03)}
   .pw-root button:not(:disabled):active{transform:scale(.985)}
   .pw-root input,.pw-root select,.pw-root textarea{font-family:inherit;transition:border-color .15s ease, box-shadow .15s ease}
-  .pw-root input:focus,.pw-root select:focus,.pw-root textarea:focus{border-color:var(--lime-d);box-shadow:0 0 0 3px rgba(10,157,110,.20);outline:none}
+  .pw-root input:focus,.pw-root select:focus,.pw-root textarea:focus{border-color:var(--lime-d);box-shadow:0 0 0 3px rgba(30, 158, 79,.20);outline:none}
   .pw-root select{appearance:none;-webkit-appearance:none;padding-right:32px!important;
     background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237D8A83' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     background-repeat:no-repeat;background-position:right 11px center}
@@ -375,7 +375,7 @@ const TOKENS = `
   .pw-root tbody tr:hover{background:#EEF7F3}
   /* Card hover — subtle zoom + brand-green highlight so it's clear which card you're on */
   .pw-root .pw-card{transition:transform .16s ease, box-shadow .18s ease, border-color .16s ease}
-  .pw-root .pw-card:hover{transform:translateY(-3px) scale(1.012); border-color:var(--lime-d)!important; box-shadow:0 22px 40px -22px rgba(5,48,30,.55), 0 0 0 1px rgba(10,157,110,.30)!important}
+  .pw-root .pw-card:hover{transform:translateY(-3px) scale(1.012); border-color:var(--lime-d)!important; box-shadow:0 22px 40px -22px rgba(5,48,30,.55), 0 0 0 1px rgba(30, 158, 79,.30)!important}
   .scroll-thin::-webkit-scrollbar{width:9px;height:9px}
   .pw-root ::-webkit-scrollbar{width:11px;height:11px}
   .pw-root ::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:2px solid transparent;background-clip:content-box}
@@ -623,7 +623,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f8faf9", fontFamily: "system-ui, sans-serif", padding: 20 }}>
           <div style={{ maxWidth: 460, width: "100%", background: "#ffffff", padding: 36, borderRadius: 24, boxShadow: "0 20px 50px rgba(0,0,0,0.08)", border: "1px solid rgba(0,0,0,0.06)", textAlign: "center" }}>
-            <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(10, 157, 110,0.1)", color: "#0A9D6E", display: "grid", placeItems: "center", margin: "0 auto 18px" }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(30, 158, 79,0.1)", color: "#1E9E4F", display: "grid", placeItems: "center", margin: "0 auto 18px" }}>
               <RefreshCw size={28} />
             </div>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: "#1D1D1F", margin: "0 0 8px" }}>Workspace Auto-Recovery</h2>
@@ -631,7 +631,7 @@ class ErrorBoundary extends React.Component {
               Your session state has been updated. Click below to launch your ProWater workspace.
             </p>
             <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-              <button onClick={this.resetSession} style={{ padding: "12px 24px", borderRadius: 14, background: "linear-gradient(135deg, #0A9D6E, #E8A93A)", border: "none", fontSize: 14, fontWeight: 700, color: "#ffffff", cursor: "pointer", boxShadow: "0 8px 22px rgba(10, 157, 110,0.3)" }}>
+              <button onClick={this.resetSession} style={{ padding: "12px 24px", borderRadius: 14, background: "linear-gradient(135deg, #1E9E4F, #C4E538)", border: "none", fontSize: 14, fontWeight: 700, color: "#ffffff", cursor: "pointer", boxShadow: "0 8px 22px rgba(30, 158, 79,0.3)" }}>
                 Launch ProWater Workspace ↗
               </button>
             </div>
@@ -849,9 +849,9 @@ function Home({ onPick }) {
       <style>{`
         .premium-home{min-height:100vh;background:linear-gradient(135deg,#FBFAF7 0%,#F7F5EF 55%,#F3F0E8 100%);display:grid;grid-template-columns:290px minmax(0,1fr);color:var(--f);position:relative;overflow:hidden}
         .pw-app-glow{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;animation:pw-app-float 14s ease-in-out infinite alternate}
-        .pw-app-glow.green{width:500px;height:500px;background:#0A9D6E;top:-120px;right:-80px;opacity:.10}
-        .pw-app-glow.blue{width:460px;height:460px;background:#E8A93A;bottom:-140px;left:20%;opacity:.08;animation-delay:4s}
-        .pw-app-glow.mint{width:400px;height:400px;background:#E8A93A;top:45%;right:15%;opacity:.07;animation-delay:8s}
+        .pw-app-glow.green{width:500px;height:500px;background:#1E9E4F;top:-120px;right:-80px;opacity:.10}
+        .pw-app-glow.blue{width:460px;height:460px;background:#C4E538;bottom:-140px;left:20%;opacity:.08;animation-delay:4s}
+        .pw-app-glow.mint{width:400px;height:400px;background:#C4E538;top:45%;right:15%;opacity:.07;animation-delay:8s}
         @keyframes pw-app-float{0%{transform:translateY(0) scale(1)}50%{transform:translateY(45px) scale(1.08)}100%{transform:translateY(-25px) scale(.95)}}
 
         /* The sidebar (pw-sidebar-v3 and every pw-brand, pw-item and pw-user
@@ -870,17 +870,17 @@ function Home({ onPick }) {
         @media(min-width:1550px){.premium-module-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
         .premium-module{position:relative;min-height:86px!important;padding:13px 15px!important;border:1px solid rgba(255,255,255,.85)!important;border-radius:16px!important;background:rgba(255,255,255,.78)!important;backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);box-shadow:0 7px 20px rgba(10,26,18,.04),inset 0 1px 0 #ffffff!important;text-align:left;display:flex;flex-direction:column;justify-content:center;overflow:hidden;transition:all .2s cubic-bezier(.16,1,.3,1)}
         .premium-module:before{content:"";position:absolute;width:80px;height:80px;border-radius:50%;right:-34px;top:-34px;background:var(--module-color);opacity:.09;transition:transform .2s ease}
-        .premium-module:hover{transform:translateY(-3px) scale(1.018);border-color:var(--module-color)!important;box-shadow:0 18px 38px rgba(10, 157, 110,.2),inset 0 1px 0 #ffffff!important;background:rgba(255,255,255,.95)!important}
+        .premium-module:hover{transform:translateY(-3px) scale(1.018);border-color:var(--module-color)!important;box-shadow:0 18px 38px rgba(30, 158, 79,.2),inset 0 1px 0 #ffffff!important;background:rgba(255,255,255,.95)!important}
         .premium-module:hover:before{transform:scale(1.4);opacity:.22}
         .premium-module-icon{width:37px;height:37px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--module-color) 14%,white);color:var(--module-color);flex:0 0 auto}
         .premium-module-name{font-size:14px;font-weight:800;letter-spacing:-.015em;color:#0a1a12;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .premium-module-desc{font-size:11.5px;color:#64748b;line-height:1.3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .premium-module-chev{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:rgba(10, 157, 110,.08);color:var(--brand);flex:0 0 auto;transition:all .2s ease}
+        .premium-module-chev{width:25px;height:25px;border-radius:8px;display:grid;place-items:center;background:rgba(30, 158, 79,.08);color:var(--brand);flex:0 0 auto;transition:all .2s ease}
         .premium-module:hover .premium-module-chev{background:var(--brand);color:#fff;transform:translateX(3px)}
         .premium-greeting{font-family:'DM Sans',system-ui,sans-serif!important;font-size:23px!important;font-weight:800!important;letter-spacing:-.025em;color:var(--f);margin:0 0 14px!important;display:flex;align-items:center;justify-content:space-between}
         .premium-group{margin-bottom:16px}
         .premium-group:last-child{margin-bottom:0}
-        .premium-group-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin:0 0 9px;padding:4px 11px;border-radius:7px;background:linear-gradient(90deg,rgba(10, 157, 110,.14) 0%,rgba(232, 169, 58,.06) 100%);border:1px solid rgba(10, 157, 110,.2);display:inline-flex;align-items:center;gap:5px}
+        .premium-group-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);margin:0 0 9px;padding:4px 11px;border-radius:7px;background:linear-gradient(90deg,rgba(30, 158, 79,.14) 0%,rgba(196, 229, 56,.06) 100%);border:1px solid rgba(30, 158, 79,.2);display:inline-flex;align-items:center;gap:5px}
 
         /* ---- Dark theme chrome ---- */
         .premium-home[data-theme="dark"]{
@@ -990,7 +990,7 @@ function Home({ onPick }) {
                     cursor: "pointer",
                     flex: "0 0 auto",
                     transition: "all .2s ease",
-                    boxShadow: "0 4px 14px rgba(10, 157, 110, 0.3)"
+                    boxShadow: "0 4px 14px rgba(30, 158, 79, 0.3)"
                   }}
                 >
                   <PanelLeftOpen size={16} />
@@ -1376,7 +1376,7 @@ const doRefresh = async () => {
         <div className="pw-app-glow blue" />
         <div className="pw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px", borderBottom: "1px solid var(--border)", background: "var(--pw-topbar-bg)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
           <button className="pw-topbar-burger" onClick={() => setMobileNav(s => !s)} style={{ display: "none", color: "var(--f)" }}><Menu /></button>
-          <button onClick={toggleSidebarCollapsed} className="pw-topbar-sidebar-toggle" title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, background: sidebarCollapsed ? "var(--teal)" : "var(--mint-2)", border: "1px solid var(--border)", color: sidebarCollapsed ? "#ffffff" : "var(--teal)", fontWeight: 700, fontSize: 12.5, cursor: "pointer", flex: "0 0 auto", transition: "all .2s ease", boxShadow: sidebarCollapsed ? "0 4px 14px rgba(10, 157, 110, 0.3)" : "none" }}>
+          <button onClick={toggleSidebarCollapsed} className="pw-topbar-sidebar-toggle" title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 10, background: sidebarCollapsed ? "var(--teal)" : "var(--mint-2)", border: "1px solid var(--border)", color: sidebarCollapsed ? "#ffffff" : "var(--teal)", fontWeight: 700, fontSize: 12.5, cursor: "pointer", flex: "0 0 auto", transition: "all .2s ease", boxShadow: sidebarCollapsed ? "0 4px 14px rgba(30, 158, 79, 0.3)" : "none" }}>
             {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             <span style={{ fontSize: 12 }}>{sidebarCollapsed ? "Show Sidebar" : "Hide Sidebar"}</span>
           </button>

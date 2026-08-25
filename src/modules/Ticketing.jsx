@@ -76,7 +76,7 @@ export function TicketOverview() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
             backdropFilter: s.hero ? "none" : "blur(20px)",
             WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
             border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
@@ -128,7 +128,7 @@ export function TicketOverview() {
               <defs>
                 <linearGradient id="tkIssueGrad" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
-                  <stop offset="100%" stopColor="#0A9D6E" stopOpacity={0.7} />
+                  <stop offset="100%" stopColor="#1E9E4F" stopOpacity={0.7} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
@@ -164,7 +164,7 @@ export function OpsKpis({ tickets }) {
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 18 }}>
       {stats.map((s, i) => (
         <div key={i} style={{
-          background: s.hero ? "linear-gradient(135deg, #0A9D6E 0%, #E8A93A 100%)" : "rgba(255, 255, 255, 0.85)",
+          background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
           backdropFilter: s.hero ? "none" : "blur(20px)",
           WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
           border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
