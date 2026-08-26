@@ -864,9 +864,10 @@ function Home({ onPick }) {
   };
 
   const filtered = visible.filter(m => `${m.label} ${m.desc}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const firstName = String(user.name || user.username || "there").split(" ")[0];
+  const firstNameRaw = String(user.name || user.username || "there").split(" ")[0];
+  const firstName = firstNameRaw.charAt(0).toUpperCase() + firstNameRaw.slice(1);
   const hour = now.getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   const initials = String(user.name || user.username || "P").trim().charAt(0).toUpperCase();
   const fmtElapsed = (s) => {
     const h = String(Math.floor(s / 3600)).padStart(2, "0");
@@ -1018,7 +1019,7 @@ function Home({ onPick }) {
         <div className="premium-content" style={{ paddingTop: 18, paddingBottom: 26 }}>
           <div className="pw-top-header">
             <div>
-              <h1 className="pw-greeting fade-up">{greeting}, <span>{firstName}</span></h1>
+              <h1 className="pw-greeting fade-up">{greeting}, <span>{firstName}</span> 👋</h1>
             </div>
             <div className="pw-header-actions">
               <div className="pw-session-badge" title="Session duration">
@@ -1423,10 +1424,6 @@ const doRefresh = async () => {
             style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 10, border: "1.5px solid var(--border)", background: "#fff", color: "var(--teal)", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: refreshing ? .6 : 1 }}>
             <RefreshCw size={15} style={{ animation: refreshing ? "pw-spin .8s linear infinite" : "none" }} /> Refresh
           </button>}
-          <div className="pw-session-badge">
-            <div className="pw-session-icon"><Clock size={18} /></div>
-            <div><small>Time</small><strong>{fmtClock(now)}</strong></div>
-          </div>
           <div className="pw-session-badge" title="Session duration">
             <div className="pw-session-icon"><Hourglass size={18} /></div>
             <div><small>Session</small><strong>{fmtElapsed(elapsed)}</strong></div>

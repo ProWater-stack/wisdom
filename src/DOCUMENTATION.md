@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.242**.
+> **Reflects:** `APP_VERSION` **2.29.251**.
 
 ---
 
@@ -755,7 +755,7 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   - **Combined Monthly Collection:** stacked Zoho + DP collection trends bar chart (trailing 7 months).
   - **Plan Tier Distribution:** horizontal bar chart showing active subscriptions grouped by plan tier.
   - **Under-Penetrated Buildings:** active connection density progress tracker highlighting the top 5 apartments with the lowest active density.
-  - **All Apartment Performance:** unified society metrics table detailing deposits and recharges for both Zoho and DrinkPrime (excluding empty rows).
+  - **All Apartment Performance:** unified society metrics table detailing deposits and recharges for both Zoho and DrinkPrime (excluding empty rows). Clicking any apartment name opens a **Modal subpage** displaying the list of all Zoho & DrinkPrime customers who made a payment (split by recharges, deposits, and total collected) in that apartment during the selected date range.
   - **Refresh Security:** The top-bar Refresh button is authorized for **admin-only** access (`tabIsAdmin`).
 - **Penetration Tracker (`PenetrationTracker`, `an_penetration`)** — cohort matrix of cumulative
   customers per society, aligned to each society's own **M1 = launch month** (month of its first

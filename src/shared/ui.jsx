@@ -423,6 +423,56 @@ export function Login() {
           transform: translate(3px, -3px) scale(1.2);
         }
 
+        .pw-door-wrap {
+          position: absolute;
+          right: 28px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 28px;
+          height: 40px;
+          perspective: 350px;
+          perspective-origin: right center;
+        }
+
+        .pw-door-frame {
+          position: absolute;
+          inset: 0;
+          border: 2.5px solid rgba(255, 255, 255, 0.95);
+          border-radius: 4px 4px 0 0;
+          background: rgba(10, 26, 18, 0.6);
+          box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+          overflow: hidden;
+        }
+
+        .pw-door-panel {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(to right, #0d381e, #14532d);
+          border-right: 1.5px solid rgba(255, 255, 255, 0.4);
+          transform-origin: left center;
+          transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .pw-door-knob {
+          position: absolute;
+          right: 3px;
+          top: 50%;
+          width: 3.5px;
+          height: 3.5px;
+          background: #C4E538;
+          border-radius: 50%;
+          box-shadow: 0 0 4px #C4E538;
+        }
+
+        .pw-runner {
+          position: absolute;
+          left: 15px;
+          bottom: 10px;
+          width: 32px;
+          height: 38px;
+          transform: translateX(0);
+        }
+
         .runner-torso {
           animation: runner-bob 0.24s ease-in-out infinite alternate;
           transform-origin: center bottom;
@@ -521,6 +571,22 @@ export function Login() {
       {/* Ambient Glows */}
       <div className="pw-glow green" />
       <div className="pw-glow blue" />
+
+      {/* Blended Double-Exposure Background Image */}
+      <div 
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: "url('/wisdom/login_bg.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center 20%",
+          opacity: 0.35,
+          mixBlendMode: "multiply",
+          pointerEvents: "none",
+          maskImage: "radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 80%)",
+          WebkitMaskImage: "radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 80%)"
+        }}
+      />
 
       {/* Glass Bubbles */}
       <div className="pw-bubble pw-b1" />

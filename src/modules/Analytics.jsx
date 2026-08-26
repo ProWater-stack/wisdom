@@ -30,7 +30,7 @@ import {
   bucketKeyOf, bucketsFor,
 } from "../shared/core";
 import {
-  Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, WowMomTT, Modal,
+  Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, WowMomTT, Modal, Drawer,
   Field, Chip, Status, Person, SortHeader, DateRangePicker, DateRangeFilter,
   MultiSelectFilter, CHART_PALETTE, renderPieLabel, pieLabelLine, GsTextCell,
   btnGhost, btnPrimary, td, ftd, trStyle, grid4, axisTick, selectStyle,
@@ -172,6 +172,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const { sel, setSel, range } = useDateRange("this_month");   // working date filter
   const [selSoc, setSelSoc] = useState(null);                  // society filter (null = all)
   const [selSource, setSelSource] = useState(null);            // revenue source filter (null = all)
+  const [selectedAptDetails, setSelectedAptDetails] = useState(null);
   useEffect(() => {
     api.logView(user.username, "Viewed Analytics overview");
     // Each source fails soft (→ []) so one dead endpoint doesn't blank the page.
@@ -657,6 +658,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // ---- controls --------------------------------------------------------------
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+  const displayNameRaw = user.name || "Admin";
+  const displayName = displayNameRaw.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   const exportOverviewCsv = () => exportToCsv("prowater-overview.csv",
     [{ label: "Metric", get: r => r.k }, { label: "Value", get: r => r.v }],
     [
@@ -666,6 +669,191 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       { k: "Outstanding", v: pendingReceivables }, { k: "Growth Rate %", v: growthRate == null ? 0 : growthRate },
       { k: "Collection Efficiency %", v: Math.round(efficiency * 10) / 10 },
     ]);
+
+  // ── Render Modal for Recharged Customers in Clicked Apartment ──────
+  const renderAptDetailsModal = () => {
+    if (!selectedAptDetails) return null;
+    const aptName = selectedAptDetails;
+
+    // Filter Zoho payments
+    const zohoList = paidCur
+      .filter(i => cleanAptName(societyOf(i)) === aptName)
+      .map(i => {
+        const sub = subs.find(s => s.customerNumber === i.customerNumber || s.zohoCustomerId === i.zohoCustomerId || s.zohoId === i.zohoId);
+        const months = termMonths(sub || { interval: i.interval, plan: i.plan }) || 1;
+        const paidDate = i.paidDate || i.date;
+        const startDate = i.dueDate ? new Date(i.dueDate) : (paidDate ? new Date(paidDate) : null);
+        const endDate = startDate ? new Date(startDate.getFullYear(), startDate.getMonth() + months, startDate.getDate() - 1) : null;
+        const depVal = depositForCustomer(custOf(i), i.plan, i.total, i.planCode) || 0;
+        const rechVal = Math.max(0, i.total - depVal);
+        return {
+          id: i.id || i.number || Math.random(),
+          name: i.customerName || custOf(i)?.name || "Unknown Zoho Customer",
+          purifierId: custOf(i)?.purifier_id || i.purifier_id || "—",
+          stack: "Zoho",
+          recharge: rechVal,
+          deposit: depVal,
+          total: i.total,
+          paidDate: paidDate ? fmtDate(new Date(paidDate)) : "—",
+          startDate: startDate ? fmtDate(startDate) : "—",
+          endDate: endDate ? fmtDate(endDate) : "—"
+        };
+      })
+      .filter(p => p.total > 0);
+
+    // Filter DrinkPrime payments
+    const dpList = dpCur
+      .filter(r => cleanAptName(r.partner_name || "Unknown") === aptName)
+      .map((r, idx) => {
+        const rechVal = Number(r.revenue_amount) || 0;
+        const depVal = Number(r.deposit_amount) || 0;
+        const startDate = r["t.validity_start_date"] ? new Date(r["t.validity_start_date"]) : null;
+        const endDate = r["t.validity_end_date"] ? new Date(r["t.validity_end_date"]) : null;
+        return {
+          id: r.id || `dp-${idx}`,
+          name: r.CustomerName || "Unknown DP Customer",
+          purifierId: r.current_device || "—",
+          stack: "DrinkPrime",
+          recharge: rechVal,
+          deposit: depVal,
+          total: rechVal + depVal,
+          paidDate: r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—",
+          startDate: startDate ? fmtDate(startDate) : "—",
+          endDate: endDate ? fmtDate(endDate) : "—"
+        };
+      })
+      .filter(p => p.total > 0);
+
+    const mergedList = [...zohoList, ...dpList].sort((a, b) => b.total - a.total);
+    const totalRechargeAmt = mergedList.reduce((s, x) => s + x.recharge, 0);
+    const totalDepositAmt = mergedList.reduce((s, x) => s + x.deposit, 0);
+    const totalCollectedAmt = mergedList.reduce((s, x) => s + x.total, 0);
+
+    return (
+      <div 
+        onClick={() => setSelectedAptDetails(null)} 
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(10,26,18,0.5)",
+          backdropFilter: "blur(6px)",
+          WebkitBackdropFilter: "blur(6px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 20,
+          zIndex: 1000
+        }}
+      >
+        <div 
+          onClick={e => e.stopPropagation()} 
+          className="pw-pop" 
+          style={{
+            width: "min(1100px, 95%)",
+            background: "#fff",
+            borderRadius: 20,
+            padding: 24,
+            boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+            maxHeight: "calc(100vh - 40px)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
+            <div>
+              <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>Apartment Customer Payments · {rangeLabel(range)}</p>
+              <h2 style={{ fontSize: 22, margin: "4px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{aptName}</h2>
+            </div>
+            <button 
+              onClick={() => setSelectedAptDetails(null)} 
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.05)",
+                display: "grid",
+                placeItems: "center",
+                cursor: "pointer",
+                border: "none",
+                transition: "background 0.2s"
+              }}
+            >
+              <X size={18} color="#475569" />
+            </button>
+          </div>
+
+          {/* Metrics summary */}
+          <div style={{ padding: "14px 20px", borderRadius: 12, background: "rgba(8,128,90,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: "#08805A" }}>{mergedList.length} Paying Customers</span>
+            </div>
+            <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
+              <div style={{ fontSize: 13, color: "#475569" }}>
+                Recharge: <strong style={{ color: "#08805A", fontSize: 14 }}>{inr(Math.round(totalRechargeAmt))}</strong>
+              </div>
+              <div style={{ fontSize: 13, color: "#475569" }}>
+                Deposit: <strong style={{ color: "#475569", fontSize: 14 }}>{inr(Math.round(totalDepositAmt))}</strong>
+              </div>
+              <div style={{ borderLeft: "1px solid rgba(0,0,0,0.12)", height: 16 }} />
+              <div style={{ fontSize: 13, color: "#1D1D1F", fontWeight: 600 }}>
+                Total Collected: <strong style={{ color: "#1D1D1F", fontSize: 16, fontWeight: 800 }}>{inr(Math.round(totalCollectedAmt))}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Table Container */}
+          <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+            {mergedList.length > 0 ? (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700 }}>Customer Name</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700 }}>Purifier ID</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>Paid Date</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>Start Date</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>End Date</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>Stack</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "right" }}>Deposit</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "right" }}>Recharge</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "right" }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mergedList.map((item, idx) => (
+                    <tr key={item.id || idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                      <td style={{ padding: "12px 16px", fontWeight: 650, color: "#1D1D1F" }}>{item.name}</td>
+                      <td style={{ padding: "12px 16px", fontFamily: "monospace", color: "#475569" }}>{item.purifierId}</td>
+                      <td style={{ padding: "12px 16px", textAlign: "center", color: "#475569" }}>{item.paidDate}</td>
+                      <td style={{ padding: "12px 16px", textAlign: "center", color: "#475569" }}>{item.startDate}</td>
+                      <td style={{ padding: "12px 16px", textAlign: "center", color: "#475569" }}>{item.endDate}</td>
+                      <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                        <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: item.stack === "Zoho" ? "rgba(30,158,79,0.1)" : "rgba(42,134,214,0.1)", color: item.stack === "Zoho" ? "#1E9E4F" : "#2A86D6" }}>
+                          {item.stack}
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px 16px", textAlign: "right", color: item.deposit > 0 ? "#475569" : "#94a3b8" }}>{item.deposit > 0 ? inr(Math.round(item.deposit)) : "—"}</td>
+                      <td style={{ padding: "12px 16px", textAlign: "right", color: item.recharge > 0 ? "#08805A" : "#94a3b8", fontWeight: item.recharge > 0 ? 600 : 400 }}>{item.recharge > 0 ? inr(Math.round(item.recharge)) : "—"}</td>
+                      <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#1D1D1F" }}>{inr(Math.round(item.total))}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(8,128,90,.15)", position: "sticky", bottom: 0, fontWeight: 700 }}>
+                    <td colSpan={6} style={{ padding: "12px 16px", color: "#1D1D1F" }}>Grand Total ({mergedList.length})</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#475569" }}>{totalDepositAmt > 0 ? inr(Math.round(totalDepositAmt)) : "—"}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#08805A" }}>{totalRechargeAmt > 0 ? inr(Math.round(totalRechargeAmt)) : "—"}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#1D1D1F", fontWeight: 800 }}>{inr(Math.round(totalCollectedAmt))}</td>
+                  </tr>
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ padding: 40 }}><Empty msg="No customer payments found." /></div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const softShadow = { background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, boxShadow: "0 10px 30px rgba(0,0,0,.03)" };
   const iconBox = (c, hero) => ({ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", color: hero ? "#ffffff" : "#08805A" });
@@ -679,7 +867,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       {/* ── header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14, marginBottom: 18 }}>
         <div>
-          <h1 style={{ fontSize: 27, margin: 0, color: "#1D1D1F", fontWeight: 700 }}>{greeting}, {user.name || "Admin"} <span>👋</span></h1>
+          <h1 style={{ fontSize: 27, margin: 0, color: "#1D1D1F", fontWeight: 700 }}>{greeting}, {displayName} 👋</h1>
           <div style={{ fontSize: 13.5, color: "#86868B", marginTop: 3 }}>Here's what's happening with your business today.</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
@@ -1321,7 +1509,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                                 transition: "background .15s ease"
                               }}
                             >
-                              <td style={{ padding: "13px 18px", fontSize: 13.5, fontWeight: 700, color: "#0d2119", whiteSpace: "nowrap", textAlign: "left" }}>{r.name}</td>
+                              <td
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedAptDetails(r.name);
+                                }}
+                                style={{
+                                  padding: "13px 18px",
+                                  fontSize: 13.5,
+                                  fontWeight: 700,
+                                  color: "#08805A",
+                                  textDecoration: "underline",
+                                  whiteSpace: "nowrap",
+                                  textAlign: "left",
+                                  cursor: "pointer"
+                                }}
+                                title="Click to view recharged customers"
+                              >
+                                {r.name}
+                              </td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}</td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600 }}>{r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}</td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}</td>
@@ -1415,6 +1621,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           ))}
         </div>
       )}
+      {renderAptDetailsModal()}
     </div>
   );
 }
