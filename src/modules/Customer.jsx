@@ -27,6 +27,12 @@ import {
   toastStyle, iconBtn, inp,
 } from "../shared/ui";
 import imgWaterFilter from "../../Tank Photos/water-filter.png";
+
+const cleanPhoneTo10Digits = (phone) => {
+  if (!phone) return "—";
+  const clean = String(phone).replace(/\D/g, "");
+  return clean.length >= 10 ? clean.slice(-10) : clean;
+};
 import imgTool from "../../Tank Photos/tool.png";
 import imgTechnology from "../../Tank Photos/technology.png";
 import imgProtect from "../../Tank Photos/protect.png";
@@ -159,11 +165,24 @@ export function CustomerSocieties() {
     { label: "Largest society", value: biggest ? biggest.count : 0, icon: Award, sub: biggest ? biggest.society : "—" },
   ];
 
-  const exportCsv = () => exportToCsv("prowater-societies.csv", [
-    { label: "Society", get: g => g.society }, { label: "Customers", get: g => g.count }, { label: "Active", get: g => g.active },
-    { label: "Own", get: g => g.own }, { label: "Normal", get: g => g.normal }, { label: "Hot & Cold", get: g => g.hotcold },
-    { label: "Churned", get: g => g.churned },
-  ], filtered);
+  const exportCsv = () => {
+    const flatCustomers = [];
+    filtered.forEach(g => {
+      g.customers.forEach(c => {
+        flatCustomers.push(c);
+      });
+    });
+
+    exportToCsv("prowater-society-customers.csv", [
+      { label: "Customer Name", get: c => c.name || "—" },
+      { label: "Phone", get: c => cleanPhoneTo10Digits(c.phone) },
+      { label: "Purifier ID", get: c => c.purifier_id || "—" },
+      { label: "Society", get: c => c.society || "— No society —" },
+      { label: "Plan", get: c => c.plan || "—" },
+      { label: "Status", get: c => c.status || "—" },
+      { label: "Device Type", get: c => deviceType(c.purifier_id) || "—" },
+    ], flatCustomers);
+  };
 
   // Which slice of a society's customers to show in its expand panel.
   const sliceOf = (g, key) => {
@@ -1665,7 +1684,7 @@ export function Customers({ accessLevel = "view" }) {
     { label: "Filter Type", get: c => filterTypeOf(c) },
     { label: "Name", get: c => c.name },
     { label: "Email", get: c => c.email },
-    { label: "Phone", get: c => c.phone },
+    { label: "Phone", get: c => cleanPhoneTo10Digits(c.phone) },
     { label: "Society", get: c => c.society },
     { label: "Plan", get: c => c.plan },
     { label: "Plan Amount", get: c => planAmount(c) ?? "" },
