@@ -877,7 +877,7 @@ function Home({ onPick }) {
   };
 
   return (
-    <div className="premium-home" style={{ gridTemplateColumns: sidebarCollapsed ? "52px minmax(0, 1fr)" : "290px minmax(0, 1fr)", transition: "grid-template-columns .25s ease" }}>
+    <div className="premium-home" style={{ gridTemplateColumns: sidebarCollapsed ? "68px minmax(0, 1fr)" : "290px minmax(0, 1fr)", transition: "grid-template-columns .25s ease" }}>
       <style>{`
         .premium-home{background:linear-gradient(135deg,#FBFAF7 0%,#F7F5EF 55%,#F3F0E8 100%);display:grid;align-items:stretch;min-height:100vh;grid-template-columns:290px minmax(0,1fr);color:var(--f);position:relative;overflow:hidden}
         .pw-app-glow{position:fixed;border-radius:50%;filter:blur(120px);pointer-events:none;z-index:0;animation:pw-app-float 14s ease-in-out infinite alternate}
@@ -1320,7 +1320,7 @@ const doRefresh = async () => {
   const signOut = async () => { await api.logout(user.username); setUser(null); };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: sidebarCollapsed ? "52px 1fr" : "312px 1fr", transition: "grid-template-columns .25s ease", minHeight: "100vh", width: "100%" }} className="shell-grid">
+    <div style={{ display: "grid", gridTemplateColumns: sidebarCollapsed ? "68px 1fr" : "312px 1fr", transition: "grid-template-columns .25s ease", minHeight: "100vh", width: "100%" }} className="shell-grid">
       <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-sidebar-v3{position:fixed;z-index:40;height:100vh;margin:0;border-radius:0;transform:translateX(-105%);transition:transform .22s ease}.pw-sidebar-v3.open{transform:none}.pw-topbar-burger{display:inline-flex!important}.iot-apt-badge{display:none!important}}`}</style>
 
       {/* sidebar — outer <aside> stretches to match the content column's

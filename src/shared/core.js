@@ -815,9 +815,10 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.253";
+export const APP_VERSION = "2.29.254";
 export const VERSION_DATE = "2026-08-26";
 export const VERSION_HISTORY = [
+  { v: "2.29.254", note: "Layout: corrected collapsed sidebar grid template column widths from 52px to 68px (compensating for the 16px left margin of the rail), aligning all icons and active indicator states perfectly inside the rail background." },
   { v: "2.29.253", note: "Customers: cleaned up CSV exports to strip country codes or spreadsheet-escape characters from phone numbers, rendering exactly a 10-digit number." },
   { v: "2.29.252", note: "Customers: updated the societies section CSV export to flatten and include detailed customer-level rows (Customer Name, Phone, Purifier ID, Society, Plan, Status, Device Type) instead of only society aggregates." },
   { v: "2.29.251", note: "Login: adjusted background image vertical positioning to center 20%, pulling the building render down to make the rooftop ProWater tank and Central RO System branding visible." },
