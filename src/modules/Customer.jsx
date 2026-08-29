@@ -6,11 +6,11 @@
    =========================================================================== */
 import React, { useState, useEffect, useRef } from "react";
 import {
-  AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Award, Ban, Boxes,
+  AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Award, Ban, Bluetooth, Boxes,
   CalendarClock, CalendarDays, CalendarRange, CheckCircle2, ChevronDown,
   ChevronLeft, ChevronRight, ChevronUp, Cpu, Download, Droplets, Gauge,
-  GitBranch, Info, Landmark, MapPin, PencilLine, PlayCircle, Receipt,
-  RefreshCw, RotateCcw, Sun, Ticket, TrendingUp, Upload, UserRound, Wallet, Wrench, X,
+  GitBranch, Info, Landmark, MapPin, PauseCircle, PencilLine, PlayCircle, Receipt,
+  RefreshCw, RotateCcw, Sun, Ticket, TrendingUp, Upload, UserRound, Wallet, Wrench, X, Wifi, WifiOff,
 } from "lucide-react";
 import {
   useAuth, api, customerApi, billingApi, creditNoteApi, ticketApi,
@@ -215,28 +215,34 @@ export function CustomerSocieties() {
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
+        {/* v2.29.274: hero cards no longer gradient — per explicit user request
+            ("make all the hero cards in same color with white background like
+            other normal cards, it becomes easy to check the percentages going
+            up or down"), every KPI card across the CRM now renders like a
+            normal white card so any percentage/delta text is always plain
+            colored text on white, never needing a pill/backdrop workaround. */}
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
-            backdropFilter: s.hero ? "none" : "blur(20px)",
-            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
-            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            background: "rgba(255, 255, 255, 0.85)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: 18,
             padding: "18px 20px",
-            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
                 {s.label}
               </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color="#08805A" />
               </div>
             </div>
-            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
               {s.value}
             </div>
-            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B" }}>{s.sub}</div>
+            <div style={{ fontSize: 12, color: "#86868B" }}>{s.sub}</div>
           </div>
         ))}
       </div>
@@ -713,6 +719,7 @@ export function AllCustomers() {
   const [deviceTypeFilter, setDeviceTypeFilter] = useState(null); // null = all (v2.29.140)
   const [filterTypeFilter, setFilterTypeFilter] = useState(null); // null = all (v2.29.140)
   const [dateSel, setDateSel] = useState({ preset: "all", from: "", to: "" });
+  const [connFilter, setConnFilter] = useState(null);
   // DP customers' Transactions sub-page (v2.29.113): reads the DrinkPrime
   // collections API directly (installationId = dp_installation_id), since a
   // DP-stack customer has no real Zoho invoices to show.
@@ -727,6 +734,209 @@ export function AllCustomers() {
   const [syncHistoryTotal, setSyncHistoryTotal] = useState(0);
   const [syncHistoryLoading, setSyncHistoryLoading] = useState(false);
   const [syncHistoryErr, setSyncHistoryErr] = useState(false);
+  const [connCheck, setConnCheck] = useState(null);
+  const [connChecking, setConnChecking] = useState(false);
+
+  // ── DP Devices Conn: force-checked LIVE connectivity, all devices (v2.29.259) ──
+  // The DP Devices Conn KPI card previously derived Connected/Disconnected purely
+  // from each customer's cached `deviceStatus` field (whatever DrinkPrime last
+  // reported into Zoho) — that can be stale by hours. `liveConn` holds a fresh,
+  // per-device result from actually pinging the same conn-check API `runConnCheck`
+  // above uses for one device, but run in bulk across every DP device (not just
+  // whichever customer happens to be open): { [bid]: true|false|null } — true/false
+  // is a real live answer, null means the check itself failed (network/API error),
+  // in which case the KPI count below falls back to the cached deviceStatus for
+  // that one device rather than silently miscounting it as offline.
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
+  const [liveConn, setLiveConn] = useState({});
+  const [liveConnChecking, setLiveConnChecking] = useState(false);
+  const [liveConnProgress, setLiveConnProgress] = useState(null); // {done,total} while running
+  // v2.29.278: persisted to localStorage (not just React state) — per explicit
+  // user request ("If the page refreshed dont loose the last refresh
+  // timestamp, Store it. Then based on the last refresh timestamp you do a
+  // refresh after 30 mins"). Read back on mount so a real page reload knows
+  // how much of the 30-minute window has already elapsed, instead of always
+  // restarting the countdown from zero.
+  const LAST_RUN_KEY = "pw_dp_conn_last_run";
+  const [liveConnLastRun, _setLiveConnLastRun] = useState(() => {
+    try { const v = localStorage.getItem(LAST_RUN_KEY); return v ? Number(v) : null; } catch { return null; }
+  });
+  const setLiveConnLastRun = (ts) => {
+    _setLiveConnLastRun(ts);
+    try { localStorage.setItem(LAST_RUN_KEY, String(ts)); } catch { /* private mode etc — state still updates */ }
+  };
+  // Lets the user stop/resume the 30-min auto-refresh loop (v2.29.263, explicit
+  // request: "Add a stop refresh button in the DP Devices Conn KPI Card"). The
+  // manual force-check button below works regardless of this — it only gates
+  // the automatic recurring tick.
+  //
+  // v2.29.264 fix — the button flipped the React state correctly (which does
+  // clear the setInterval), but two things still made it look broken: (1) a
+  // bulk check already IN FLIGHT when Stop was clicked had no way to actually
+  // halt — its already-dispatched fetches ran to completion and updated
+  // liveConn/the KPI numbers a moment later, which reads as "it's still
+  // refreshing"; fixed with a real AbortController the Stop button now fires,
+  // so in-flight requests are killed immediately, not just future ones
+  // prevented. (2) the on/off choice lived only in React state, so a plain
+  // browser refresh (a full remount, not just a re-render) always came back
+  // up with the default `true` and silently restarted auto-refresh even
+  // after the user had explicitly stopped it — fixed by persisting the
+  // choice to localStorage and reading it back on mount.
+  const AUTO_REFRESH_KEY = "pw_dp_conn_autorefresh";
+  const [autoRefreshOn, setAutoRefreshOn] = useState(() => {
+    try { return localStorage.getItem(AUTO_REFRESH_KEY) !== "off"; } catch { return true; }
+  });
+  // A ref (not the `liveConnChecking` state) guards against overlapping runs —
+  // the 30-min auto-tick below fires from a `setInterval` closure captured
+  // once when `data` first loaded, so it can't be trusted to see the latest
+  // React state; a ref is always current regardless of which render's
+  // closure is calling it.
+  const liveConnCheckingRef = useRef(false);
+  // Holds the AbortController for whichever bulk check is currently in
+  // flight (if any) — Stop calls .abort() on it for a real, immediate halt.
+  const liveConnAbortRef = useRef(null);
+
+  const runBulkConnCheck = async () => {
+    if (liveConnCheckingRef.current) return; // don't stack overlapping runs (manual click during the 30-min auto tick)
+    liveConnCheckingRef.current = true;
+    const controller = new AbortController();
+    liveConnAbortRef.current = controller;
+    // v2.29.278: only WIFI-connectivity devices get force-checked — per
+    // explicit user request ("Run a refresh only for wifi devices and skip
+    // the BLE"). BLE (and GSM, which has no real connectivity to check at
+    // all) fall back to whatever their cached deviceStatus already says, via
+    // isDpOnline() below — they're just never included in this fetch loop.
+    const list = (dataRef.current?.customers || []).filter(c => c.isDpCustomer && c.bid && String(c.connectivity || "").toUpperCase() === "WIFI");
+    setLiveConnChecking(true);
+    setLiveConnProgress({ done: 0, total: list.length });
+    if (!list.length) {
+      setLiveConnChecking(false);
+      setLiveConnProgress(null);
+      setLiveConnLastRun(Date.now());
+      liveConnCheckingRef.current = false;
+      return;
+    }
+    const CONCURRENCY = 6; // small pool — a real fleet can be hundreds of devices
+    let cursor = 0, done = 0;
+    const found = {};
+    const worker = async () => {
+      while (cursor < list.length) {
+        if (controller.signal.aborted) return; // hard stop — don't start another device
+        const c = list[cursor++];
+        try {
+          const r = await fetch("https://api.drinkprime.in/sponsor/device/life/conn-check", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ botId: c.bid, connectivity: c.connectivity || "WIFI" }),
+            signal: controller.signal,
+          });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const json = await r.json();
+          // Same response convention already relied on by the single-device
+          // "Ping Conn" check in the profile drawer below: {success:true} = online.
+          found[c.bid] = json?.success === true;
+        } catch (e) {
+          if (controller.signal.aborted) return; // aborted mid-fetch — drop this result, don't mark it offline
+          found[c.bid] = null; // unknown — KPI count falls back to cached deviceStatus
+        }
+        done++;
+        setLiveConnProgress({ done, total: list.length });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, list.length) }, worker));
+    if (!controller.signal.aborted) {
+      setLiveConn(prev => ({ ...prev, ...found }));
+      setLiveConnLastRun(Date.now());
+    }
+    setLiveConnChecking(false);
+    setLiveConnProgress(null);
+    liveConnCheckingRef.current = false;
+    liveConnAbortRef.current = null;
+  };
+
+  const stopAutoRefresh = () => {
+    setAutoRefreshOn(false);
+    try { localStorage.setItem(AUTO_REFRESH_KEY, "off"); } catch { /* private mode etc — state still updates */ }
+    if (liveConnAbortRef.current) liveConnAbortRef.current.abort(); // hard-kill anything in flight right now
+    // Flip the UI immediately rather than waiting for the aborted fetches'
+    // rejections to actually propagate back through runBulkConnCheck — the
+    // whole point of "Stop" is that it reads as stopped the instant it's clicked.
+    liveConnCheckingRef.current = false;
+    setLiveConnChecking(false);
+    setLiveConnProgress(null);
+  };
+  const resumeAutoRefresh = () => {
+    setAutoRefreshOn(true);
+    try { localStorage.setItem(AUTO_REFRESH_KEY, "on"); } catch { /* private mode etc — state still updates */ }
+  };
+
+  // Auto-run every 30 minutes — per explicit user request ("run a live
+  // refresh every 30 mins to show me the live status"). Re-arms whenever the
+  // Stop/Resume button flips `autoRefreshOn` back on; stopping it just clears
+  // the pending timer — the manual refresh icon still force-checks on demand
+  // either way. Reads the persisted on/off choice at mount time (the
+  // `autoRefreshOn` initializer above), so a stopped state survives a real
+  // browser refresh, not just a React re-render.
+  //
+  // v2.29.278: previously always called `runBulkConnCheck()` immediately on
+  // mount, discarding however much of the 30-minute window had already
+  // elapsed before this page load — per explicit user request ("based on the
+  // last refresh timestamp you do a refresh after 30 mins"), this now reads
+  // the persisted `liveConnLastRun` and only waits out whatever's actually
+  // left of that window: a fresh page load 25 minutes after the last real
+  // check schedules a check 5 minutes from now, not another full 30. No
+  // persisted timestamp (or the 30 minutes already fully elapsed) still
+  // means "check right now," same as before.
+  useEffect(() => {
+    if (!data || !autoRefreshOn) return;
+    const THIRTY_MIN = 30 * 60 * 1000;
+    const elapsed = liveConnLastRun ? Date.now() - liveConnLastRun : Infinity;
+    const remaining = Math.max(0, THIRTY_MIN - elapsed);
+    let intervalId;
+    const timeoutId = setTimeout(() => {
+      runBulkConnCheck();
+      intervalId = setInterval(runBulkConnCheck, THIRTY_MIN);
+    }, remaining);
+    return () => { clearTimeout(timeoutId); if (intervalId) clearInterval(intervalId); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!data, autoRefreshOn]);
+
+  const runConnCheck = (botId, connectivity) => {
+    if (!botId) return;
+    setConnChecking(true);
+    setConnCheck(null);
+    fetch("https://api.drinkprime.in/sponsor/device/life/conn-check", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ botId, connectivity: connectivity || "WIFI" }),
+    })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP error ${r.status}`);
+        return r.json();
+      })
+      .then(json => {
+        setConnCheck(json);
+      })
+      .catch(err => {
+        setConnCheck({ error: err.message || "Failed to check connection" });
+      })
+      .finally(() => {
+        setConnChecking(false);
+      });
+  };
+
+  useEffect(() => {
+    if (sel && sel.isDpCustomer && sel.bid) {
+      runConnCheck(sel.bid, sel.connectivity);
+    } else {
+      setConnCheck(null);
+      setConnChecking(false);
+    }
+  }, [sel]);
+
   useEffect(() => {
     api.logView(user.username, "Viewed All Customers");
     Promise.all([
@@ -809,15 +1019,17 @@ export function AllCustomers() {
   const stackOf = (c) => c.isDpCustomer ? "DP" : "Zoho";
 
   // Faceted filter options (v2.29.150, per explicit request — "if I filter
-  // Row highlight (v2.29.117): Un-Installed (dp_details.device_status) → yellow,
-  // Dunning (Zoho subscription status, passed through as-is by the mapper) →
-  // red, Inactive (either stack's own "inactive" status) → orange.
+  // Row highlight (v2.29.261): Un-Installed (dp_details.device_status) now shares
+  // the same red used for Dunning (Zoho subscription status, passed through as-is
+  // by the mapper) — per explicit user request ("where the device status is
+  // Un-Installed mark in red color for the entire row like how you have for
+  // dunning"); was previously a separate yellow. Inactive (either stack's own
+  // "inactive" status) stays its own orange.
   const normSt = (s) => String(s || "").toLowerCase().replace(/[\s_-]+/g, "");
   const rowTint = (c) => {
     const dev = normSt(c.deviceStatus);
     const st = normSt(c.status);
-    if (dev.includes("uninstall")) return { background: "#FFFBEA" };
-    if (st === "dunning") return { background: "var(--danger-t)" };
+    if (dev.includes("uninstall") || st === "dunning") return { background: "var(--danger-t)" };
     if (st === "inactive" || dev === "inactive") return { background: "#FFF1E0" };
     return {};
   };
@@ -834,6 +1046,7 @@ export function AllCustomers() {
     (exclude === "stack" || (stackFilter === null || stackFilter.includes(stackOf(c)))) &&
     (exclude === "deviceType" || (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c)))) &&
     (exclude === "filterType" || (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c)))) &&
+    (exclude === "conn" || (connFilter === null ? true : (c.isDpCustomer && (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active")))) &&
     (!ql || matchesQ(c)));
   const societyOptions = Array.from(new Set(facetPop("society").map(c => c.society).filter(Boolean))).sort();
   const statusOptions = Array.from(new Set(facetPop("status").map(c => c.status).filter(Boolean))).sort();
@@ -846,36 +1059,126 @@ export function AllCustomers() {
     (statusFilter === null || statusFilter.includes(c.status)) &&
     (stackFilter === null || stackFilter.includes(stackOf(c))) &&
     (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
-    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))));
+    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
+    (connFilter === null ? true : (c.isDpCustomer && (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active"))));
 
   const results = (ql ? filtered.filter(matchesQ) : filtered)
     .slice().sort((a, b) => String(a.purifier_id).localeCompare(String(b.purifier_id), undefined, { numeric: true }));
 
   // Reset filters helper
-  const hasActiveFilters = societyFilter !== null || statusFilter !== null || stackFilter !== null || deviceTypeFilter !== null || filterTypeFilter !== null || q !== "";
+  const hasActiveFilters = societyFilter !== null || statusFilter !== null || stackFilter !== null || deviceTypeFilter !== null || filterTypeFilter !== null || connFilter !== null || q !== "";
   const handleResetFilters = () => {
     setSocietyFilter(null);
     setStatusFilter(null);
     setStackFilter(null);
     setDeviceTypeFilter(null);
     setFilterTypeFilter(null);
+    setConnFilter(null);
     setQ("");
   };
+
+  // Export — per explicit user request ("Also add a export option"). Exports
+  // exactly the `results` population currently on screen (post search/filter),
+  // matching every visible column plus phone/email for reference.
+  const exportCsv = () => exportToCsv("prowater-all-customers.csv", [
+    { label: "Purifier ID", get: c => c.purifier_id },
+    { label: "Customer", get: c => c.name },
+    { label: "Phone", get: c => fmtPhone(c.phone) },
+    { label: "Email", get: c => c.email },
+    { label: "Society", get: c => c.society },
+    { label: "Plan", get: c => c.plan },
+    { label: "Device Type", get: c => deviceTypeOf(c) },
+    { label: "Stack", get: c => stackOf(c) },
+    { label: "Status", get: c => c.status },
+  ], results);
 
   // ── Dynamic KPI Card metrics computed off the active `results` population ──
   // Status logic for Active Customers: "Active", "In-active", "active", "dunning"
   const activeStatuses = ["active", "in-active", "dunning"];
-  const activeCount = results.filter(c => activeStatuses.includes(String(c.status || "").toLowerCase())).length;
+
+  // ── Unique-customer identity (v2.29.257, keyed off the API's own ID as of
+  // v2.29.262) ────────────────────────────────────────────────────────────
+  // `results` is one row per purifier/device profile, not one row per
+  // person — a real customer with 2 purifiers gets 2 rows. Roll those up to
+  // a real per-customer count for the KPI card, per explicit user request
+  // ("pull the records what i have in the get-all-customers API... that
+  // also has an identifier in the API"). Key on `c.id` — which the mapper in
+  // customerApi.getCustomers already resolves to `customer_number`, the ONE
+  // identifier get-all-customers guarantees on every real record, Zoho or
+  // DrinkPrime alike (confirmed against real examples of both the user
+  // pasted: Zoho's "CUS-00010" and DP's "267907" — both `customer_number`,
+  // while `zoho_customer_id` is an empty string on the DP one). This is more
+  // reliable than the zohoId/email guess this used before v2.29.260's
+  // removal of the old placeholder-email stub rows, since `id` is the
+  // literal account identifier the API itself hands us, not a derived
+  // guess. Falls back to email only in the unlikely case `id` itself is
+  // blank (defensive — customer_number is present on every payload seen).
+  const custKey = (c) => c.id ? `id:${String(c.id).toLowerCase()}` : c.email ? `e:${String(c.email).toLowerCase()}` : `p:${String(c.purifier_id || "").toLowerCase()}`;
+  // Row-level duplicate flag (v2.29.267, explicit user request: "if there is
+  // a duplicate row with the user in the table show with a warning sign").
+  // Counts how many rows in the current view share the same custKey — any
+  // count > 1 gets a warning badge on every one of those rows, whether it's
+  // a genuine multi-device customer or an actual data duplicate; the badge's
+  // job is just to make it visible so Business Ops can tell at a glance and
+  // investigate, not to silently decide which case it is.
+  const custKeyCounts = {};
+  results.forEach(c => { const k = custKey(c); custKeyCounts[k] = (custKeyCounts[k] || 0) + 1; });
+  const uniqueCustomerMap = new Map();
+  results.forEach(c => {
+    const k = custKey(c);
+    const isActiveRow = activeStatuses.includes(String(c.status || "").toLowerCase());
+    const prev = uniqueCustomerMap.get(k);
+    if (!prev) uniqueCustomerMap.set(k, { isDp: c.isDpCustomer, isActive: isActiveRow });
+    else { prev.isDp = prev.isDp || c.isDpCustomer; prev.isActive = prev.isActive || isActiveRow; }
+  });
+  const uniqueCustomers = Array.from(uniqueCustomerMap.values());
+  const uniqueTotalCount = uniqueCustomers.length;
+  const uniqueActiveCount = uniqueCustomers.filter(u => u.isActive).length;
+  const uniqueInactiveCount = uniqueTotalCount - uniqueActiveCount;
+  const uniqueDpCount = uniqueCustomers.filter(u => u.isDp).length;
+  const uniqueZohoCount = uniqueTotalCount - uniqueDpCount;
 
   // Distinct societies in current view & DP / Zoho split
   const resultSocieties = Array.from(new Set(results.map(c => c.society).filter(isRealSociety)));
   const totalSocietiesCount = resultSocieties.length;
-  const dpSocCount = resultSocieties.filter(soc => results.some(c => c.society === soc && c.isDpCustomer)).length;
-  const zohoSocCount = resultSocieties.filter(soc => results.some(c => c.society === soc && !c.isDpCustomer)).length;
+  // Named lists (not just counts) so the KPI card can actually show which
+  // apartments are which — per explicit user request ("shows as 9 DP and 4
+  // Zoho, so which are those 9... show the apartment names"). A society with
+  // BOTH a DP and a Zoho customer in it appears in both lists (that overlap
+  // is real — it's why dpSocCount+zohoSocCount can exceed totalSocietiesCount
+  // — not a bug), sorted for a stable, readable tooltip/dropdown order.
+  const dpSocietyNames = resultSocieties.filter(soc => results.some(c => c.society === soc && c.isDpCustomer)).sort();
+  const zohoSocietyNames = resultSocieties.filter(soc => results.some(c => c.society === soc && !c.isDpCustomer)).sort();
+  const dpSocCount = dpSocietyNames.length;
+  const zohoSocCount = zohoSocietyNames.length;
 
   const ownCount = results.filter(c => deviceTypeOf(c) === "Own Device").length;
   const normalCount = results.filter(c => deviceTypeOf(c) === "Normal").length;
   const hotColdCount = results.filter(c => deviceTypeOf(c) === "Hot & Cold").length;
+
+  // Prefers the live-checked result from runBulkConnCheck (a real API ping) for
+  // any device that has one; only falls back to the cached deviceStatus field
+  // for devices not yet checked (or whose check itself failed — liveConn holds
+  // `null` for those, not a false "offline").
+  const dpCustomers = results.filter(c => c.isDpCustomer);
+  const isDpOnline = (c) => {
+    const live = c.bid ? liveConn[c.bid] : undefined;
+    return live === true || live === false ? live : normSt(c.deviceStatus) === "active";
+  };
+  const dpConnected = dpCustomers.filter(isDpOnline).length;
+  const dpDisconnected = dpCustomers.length - dpConnected;
+
+  // Connectivity-medium breakdown (v2.29.276, explicit user request: "if the
+  // connectivity is BLE then show the count, WIFI then show the count...
+  // and if its GSM show as No Connectivity icon"). `c.connectivity` comes
+  // straight from the API's own dp_details.connectivity field (confirmed
+  // real values: "WIFI", plus "BLE"/"GSM" per the user's own description) —
+  // GSM devices have no WIFI/BLE transport to actually live-check, hence the
+  // distinct "No Connectivity" treatment rather than lumping them in with
+  // either real connectivity medium.
+  const dpBleCount = dpCustomers.filter(c => String(c.connectivity || "").toUpperCase() === "BLE").length;
+  const dpWifiCount = dpCustomers.filter(c => String(c.connectivity || "").toUpperCase() === "WIFI").length;
+  const dpGsmCount = dpCustomers.filter(c => String(c.connectivity || "").toUpperCase() === "GSM").length;
 
   // ── Dynamic Filter Type counts computed off `results` ──
   const normFt = (ft) => {
@@ -916,7 +1219,7 @@ export function AllCustomers() {
     // payments/v1 response shape (v2.29.134 — was `c.totalPaid` on the old
     // v2/collections endpoint).
     const totalPaid = sel.isDpCustomer
-      ? (dpTxns || []).reduce((s, c) => s + (c.amount || 0), 0)
+      ? (sel.total_paid || 0)
       : txns.filter(t => t.status === "paid").reduce((s, t) => s + (t.total || 0), 0);
     const planName = custSubs[0]?.plan || sel.plan;
     // Current paid transaction — the most recent paid invoice (txns is
@@ -1133,28 +1436,128 @@ export function AllCustomers() {
                 <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Customer Profile & Attributes</div>
                 <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Core parameters, account values, and installed device details</div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: "0 40px" }}>
-                <div>
-                  <DefRow k="Purifier ID" v={sel.purifier_id} />
-                  <DefRow k="Customer ID" v={sel.id} />
-                  <DefRow k="Name" v={sel.name} />
-                  <DefRow k="Email" v={sel.email} />
-                  <DefRow k="Phone" v={sel.phone} />
-                  <DefRow k="Referral code" v={referralCode} />
-                  <DefRow k="Referrals made" v={referralsDone} />
-                  <DefRow k="Support tickets" v={cell(custTickets.length, custTickets.length >= 8 ? "red" : custTickets.length >= 5 ? "amber" : null)} />
-                </div>
-                <div>
-                  <DefRow k="Society" v={sel.society} />
-                  <DefRow k="Plan" v={planName} />
-                  <DefRow k="Status" v={cell(<span style={{ textTransform: "capitalize" }}>{sel.status || "—"}</span>, statusActive ? null : "red")} />
-                  <DefRow k="Installed date" v={installed ? fmtDate(installed) : "—"} />
-                  <DefRow k="LTV (lifetime value)" v={cell(inr(totalPaid), totalPaid === 0 ? "red" : null)} />
-                  <DefRow k="Security Deposit" v={inr(securityDeposit)} />
-                  <DefRow k="Discounts (credit notes)" v={<>{cell(inr(discountTotal), discountPct >= 30 ? "red" : discountPct >= 20 ? "amber" : null)}{discountCount ? <span style={{ color: "#86868B", fontWeight: 400 }}> · {discountCount} note{discountCount !== 1 ? "s" : ""}{discountBalance > 0 ? ` · ${inr(discountBalance)} balance` : ""}</span> : null}</>} />
-                  <DefRow k="Complaints" v={cell(complaintCount, complaintCount >= 2 ? "red" : complaintCount >= 1 ? "amber" : null)} />
-                </div>
-              </div>
+              {(() => {
+                const leftCols = [
+                  { k: "Purifier ID", v: sel.purifier_id },
+                  { k: "Customer ID", v: sel.id },
+                  sel.db_id ? { k: "Database ID", v: sel.db_id } : null,
+                  { k: "Name", v: sel.name },
+                  { k: "Email", v: sel.email },
+                  { k: "Phone", v: sel.phone },
+                  { k: "Referral code", v: referralCode },
+                  { k: "Referrals made", v: referralsDone },
+                  { k: "Support tickets", v: cell(custTickets.length, custTickets.length >= 8 ? "red" : custTickets.length >= 5 ? "amber" : null) },
+                  sel.isDpCustomer && sel.bid ? {
+                    k: "Bot ID",
+                    v: (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span>{sel.bid}</span>
+                        {sel.connectivity && <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "rgba(0,0,0,0.06)", color: "#475569" }}>({sel.connectivity})</span>}
+                        <button
+                          onClick={() => runConnCheck(sel.bid, sel.connectivity)}
+                          disabled={connChecking}
+                          style={{
+                            background: "rgba(8,128,90,0.1)",
+                            color: "#08805A",
+                            border: "1px solid rgba(8,128,90,0.2)",
+                            borderRadius: 6,
+                            padding: "3px 8px",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: connChecking ? "not-allowed" : "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4
+                          }}
+                        >
+                          {connChecking ? "Checking..." : "Ping Conn"}
+                        </button>
+                      </div>
+                    )
+                  } : null,
+                  sel.isDpCustomer && (connChecking || connCheck) ? {
+                    k: "Live Conn Status",
+                    v: (
+                      connChecking ? (
+                        <span style={{ color: "#86868B" }}>Checking connection...</span>
+                      ) : connCheck.error ? (
+                        <span style={{ 
+                          fontSize: 11.5, 
+                          fontWeight: 700, 
+                          padding: "4px 10px", 
+                          borderRadius: 999, 
+                          background: "rgba(220,65,65,0.12)", 
+                          color: "#DC4141",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5
+                        }}>
+                          <WifiOff size={13} /> Disconnected ({connCheck.error})
+                        </span>
+                      ) : connCheck.success === true ? (
+                        <span style={{ 
+                          fontSize: 11.5, 
+                          fontWeight: 700, 
+                          padding: "4px 10px", 
+                          borderRadius: 999, 
+                          background: "rgba(8,128,90,0.12)", 
+                          color: "#08805A",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5
+                        }}>
+                          <Wifi size={13} /> {String(sel.connectivity || 'wifi').toLowerCase()} is connected
+                        </span>
+                      ) : (
+                        <span style={{ 
+                          fontSize: 11.5, 
+                          fontWeight: 700, 
+                          padding: "4px 10px", 
+                          borderRadius: 999, 
+                          background: "rgba(220,65,65,0.12)", 
+                          color: "#DC4141",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 5
+                        }}>
+                          <WifiOff size={13} /> Disconnected
+                        </span>
+                      )
+                    )
+                  } : null,
+                ].filter(Boolean);
+
+                const rightCols = [
+                  { k: "Society", v: sel.society },
+                  { k: "Plan", v: planName },
+                  sel.plan_name ? { k: "Plan Name (API)", v: sel.plan_name } : null,
+                  sel.partner_type ? { k: "Partner Type", v: sel.partner_type } : null,
+                  { k: "Status", v: cell(<span style={{ textTransform: "capitalize" }}>{sel.status || "—"}</span>, statusActive ? null : "red") },
+                  { k: "Installed date", v: installed ? fmtDate(installed) : "—" },
+                  { k: "LTV (lifetime value)", v: cell(inr(totalPaid), totalPaid === 0 ? "red" : null) },
+                  { k: "Security Deposit", v: inr(securityDeposit) },
+                  { k: "Discounts (credit notes)", v: <>{cell(inr(discountTotal), discountPct >= 30 ? "red" : discountPct >= 20 ? "amber" : null)}{discountCount ? <span style={{ color: "#86868B", fontWeight: 400 }}> · {discountCount} note{discountCount !== 1 ? "s" : ""}{discountBalance > 0 ? ` · ${inr(discountBalance)} balance` : ""}</span> : null}</> },
+                  { k: "Complaints", v: cell(complaintCount, complaintCount >= 2 ? "red" : complaintCount >= 1 ? "amber" : null) },
+                  sel.wallet_id ? { k: "Wallet ID", v: sel.wallet_id } : null,
+                ].filter(Boolean);
+
+                const maxRows = Math.max(leftCols.length, rightCols.length);
+
+                return (
+                  <div className="profile-grid">
+                    <style>{`
+                      .profile-grid { display: grid; grid-template-columns: 1fr; gap: 0 40px; }
+                      @media(min-width: 768px) { .profile-grid { grid-template-columns: 1fr 1fr; } }
+                    `}</style>
+                    {Array.from({ length: maxRows }).map((_, i) => (
+                      <React.Fragment key={i}>
+                        {leftCols[i] ? <DefRow k={leftCols[i].k} v={leftCols[i].v} /> : <DefRow k=" " v=" " />}
+                        {rightCols[i] ? <DefRow k={rightCols[i].k} v={rightCols[i].v} /> : <DefRow k=" " v=" " />}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Score Cards */}
@@ -1333,9 +1736,12 @@ export function AllCustomers() {
           <>
             {/* Hero KPI Grid */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 14, marginBottom: 18 }}>
-              <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", borderRadius: 16, padding: 16, color: "#fff", boxShadow: "0 8px 20px rgba(8,128,90,0.25)" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Referrals Made</div>
-                <div className="serif" style={{ fontSize: 26, fontWeight: 700, marginTop: 4 }}>{referralsDone}</div>
+              {/* v2.29.274: was a gradient hero card — converted to match its
+                  siblings (plain white card), per explicit user request to
+                  make all hero cards the same white style as normal cards. */}
+              <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Referrals Made</div>
+                <div className="serif" style={{ fontSize: 26, fontWeight: 700, color: "#08805A", marginTop: 4 }}>{referralsDone}</div>
               </div>
               <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", borderRadius: 16, border: "1px solid rgba(0,0,0,0.08)", padding: 16 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Converted</div>
@@ -1433,19 +1839,53 @@ export function AllCustomers() {
       <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
       {/* Dynamic KPI Cards Grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16, marginBottom: 16 }}>
-        {/* 1. Total Societies Card with DP / Zoho split */}
-        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
+        {/* 1. Total Societies Card — DP/Zoho split moved beside the number
+            (v2.29.263), using the wide hero card's right-side space instead
+            of a small caption line underneath, per explicit user request
+            ("show the split of it, on the right side of the KPI card there
+            is much space"). */}
+        {/* v2.29.274: converted from a gradient hero card to the same white
+            style as its siblings (Active Customers, DP Devices Conn, Device
+            Mix) — per explicit user request to make all hero cards the same
+            white style as normal cards, so any percentage/status text is
+            always plain colored text on white. */}
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)", position: "relative", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Total Societies</span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "grid", placeItems: "center" }}>
-              <Boxes size={17} color="#ffffff" />
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Total Societies</span>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+              <Boxes size={17} color="#08805A" />
             </div>
           </div>
-          <div className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#fff", margin: "10px 0 4px", lineHeight: 1.1 }}>
-            {totalSocietiesCount.toLocaleString("en-IN")}
-          </div>
-          <div style={{ fontSize: 12, color: "#E2F3EE", fontWeight: 600 }}>
-            {dpSocCount} DP · {zohoSocCount} Zoho
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
+            <div className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>
+              {totalSocietiesCount.toLocaleString("en-IN")}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              {/* Clicking either stat filters the table below by Customer Stack
+                  (the existing filter, reused) so the exact apartments are
+                  right there in the Society column; the tooltip also lists
+                  them directly — per explicit user request ("shows as 9 DP
+                  and 4 Zoho, so which are those 9... show the apartment
+                  names"). A society with both a DP and a Zoho customer counts
+                  toward both sides — that overlap is real data, not a bug. */}
+              <div
+                onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "DP") ? null : ["DP"])}
+                title={dpSocietyNames.length ? `DP societies (click to filter the table):\n${dpSocietyNames.join("\n")}` : "No DP societies in the current view"}
+                style={{ textAlign: "center", cursor: dpSocietyNames.length ? "pointer" : "default" }}
+              >
+                <div className="serif" style={{ fontSize: 18, fontWeight: 700, color: "#2A86D6", lineHeight: 1 }}>{dpSocCount}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#86868B", marginTop: 3 }}>DP</div>
+              </div>
+              <div style={{ width: 1, height: 28, background: "rgba(0,0,0,0.1)" }} />
+              <div
+                onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "Zoho") ? null : ["Zoho"])}
+                title={zohoSocietyNames.length ? `Zoho societies (click to filter the table):\n${zohoSocietyNames.join("\n")}` : "No Zoho societies in the current view"}
+                style={{ textAlign: "center", cursor: zohoSocietyNames.length ? "pointer" : "default" }}
+              >
+                <div className="serif" style={{ fontSize: 18, fontWeight: 700, color: "#08805A", lineHeight: 1 }}>{zohoSocCount}</div>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#86868B", marginTop: 3 }}>Zoho</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1458,77 +1898,182 @@ export function AllCustomers() {
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
-            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{activeCount.toLocaleString("en-IN")}</span>
-            <span style={{ fontSize: 12, color: "#86868B" }}>of {results.length.toLocaleString("en-IN")} total customers</span>
+            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{uniqueActiveCount.toLocaleString("en-IN")}</span>
+            <span style={{ fontSize: 12, color: "#86868B" }}>of {uniqueTotalCount.toLocaleString("en-IN")} unique customers</span>
           </div>
-          <div style={{ fontSize: 11.5, color: "#86868B" }}>
-            {(results.length - activeCount).toLocaleString("en-IN")} Inactive customers
+          {/* Collapsed to one line (v2.29.268, explicit request: "show this in 1
+              line itself (140 DP · 96 Zoho | 22 Inactive customers)") — was two
+              separate lines before. */}
+          <div style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <span style={{ color: "#08805A", fontWeight: 600 }}>{uniqueDpCount.toLocaleString("en-IN")} DP · {uniqueZohoCount.toLocaleString("en-IN")} Zoho</span>
+            <span style={{ color: "#C6C6CB" }}> | </span>
+            <span style={{ color: "#DC4141", fontWeight: 600 }}>{uniqueInactiveCount.toLocaleString("en-IN")} Inactive customers</span>
           </div>
         </div>
 
-        {/* 3, 4, 5. Device Mix Cards */}
-        {[
-          { label: "Own Device", value: ownCount.toLocaleString("en-IN"), img: imgWaterFilter, sub: "OWN- purifiers" },
-          { label: "Normal", value: normalCount.toLocaleString("en-IN"), img: imgTool, sub: "standard units" },
-          { label: "Hot & Cold Device", value: hotColdCount.toLocaleString("en-IN"), img: imgTechnology, sub: "HAC- purifiers" },
-        ].map((s, i) => (
-          <div key={i} style={{
-            background: "rgba(255, 255, 255, 0.85)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(0,0,0,0.08)",
-            borderRadius: 18,
-            padding: "18px 20px",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
-                {s.label}
-              </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center", overflow: "hidden" }}>
-                <img src={s.img} alt={s.label} style={{ width: 22, height: 22, objectFit: "contain" }} />
+        {/* 3. DP Devices Connection Card (only visible/calculated for DP stack) */}
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>DP Devices Conn</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                onClick={() => (autoRefreshOn ? stopAutoRefresh() : resumeAutoRefresh())}
+                title={autoRefreshOn ? "Stop the 30-min auto-refresh (manual refresh still works)" : "Resume the 30-min auto-refresh"}
+                style={{
+                  width: 26, height: 26, borderRadius: 8, padding: 0,
+                  background: autoRefreshOn ? "rgba(220,65,65,0.08)" : "rgba(8,128,90,0.08)",
+                  border: autoRefreshOn ? "1px solid rgba(220,65,65,0.15)" : "1px solid rgba(8,128,90,0.15)",
+                  display: "grid", placeItems: "center", cursor: "pointer",
+                }}
+              >
+                {autoRefreshOn ? <PauseCircle size={13} color="#DC4141" /> : <PlayCircle size={13} color="#08805A" />}
+              </button>
+              <button
+                onClick={runBulkConnCheck}
+                disabled={liveConnChecking}
+                title={
+                  liveConnChecking
+                    ? `Force-checking devices… ${liveConnProgress?.done ?? 0}/${liveConnProgress?.total ?? 0}`
+                    : liveConnLastRun
+                    ? `Force-check all DP devices now — last run ${new Date(liveConnLastRun).toLocaleTimeString("en-IN")}`
+                    : "Force-check all DP devices now"
+                }
+                style={{
+                  width: 26, height: 26, borderRadius: 8, padding: 0,
+                  background: "rgba(8,128,90,0.08)", border: "1px solid rgba(8,128,90,0.15)",
+                  display: "grid", placeItems: "center",
+                  cursor: liveConnChecking ? "not-allowed" : "pointer",
+                }}
+              >
+                <RefreshCw size={13} color="#08805A" style={liveConnChecking ? { animation: "pw-spin 0.9s linear infinite" } : undefined} />
+              </button>
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <Wifi size={17} color="#08805A" />
               </div>
             </div>
-            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
-              {s.value}
+          </div>
+          {/* v2.29.277: the BLE/WIFI/GSM connectivity-medium counts were on
+              their own row in v2.29.276, which grew this card taller than its
+              siblings (Total Societies/Active Customers/Device Mix all
+              stretch to match the tallest card in the grid row, per explicit
+              user feedback — "why did you expand the card, there was already
+              space, adjust in that"). Folded them into this existing
+              number+subtitle row instead, using the row's own already-unused
+              trailing width — net card height is back to what it was before
+              v2.29.276. */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px", flexWrap: "wrap" }}>
+            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{dpConnected}</span>
+            <span style={{ fontSize: 12, color: "#86868B" }}>of {dpCustomers.length} online</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, marginLeft: "auto" }}>
+              <span title={`${dpBleCount} device${dpBleCount === 1 ? "" : "s"} on BLE`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: "#2A86D6" }}>
+                <Bluetooth size={11.5} color="#2A86D6" /> {dpBleCount}
+              </span>
+              <span title={`${dpWifiCount} device${dpWifiCount === 1 ? "" : "s"} on WIFI`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: "#08805A" }}>
+                <Wifi size={11.5} color="#08805A" /> {dpWifiCount}
+              </span>
+              <span title={`${dpGsmCount} device${dpGsmCount === 1 ? "" : "s"} on GSM — no WIFI/BLE connectivity to live-check`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: "#86868B" }}>
+                <Ban size={11.5} color="#86868B" /> {dpGsmCount}
+              </span>
+            </span>
+          </div>
+          {/* Collapsed to one line (v2.29.268, explicit request: "show this in
+              1 line itself (122 | 18 | Not yet force-checked · auto-refresh
+              stopped)") — the connected/disconnected chips and the status
+              caption used to be two separate lines. The caption is the part
+              most likely to overflow a narrow card, so it alone gets
+              min-width:0 + ellipsis inside the flex row rather than the whole
+              line wrapping. */}
+          <div style={{ fontSize: 11.5, color: "#86868B", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+            <span
+              onClick={() => setConnFilter(f => f === "connected" ? null : "connected")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                color: "#08805A",
+                fontWeight: 700,
+                cursor: "pointer",
+                background: connFilter === "connected" ? "rgba(8,128,90,0.12)" : "transparent",
+                padding: "2px 6px",
+                borderRadius: 6,
+                border: connFilter === "connected" ? "1px solid rgba(8,128,90,0.3)" : "1px solid transparent",
+                flex: "0 0 auto",
+              }}
+              title={`${dpConnected} connected — click to filter`}
+            >
+              <Wifi size={12.5} color="#08805A" /> {dpConnected}
+            </span>
+            <span style={{ color: "#C6C6CB", flex: "0 0 auto" }}>|</span>
+            <span
+              onClick={() => setConnFilter(f => f === "disconnected" ? null : "disconnected")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                color: "#DC4141",
+                fontWeight: 700,
+                cursor: "pointer",
+                background: connFilter === "disconnected" ? "rgba(220,65,65,0.12)" : "transparent",
+                padding: "2px 6px",
+                borderRadius: 6,
+                border: connFilter === "disconnected" ? "1px solid rgba(220,65,65,0.3)" : "1px solid transparent",
+                flex: "0 0 auto",
+              }}
+              title={`${dpDisconnected} disconnected — click to filter`}
+            >
+              <WifiOff size={12.5} color="#DC4141" /> {dpDisconnected}
+            </span>
+            <span style={{ color: "#C6C6CB", flex: "0 0 auto" }}>|</span>
+            <span style={{ fontSize: 10, color: "#B0B0B5", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {/* v2.29.275 replaced the vague "auto-refreshes every 30 min"
+                  with the actual computed next-check clock time (last run +
+                  30 min). v2.29.278 dropped the "auto-refresh stopped" suffix
+                  entirely — per explicit user request ("remove the text
+                  (auto-refresh stopped)") — the Stop/Resume button's own
+                  icon already communicates that state, so the caption now
+                  just quietly omits "next refresh" rather than announcing
+                  the stop a second time. */}
+              {liveConnChecking
+                ? `Force-checking… ${liveConnProgress?.done ?? 0}/${liveConnProgress?.total ?? 0}`
+                : liveConnLastRun
+                ? `Live-checked ${new Date(liveConnLastRun).toLocaleTimeString("en-IN")}${autoRefreshOn ? ` · next refresh at ${new Date(liveConnLastRun + 30 * 60 * 1000).toLocaleTimeString("en-IN")}` : ""}`
+                : "Not yet force-checked"}
+            </span>
+          </div>
+        </div>
+
+        {/* 4. Device Mix Card — consolidated (v2.29.258): Own/Normal/Hot & Cold used
+            to be 3 separate cards; folded into one so Total Societies, Active
+            Customers and DP Devices Conn get more breathing room in the row. */}
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Device Mix</span>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+              <Boxes size={17} color="#08805A" />
             </div>
           </div>
-        ))}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
+            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>
+              {(ownCount + normalCount + hotColdCount).toLocaleString("en-IN")}
+            </span>
+            <span style={{ fontSize: 12, color: "#86868B" }}>total devices</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+            {[
+              { label: "Own Device", value: ownCount, img: imgWaterFilter },
+              { label: "Normal", value: normalCount, img: imgTool },
+              { label: "Hot & Cold Device", value: hotColdCount, img: imgTechnology },
+            ].map((s, i) => (
+              <span key={i} title={`${s.value.toLocaleString("en-IN")} ${s.label}`}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#475569" }}>
+                <img src={s.img} alt={s.label} style={{ width: 14, height: 14, objectFit: "contain" }} />
+                {s.value.toLocaleString("en-IN")}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* 5 Filter Type Cards (Row 2 — Compact & Dynamic) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
-        {[
-          { label: "UV", value: uvCount.toLocaleString("en-IN"), img: imgProtect, sub: "UV Filtered" },
-          { label: "Alkaline", value: alkalineCount.toLocaleString("en-IN"), img: imgAlkaline, sub: "Alkaline pH" },
-          { label: "Copper", value: copperCount.toLocaleString("en-IN"), img: imgCopper, sub: "Copper Infused" },
-          { label: "Mineral", value: mineralCount.toLocaleString("en-IN"), img: imgMinerals, sub: "Mineralized" },
-          { label: "Uncategorised", value: uncategorisedCount.toLocaleString("en-IN"), img: imgOptions, sub: "Unassigned" },
-        ].map((f, i) => (
-          <div key={i} style={{
-            background: "rgba(255, 255, 255, 0.85)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(0,0,0,0.08)",
-            borderRadius: 14,
-            padding: "12px 14px",
-            boxShadow: "0 6px 18px rgba(0, 0, 0, 0.02)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
-                {f.label}
-              </span>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(8,128,90,0.1)", display: "grid", placeItems: "center", overflow: "hidden" }}>
-                <img src={f.img} alt={f.label} style={{ width: 18, height: 18, objectFit: "contain" }} />
-              </div>
-            </div>
-            <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", margin: "6px 0 2px", lineHeight: 1.1 }}>
-              {f.value}
-            </div>
-            <div style={{ fontSize: 11, color: "#86868B" }}>{f.sub}</div>
-          </div>
-        ))}
-      </div>
 
       <Toolbar q={q} setQ={setQ} placeholder="Search by Purifier ID, phone, name or email…" count={results.length}
         right={
@@ -1544,30 +2089,56 @@ export function AllCustomers() {
                 <RotateCcw size={13} /> Reset Filters
               </button>
             )}
+            <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>
           </div>
         } />
       <Card pad={false} hover={false}>
-        <Table head={["Purifier ID", "Customer", "Society", "Plan", "Device Type", "Filter Type", "Stack", "Status", ""]} maxHeight="calc(100vh - 260px)">
+        <Table head={["Purifier ID", "Customer", "Phone", "Society", "Plan", "Device Type", "Stack", "Status", ""]} maxHeight="calc(100vh - 260px)">
           {results.map(c => {
             const pm = planMeta(c);
             const dtStyle = pm?.deviceType && DEVICE_TYPE_STYLE[pm.deviceType === "Normal" ? "Normal Device" : pm.deviceType];
+            const dupCount = custKeyCounts[custKey(c)];
+            const isDup = dupCount > 1;
             return (
             <tr key={c.id} style={{ ...trStyle, ...rowTint(c) }} onClick={() => openCustomer(c)}>
               <td style={{ ...td, fontWeight: 700, color: "var(--brand)" }}>{c.purifier_id}</td>
-              <td style={td}>{c.name || "—"}</td>
+              <td style={td}>
+                {c.name || "—"}
+                {isDup && (
+                  <span
+                    title={`This customer (ID: ${c.id || "—"}) appears in ${dupCount} rows in this table — check whether it's multiple devices on one account or a real data duplicate.`}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 3,
+                      fontSize: 9.5, fontWeight: 700, padding: "2px 7px", borderRadius: 999,
+                      background: "linear-gradient(90deg, #FFE08A 0%, #FF7A00 100%)",
+                      color: "#7A3E00", marginLeft: 7, verticalAlign: "middle", whiteSpace: "nowrap",
+                    }}
+                  >
+                    <AlertTriangle size={10} /> Duplicate
+                  </span>
+                )}
+              </td>
+              <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtPhone(c.phone)}</td>
               <td style={td}>{c.society || "—"}</td>
               <td style={td}>{c.plan || "—"}</td>
               <td style={td}>
                 {pm?.deviceType ? (
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, color: (dtStyle || ["#475569", "#F1F5F9"])[0], background: (dtStyle || ["#475569", "#F1F5F9"])[1] }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap", color: (dtStyle || ["#475569", "#F1F5F9"])[0], background: (dtStyle || ["#475569", "#F1F5F9"])[1] }}>
                     {pm.deviceType}
                   </span>
                 ) : <DeviceTypeBadge purifierId={c.purifier_id} />}
               </td>
-              <td style={td}>{pm?.filterType ? <Chip>{pm.filterType}</Chip> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+              {/* whiteSpace:nowrap fixes "Zoho" mid-word-wrapping into "Zoh"/"o" —
+                  the shared `td` style sets wordBreak:"break-word" (a deliberate
+                  app-wide convention for long free-text cells), which breaks
+                  ANY single "word" that doesn't fit the column, including a
+                  short pill label like this one once the column got narrower
+                  (e.g. after the Filter Type column was removed and widths
+                  redistributed). Scoped to just this badge, not the shared td
+                  style, since other cells still need break-word for long text. */}
               <td style={td}>
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999,
+                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
                   background: c.isDpCustomer ? "#E5F0FA" : "var(--mint)",
                   color: c.isDpCustomer ? "#2A86D6" : "var(--brand)",
                 }}>{stackOf(c)}</span>
@@ -1577,6 +2148,19 @@ export function AllCustomers() {
             </tr>
             );
           })}
+          {/* v2.29.279: Total Purifier Count footer row — per explicit user
+              request ("also a total count at the bottom of the table as
+              Total Purifier Count - and show the count here"). Counts every
+              row currently in view (`results`, same population the search
+              bar's own result count already reflects), not the full
+              unfiltered dataset, so it stays accurate against whatever
+              filters/search are active. */}
+          {results.length > 0 && (
+            <tr>
+              <td style={{ ...ftd, textAlign: "center" }} colSpan={2}>Total Purifier Count</td>
+              <td style={{ ...ftd, textAlign: "center" }} colSpan={7}>{results.length.toLocaleString("en-IN")}</td>
+            </tr>
+          )}
         </Table>
         {results.length === 0 && <Empty msg={ql || societyFilter || statusFilter || stackFilter || deviceTypeFilter || filterTypeFilter || dateSel.preset !== "all" ? "No customer matches these filters." : "No customers with a Purifier ID."} />}
       </Card>
@@ -1705,26 +2289,33 @@ export function Customers({ accessLevel = "view" }) {
 
       {/* Active-customers KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", color: "#ffffff", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 25px rgba(8, 128, 90, 0.28)", position: "relative", overflow: "hidden" }}>
+        {/* v2.29.274: converted from a gradient hero card to a plain white
+            card — per explicit user request to make all hero cards the same
+            white style as normal cards, so the growth percentage below is
+            just plain colored text, no pill/backdrop needed anymore. */}
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)", position: "relative", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#B5E2D4" }}>Active Customers</span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "grid", placeItems: "center" }}>
-              <UserRound size={17} color="#ffffff" />
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Active Customers</span>
+            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+              <UserRound size={17} color="#08805A" />
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
-            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#fff", lineHeight: 1.1 }}>{activeCount.toLocaleString("en-IN")}</span>
-            <span style={{ fontSize: 12, color: "#E2F3EE" }}>of {rows.length.toLocaleString("en-IN")} total</span>
+            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{activeCount.toLocaleString("en-IN")}</span>
+            <span style={{ fontSize: 12, color: "#86868B" }}>of {rows.length.toLocaleString("en-IN")} total</span>
           </div>
           {hasSignupDates ? (
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 4 }}>
-              <span style={{ fontWeight: 700, color: growthPct >= 0 ? "#B5E2D4" : "#F5BFBF", display: "inline-flex", alignItems: "center", gap: 3 }}>
+              <span style={{
+                fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 3,
+                color: growthPct >= 0 ? "#08805A" : "#DC2626",
+              }}>
                 {growthPct >= 0 ? "▲" : "▼"} {growthPct >= 0 ? "+" : ""}{growthPct}%
               </span>
-              <span style={{ color: "#E2F3EE" }}>new sign-ups vs last month</span>
+              <span style={{ color: "#86868B" }}>new sign-ups vs last month</span>
             </div>
           ) : (
-            <div style={{ fontSize: 11.5, color: "#E2F3EE", marginTop: 4 }}>No dated sign-ups to compare month-on-month.</div>
+            <div style={{ fontSize: 11.5, color: "#86868B", marginTop: 4 }}>No dated sign-ups to compare month-on-month.</div>
           )}
         </div>
 
@@ -1880,12 +2471,17 @@ export function CustomerDrawer({ customer, amount, planMeta, accessLevel, actor,
 
       {!edit ? <>
         <DefRow k="Purifier ID" v={customer.purifier_id || "—"} />
+        {customer.isDpCustomer && customer.bid && <DefRow k="Bot ID" v={customer.bid} />}
+        {customer.db_id && <DefRow k="Database ID" v={customer.db_id} />}
         <DefRow k="Device Type" v={planMeta?.deviceType || deviceType(customer.purifier_id) || "—"} />
         <DefRow k="Filter Type" v={planMeta?.filterType || "—"} />
         <DefRow k="Email" v={customer.email} />
         <DefRow k="Phone" v={fmtPhone(customer.phone)} />
         <DefRow k="Address" v={customer.address} />
         <DefRow k="Plan" v={customer.plan} />
+        {customer.plan_name && <DefRow k="Plan Name (API)" v={customer.plan_name} />}
+        {customer.partner_type && <DefRow k="Partner Type" v={customer.partner_type} />}
+        {customer.wallet_id && <DefRow k="Wallet ID" v={customer.wallet_id} />}
         <DefRow k="Plan amount" v={amount != null ? inr(amount) : "—"} />
         <DefRow k="Billing cycle" v={customer.billing} />
         <DefRow k="Society" v={customer.society} />

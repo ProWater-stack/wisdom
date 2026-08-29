@@ -62,6 +62,7 @@ export const API_USAGE = [
   { group: "DrinkPrime · separate origin, unauthenticated, CORS-open", items: [
     { m: "GET", path: "api.drinkprime.in/payments/payments/payments/v1", use: "Customer · All Customers, DP-stack Transactions sub-page (?loader=true&page=1&pageSize=100&deviceCode={purifier_id}&installationID={dp_installation_id}, v2.29.134 — replaced the old v2/collections endpoint)" },
     { m: "GET", path: "api.drinkprime.in/sponsor/device/details/syncs", use: "Customer · All Customers, DP-stack Sync History sub-page (?pageSize=10&page=1&orderDir=desc&orderBy=id&deviceCode={purifier_id}, v2.29.127)" },
+    { m: "POST", path: "api.drinkprime.in/sponsor/device/life/conn-check", use: "Customer · All Customers, DP device connectivity check (payload: botId, connectivity) (v2.29.254)" },
   ] },
   { group: "Google / Firebase", items: [
     { m: "POST", path: "identitytoolkit.googleapis.com/…:signInWithPassword", use: "Login — email/password auth" },

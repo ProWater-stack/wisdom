@@ -239,13 +239,6 @@ export function AutoGSSociety({ accessLevel = "view" }) {
   const ticketsCreated = rows.filter(r => r.ticketId).length;
   const nearest = [...rows].sort((a, b) => a.daysLeft - b.daysLeft)[0];
 
-  const stats = [
-    { label: "Societies on schedule", value: rows.length, icon: CalendarClock, sub: `every ${GS_INTERVAL_DAYS} days`, hero: true },
-    { label: "Due for service", value: dueCount, icon: AlertCircle, sub: "raise ticket (day 14)" },
-    { label: "Tickets raised", value: ticketsCreated, icon: Ticket, sub: "for upcoming visits" },
-    { label: "Next visit", value: nearest ? `${nearest.daysLeft}d` : "—", icon: MapPin, sub: nearest ? nearest.society : "" },
-  ];
-
   const daysBadge = (d) => {
     const [c, bg, lbl] = d < 0 ? ["#DC4141", "#FBE8E8", `${-d}d overdue`]
       : d <= 1 ? ["#986315", "#FBF0E0", d <= 0 ? "due today" : "due tomorrow"]
@@ -261,7 +254,6 @@ export function AutoGSSociety({ accessLevel = "view" }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--slate)", background: "var(--mint-2)", padding: "10px 14px", borderRadius: 11, marginBottom: 16 }}>
         <AlertCircle size={15} /> A general service runs every {GS_INTERVAL_DAYS} days per society. On day 14 a ticket is raised so a technician visits on day 15.
       </div>
-      <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
       <div style={{ marginTop: 18 }}>
         <Card title="Auto GS — Society schedule" sub="Last & next service per society, with the ticket auto-raised for the upcoming visit.">
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>

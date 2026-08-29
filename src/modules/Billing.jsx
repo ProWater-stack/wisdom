@@ -82,26 +82,26 @@ export function BillingOverview() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
-            backdropFilter: s.hero ? "none" : "blur(20px)",
-            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
-            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            background: "rgba(255, 255, 255, 0.85)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: 18,
             padding: "18px 20px",
-            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
                 {s.label}
               </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color="#08805A" />
               </div>
             </div>
-            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
               {s.value}
             </div>
-            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B" }}>{s.sub}</div>
+            <div style={{ fontSize: 12, color: "#86868B" }}>{s.sub}</div>
           </div>
         ))}
       </div>
@@ -450,26 +450,26 @@ export function DepositRefunds() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 18 }}>
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
-            backdropFilter: s.hero ? "none" : "blur(20px)",
-            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
-            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            background: "rgba(255, 255, 255, 0.85)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: 18,
             padding: "18px 20px",
-            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
                 {s.label}
               </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color="#08805A" />
               </div>
             </div>
-            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
+            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
               {s.value}
             </div>
-            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B" }}>{s.sub}</div>
+            <div style={{ fontSize: 12, color: "#86868B" }}>{s.sub}</div>
           </div>
         ))}
       </div>

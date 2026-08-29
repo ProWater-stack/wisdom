@@ -2044,16 +2044,20 @@ export function IoTDevices() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
         {kpiCards.map((k) => {
           const hero = k.hero, off = k.offline, flt = k.faulty;
-          const bg = hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : off ? "rgba(220, 38, 38, 0.05)" : flt ? "rgba(152, 99, 21, 0.05)" : "rgba(255, 255, 255, 0.85)";
-          const bd = hero ? "none" : off ? "1px solid rgba(220, 38, 38, 0.18)" : flt ? "1px solid rgba(152, 99, 21, 0.18)" : "1px solid rgba(0,0,0,0.08)";
-          const labelC = hero ? "#B5E2D4" : off ? "#DC4141" : flt ? "#986315" : "#86868B";
-          const valueC = hero ? "#ffffff" : off ? "#DC4141" : flt ? "#986315" : "#1D1D1F";
-          const subC = hero ? "#E2F3EE" : off ? "#DC4141" : flt ? "#986315" : "#86868B";
-          const iconC = hero ? "#ffffff" : off ? "#DC4141" : flt ? "#986315" : "#08805A";
-          const iconBg = hero ? "rgba(255,255,255,.2)" : off ? "rgba(220,38,38,.12)" : flt ? "rgba(152,99,21,.12)" : "rgba(8,128,90,.12)";
-          const shadow = hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)";
+          // v2.29.274: hero no longer gets its own gradient/color branch — per
+          // explicit user request to make all hero cards the same white style
+          // as normal cards, it just falls through to the same values the
+          // plain (non-off, non-faulty) case already used.
+          const bg = off ? "rgba(220, 38, 38, 0.05)" : flt ? "rgba(152, 99, 21, 0.05)" : "rgba(255, 255, 255, 0.85)";
+          const bd = off ? "1px solid rgba(220, 38, 38, 0.18)" : flt ? "1px solid rgba(152, 99, 21, 0.18)" : "1px solid rgba(0,0,0,0.08)";
+          const labelC = off ? "#DC4141" : flt ? "#986315" : "#86868B";
+          const valueC = off ? "#DC4141" : flt ? "#986315" : "#1D1D1F";
+          const subC = off ? "#DC4141" : flt ? "#986315" : "#86868B";
+          const iconC = off ? "#DC4141" : flt ? "#986315" : "#08805A";
+          const iconBg = off ? "rgba(220,38,38,.12)" : flt ? "rgba(152,99,21,.12)" : "rgba(8,128,90,.12)";
+          const shadow = "0 10px 30px rgba(0, 0, 0, 0.03)";
           return (
-            <div key={k.label} style={{ position: "relative", overflow: "hidden", background: bg, border: bd, borderRadius: 18, boxShadow: shadow, backdropFilter: hero ? "none" : "blur(20px)", WebkitBackdropFilter: hero ? "none" : "blur(20px)", padding: 18, minHeight: 120, display: "flex", flexDirection: "column" }}>
+            <div key={k.label} style={{ position: "relative", overflow: "hidden", background: bg, border: bd, borderRadius: 18, boxShadow: shadow, backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", padding: 18, minHeight: 120, display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 1 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: labelC }}>{k.label}</span>
                 <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: iconBg, color: iconC }}><k.icon size={17} /></span>

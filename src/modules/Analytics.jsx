@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import {
   useAuth, api, apartmentApi, billingApi, creditNoteApi, customerApi,
-  authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer,
+  authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer, PLAN_CATALOG,
   dmy, endOfDay, exportToCsv, fetchAllDpTransactions, fmtDate, fmtPhone,
   fmtTime, inr, isoDay, isRealSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
@@ -856,7 +856,9 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   };
 
   const softShadow = { background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,.08)", borderRadius: 20, boxShadow: "0 10px 30px rgba(0,0,0,.03)" };
-  const iconBox = (c, hero) => ({ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", color: hero ? "#ffffff" : "#08805A" });
+  // v2.29.274: `hero` no longer changes icon styling — per explicit user
+  // request to make all hero cards the same white style as normal cards.
+  const iconBox = () => ({ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", color: "#08805A" });
   const socTd = { padding: "14px 18px", fontSize: 13.5, color: "#475569", textAlign: "center", borderBottom: "1px solid rgba(0,0,0,.04)", whiteSpace: "nowrap" };
   const socFt = { padding: "14px 18px", fontSize: 13, fontWeight: 700, color: "#0d2119", textAlign: "center", whiteSpace: "nowrap" };
 
@@ -928,39 +930,37 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
       {/* ── KPI row ────────────────────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 16 }}>
-        {kpis.map((k, i) => {
-          const hero = k.hero;
-          return (
-            <div key={k.label} style={{
-              background: hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255,255,255,0.85)",
-              color: hero ? "#ffffff" : "#1D1D1F",
-              backdropFilter: hero ? undefined : "blur(20px)",
-              WebkitBackdropFilter: hero ? undefined : "blur(20px)",
-              border: hero ? "none" : "1px solid rgba(0,0,0,0.08)",
-              borderRadius: 20,
-              padding: 18,
-              boxShadow: hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
-              display: "flex", flexDirection: "column", gap: 6
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 11, color: hero ? "#B5E2D4" : "#86868B", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>{k.label}</span>
-                <span style={iconBox(k.color, hero)}><k.icon size={17} /></span>
-              </div>
-              <div className="serif" style={{ fontSize: 26, color: hero ? "#ffffff" : "#1D1D1F", fontWeight: 700, lineHeight: 1.1 }}>{k.value}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                {hero ? (
-                  <span style={{ background: "rgba(255,255,255,0.25)", color: "#ffffff", fontWeight: 700, padding: "3px 9px", borderRadius: 999, fontSize: 11 }}>
-                    {k.delta != null ? `${k.delta > 0 ? "↑" : "↓"} ${Math.abs(k.delta)}%` : "Live"}
-                  </span>
-                ) : (
-                  <OvDelta delta={k.delta} suffix={k.delta != null ? vsPrev : ""} invert={k.invert} />
-                )}
-                {k.delta == null && <span style={{ fontSize: 12, color: hero ? "#E2F3EE" : "#86868B" }}>{vsPrev}</span>}
-              </div>
-              <div style={{ height: 40, margin: "4px -4px -2px" }}><OvSpark data={k.spark} color={hero ? "#ffffff" : "#08805A"} gid={`ovspark-${i}`} /></div>
+        {/* v2.29.274: `hero` no longer renders a gradient card — per explicit
+            user request ("make all the hero cards in same color with white
+            background like other normal cards, it becomes easy to check the
+            percentages going up or down"). Every card, hero or not, now
+            renders identically to what the non-hero branch already used, so
+            the delta badge is just OvDelta's plain green/red/invert-aware
+            text — no more separate hero-only color logic needed. */}
+        {kpis.map((k, i) => (
+          <div key={k.label} style={{
+            background: "rgba(255,255,255,0.85)",
+            color: "#1D1D1F",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
+            borderRadius: 20,
+            padding: 18,
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
+            display: "flex", flexDirection: "column", gap: 6
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "#86868B", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>{k.label}</span>
+              <span style={iconBox()}><k.icon size={17} /></span>
             </div>
-          );
-        })}
+            <div className="serif" style={{ fontSize: 26, color: "#1D1D1F", fontWeight: 700, lineHeight: 1.1 }}>{k.value}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <OvDelta delta={k.delta} suffix={k.delta != null ? vsPrev : ""} invert={k.invert} />
+              {k.delta == null && <span style={{ fontSize: 12, color: "#86868B" }}>{vsPrev}</span>}
+            </div>
+            <div style={{ height: 40, margin: "4px -4px -2px" }}><OvSpark data={k.spark} color="#08805A" gid={`ovspark-${i}`} /></div>
+          </div>
+        ))}
       </div>
 
       {/* ── Revenue Overview (full width) ──────────────────────────────────── */}
@@ -1231,22 +1231,26 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               { label: "ARPU (Monthly)",           value: inr(Math.round(arpu)), sub: "Avg monthly revenue / customer", color: "#F59E0B" },
               { label: "LTV (Projected)",          value: inr(Math.round(ltv)), sub: "Based on 1.5% monthly churn", color: "#7C3AED" },
             ].map((k, i) => (
+              // v2.29.274: `hero` no longer renders a gradient card — per
+              // explicit user request to make all hero cards the same white
+              // style as normal cards, so the delta below is just plain
+              // colored text on white, no pill/backdrop needed.
               <div key={k.label} style={{
-                background: k.hero ? "linear-gradient(135deg,#1E9E4F 0%,#C4E538 100%)" : "rgba(255,255,255,0.88)",
-                border: k.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+                background: "rgba(255,255,255,0.88)",
+                border: "1px solid rgba(0,0,0,0.08)",
                 borderRadius: 18, padding: "16px 18px",
-                boxShadow: k.hero ? "0 10px 28px rgba(30,158,79,.28)" : "0 6px 20px rgba(0,0,0,.03)",
+                boxShadow: "0 6px 20px rgba(0,0,0,.03)",
                 display: "flex", flexDirection: "column", gap: 4,
               }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: k.hero ? "#A7F3D0" : "#86868B" }}>{k.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: k.hero ? "#fff" : "#1D1D1F", lineHeight: 1.15, letterSpacing: "-.02em" }}>{k.value}</div>
+                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>{k.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#1D1D1F", lineHeight: 1.15, letterSpacing: "-.02em" }}>{k.value}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   {k.delta != null
-                    ? <span style={{ fontSize: 11.5, fontWeight: 700, color: k.hero ? "#fff" : (k.delta >= 0 ? "#08805A" : "#DC4141") }}>
+                    ? <span style={{ fontSize: 11.5, fontWeight: 700, color: k.delta >= 0 ? "#08805A" : "#DC4141" }}>
                         {k.delta >= 0 ? "▲" : "▼"} {Math.abs(k.delta)}% {vsPrev}
                       </span>
                     : k.sub
-                      ? <span style={{ fontSize: 11, color: k.hero ? "#D1FAE5" : "#86868B" }}>{k.sub}</span>
+                      ? <span style={{ fontSize: 11, color: "#86868B" }}>{k.sub}</span>
                       : null}
                 </div>
               </div>
@@ -2552,29 +2556,29 @@ useEffect(() => {
           <div key={s.key} onClick={() => setDrill(drill === s.key ? null : s.key)}
             style={{
               cursor: "pointer",
-              background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
-              backdropFilter: s.hero ? "none" : "blur(20px)",
-              WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
-              border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+              background: "rgba(255, 255, 255, 0.85)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: "1px solid rgba(0,0,0,0.08)",
               borderRadius: 18,
               padding: "18px 20px",
-              boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
               outline: drill === s.key ? "2.5px solid #08805A" : "none",
               outlineOffset: 2,
               transition: "transform .15s ease, boxShadow .15s ease"
             }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
                 {s.label}
               </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color="#08805A" />
               </div>
             </div>
-            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 28, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 28, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
               {s.value}
             </div>
-            <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B", fontWeight: 500, marginTop: 4 }}>{s.sub}</div>
+            <div style={{ fontSize: 12, color: "#86868B", fontWeight: 500, marginTop: 4 }}>{s.sub}</div>
           </div>
         ))}
       </div>
@@ -3030,29 +3034,32 @@ export function AppLogs() {
               </div>} />
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 360px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 820 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed", textAlign: "center", fontSize: 13.5 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                  {["User", "Phone", "Apartment", "Purifier ID", "Device", "IP"].map(h => (
-                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
-                  ))}
-                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "16%" }}>User</th>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "10%" }}>Phone</th>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "15%" }}>Apartment</th>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "12%" }}>Purifier ID</th>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "12%" }}>Device</th>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "11%" }}>IP</th>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "13%" }}>
                     <SortHeader key="lt" label="Login time" k="loginTime" sort={sort} onSort={toggleSort} />
                   </th>
-                  <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>Status</th>
+                  <th style={{ padding: "12px 10px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1, width: "11%" }}>Status</th>
                 </tr>
               </thead>
               <tbody>
                 {pageRows.map((r, i) => (
                   <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                    <td style={{ padding: "14px 18px" }}><Person name={r.name || "—"} email={r.email} /></td>
-                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569" }}>{fmtPhone(r.phone)}</td>
-                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569" }}>{r.apartment || "—"}</td>
-                    <td style={{ padding: "14px 18px", textAlign: "center" }}>{r.purifierId && r.purifierId !== "null" ? <Chip>{r.purifierId}</Chip> : "—"}</td>
-                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#86868b", maxWidth: 170 }} title={r.device}>{trunc(r.device, 26)}</td>
-                    <td style={{ padding: "14px 18px", fontSize: 12, fontFamily: "ui-monospace,monospace", color: "#475569", maxWidth: 160 }} title={r.ip}>{trunc(r.ip, 22)}</td>
-                    <td style={{ padding: "14px 18px", fontSize: 12.5, whiteSpace: "nowrap", color: "#86868b" }}>{fmtLogin(r.loginTime)}</td>
-                    <td style={{ padding: "14px 18px" }}>{renderHigStatusBadge(r.status)}</td>
+                    <td style={{ padding: "12px 10px", overflow: "hidden" }}><Person name={r.name || "—"} email={r.email} /></td>
+                    <td style={{ padding: "12px 10px", fontSize: 12.5, color: "#475569", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtPhone(r.phone)}</td>
+                    <td style={{ padding: "12px 10px", fontSize: 12.5, color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.apartment}>{r.apartment || "—"}</td>
+                    <td style={{ padding: "12px 10px", textAlign: "center", whiteSpace: "nowrap", overflow: "hidden" }}>{r.purifierId && r.purifierId !== "null" ? <Chip>{r.purifierId}</Chip> : "—"}</td>
+                    <td style={{ padding: "12px 10px", fontSize: 12, color: "#86868b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.device}>{trunc(r.device, 26)}</td>
+                    <td style={{ padding: "12px 10px", fontSize: 12, fontFamily: "ui-monospace,monospace", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.ip}>{trunc(r.ip, 22)}</td>
+                    <td style={{ padding: "12px 10px", fontSize: 12.5, whiteSpace: "nowrap", color: "#86868b", overflow: "hidden", textOverflow: "ellipsis" }}>{fmtLogin(r.loginTime)}</td>
+                    <td style={{ padding: "12px 10px", overflow: "hidden" }} title={String(r.status || "")}>{renderHigStatusBadge(trunc(r.status, 20))}</td>
                   </tr>
                 ))}
                 {shown.length === 0 && <tr><td colSpan={8} style={{ padding: 0 }}><Empty msg="No app logs match your search." /></td></tr>}
@@ -3129,12 +3136,77 @@ export function EarnedRevenue() {
   const modByTxnId = {}, modByNumber = {};
   data.mods.forEach(m => { if (m.id) modByTxnId[m.id] = m; if (m.number) modByNumber[m.number] = m; });
 
+  // Deposit/Recharge plan-catalog lookup (v2.29.280) — per explicit user
+  // request, confirmed against a real example: invoice INV-000706 (₹2,399
+  // total, plan "ProWater Advance"/pro_advance) was showing Deposit ₹0 /
+  // Recharge ₹2,399 because its plan_code never matched PLAN_CATALOG's
+  // exact-code-only lookup; the catalog entry for that plan is Setup Fee
+  // ₹2,000 / Price ₹399 (₹2,000+₹399=₹2,399, confirming the match), so it
+  // should read Deposit ₹2,000 / Recharge ₹399 instead.
+  //
+  // Deliberately a LOCAL helper, not a change to the shared `planInfo`/
+  // `depositForCustomer` in shared/core.js — those two are also called by
+  // ~8 other reports across this file (Overview, Reconciliation, etc.) that
+  // were never part of this request; changing the shared functions would
+  // have silently changed numbers in every one of those unrelated reports
+  // too. Keeping this scoped to Earned Revenue's own rows only.
+  //
+  // Also deliberately does NOT blindly set deposit=setupFee/recharge=price
+  // for every matched plan regardless of amount — a RECURRING recharge-only
+  // invoice (deposit already collected on an earlier invoice) can have a
+  // total far below the plan's setupFee, and forcing that fee onto it would
+  // show a deposit bigger than the invoice's own total (impossible, and the
+  // exact kind of nonsensical number that's worse than the original bug).
+  // So: only split into Setup Fee + remainder when the invoice's real total
+  // actually covers the fee (a first/setup invoice); otherwise the whole
+  // total stays Recharge, same convention the rest of the app already uses.
+  //
+  // v2.29.283 — real-world case found via the Plan Code column added above:
+  // Kavitha Dhinesh's invoice (₹2,399 total) has plan_code "STANDARD_1M_399"
+  // in OUR OWN API data, which IS a real, valid, zero-deposit catalog entry
+  // (setupFee ₹0, total ₹399) — a genuinely different plan from the
+  // deposit-bearing "STANDARD_1M_399_SD" (setupFee ₹2,000, total ₹2,399) her
+  // ACTUAL Zoho invoice line item shows. Exact-code matching alone can't
+  // tell these apart — both codes are real catalog entries, and picking the
+  // wrong one isn't a matching bug, it's ambiguous input (our backend's
+  // plan_code for this invoice/subscription doesn't reflect what Zoho's own
+  // invoice says — a data-sync issue upstream of this dashboard, not
+  // something fixable here). But we DO know the invoice's own real total,
+  // and every PLAN_CATALOG entry carries its own expected Total — so among
+  // every candidate plan sharing this code OR this name, prefer whichever
+  // one's Total exactly equals what was actually charged. For Kavitha's
+  // invoice: candidates sharing the name "STANDARD" include both
+  // STANDARD_1M_399 (Total ₹399) and STANDARD_1M_399_SD (Total ₹2,399) —
+  // only the latter matches the real ₹2,399 charged, so that's the one
+  // used, regardless of which one the plan_code field pointed at.
+  const lookupPlanEntry = (code, name, amount) => {
+    const c = String(code || "").trim().toLowerCase();
+    const n = String(name || "").trim().toLowerCase();
+    if (!c && !n) return null;
+    const entries = Object.entries(PLAN_CATALOG); // [code, planObj][]
+    const codeMatch = c && entries.find(([k]) => k.toLowerCase() === c);
+    const candidates = entries
+      .filter(([k, v]) => (c && k.toLowerCase() === c) || (n && String(v.name || "").trim().toLowerCase() === n))
+      .map(([, v]) => v);
+    if (!candidates.length) return null;
+    const totalMatch = candidates.find(v => (v.total || 0) === amount);
+    // No candidate's Total matches the real invoice amount (e.g. a partial
+    // payment) — fall back to the exact code match if there is one, else
+    // just the first name match (original priority order).
+    return totalMatch || (codeMatch ? codeMatch[1] : candidates[0]);
+  };
+
   const rows = data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).map(i => {
     const sub = subFor(i);
     const plan = sub?.plan || i.plan || "—";
     const planCode = sub?.planCode || i.planCode || "";
     const total = i.total || 0;
-    const deposit = depositForCustomer(custOf(i), plan, total, planCode);
+    const planEntry = lookupPlanEntry(planCode, plan, total);
+    const catalogFee = planEntry?.setupFee || 0;
+    // deposit+recharge always sums back to the real invoice total — see the
+    // lookupPlanEntry comment above for why this doesn't just always use
+    // setupFee/price directly.
+    const deposit = (planEntry && catalogFee > 0 && total >= catalogFee) ? catalogFee : (planEntry ? 0 : depositForCustomer(custOf(i), plan, total, planCode));
     const recharge = Math.max(0, total - deposit);
     const months = termMonths(sub || { interval: i.interval, plan }) || 1;
     // Prefer the API's real paid_date (added ~2026-08); fall back to invoice
@@ -3208,7 +3280,7 @@ export function EarnedRevenue() {
       : 0;
     const remainingDaysEarned = tenureDays > 0 ? (recharge * remainingDays) / tenureDays : 0;
     const remainingMonthEarned = earnedPerMonth * remainingMonths;
-    return { invoiceId: i.id || "—", invoiceNumber: i.number || "—", referenceNumber: i.referenceNumber || "—", paymentMode: i.paymentMode || "—", customer: i.customerName || "—", phone: custOf(i)?.phone || "", society: societyOf(i), plan, total, deposit, recharge, months, intervalLabel, earnedPerMonth,
+    return { invoiceId: i.id || "—", invoiceNumber: i.number || "—", referenceNumber: i.referenceNumber || "—", paymentMode: i.paymentMode || "—", customer: i.customerName || "—", phone: custOf(i)?.phone || "", society: societyOf(i), plan, planCode, planMatched: !!planEntry, total, deposit, recharge, months, intervalLabel, earnedPerMonth,
       payDay: pd, dueDay: dueValid ? dd : null, nextBillDay: nbValid ? nb : null, tenureDays, daysInPaidMonth, earnedRevenue,
       remainingDays, remainingMonths, remainingDaysEarned, remainingMonthEarned };
   });
@@ -3269,6 +3341,7 @@ export function EarnedRevenue() {
     { label: "Invoice #", get: r => r.invoiceNumber }, { label: "Invoice ID", get: r => r.invoiceId },
     { label: "Reference Number", get: r => r.referenceNumber }, { label: "Payment Mode", get: r => r.paymentMode },
     { label: "Customer", get: r => r.customer }, { label: "Apartment", get: r => r.society }, { label: "Plan", get: r => r.plan },
+    { label: "Plan Code", get: r => r.planCode }, { label: "Matched in Plan Catalog", get: r => r.planMatched ? "Yes" : "No" },
     { label: "Start Date", get: r => r.dueDay ? fmtDate(r.dueDay) : "" },
     { label: "Paid on", get: r => (r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "" },
     { label: "End Date", get: r => r.nextBillDay ? fmtDate(r.nextBillDay) : "" },
@@ -3333,36 +3406,40 @@ export function EarnedRevenue() {
         );
       })()}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+        {/* v2.29.274: `hero` no longer renders a gradient card — per explicit
+            user request to make all hero cards the same white style as
+            normal cards, so this delta badge is now always the plain
+            tinted-pill treatment the non-hero branch already used. */}
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
-            backdropFilter: s.hero ? "none" : "blur(20px)",
-            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
-            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            background: "rgba(255, 255, 255, 0.85)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: 18,
             padding: "18px 20px",
-            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
             position: "relative",
             overflow: "hidden"
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
                 {s.label}
               </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: s.hero ? "rgba(255,255,255,0.2)" : "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <s.icon size={17} color={s.hero ? "#ffffff" : "#08805A"} />
+              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <s.icon size={17} color="#08805A" />
               </div>
             </div>
-            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 28, color: s.hero ? "#ffffff" : "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
+            <div style={{ fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif", fontWeight: 700, fontSize: 28, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1, letterSpacing: "-0.02em" }}>
               {s.value}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-              <div style={{ fontSize: 12, color: s.hero ? "#E2F3EE" : "#86868B", fontWeight: 500 }}>{s.sub}</div>
+              <div style={{ fontSize: 12, color: "#86868B", fontWeight: 500 }}>{s.sub}</div>
               {s.delta != null && Number.isFinite(s.delta) && (
                 <span style={{
                   fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
-                  background: s.hero ? (s.delta > 0 ? "rgba(255,255,255,0.25)" : "rgba(220,38,38,0.3)") : (s.delta > 0 ? "rgba(8,128,90,0.12)" : "rgba(220,38,38,0.1)"),
-                  color: s.hero ? "#ffffff" : (s.delta > 0 ? "#08805a" : "#dc2626")
+                  background: s.delta > 0 ? "rgba(8,128,90,0.12)" : "rgba(220,38,38,0.1)",
+                  color: s.delta > 0 ? "#08805a" : "#dc2626"
                 }}>
                   {s.delta > 0 ? "▲ +" : s.delta < 0 ? "▼ " : ""}{s.delta}%
                 </span>
@@ -3413,7 +3490,7 @@ export function EarnedRevenue() {
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 1200 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                  {["Invoice #", "Reference Number", "Customer", "Apartment"].map(h => (
+                  {["Invoice #", "Reference Number", "Customer", "Apartment", "Plan"].map(h => (
                     <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                   ))}
                   <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
@@ -3454,7 +3531,30 @@ export function EarnedRevenue() {
                     <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", fontWeight: 600, color: "#0d2119" }}>{r.invoiceNumber}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", color: "#86868b" }}>{r.referenceNumber}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap" }}>{r.customer}</td>
-                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569" }}>{r.society}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{r.society}</td>
+                    {/* Plan column (v2.29.281) — added per explicit user report that
+                        a real invoice (Kavitha Dhinesh, ₹2,399) still showed Deposit
+                        ₹0/Recharge ₹2,399 after the v2.29.280 catalog-lookup fix.
+                        Making the plan name/code actually visible here (with a
+                        title tooltip showing the exact code + whether it matched
+                        the catalog) turns "why didn't this match" from invisible
+                        into something diagnosable directly in the UI — an
+                        unmatched plan gets a muted/dashed-underline treatment so
+                        it's obvious at a glance which rows fell back to the old
+                        depositForCustomer() estimate instead of a real catalog hit. */}
+                    <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap" }}
+                      title={`Plan code: ${r.planCode || "(blank)"}${r.planMatched ? " — matched in Plan Catalog" : " — NOT found in Plan Catalog (by code or name)"}`}>
+                      <span style={r.planMatched ? { color: "#475569" } : { color: "#986315", textDecoration: "underline dashed", textUnderlineOffset: 3 }}>
+                        {r.plan}
+                      </span>
+                      {/* Plan Code shown directly, not just in the hover tooltip —
+                          per explicit user request ("add the plan code also
+                          instead of plan") — this is the exact string
+                          lookupPlanEntry() searches PLAN_CATALOG for. */}
+                      <div style={{ fontSize: 10.5, fontFamily: "ui-monospace,monospace", color: "#94a3b8", marginTop: 2 }}>
+                        {r.planCode || "(blank)"}
+                      </div>
+                    </td>
                     <td style={{ padding: "14px 18px", whiteSpace: "nowrap", fontSize: 12.5, color: "#475569" }}>{r.dueDay ? fmtDate(r.dueDay) : "—"}</td>
                     <td style={{ padding: "14px 18px", whiteSpace: "nowrap", fontSize: 12.5, color: "#475569" }}>{(r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "—"}</td>
                     <td style={{ padding: "14px 18px", whiteSpace: "nowrap", fontSize: 12.5, color: "#475569" }}>{r.nextBillDay ? fmtDate(r.nextBillDay) : "—"}</td>
@@ -3473,7 +3573,7 @@ export function EarnedRevenue() {
                 ))}
                 {tableRows.length > 0 && (
                   <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={7}>Total ({tableRows.length})</td>
+                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={8}>Total ({tableRows.length})</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(visTotal.total)}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(visTotal.deposit)}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(visTotal.recharge)}</td>
@@ -4161,29 +4261,35 @@ export function DPTransactions() {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
+        {/* v2.29.274: after two rounds of chasing a legible trend-badge color
+            against this card's gradient (v2.29.270, v2.29.271), the user
+            asked for the simpler fix that actually addresses the root cause
+            — hero cards no longer render a gradient at all, so the delta
+            text below is just plain color on white, same as every non-hero
+            card already had. */}
         {stats.map((s, i) => (
           <div key={i} style={{
-            background: s.hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255, 255, 255, 0.85)",
-            backdropFilter: s.hero ? "none" : "blur(20px)",
-            WebkitBackdropFilter: s.hero ? "none" : "blur(20px)",
-            border: s.hero ? "none" : "1px solid rgba(0,0,0,0.08)",
+            background: "rgba(255, 255, 255, 0.85)",
+            backdropFilter: "blur(20px)",
+            WebkitBackdropFilter: "blur(20px)",
+            border: "1px solid rgba(0,0,0,0.08)",
             borderRadius: 20,
             padding: "20px 22px",
-            boxShadow: s.hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
-            color: s.hero ? "#fff" : "#1D1D1F",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
+            color: "#1D1D1F",
             display: "flex", flexDirection: "column", justifyContent: "space-between"
           }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: s.hero ? "#B5E2D4" : "#86868B" }}>{s.label}</span>
-                {s.icon && <s.icon size={18} style={{ color: s.hero ? "#A7F3D0" : "#08805A" }} />}
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>{s.label}</span>
+                {s.icon && <s.icon size={18} style={{ color: "#08805A" }} />}
               </div>
-              <div style={{ fontSize: 25, fontWeight: 700, color: s.hero ? "#fff" : "#1D1D1F", letterSpacing: "-.02em" }}>{s.value}</div>
+              <div style={{ fontSize: 25, fontWeight: 700, color: "#1D1D1F", letterSpacing: "-.02em" }}>{s.value}</div>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12, fontSize: 12 }}>
-              <span style={{ color: s.hero ? "#D1FAE5" : "#86868B" }}>{s.sub}</span>
+              <span style={{ color: "#86868B" }}>{s.sub}</span>
               {s.delta != null && (
-                <span style={{ fontWeight: 700, color: s.hero ? "#A7F3D0" : (s.delta >= 0 ? "#08805A" : "#DC2626") }}>
+                <span style={{ fontWeight: 700, color: s.delta >= 0 ? "#08805A" : "#DC2626" }}>
                   {s.delta >= 0 ? "▲ +" : "▼ "}{s.delta}%
                 </span>
               )}
@@ -4278,11 +4384,20 @@ export function DPTransactions() {
             {pageRows.map((r, i) => (
               <tr key={r.id ? `${r.id}-${i}` : i} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
-                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.partner_name || "—"}</td>
-                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.CustomerName || "—"}</td>
-                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.phone || "—"}</td>
-                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>
-                  {r.current_device ? <span style={{ display: "inline-block", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)" }}>{r.current_device}</span> : "—"}
+                <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>{r.partner_name || "—"}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>{r.CustomerName || "—"}</td>
+                {/* whiteSpace:"nowrap" fixes phone numbers / device codes wrapping
+                    mid-string (e.g. "8127910369" -> "8127910"/"369") — the shared
+                    `td` style sets wordBreak:"break-word" (a deliberate convention
+                    for long free-text cells like addresses), which breaks ANY
+                    single unbroken "word" that doesn't fit the column, including
+                    a short fixed-format value like a phone number or device code
+                    once this table's columns are narrow (14 columns in one table).
+                    Same fix already applied to the Stack column and App Logs
+                    table elsewhere in this file. */}
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center", whiteSpace: "nowrap" }}>{r.phone || "—"}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>
+                  {r.current_device ? <span style={{ display: "inline-block", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)", whiteSpace: "nowrap" }}>{r.current_device}</span> : "—"}
                 </td>
                 <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap", fontSize: 10.5, fontWeight: 700, padding: "3px 9px 3px 7px", borderRadius: 999, color: r.row_type === "TRANSACTION" ? "#08805A" : "#2A86D6", background: r.row_type === "TRANSACTION" ? "#E2F3EE" : "#E5F0FA" }}>
@@ -4292,11 +4407,11 @@ export function DPTransactions() {
                 </td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_start_date"] ? fmtDate(new Date(r["t.validity_start_date"])) : "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_end_date"] ? fmtDate(new Date(r["t.validity_end_date"])) : "—"}</td>
-                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{validityOf(r) != null ? Number(validityOf(r)).toLocaleString("en-IN") : "—"}</td>
-                <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{litresOf(r) != null ? Number(litresOf(r)).toLocaleString("en-IN") : "—"}</td>
-                <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.Plan || "—"}</td>
-                <td style={{ ...td, fontWeight: 600, textAlign: "center" }}>{r.deposit_amount != null ? inr(r.deposit_amount) : "—"}</td>
-                <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600, textAlign: "center" }}>{r.revenue_amount != null ? inr(r.revenue_amount) : "—"}</td>
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center", whiteSpace: "nowrap" }}>{validityOf(r) != null ? Number(validityOf(r)).toLocaleString("en-IN") : "—"}</td>
+                <td style={{ ...td, fontSize: 12.5, textAlign: "center", whiteSpace: "nowrap" }}>{litresOf(r) != null ? Number(litresOf(r)).toLocaleString("en-IN") : "—"}</td>
+                <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>{r.Plan || "—"}</td>
+                <td style={{ ...td, fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.deposit_amount != null ? inr(r.deposit_amount) : "—"}</td>
+                <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.revenue_amount != null ? inr(r.revenue_amount) : "—"}</td>
               </tr>
             ))}
             {tableRows.length > 0 && (
@@ -4349,19 +4464,19 @@ export function DPTransactions() {
                     <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
                     <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.startDate ? fmtDate(r.startDate) : "—"}</td>
                     <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.endDate ? fmtDate(r.endDate) : "—"}</td>
-                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.partner_name || "—"}</td>
-                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.CustomerName || "—"}</td>
-                    <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.phone || "—"}</td>
-                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>
-                      {r.current_device ? <span style={{ display: "inline-block", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)" }}>{r.current_device}</span> : "—"}
+                    <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>{r.partner_name || "—"}</td>
+                    <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>{r.CustomerName || "—"}</td>
+                    <td style={{ ...td, fontSize: 12.5, textAlign: "center", whiteSpace: "nowrap" }}>{r.phone || "—"}</td>
+                    <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>
+                      {r.current_device ? <span style={{ display: "inline-block", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)", whiteSpace: "nowrap" }}>{r.current_device}</span> : "—"}
                     </td>
-                    <td style={{ ...td, fontSize: 12, textAlign: "center" }}>{r.Plan || "—"}</td>
-                    <td style={{ ...td, fontWeight: 600, textAlign: "center" }}>{r.totalPaid ? inr(r.totalPaid) : "—"}</td>
-                    <td style={{ ...td, fontWeight: 600, textAlign: "center" }}>{r.recharge ? inr(r.recharge) : "—"}</td>
-                    <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.tenureDays ? `${r.tenureDays}d` : "—"}</td>
-                    <td style={{ ...td, fontSize: 12.5, textAlign: "center" }}>{r.daysInPaidMonth ? `${r.daysInPaidMonth}d` : "—"}</td>
-                    <td style={{ ...td, color: "#08805A", fontWeight: 700, textAlign: "center" }}>{inr(Math.round(er))}</td>
-                    <td style={{ ...td, color: "#D97706", fontWeight: 600, textAlign: "center" }}>{remEr > 0 ? inr(Math.round(remEr)) : "—"}</td>
+                    <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>{r.Plan || "—"}</td>
+                    <td style={{ ...td, fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.totalPaid ? inr(r.totalPaid) : "—"}</td>
+                    <td style={{ ...td, fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.recharge ? inr(r.recharge) : "—"}</td>
+                    <td style={{ ...td, fontSize: 12.5, textAlign: "center", whiteSpace: "nowrap" }}>{r.tenureDays ? `${r.tenureDays}d` : "—"}</td>
+                    <td style={{ ...td, fontSize: 12.5, textAlign: "center", whiteSpace: "nowrap" }}>{r.daysInPaidMonth ? `${r.daysInPaidMonth}d` : "—"}</td>
+                    <td style={{ ...td, color: "#08805A", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap" }}>{inr(Math.round(er))}</td>
+                    <td style={{ ...td, color: "#D97706", fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{remEr > 0 ? inr(Math.round(remEr)) : "—"}</td>
                   </tr>
                 );
               })}
@@ -4868,6 +4983,7 @@ export function ApiLoadTracker() {
   const { user } = useAuth();
   const [logs, setLogs] = useState([]);
   const [ticker, setTicker] = useState(0);
+  const [filterToday, setFilterToday] = useState(true);
 
   useEffect(() => {
     try {
@@ -4885,24 +5001,29 @@ export function ApiLoadTracker() {
     }
   };
 
+  const todayStr = new Date().toDateString();
+  const displayedLogs = filterToday 
+    ? logs.filter(l => l.at && new Date(l.at).toDateString() === todayStr)
+    : logs;
+
   // 1. Calculations for KPIs
-  const totalCalls = logs.length;
-  const successCalls = logs.filter(l => l.type === "success").length;
+  const totalCalls = displayedLogs.length;
+  const successCalls = displayedLogs.filter(l => l.type === "success").length;
   const successRate = totalCalls > 0 ? Math.round((successCalls / totalCalls) * 100) : 100;
   
   const avgLatency = totalCalls > 0 
-    ? Math.round(logs.reduce((s, l) => s + l.duration, 0) / totalCalls) 
+    ? Math.round(displayedLogs.reduce((s, l) => s + l.duration, 0) / totalCalls) 
     : 0;
 
   // Find Peak Latency
   let peakLog = null;
-  logs.forEach(l => {
+  displayedLogs.forEach(l => {
     if (!peakLog || l.duration > peakLog.duration) peakLog = l;
   });
 
   // 2. Calculations for Hourly Spikes (load distribution)
   const hourlyData = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0, avg: 0, sum: 0 }));
-  logs.forEach(l => {
+  displayedLogs.forEach(l => {
     const hr = new Date(l.at).getHours();
     hourlyData[hr].count++;
     hourlyData[hr].sum += l.duration;
@@ -4929,7 +5050,7 @@ export function ApiLoadTracker() {
 
   // 3. Group by API path to find slowest endpoints
   const apiGroups = {};
-  logs.forEach(l => {
+  displayedLogs.forEach(l => {
     const p = l.path || "Other";
     if (!apiGroups[p]) apiGroups[p] = { path: p, count: 0, sum: 0, min: Infinity, max: -Infinity };
     apiGroups[p].count++;
@@ -4949,11 +5070,51 @@ export function ApiLoadTracker() {
 
   return (
     <div className="fade-up">
+      {/* Date Filter Bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: "#1D1D1F", margin: 0 }}>System Performance Monitoring</h2>
+          <div style={{ fontSize: 12.5, color: "#86868B" }}>Real-time latency metrics from active API requests</div>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button 
+            onClick={() => setFilterToday(true)} 
+            style={{ 
+              padding: "7px 14px", 
+              borderRadius: 10, 
+              fontSize: 12.5, 
+              fontWeight: 700, 
+              cursor: "pointer", 
+              border: "1.5px solid " + (filterToday ? "var(--teal)" : "var(--border)"), 
+              background: filterToday ? "var(--mint-2)" : "#fff", 
+              color: filterToday ? "var(--teal-d)" : "var(--slate)" 
+            }}
+          >
+            Today Only
+          </button>
+          <button 
+            onClick={() => setFilterToday(false)} 
+            style={{ 
+              padding: "7px 14px", 
+              borderRadius: 10, 
+              fontSize: 12.5, 
+              fontWeight: 700, 
+              cursor: "pointer", 
+              border: "1.5px solid " + (!filterToday ? "var(--teal)" : "var(--border)"), 
+              background: !filterToday ? "var(--mint-2)" : "#fff", 
+              color: !filterToday ? "var(--teal-d)" : "var(--slate)" 
+            }}
+          >
+            All Logs ({logs.length})
+          </button>
+        </div>
+      </div>
+
       {/* ── KPI Cards ───────────────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 16 }}>
         <Stat label="Average Latency" value={`${avgLatency} ms`} icon={CalendarClock} sub="Across all tracked modules" hero />
         <Stat label="Success Rate" value={`${successRate}%`} icon={CheckCircle2} sub={`${successCalls} of ${totalCalls} calls succeeded`} />
-        <Stat label="Total API Calls" value={totalCalls} icon={ScrollText} sub="Last 1000 requests" />
+        <Stat label="Total API Calls" value={totalCalls} icon={ScrollText} sub={filterToday ? "Today's requests" : "Last 1000 requests"} />
         <Stat 
           label="Peak Latency Event" 
           value={peakLog ? `${peakLog.duration} ms` : "—"} 
@@ -5044,7 +5205,7 @@ export function ApiLoadTracker() {
       </div>
 
       {/* ── Recent Requests Log Table ───────────────────────────────────── */}
-      {logs.length > 0 && (
+      {displayedLogs.length > 0 && (
         <div style={{ ...softShadow, padding: 0, overflow: "hidden" }}>
           <div style={{ padding: "18px 20px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
             <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Recent API Request telemetry</h3>
@@ -5060,7 +5221,7 @@ export function ApiLoadTracker() {
                 </tr>
               </thead>
               <tbody>
-                {logs.slice(0, 30).map((l, i) => (
+                {displayedLogs.slice(0, 30).map((l, i) => (
                   <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
                     <td style={{ padding: "12px 18px", fontSize: 12.5, color: "#475569", textAlign: "center" }}>{new Date(l.at).toLocaleTimeString()}</td>
                     <td style={{ padding: "12px 18px", fontSize: 13, color: "#0d2119", textAlign: "left", fontFamily: "monospace" }}>{l.path}</td>

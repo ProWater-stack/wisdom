@@ -117,26 +117,33 @@ export function Drop() {
   );
 }
 export function Stat({ label, value, icon: Icon, sub, hero, delta }) {
-  // Optional MoM delta badge: green ▲ for up, red ▼ for down (lightened on hero).
+  // v2.29.274: `hero` used to render a green-to-lime gradient card — every
+  // attempt to keep a legible delta badge on top of it (lightened text,
+  // then a white pill) kept surfacing new contrast bugs, because no single
+  // treatment survives a badge landing at an arbitrary point along a
+  // gradient that spans dark green to bright lime. Per explicit user
+  // request ("make all the hero cards in same color with white background
+  // like other normal cards, it becomes easy to check the percentages going
+  // up or down"), hero cards now render identically to normal ones — same
+  // white background, same text colors — so the delta badge is just plain
+  // green/red text on white, exactly as legible as every non-hero card
+  // already was. `hero` is still accepted (existing call sites pass it) but
+  // no longer changes any styling.
   const hasDelta = delta != null && Number.isFinite(delta);
   const up = hasDelta && delta > 0, down = hasDelta && delta < 0;
-  const deltaColor = hero
-    ? (up ? "#1E9E4F" : down ? "#F5BFBF" : "#B5E2D4")
-    : (up ? "#08805A" : down ? "#DC4141" : "#7D8A83");
+  const deltaColor = up ? "#08805A" : down ? "#DC4141" : "#7D8A83";
   return (
     <div style={{
-      background: hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "#fff",
-      color: hero ? "#E2F3EE" : "inherit", border: hero ? "none" : "1px solid var(--border)",
+      background: "#fff", color: "inherit", border: "1px solid var(--border)",
       borderRadius: "var(--radius)", padding: 18, boxShadow: "var(--shadow)", position: "relative", overflow: "hidden"
     }}>
-      {hero && <div style={{ position: "absolute", right: -20, top: -20, width: 90, height: 90, borderRadius: 999, background: "radial-gradient(circle,rgba(168,217,64,.4),transparent 70%)" }} />}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span className="eyebrow" style={{ color: hero ? "var(--lime)" : "var(--muted)" }}>{label}</span>
-        <Icon size={18} color={hero ? "var(--lime)" : "var(--teal)"} />
+        <span className="eyebrow" style={{ color: "var(--muted)" }}>{label}</span>
+        <Icon size={18} color="var(--teal)" />
       </div>
-      <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: hero ? "#fff" : "var(--f)", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: "'DM Sans',system-ui,sans-serif", fontWeight: 800, fontSize: 30, color: "var(--f)", margin: "8px 0 2px", lineHeight: 1 }}>{value}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 12, color: hero ? "#B5E2D4" : "var(--muted)" }}>{sub}</div>
+        <div style={{ fontSize: 12, color: "var(--muted)" }}>{sub}</div>
         {hasDelta && <span style={{ fontSize: 11.5, fontWeight: 700, color: deltaColor, whiteSpace: "nowrap" }}>
           {up ? "▲" : down ? "▼" : "—"} {up ? "+" : ""}{delta}%
         </span>}
@@ -1086,9 +1093,9 @@ export const toastStyle = { position: "fixed", bottom: 24, left: "50%", transfor
 export function DateRangeFilter({ range, onChange, right }) {
   return (
     <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-      <input type="date" value={range.from || ""} onChange={e => onChange({ ...range, from: e.target.value })} style={inp} />
+      <input type="date" value={range.from || ""} onChange={e => onChange({ ...range, from: e.target.value })} style={{ ...inp, width: 170 }} />
       <span style={{ color: "var(--muted)", fontSize: 12.5 }}>to</span>
-      <input type="date" value={range.to || ""} onChange={e => onChange({ ...range, to: e.target.value })} style={inp} />
+      <input type="date" value={range.to || ""} onChange={e => onChange({ ...range, to: e.target.value })} style={{ ...inp, width: 170 }} />
       {(range.from || range.to) && <button onClick={() => onChange({ from: "", to: "" })} style={btnGhost}>Clear</button>}
       {right}
     </div>

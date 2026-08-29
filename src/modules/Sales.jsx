@@ -217,17 +217,19 @@ export function SalesLeads({ isAdmin }) {
           (not clickable) — filtering happens via the status dropdown below,
           whose options mirror these cards. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
-          <div style={{ position: "absolute", right: -10, top: -10, width: 90, height: 90, background: "rgba(255,255,255,.06)", borderRadius: "50%", pointerEvents: "none" }} />
+        {/* v2.29.274: converted from a gradient hero card to the same white
+            style as its siblings — per explicit user request to make all
+            hero cards the same white style as normal cards. */}
+        <div style={{ background: "#fff", borderRadius: 20, padding: "22px 24px", border: "1px solid rgba(0,0,0,.05)", boxShadow: "0 4px 16px rgba(0,0,0,.02)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#80e6a2" }}>Total Leads</span>
-              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, background: "rgba(255,255,255,.15)", color: "#fff", fontWeight: 600 }}>100%</span>
+              <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#64748b" }}>Total Leads</span>
+              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, background: "rgba(8,128,90,.1)", color: "#08805A", fontWeight: 600 }}>100%</span>
             </div>
-            <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1 }}>{totalLeads}</div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#0d2119", letterSpacing: "-.03em", lineHeight: 1 }}>{totalLeads}</div>
           </div>
           <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", fontWeight: 500 }}>Overall generated leads</div>
+            <div style={{ fontSize: 12, color: "#86868B", fontWeight: 500 }}>Overall generated leads</div>
           </div>
         </div>
 
@@ -581,36 +583,49 @@ export function SalesTrendAnalysis() {
     const isFlat = delta === 0;
     const isGood = goodDir === "up" ? delta > 0 : delta < 0;
     const arrow = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
-    const green = vivid ? { bg: "rgba(255,255,255,.25)", color: "#ffffff" } : { bg: "rgba(8,128,90,.12)", color: "#08805A" };
-    const red = vivid ? { bg: "rgba(220,38,38,.4)", color: "#ffffff" } : { bg: "rgba(220,38,38,.12)", color: "#DC4141" };
-    const flat = vivid ? { bg: "rgba(255,255,255,.2)", color: "#ffffff" } : { bg: "rgba(134,134,139,.15)", color: "#86868B" };
+    // v2.29.273: "vivid" (hero-card) pills used to be translucent white/red
+    // backgrounds with plain white text — too translucent to guarantee
+    // contrast wherever they land on the green-to-lime hero gradient (worst
+    // at the bright lime end), and the "green"/"flat" cases were identical
+    // white-on-white-ish, losing the color distinction entirely. Solid white
+    // pill + real colored text, same fix as everywhere else this pattern
+    // showed up (shared Stat component, Analytics KPI cards, Customer's
+    // Active Customers card).
+    const green = vivid ? { bg: "rgba(255,255,255,0.94)", color: "#08805A" } : { bg: "rgba(8,128,90,.12)", color: "#08805A" };
+    const red = vivid ? { bg: "rgba(255,255,255,0.94)", color: "#DC2626" } : { bg: "rgba(220,38,38,.12)", color: "#DC4141" };
+    const flat = vivid ? { bg: "rgba(255,255,255,0.94)", color: "#7D8A83" } : { bg: "rgba(134,134,139,.15)", color: "#86868B" };
     const { bg, color } = isFlat ? flat : (isGood ? green : red);
     return { text: `${arrow} ${Math.abs(delta)}${suffix}`, bg, color };
   };
 
-  const kpiCard = ({ label, value, valueColor, icon: Icon, iconBg, iconColor, delta, hero }) => (
+  // v2.29.274: `hero` no longer changes styling at all — per explicit user
+  // request to make all hero cards the same white style as normal cards, so
+  // percentage deltas are always plain readable text, never a color/pill
+  // guessed against a gradient. `hero` is still accepted (call sites pass
+  // it) but is now a no-op.
+  const kpiCard = ({ label, value, valueColor, icon: Icon, iconBg, iconColor, delta }) => (
     <div style={{
-      background: hero ? "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)" : "rgba(255,255,255,.85)",
-      color: hero ? "#fff" : "#1D1D1F",
-      backdropFilter: hero ? undefined : "blur(20px)",
-      WebkitBackdropFilter: hero ? undefined : "blur(20px)",
-      border: hero ? "none" : "1px solid rgba(0,0,0,.08)",
+      background: "rgba(255,255,255,.85)",
+      color: "#1D1D1F",
+      backdropFilter: "blur(20px)",
+      WebkitBackdropFilter: "blur(20px)",
+      border: "1px solid rgba(0,0,0,.08)",
       borderRadius: 18,
       padding: "18px 20px",
-      boxShadow: hero ? "0 10px 25px rgba(8, 128, 90, 0.28)" : "0 10px 30px rgba(0, 0, 0, 0.03)",
+      boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
       display: "flex", flexDirection: "column", justifyContent: "space-between",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: hero ? "#B5E2D4" : "#86868B" }}>{label}</span>
-        <div style={{ width: 34, height: 34, borderRadius: 10, background: hero ? "rgba(255,255,255,0.2)" : iconBg, display: "grid", placeItems: "center" }}>
-          <Icon size={17} color={hero ? "#ffffff" : iconColor} />
+        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>{label}</span>
+        <div style={{ width: 34, height: 34, borderRadius: 10, background: iconBg, display: "grid", placeItems: "center" }}>
+          <Icon size={17} color={iconColor} />
         </div>
       </div>
       <div style={{ margin: "12px 0 8px" }}>
-        <div className="serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, color: valueColor || (hero ? "#fff" : "#1D1D1F") }}>{value}</div>
+        <div className="serif" style={{ fontSize: 30, fontWeight: 700, lineHeight: 1.1, color: valueColor || "#1D1D1F" }}>{value}</div>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12 }}>
-        <span style={{ color: hero ? "#E2F3EE" : "#86868B" }}>{rangeLabel(range)}</span>
+        <span style={{ color: "#86868B" }}>{rangeLabel(range)}</span>
         {delta && (
           <span style={{ background: delta.bg, color: delta.color, fontWeight: 700, padding: "3px 9px", borderRadius: 999, fontVariantNumeric: "tabular-nums" }}>{delta.text}</span>
         )}
@@ -638,10 +653,14 @@ export function SalesTrendAnalysis() {
 
       {/* ── 2.3 Top KPI Row (Full Width) ─────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 18 }}>
+        {/* v2.29.274: hero no longer renders as a gradient card — per explicit
+            user request, it's now styled the same as its sibling cards, so
+            the icon and delta pill go back to the same green-on-white
+            treatment every other card already uses. */}
         {kpiCard({
           label: "Total Leads", value: totalN, hero: true,
-          icon: Briefcase, iconBg: "rgba(255,255,255,.2)", iconColor: "#fff",
-          delta: kpiDelta(momPct(totalN, totalPrevN), "up", "%", true),
+          icon: Briefcase, iconBg: "rgba(8,128,90,.12)", iconColor: "#08805A",
+          delta: kpiDelta(momPct(totalN, totalPrevN), "up", "%", false),
         })}
         {kpiCard({
           label: "Interested", value: interestedN, valueColor: "#08805A",
@@ -1154,17 +1173,19 @@ export function ApartmentLeads() {
     <div className="fade-up">
       {/* KPI Header Cards — matching Apple HIG grid style in SalesLeads */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 20, marginBottom: 28 }}>
-        <div style={{ background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)", borderRadius: 20, padding: "22px 24px", color: "#fff", boxShadow: "0 12px 24px -6px rgba(10,58,42,.25)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
-          <div style={{ position: "absolute", right: -10, top: -10, width: 90, height: 90, background: "rgba(255,255,255,.06)", borderRadius: "50%", pointerEvents: "none" }} />
+        {/* v2.29.274: converted from a gradient hero card to a plain white
+            card — per explicit user request to make all hero cards the same
+            white style as normal cards. */}
+        <div style={{ background: "#fff", borderRadius: 20, padding: "22px 24px", border: "1px solid rgba(0,0,0,.05)", boxShadow: "0 4px 16px rgba(0,0,0,.02)", position: "relative", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 120 }}>
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#80e6a2" }}>Total Apartment Leads</span>
-              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, background: "rgba(255,255,255,.15)", color: "#fff", fontWeight: 600 }}>Active</span>
+              <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#64748b" }}>Total Apartment Leads</span>
+              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 12, background: "rgba(8,128,90,.1)", color: "#08805A", fontWeight: 600 }}>Active</span>
             </div>
-            <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: "-.03em", lineHeight: 1 }}>{totalApartments}</div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: "#0d2119", letterSpacing: "-.03em", lineHeight: 1 }}>{totalApartments}</div>
           </div>
           <div style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", fontWeight: 500 }}>Societies &amp; High-rises logged</div>
+            <div style={{ fontSize: 12, color: "#86868B", fontWeight: 500 }}>Societies &amp; High-rises logged</div>
           </div>
         </div>
 
