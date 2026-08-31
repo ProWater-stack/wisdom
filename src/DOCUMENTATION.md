@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.284**.
+> **Reflects:** `APP_VERSION` **2.29.299**.
 
 ---
 
@@ -616,7 +616,7 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
     TDS / temperature as the **min–max range over the last day** vs their ideal bands, rated
     GOOD / AMBER / CHECK, with an overall summary and a **Recent readings** table. Fed by
     the bare `GET /devices/history?deviceId=…` (`{ items:[…] }`), polled every 8s. Ideal bands
-    (pH 6.5–8.5, TDS 50–300 mg/L, temp 15–25 °C) are app-side constants, not in the feed.
+    (pH 6.5–8.5, TDS 50–300 ppm, temp 15–25 °C) are app-side constants, not in the feed.
   - **junctionBox units** (`payload.units[].channels`) → the existing water-pressure / unit-health /
     channels grid with per-device pressure/flow charts and 12-hour consumption.
   Known tank device `E05A1B9C2DD4` is always kept in the roster, polled and selected by default.

@@ -7,7 +7,7 @@
    =========================================================================== */
 import React, { useState, useEffect } from "react";
 import {
-  Check, CheckCircle2, ChevronRight, Download, Landmark, RefreshCw,
+  Check, CheckCircle2, ChevronRight, Copy, Download, Landmark, RefreshCw,
   RotateCcw, TrendingUp, Undo2, Wallet,
 } from "lucide-react";
 import {
@@ -16,13 +16,13 @@ import {
 } from "recharts";
 import {
   useAuth, api, billingApi, customerApi, depositForCustomer, exportToCsv,
-  fmtDate, inr, pushLog, PLAN_CATALOG,
+  fmtDate, inr, pushLog, SEED_PLANS,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, Modal, Field,
   Chip, Status, Person, Drawer, DefRow, CHART_PALETTE, renderPieLabel,
   pieLabelLine, btnGhost, btnPrimary, td, ftd, trStyle, grid4, axisTick,
-  selectStyle, toastStyle, MultiSelectFilter, SortHeader,
+  selectStyle, toastStyle, SortHeader,
 } from "../shared/ui";
 
 /* ===========================================================================
@@ -522,53 +522,63 @@ export function DepositRefunds() {
 }
 
 /* ===========================================================================
-   Plans (v2.29.133) — the master plan catalog (PLAN_CATALOG, shared/core.js),
-   given directly by the business: 64 real plans with their exact Device Type,
-   Filter Type, Setup Fee, Price, Total, and billing cadence. Static local
-   data, no API fetch — this IS the source of truth `depositForCustomer()` now
-   reads from first (see shared/core.js). Read-only reference screen; edit the
-   catalog in code, not here.
+   Plans (v2.29.133; live-wired v2.29.287) — now fetched from the real plan
+   catalog API (`billingApi.getPlans()`, GET /admin/subs-module-get-all-plans,
+   shared/core.js), falling back to `SEED_PLANS` (the same 64-plan business
+   dump this page always showed, before it had a live API) if that fetch
+   fails or is unreachable. Note: `depositForCustomer()`/`planInfo()` and every
+   other call site (Analytics.jsx, Customer.jsx) still read the STATIC
+   `PLAN_CATALOG` constant, unchanged — only this page's own view is live now,
+   deliberately, so this can't silently move numbers anywhere else in the app.
    =========================================================================== */
 export function Plans() {
   const { user } = useAuth();
-  useEffect(() => { api.logView(user.username, "Viewed Plans"); }, []);
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    api.logView(user.username, "Viewed Plans");
+    billingApi.getPlans().then(setRows).catch(() => setRows([...SEED_PLANS]));
+  }, []);
 
   const [q, setQ] = useState("");
-  const [deviceTypeFilter, setDeviceTypeFilter] = useState(null); // null = all
-  const [filterTypeFilter, setFilterTypeFilter] = useState(null); // null = all
   const [sort, setSort] = useState({ key: "total", dir: "desc" });
   const toggleSort = (k) => setSort(s => s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: k === "name" || k === "code" ? "asc" : "desc" });
+  // Copy Link feedback (v2.29.288) — briefly shows "Copied" on the clicked row only.
+  const [copiedCode, setCopiedCode] = useState("");
+  const copyLink = async (p) => {
+    try { await navigator.clipboard.writeText(p.url); } catch { /* clipboard unavailable — silently ignore */ }
+    setCopiedCode(p.code);
+    setTimeout(() => setCopiedCode(c => (c === p.code ? "" : c)), 1500);
+  };
 
-  const all = Object.entries(PLAN_CATALOG).map(([code, p]) => ({ code, ...p }));
-  const deviceTypeOptions = Array.from(new Set(all.map(p => p.deviceType))).sort();
-  const filterTypeOptions = Array.from(new Set(all.map(p => p.filterType))).sort();
+  if (!rows) return <Loading title="Loading Plans" subtitle="Fetching the plan catalog…" />;
 
-  const filtered = all.filter(p =>
-    (`${p.name} ${p.code}`).toLowerCase().includes(q.toLowerCase())
-    && (deviceTypeFilter === null || deviceTypeFilter.includes(p.deviceType))
-    && (filterTypeFilter === null || filterTypeFilter.includes(p.filterType)));
+  const all = rows;
+
+  const filtered = all.filter(p => (`${p.name} ${p.code}`).toLowerCase().includes(q.toLowerCase()));
 
   const dir = sort.dir === "asc" ? 1 : -1;
   const sorted = [...filtered].sort((a, b) => {
-    if (sort.key === "name" || sort.key === "code" || sort.key === "deviceType" || sort.key === "filterType") {
-      return String(a[sort.key]).localeCompare(String(b[sort.key])) * dir;
-    }
+    if (sort.key === "name" || sort.key === "code") return String(a[sort.key]).localeCompare(String(b[sort.key])) * dir;
     return ((a[sort.key] || 0) - (b[sort.key] || 0)) * dir;
   });
 
+  // KPI cards (v2.29.288) — rebuilt off the real API's own fields (status,
+  // setup_fee) now that Device Type/Filter Type (never part of the live
+  // response) are gone from this page entirely.
   const stats = [
     { label: "Total Plans", value: all.length, sub: "in the catalog" },
-    { label: "Normal Device", value: all.filter(p => p.deviceType === "Normal").length, sub: "plans" },
-    { label: "Hot & Cold", value: all.filter(p => p.deviceType === "Hot & Cold").length, sub: "plans" },
-    { label: "Setup Fee ₹0", value: all.filter(p => !p.setupFee).length, sub: "no deposit component" },
+    { label: "Active Plans", value: all.filter(p => p.status === "active").length, sub: "currently sellable" },
+    { label: "Deposit Required", value: all.filter(p => p.setupFee > 0).length, sub: "plans with a deposit" },
+    { label: "No Deposit", value: all.filter(p => !p.setupFee).length, sub: "zero setup fee" },
   ];
+
+  const tenureOf = (p) => `${p.billEvery} ${p.billingInterval}`;
 
   const exportCsv = () => exportToCsv("prowater-plans.csv", [
     { label: "Plan Name", get: p => p.name }, { label: "Plan Code", get: p => p.code },
-    { label: "Device Type", get: p => p.deviceType }, { label: "Filter Type", get: p => p.filterType },
-    { label: "Setup Fee", get: p => p.setupFee }, { label: "Price", get: p => p.price },
-    { label: "Total", get: p => p.total }, { label: "Bill Every", get: p => p.billEvery },
-    { label: "Billing Interval", get: p => p.billingInterval },
+    { label: "Deposit Amount", get: p => p.setupFee }, { label: "Recharge Amount", get: p => p.price },
+    { label: "Total Amount", get: p => p.total }, { label: "Tenure", get: p => tenureOf(p) },
+    { label: "Link", get: p => p.url },
   ], sorted);
 
   return (
@@ -587,25 +597,21 @@ export function Plans() {
 
       <Toolbar q={q} setQ={setQ} placeholder="Search plan name or code…" count={sorted.length}
         right={<>
-          <MultiSelectFilter label="Device Type" options={deviceTypeOptions} value={deviceTypeFilter} onChange={setDeviceTypeFilter} width={180} />
-          <MultiSelectFilter label="Filter Type" options={filterTypeOptions} value={filterTypeFilter} onChange={setFilterTypeFilter} width={180} />
           <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>
         </>} />
 
       <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
         <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 960 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 780 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                 {[
                   <SortHeader key="n" label="Plan Name" k="name" sort={sort} onSort={toggleSort} />,
                   <SortHeader key="c" label="Plan Code" k="code" sort={sort} onSort={toggleSort} />,
-                  <SortHeader key="dt" label="Device Type" k="deviceType" sort={sort} onSort={toggleSort} />,
-                  <SortHeader key="ft" label="Filter Type" k="filterType" sort={sort} onSort={toggleSort} />,
-                  <SortHeader key="sf" label="Setup Fee" k="setupFee" sort={sort} onSort={toggleSort} />,
-                  <SortHeader key="pr" label="Price" k="price" sort={sort} onSort={toggleSort} />,
-                  <SortHeader key="tt" label="Total" k="total" sort={sort} onSort={toggleSort} />,
-                  "Bill Every", "Billing Interval",
+                  <SortHeader key="sf" label="Deposit Amount" k="setupFee" sort={sort} onSort={toggleSort} />,
+                  <SortHeader key="pr" label="Recharge Amount" k="price" sort={sort} onSort={toggleSort} />,
+                  <SortHeader key="tt" label="Total Amount" k="total" sort={sort} onSort={toggleSort} />,
+                  "Tenure", "Link",
                 ].map((h, idx) => (
                   <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                 ))}
@@ -616,22 +622,22 @@ export function Plans() {
                 <tr key={p.code} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
                   <td style={{ padding: "14px 18px", fontWeight: 600, color: "#0d2119" }}>{p.name}</td>
                   <td style={{ padding: "14px 18px", fontSize: 12, color: "#86868b", whiteSpace: "nowrap" }}>{p.code}</td>
-                  <td style={{ padding: "14px 18px" }}>
-                    <span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap", color: p.deviceType === "Hot & Cold" ? "#986315" : p.deviceType === "Test" ? "#86868b" : "#08805a", background: p.deviceType === "Hot & Cold" ? "rgba(152,99,21,.12)" : p.deviceType === "Test" ? "rgba(134,134,139,.12)" : "rgba(8,128,90,.12)" }}>
-                      {p.deviceType}
-                    </span>
-                  </td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{p.filterType}</td>
                   <td style={{ padding: "14px 18px", color: p.setupFee ? "#0d2119" : "#94a3b8", fontWeight: p.setupFee ? 600 : 400 }}>{p.setupFee ? inr(p.setupFee) : "—"}</td>
                   <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(p.price)}</td>
                   <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(p.total)}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569", textAlign: "center" }}>{p.billEvery}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{p.billingInterval}</td>
+                  <td style={{ padding: "14px 18px", color: "#475569", whiteSpace: "nowrap" }}>{tenureOf(p)}</td>
+                  <td style={{ padding: "14px 18px" }}>
+                    {p.url ? (
+                      <button onClick={() => copyLink(p)} title={p.url} style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 700, padding: "5px 11px", borderRadius: 8, border: "1px solid " + (copiedCode === p.code ? "#08805a" : "rgba(0,0,0,.1)"), background: copiedCode === p.code ? "rgba(8,128,90,.1)" : "#fff", color: copiedCode === p.code ? "#08805a" : "#475569", cursor: "pointer", whiteSpace: "nowrap" }}>
+                        {copiedCode === p.code ? <><Check size={13} /> Copied</> : <><Copy size={13} /> Copy Link</>}
+                      </button>
+                    ) : <span style={{ color: "#94a3b8" }}>—</span>}
+                  </td>
                 </tr>
               ))}
               {sorted.length > 0 && (
                 <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                  <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={4}>Total ({sorted.length})</td>
+                  <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={2}>Total ({sorted.length})</td>
                   <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(sorted.reduce((s, p) => s + (p.setupFee || 0), 0))}</td>
                   <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(sorted.reduce((s, p) => s + (p.price || 0), 0))}</td>
                   <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(sorted.reduce((s, p) => s + (p.total || 0), 0))}</td>

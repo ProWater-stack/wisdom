@@ -25,7 +25,7 @@ import {
 export const MODULE_DOCS = [
   { id: "sales", label: "Sales", summary: "Zoho CRM leads: pipeline, leads & deals, analytics, error correction, apartment leads.", points: ["Live leads via /admin/zoho/get-all-leads (per_page 500)", "Kanban pipeline + full leads table with status filter", "Apartment × lead-status pivot", "Error Correction flags installed leads missing money fields"], source: "/admin/zoho/get-all-leads" },
   { id: "customer", label: "Customer", summary: "Zoho Billing customer accounts, plans and credits.", points: ["Paginated customer list with search", "Editable plan/billing per role", "Grand-total row on plan amount"], source: "/admin/get-all-customers" },
-  { id: "billing", label: "Billing & Subscription", summary: "Subscriptions, invoices, deposits and analytics.", points: ["Subscriptions + invoices from Zoho Billing", "Earned Revenue & Apartment Performance analytics", "Deposits & refunds"], source: "/admin/get-all-subscriptions · /admin/get-all-invoices" },
+  { id: "billing", label: "Billing & Subscription", summary: "Subscriptions, invoices, deposits and analytics.", points: ["Subscriptions + invoices from Zoho Billing", "Earned Revenue & Apartment Performance analytics", "Deposits & refunds", "Plans catalog (live)"], source: "/admin/get-all-subscriptions · /admin/get-all-invoices · /admin/subs-module-get-all-plans" },
   { id: "erp", label: "ERP & Inventory", summary: "Purifier asset lifecycle, cost & depreciation.", points: ["Asset register with book value", "Cost / depreciation totals"], source: "local" },
   { id: "fsm", label: "FSM System", summary: "Field service: technician tracking, AMC, water quality.", points: ["Track technician location", "AMC / maintenance schedule"], source: "local" },
   { id: "iot", label: "IoT Core", summary: "Live device telemetry — pressure, flow, valve state.", points: ["Device monitor with status polling", "Valve + channel telemetry"], source: "AWS IoT API" },
@@ -45,6 +45,7 @@ export const API_USAGE = [
     { m: "GET", path: "/admin/get-all-subscriptions", use: "Subscriptions (Zoho Billing) — Billing" },
     { m: "GET", path: "/admin/get-all-invoices", use: "Invoices (Zoho Billing) — Billing, Analytics, Earned Revenue (customer/plan lookup)" },
     { m: "GET", path: "/admin/get-all-submodules", use: "Subscription term/payment records (Zoho Billing) — Earned Revenue's Start/End-date + Interval enrichment lookup, joined via invoice_id/invoice_number → transaction_id (v2.29.104-106)" },
+    { m: "GET", path: "/admin/subs-module-get-all-plans", use: "Plan catalog (Zoho Billing) — Billing & Subscription · Plans (v2.29.287); falls back to the static PLAN_CATALOG sample data if unreachable" },
     { m: "GET", path: "/admin/get-all-creditnotes", use: "Credit notes / discounts (Zoho Billing) — Analytics · Credits, All Customers" },
     { m: "GET", path: "/admin/zoho/get-all-leads", use: "Zoho CRM leads — Sales, Analytics" },
     { m: "GET", path: "/admin/zoho/get-all-apartments/data", use: "Apartment leads — Sales" },

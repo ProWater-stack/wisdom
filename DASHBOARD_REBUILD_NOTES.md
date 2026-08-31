@@ -12,6 +12,16 @@
 - Added responsive tablet and mobile layouts.
 - Bumped the application version to `2.15.0` and added a changelog entry.
 
+## IoT Module Changes (31 August 2026)
+
+- Removed Pressure and Flow KPI gauge cards from the IoT gauge row — now shows only pH, TDS, Temp, and Tank.
+- Center-aligned all table headers in the Recent Readings, Consumption, and Recent Heartbeats tables.
+- Replaced the cloudy weather bar (solid rect) with a floating multi-layer cloud SVG animation using the `pwCloudFloat` keyframes.
+
+## Documentation
+
+- Updated `src/DOCUMENTATION.md` to reflect APP_VERSION 2.29.286 and corrected TDS unit label from mg/L to ppm throughout.
+
 ## Preserved
 
 All existing authentication, access-control, API, module-routing, module-page, and release-popup logic remains intact.

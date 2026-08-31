@@ -181,7 +181,7 @@ export function iotWeatherNarrative(wxCorr, weather, chrono) {
     if (phMed != null && phMed > 8.5) extra.push("a faint soapy/bitter edge (slightly alkaline)");
     if (tempMed != null && tempMed > 28) extra.push("water feels warm at the tap");
     else if (tempMed != null && tempMed > 25) extra.push("water may feel a bit lukewarm");
-    const taste = `Residents' tap water ${base}${extra.length ? ", with " + extra.join(" and ") : ""}. (Central RO now ~${Math.round(tdsMed)} mg/L TDS, pH ${phMed != null ? phMed.toFixed(1) : "—"}, ~${tempMed != null ? Math.round(tempMed) : "—"} °C.)`;
+    const taste = `Residents' tap water ${base}${extra.length ? ", with " + extra.join(" and ") : ""}. (Central RO now ~${Math.round(tdsMed)} ppm TDS, pH ${phMed != null ? phMed.toFixed(1) : "—"}, ~${tempMed != null ? Math.round(tempMed) : "—"} °C.)`;
     const highLoad = (tdsMed > 300) || (tempMed != null && tempMed > 28);
     const midLoad = (tdsMed > 150) || (tempMed != null && tempMed > 25);
     const purifiers = highLoad
@@ -284,7 +284,7 @@ export function iotTank(tankLevel) {
 export const IOT_WQ_IDEAL = { ph: [6.5, 8.5], tds: [50, 300], temp: [15, 25], pressure: [0, 4], flowMLPM: [0, 3] };
 export const IOT_WQ_META = {
   ph:       { label: "pH Level",    unit: "",     icon: FlaskConical, dp: 1 },
-  tds:      { label: "TDS",         unit: "mg/L", icon: Droplets,     dp: 0 },
+  tds:      { label: "TDS",         unit: "ppm", icon: Droplets,     dp: 0 },
   temp:     { label: "Temperature", unit: "°C",   icon: Thermometer,  dp: 1 },
   pressure: { label: "Pressure",    unit: "bar",  icon: Gauge,        dp: 2 },
   flowMLPM: { label: "Flow rate",   unit: "L/min",icon: Waves,        dp: 2 },
@@ -355,7 +355,7 @@ export function iotDispensedRange(items) {
 }
 // Precise 3-tier water-quality classification (ProWater thresholds).
 //   pH       green 6.5–8.5 · amber 6.0–6.4 / 8.6–9.0 · red <6.0 / >9.0
-//   TDS      green 50–300  · amber 301–500          · red <50 / >500   (mg/L)
+//   TDS      green 50–300  · amber 301–500          · red <50 / >500   (ppm)
 //   Temp     green 15–25   · amber 10–14.9 / 25.1–32 · red <10 / >32    (°C)
 //
 // Pressure/flow are pump-driven, not water-quality metrics: 0 while the pump
@@ -801,7 +801,7 @@ export const IOT_WAVE_COL = { green: "#12a150", amber: "#d1830a", red: "#e0453f"
 export function iotTrendMetrics() {
   return [
     { k: "ph",       label: "pH",          unit: "",      dp: 1, ideal: IOT_WQ_IDEAL.ph,       get: (it) => iotWqNum(it.waterQuality?.ph),       cls: (v) => iotWqClass("ph", v) },
-    { k: "tds",      label: "TDS",         unit: "mg/L",  dp: 0, ideal: IOT_WQ_IDEAL.tds,      get: (it) => iotWqNum(it.waterQuality?.tds),      cls: (v) => iotWqClass("tds", v) },
+    { k: "tds",      label: "TDS",         unit: "ppm",  dp: 0, ideal: IOT_WQ_IDEAL.tds,      get: (it) => iotWqNum(it.waterQuality?.tds),      cls: (v) => iotWqClass("tds", v) },
     { k: "temp",     label: "Temperature", unit: "°C",    dp: 1, ideal: IOT_WQ_IDEAL.temp,     get: (it) => iotWqNum(it.waterQuality?.temp),     cls: (v) => iotWqClass("temp", v) },
     { k: "tank",     label: "Tank level",  unit: "%",     dp: 0, ideal: [50, 100],              get: (it) => iotTank(it.tankLevel).pct,           cls: (v) => iotTankBand(v) },
     { k: "pressure", label: "Pressure",    unit: "bar",   dp: 2, ideal: IOT_WQ_IDEAL.pressure, get: (it) => iotWqNum(it.waterQuality?.pressure), cls: (v) => iotWqClass("pressure", v) },
@@ -979,7 +979,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
     { label: "Time", get: (it) => iotStamp(it.timestamp) },
     { label: "Tank %", get: (it) => iotTank(it.tankLevel).pct },
     { label: "pH", get: (it) => { const v = iotWqNum(it.waterQuality?.ph); return v == null ? "" : v.toFixed(1); } },
-    { label: "TDS (mg/L)", get: (it) => { const v = iotWqNum(it.waterQuality?.tds); return v == null ? "" : Math.round(v); } },
+    { label: "TDS (ppm)", get: (it) => { const v = iotWqNum(it.waterQuality?.tds); return v == null ? "" : Math.round(v); } },
     { label: "Temp (°C)", get: (it) => { const v = iotWqNum(it.waterQuality?.temp); return v == null ? "" : v.toFixed(1); } },
     { label: "Pressure (bar)", get: (it) => { const v = iotWqNum(it.waterQuality?.pressure); return v == null ? "" : v.toFixed(2); } },
     { label: "Flow rate (L/min)", get: (it) => { const v = iotWqNum(it.waterQuality?.flowMLPM); return v == null ? "" : v.toFixed(2); } },
@@ -1000,15 +1000,15 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const WXLVL = { strong: "#0A7D53", moderate: "#a86e00", weak: "#6b8577", none: "#8aa398" };
   const WX_SERIES = [
     { key: "wtemp", oorKey: "oorTemp", label: "Water temp", unit: "°C", color: "#1E9E4F", dp: 1 },
-    { key: "tds", oorKey: "oorTds", label: "TDS", unit: "mg/L", color: "#2A86D6", dp: 0 },
+    { key: "tds", oorKey: "oorTds", label: "TDS", unit: "ppm", color: "#2A86D6", dp: 0 },
     { key: "ph", oorKey: "oorPh", label: "pH", unit: "", color: "#7A5AF8", dp: 1 },
     { key: "tank", oorKey: "oorTank", label: "Tank", unit: "%", color: "#986315", dp: 0 },
   ];
   const wxDot = (s) => (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const bad = payload[s.oorKey]; return <circle key={index} cx={cx} cy={cy} r={bad ? 3.6 : 0} fill={bad ? "#e0453f" : s.color} stroke="#fff" strokeWidth={bad ? 1.2 : 0} />; };
   const bigTT = (props) => {
     const { active, payload } = props; if (!active || !payload || !payload.length) return null; const d = payload[0].payload;
-    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "mg/L" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}{bad ? " · out of range" : ""}</div>;
-    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#1E9E4F")}{row("TDS", d.tds, "mg/L", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}{row("Tank", d.tank, "%", d.oorTank, "#986315")}</div>);
+    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "ppm" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}{bad ? " · out of range" : ""}</div>;
+    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#1E9E4F")}{row("TDS", d.tds, "ppm", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}{row("Tank", d.tank, "%", d.oorTank, "#986315")}</div>);
   };
   // Flashing red ring at timestamps where taste is likely affected (temp+TDS+pH).
   const tasteDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload || !payload.taste) return null; return (<g key={index}><circle cx={cx} cy={cy} r={5} fill="none" stroke="#e0453f" strokeWidth={2}><animate attributeName="r" values="5;9;5" dur="1.1s" repeatCount="indefinite" /><animate attributeName="opacity" values="1;0.15;1" dur="1.1s" repeatCount="indefinite" /></circle><circle cx={cx} cy={cy} r={2.6} fill="#e0453f"><animate attributeName="opacity" values="1;0.25;1" dur="1.1s" repeatCount="indefinite" /></circle></g>); };
@@ -1039,11 +1039,9 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
       {all.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10, padding: "12px 18px 6px" }}>
           <IoTMetricGauge metricKey="ph" label="pH" unit="" value={gaugeVal.ph} active={metric === "ph"} onClick={() => setMetric("ph")} />
-          <IoTMetricGauge metricKey="tds" label="TDS" unit="mg/L" value={gaugeVal.tds} active={metric === "tds"} onClick={() => setMetric("tds")} />
+          <IoTMetricGauge metricKey="tds" label="TDS" unit="ppm" value={gaugeVal.tds} active={metric === "tds"} onClick={() => setMetric("tds")} />
           <IoTMetricGauge metricKey="temp" label="Temp" unit="°C" value={gaugeVal.temp} active={metric === "temp"} onClick={() => setMetric("temp")} />
           <IoTMetricGauge metricKey="tank" label="Tank" unit="%" value={gaugeVal.tank} active={metric === "tank"} onClick={() => setMetric("tank")} />
-          <IoTMetricGauge metricKey="pressure" label="Pressure" unit="bar" value={gaugeVal.pressure} active={metric === "pressure"} onClick={() => setMetric("pressure")} />
-          <IoTMetricGauge metricKey="flowMLPM" label="Flow" unit="L/min" value={gaugeVal.flowMLPM} active={metric === "flowMLPM"} onClick={() => setMetric("flowMLPM")} />
         </div>
       )}
 
@@ -1208,8 +1206,8 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-              {[syncHead, "Tank", "pH", "TDS (mg/L)", "Temp (°C)", "Pressure (bar)", "Flow (L/min)", "Dispensed (L)"].map((h, idx) => (
-                <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: idx === 0 ? "left" : "right", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+              {[syncHead, "Tank", "pH", "TDS (ppm)", "Temp (°C)", "Pressure (bar)", "Flow (L/min)", "Dispensed (L)"].map((h, idx) => (
+                <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -1304,9 +1302,9 @@ export function IoTWeatherCard({ weather }) {
           50% { transform: scale(1.18); opacity: 0.8; }
         }
         @keyframes pwCloudDrift {
-          0% { transform: translateX(30px); opacity: 0.2; }
-          50% { opacity: 0.5; }
-          100% { transform: translateX(-30px); opacity: 0.1; }
+          0% { transform: translate(-14px, 0px); }
+          50% { transform: translate(14px, -5px); }
+          100% { transform: translate(-14px, 0px); }
         }
       `}</style>
 
@@ -1372,8 +1370,40 @@ export function IoTWeatherCard({ weather }) {
         )}
 
         {mode === "cloudy" && (
-          <div style={{ position: "absolute", inset: 0, animation: "pwCloudDrift 8s ease-in-out infinite", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-            <div style={{ width: 85, height: 28, borderRadius: 16, background: "rgba(148,163,184,0.4)" }} />
+          <div style={{ position: "absolute", inset: 0 }}>
+            {/* Soft sun glow peeking behind the cloud deck — most "cloudy"
+                conditions are really "partly cloudy", so a hint of warmth
+                behind the clouds reads truer than flat grey. */}
+            <div style={{
+              position: "absolute", right: 18, top: 6, width: 26, height: 26, borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(251,191,36,0.55) 0%, rgba(245,158,11,0.15) 65%, transparent 100%)",
+              animation: "pwSunPulse 4s ease-in-out infinite", filter: "blur(0.5px)",
+            }} />
+            {/* Layered cloud puffs — each its own size/depth/opacity/timing,
+                same "several independent staggered elements" idea the rain
+                drops use, instead of one flat shape bobbing in place. */}
+            {[
+              { left: "8%", top: "70%", scale: 0.5, opacity: 0.5, dur: "9s", delay: "-3s", tint: "#DCE6EE" },
+              { left: "32%", top: "38%", scale: 0.8, opacity: 0.85, dur: "7s", delay: "-5.5s", tint: "#C7D9E6" },
+              { left: "58%", top: "58%", scale: 0.65, opacity: 0.7, dur: "8s", delay: "-1.5s", tint: "#D3E1EB" },
+              { left: "82%", top: "34%", scale: 1, opacity: 1, dur: "6.5s", delay: "-4s", tint: "#EEF3F7" },
+            ].map((c, idx) => (
+              <div key={idx} style={{
+                position: "absolute", left: c.left, top: c.top,
+                transform: `translate(-50%, -50%) scale(${c.scale})`,
+                opacity: c.opacity,
+                animation: `pwCloudDrift ${c.dur} ease-in-out infinite`,
+                animationDelay: c.delay,
+                filter: "drop-shadow(0 3px 4px rgba(30,60,90,0.10))",
+              }}>
+                <svg width="72" height="40" viewBox="0 0 72 40">
+                  <ellipse cx="18" cy="27" rx="16" ry="11" fill={c.tint} />
+                  <ellipse cx="30" cy="18" rx="14" ry="12" fill={c.tint} />
+                  <ellipse cx="43" cy="22" rx="17" ry="12" fill={c.tint} />
+                  <ellipse cx="55" cy="28" rx="14" ry="10" fill={c.tint} />
+                </svg>
+              </div>
+            ))}
           </div>
         )}
 
@@ -1428,9 +1458,9 @@ export function iotRunAlerts(devices, histByDevice) {
         else if (ph < 6.5 || ph > 8.5) flag("PH_OOR", "pH out of range", "high", ts, `pH ${ph.toFixed(1)}`, "pH outside the ideal 6.5–8.5 band.", "Check dosing and source water.", "Dosing drift or a source-water shift.");
       }
       if (tds != null) {
-        if (tds > 600) flag("TDS_SPIKE", "High TDS contamination spike", "high", ts, `${Math.round(tds)} mg/L`, "TDS above 600 mg/L (BR-TDS-01).", "Divert to waste; check RO membrane / filtration.", "RO membrane breakdown, scaling, or contamination.");
-        else if (tds > 500) flag("TDS_OOR", "TDS out of safe range", "high", ts, `${Math.round(tds)} mg/L`, "TDS above the 500 mg/L safe limit.", "Check filtration / RO membrane.", "Membrane wear or high mineral load.");
-        if (tds < 30) flag("TDS_DROP", "Sudden TDS drop (dilution)", "medium", ts, `${Math.round(tds)} mg/L`, "TDS below 30 mg/L (BR-TDS-02).", "Schedule calibration; check for line breaks.", "Over-purification, dilution, or a disconnected sensor.");
+        if (tds > 600) flag("TDS_SPIKE", "High TDS contamination spike", "high", ts, `${Math.round(tds)} ppm`, "TDS above 600 ppm (BR-TDS-01).", "Divert to waste; check RO membrane / filtration.", "RO membrane breakdown, scaling, or contamination.");
+        else if (tds > 500) flag("TDS_OOR", "TDS out of safe range", "high", ts, `${Math.round(tds)} ppm`, "TDS above the 500 ppm safe limit.", "Check filtration / RO membrane.", "Membrane wear or high mineral load.");
+        if (tds < 30) flag("TDS_DROP", "Sudden TDS drop (dilution)", "medium", ts, `${Math.round(tds)} ppm`, "TDS below 30 ppm (BR-TDS-02).", "Schedule calibration; check for line breaks.", "Over-purification, dilution, or a disconnected sensor.");
       }
       if (tp != null && (tp < 10 || tp > 32)) flag("TEMP_OOR", "Temperature out of range", "high", ts, `${tp.toFixed(1)} °C`, "Water temperature beyond 10–32 °C.", "Inspect heat source / ambient exposure.", "Heat-exchanger fault, solar heating, or cold influx.");
       if (prev) {
@@ -1471,7 +1501,7 @@ export function iotAnomalyEvents(devices, histByDevice) {
       const ts = new Date(it.timestamp).getTime();
       const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp), tank = iotTank(it.tankLevel).pct;
       if (ph != null) { if (ph < 6.0 || ph > 9.0) events.push(mk(d.deviceId, "PH_CRIT", "Critical pH out of bounds", "critical", ts, `pH ${ph.toFixed(1)}`, "pH beyond the safe 6.0–9.0 band (BR-PH-01).", "Emergency: divert flow, inspect chemical dosing.", "Dosing failure or acid/alkali intrusion.")); else if (ph < 6.5 || ph > 8.5) events.push(mk(d.deviceId, "PH_OOR", "pH out of range", "high", ts, `pH ${ph.toFixed(1)}`, "pH outside the ideal 6.5–8.5 band.", "Check dosing and source water.", "Dosing drift or a source-water shift.")); }
-      if (tds != null) { if (tds > 600) events.push(mk(d.deviceId, "TDS_SPIKE", "High TDS contamination spike", "high", ts, `${Math.round(tds)} mg/L`, "TDS above 600 mg/L (BR-TDS-01).", "Divert to waste; check RO membrane / filtration.", "RO membrane breakdown, scaling, or contamination.")); else if (tds > 500) events.push(mk(d.deviceId, "TDS_OOR", "TDS out of safe range", "high", ts, `${Math.round(tds)} mg/L`, "TDS above the 500 mg/L safe limit.", "Check filtration / RO membrane.", "Membrane wear or high mineral load.")); if (tds < 30) events.push(mk(d.deviceId, "TDS_DROP", "Sudden TDS drop (dilution)", "medium", ts, `${Math.round(tds)} mg/L`, "TDS below 30 mg/L (BR-TDS-02).", "Schedule calibration; check for line breaks.", "Over-purification, dilution, or a disconnected sensor.")); }
+      if (tds != null) { if (tds > 600) events.push(mk(d.deviceId, "TDS_SPIKE", "High TDS contamination spike", "high", ts, `${Math.round(tds)} ppm`, "TDS above 600 ppm (BR-TDS-01).", "Divert to waste; check RO membrane / filtration.", "RO membrane breakdown, scaling, or contamination.")); else if (tds > 500) events.push(mk(d.deviceId, "TDS_OOR", "TDS out of safe range", "high", ts, `${Math.round(tds)} ppm`, "TDS above the 500 ppm safe limit.", "Check filtration / RO membrane.", "Membrane wear or high mineral load.")); if (tds < 30) events.push(mk(d.deviceId, "TDS_DROP", "Sudden TDS drop (dilution)", "medium", ts, `${Math.round(tds)} ppm`, "TDS below 30 ppm (BR-TDS-02).", "Schedule calibration; check for line breaks.", "Over-purification, dilution, or a disconnected sensor.")); }
       if (tp != null && (tp < 10 || tp > 32)) events.push(mk(d.deviceId, "TEMP_OOR", "Temperature out of range", "high", ts, `${tp.toFixed(1)} °C`, "Water temperature beyond 10–32 °C.", "Inspect heat source / ambient exposure.", "Heat-exchanger fault, solar heating, or cold influx."));
       if (prev) { const gapMin = (ts - prev.ts) / 60000; if (gapMin > 0 && gapMin <= 15) {
         if (ph != null && prev.ph != null && Math.abs(ph - prev.ph) > 0.8) events.push(mk(d.deviceId, "PH_DRIFT", "pH rapid drift", "high", ts, `Δ${(ph - prev.ph).toFixed(1)} in ${Math.round(gapMin)}m`, "pH moved > 0.8 within minutes (BR-PH-02).", "Flag chemical-dosing failure; inspect feed pumps.", "Dosing-pump failure."));
@@ -1748,7 +1778,7 @@ function IoTDiurnalDemandChart({ avgTds = 28, avgPh = 7.4, style = {} }) {
           <span style={{ color: "#08805A", background: "rgba(8,128,90,0.12)", padding: "4px 9px", borderRadius: 999 }}>Morning: 06:00 – 11:59</span>
           <span style={{ color: "#D97706", background: "rgba(245,158,11,0.14)", padding: "4px 9px", borderRadius: 999 }}>Afternoon: 12:00 – 17:59</span>
           <span style={{ color: "#0284C7", background: "rgba(2,132,199,0.12)", padding: "4px 9px", borderRadius: 999 }}>Evening: 18:00 – 23:59</span>
-          <span style={{ color: "#08805A", background: "rgba(8,128,90,0.12)", padding: "4px 9px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4 }}>🧪 Avg TDS: <strong style={{ color: "#08805A" }}>{avgTds} mg/L</strong></span>
+          <span style={{ color: "#08805A", background: "rgba(8,128,90,0.12)", padding: "4px 9px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4 }}>🧪 Avg TDS: <strong style={{ color: "#08805A" }}>{avgTds} ppm</strong></span>
           <span style={{ color: "#0284C7", background: "rgba(2,132,199,0.12)", padding: "4px 9px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4 }}>💧 Avg pH: <strong style={{ color: "#0284C7" }}>{avgPh}</strong></span>
         </div>
       </div>
@@ -1769,7 +1799,7 @@ function IoTDiurnalDemandChart({ avgTds = 28, avgPh = 7.4, style = {} }) {
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,0.06)", fontSize: 12, color: "#86868B", flexWrap: "wrap", gap: 8 }}>
         <span>24h Total Draw: <strong style={{ color: "#1D1D1F" }}>{total24h} Liters</strong></span>
         <span>Peak Flow: <strong style={{ color: "#08805A" }}>48 L/h (08:00 AM)</strong></span>
-        <span>Avg TDS: <strong style={{ color: "#08805A" }}>{avgTds} mg/L</strong> (Optimal Pure)</span>
+        <span>Avg TDS: <strong style={{ color: "#08805A" }}>{avgTds} ppm</strong> (Optimal Pure)</span>
         <span>Avg pH: <strong style={{ color: "#0284C7" }}>{avgPh} pH</strong> (Balanced Neutral)</span>
       </div>
     </div>
@@ -1909,6 +1939,15 @@ export function IoTDevices() {
   // short live window if the ~62-day fetch hasn't landed yet).
   const dispensedItems = useMemo(() => iotFilterByRange(histRangeByDevice[selected] ?? wqItems, range), [histRangeByDevice, selected, wqItems, range]);
   const dispensed = useMemo(() => iotDispensedRange(dispensedItems), [dispensedItems]);
+  // Dispensed Today (v2.29.298) — deliberately independent of the shared
+  // `range` toggle above (which the Tank panel/Trend charts also read): this
+  // always means literally today, calendar-fixed, regardless of whatever
+  // period the rest of the page is currently showing. `windowDelta` is the
+  // actual litres dispensed within that fixed "today" window; `.total` (the
+  // lifetime counter's latest reading) is identical to `dispensed.total`
+  // either way, so it's reused rather than recomputed.
+  const todayDispensedItems = useMemo(() => iotFilterByRange(histRangeByDevice[selected] ?? wqItems, "today"), [histRangeByDevice, selected, wqItems]);
+  const todayDispensed = useMemo(() => iotDispensedRange(todayDispensedItems), [todayDispensedItems]);
 
   const history = historyByDevice[selected] ?? []; // newest-first
   const chrono = useMemo(() => [...history].reverse(), [history]); // oldest-first, for time-series charts
@@ -1986,10 +2025,6 @@ export function IoTDevices() {
     return out;
   })();
 
-  // Fleet health macro metrics
-  const fleetUptime = devices.length ? Math.round((online / devices.length) * 1000) / 10 : 100;
-  const avgPressure = devices.length ? (devices.reduce((s, d) => s + parseFloat(d.payload?.inputPressure || 0), 0) / devices.length).toFixed(1) : "0.0";
-
   const exportTelemetryCsv = () => {
     if (!history || !history.length) return;
     exportToCsv(`telemetry-${selected || "device"}.csv`, [
@@ -2010,32 +2045,14 @@ export function IoTDevices() {
         @media(max-width:900px){.iot-grid{grid-template-columns:1fr!important}.iot-tankwq{grid-template-columns:1fr!important}}
         @keyframes iotFlowPulse{0%,100%{opacity:.35}50%{opacity:1}}
         .iot-flow-dot{animation:iotFlowPulse 1.1s ease-in-out infinite}
-        @media(prefers-reduced-motion:reduce){.iot-flow-dot{animation:none}}
+        @keyframes pwDropBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+        @keyframes pwDropRipple{0%{transform:scale(0.4);opacity:0.6}100%{transform:scale(2);opacity:0}}
+        @media(prefers-reduced-motion:reduce){.iot-flow-dot{animation:none}.pw-drop-bounce,.pw-drop-ripple{animation:none!important}}
         ${IOT_TANK_CSS}
       `}</style>
 
       {/* Fleet Macro Health & Weather Banner */}
       <IoTWeatherCard weather={weather} />
-
-      {/* Fleet Macro Uptime Strip (Point 1) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 14, marginBottom: 16, background: "rgba(243,248,236,.6)", padding: "14px 18px", borderRadius: 18, border: "1px solid rgba(8,128,90,0.15)" }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Fleet Uptime</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{fleetUptime}%</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Avg Line Pressure</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", marginTop: 2 }}>{avgPressure} <span style={{ fontSize: 13, color: "#86868B" }}>bar</span></div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Active Monitored Fleet</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{online}/{devices.length} <span style={{ fontSize: 12, color: "#86868B" }}>online</span></div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Active Fault Alerts</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: faulty > 0 ? "#986315" : "#08805A", marginTop: 2 }}>{faulty}</div>
-        </div>
-      </div>
 
       {err && <ApiError msg={err} />}
       {toast && <div style={{ ...toastStyle, background: "#DC4141" }}><AlertCircle size={16} /> {toast}</div>}
@@ -2103,6 +2120,32 @@ export function IoTDevices() {
           </div>
         );
 
+        // Fills the empty space the Water Quality card was left with after
+        // the Hydraulics & Pressure card below it was removed (v2.29.286) —
+        // shows Dispensed Today (a fixed calendar-today window, independent
+        // of the shared range toggle elsewhere on this page). "Total
+        // dispensed" was dropped per explicit user feedback — it's already
+        // shown in the Tank panel card, right next to this one, so repeating
+        // it here was pure duplication. A small bouncing-droplet + expanding-
+        // ripple animation (reusing the already-imported `Droplets` icon)
+        // sits next to the number, per explicit user request for "some
+        // animation" here — same water-themed motif as the rain drops/
+        // cloud drift elsewhere in this module.
+        const dispensedExtra = isTank ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ position: "relative", display: "grid", placeItems: "center", width: 34, height: 34, flex: "0 0 auto" }}>
+              <span className="pw-drop-ripple" style={{ position: "absolute", width: 20, height: 20, borderRadius: "50%", border: "2px solid #08805A", animation: "pwDropRipple 1.8s ease-out infinite" }} />
+              <Droplets size={18} color="#08805A" className="pw-drop-bounce" style={{ position: "relative", zIndex: 1, animation: "pwDropBounce 1.4s ease-in-out infinite" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)" }}>Dispensed today</div>
+              <div className="serif" style={{ fontSize: 24, fontWeight: 800, color: "var(--f)", marginTop: 3, lineHeight: 1 }}>
+                {todayDispensed ? todayDispensed.windowDelta.toFixed(2) : "0.00"} <span style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)" }}>L</span>
+              </div>
+            </div>
+          </div>
+        ) : null;
+
         return (
           <div className="iot-monitor-grid" style={{ display: "grid", gridTemplateColumns: "230px minmax(340px, 520px) minmax(280px, 1fr)", gap: 16, alignItems: "stretch" }}>
             {deviceListCard}
@@ -2115,11 +2158,7 @@ export function IoTDevices() {
 
             <div style={{ ...IOT_CARD, padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               {isTank ? (
-                <>
-                  <IoTWaterQualityCard range={wqRange} title="Water Quality & Potability" subtitle="Live tank sensors" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
-                  <div style={{ margin: "14px 0", borderTop: "1px solid rgba(0,0,0,0.06)" }} />
-                  <IoTWaterQualityCard range={wqRange} keys={["pressure", "flowMLPM"]} title="Hydraulics & Pressure" subtitle="Line pressure & dispense flow rate" style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
-                </>
+                <IoTWaterQualityCard range={wqRange} title="Water Quality & Potability" subtitle="Live tank sensors" extra={dispensedExtra} style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
               ) : (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
@@ -2176,7 +2215,7 @@ export function IoTDevices() {
                   <thead>
                     <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                       {["12-hour block (IST)", ...cids, "Total"].map((h, idx) => (
-                        <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: idx === 0 ? "left" : "right", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                        <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -2226,7 +2265,7 @@ export function IoTDevices() {
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
                   {["Device Heartbeat", ...chanIds.map(id => `${id} · Total Vol`), "Fault / Anomaly"].map((h, idx) => (
-                    <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: idx === 0 ? "left" : idx === chanIds.length + 1 ? "left" : "right", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                    <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>

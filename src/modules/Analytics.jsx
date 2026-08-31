@@ -22,7 +22,7 @@ import {
 } from "recharts";
 import {
   useAuth, api, apartmentApi, billingApi, creditNoteApi, customerApi,
-  authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer, PLAN_CATALOG,
+  authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer, SEED_PLANS,
   dmy, endOfDay, exportToCsv, fetchAllDpTransactions, fmtDate, fmtPhone,
   fmtTime, inr, isoDay, isRealSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
@@ -3105,9 +3105,9 @@ export function EarnedRevenue() {
   const [search, setSearch] = useState(""); // per-invoice table search (customer / mobile / apartment)
   useEffect(() => {
     api.logView(user.username, "Viewed Earned Revenue");
-    Promise.all([billingApi.getInvoices(), billingApi.getSubscriptions(), billingApi.getSubmodules().catch(() => []), customerApi.getCustomers().catch(() => [])])
-      .then(([inv, subs, mods, cust]) => setData({ inv, subs, mods, cust }))
-      .catch(() => setData({ inv: [], subs: [], mods: [], cust: [] }));
+    Promise.all([billingApi.getInvoices(), billingApi.getSubscriptions(), billingApi.getSubmodules().catch(() => []), customerApi.getCustomers().catch(() => []), billingApi.getPlans().catch(() => [...SEED_PLANS]), creditNoteApi.getCreditNotes().catch(() => [])])
+      .then(([inv, subs, mods, cust, plans, creditNotes]) => setData({ inv, subs, mods, cust, plans, creditNotes }))
+      .catch(() => setData({ inv: [], subs: [], mods: [], cust: [], plans: [], creditNotes: [] }));
   }, []);
   if (!data) return <Loading title="Loading Earned Revenue" subtitle="Synchronizing recognized revenue data…" />;
 
@@ -3136,13 +3136,38 @@ export function EarnedRevenue() {
   const modByTxnId = {}, modByNumber = {};
   data.mods.forEach(m => { if (m.id) modByTxnId[m.id] = m; if (m.number) modByNumber[m.number] = m; });
 
-  // Deposit/Recharge plan-catalog lookup (v2.29.280) — per explicit user
-  // request, confirmed against a real example: invoice INV-000706 (₹2,399
-  // total, plan "ProWater Advance"/pro_advance) was showing Deposit ₹0 /
-  // Recharge ₹2,399 because its plan_code never matched PLAN_CATALOG's
-  // exact-code-only lookup; the catalog entry for that plan is Setup Fee
-  // ₹2,000 / Price ₹399 (₹2,000+₹399=₹2,399, confirming the match), so it
-  // should read Deposit ₹2,000 / Recharge ₹399 instead.
+  // Credit column (v2.29.292, real credit-note number v2.29.293) — indexes
+  // GET /admin/get-all-creditnotes by the invoice number(s) it was applied
+  // to (a credit note can carry its link either as a top-level
+  // invoice_number or inside an invoices_applied array — see mapCreditNote).
+  // A given invoice number maps to at most one credit note in practice; if
+  // more than one somehow matched, the last one wins (harmless — this is a
+  // display enrichment, not the underlying Deposit/Recharge math).
+  const creditByInvoiceNumber = {};
+  (data.creditNotes || []).forEach(cn => {
+    [cn.invoiceNumber, ...(cn.invoicesApplied || [])].filter(Boolean).forEach(num => { creditByInvoiceNumber[num] = cn; });
+  });
+  // Fallback match: customer + exact amount (v2.29.294) — confirmed via real
+  // live data that invoice_number/invoices_applied come back empty on every
+  // credit note, so creditByInvoiceNumber above never actually matches
+  // anything live (kept anyway — harmless, and starts working for free if
+  // the feed is ever fixed upstream). Per explicit user decision: among a
+  // customer's own credit notes, prefer the one whose actually-applied
+  // amount (totalCreditsUsed, falling back to the note's own total) exactly
+  // equals the invoice's total — the strongest signal available without a
+  // real invoice link, and safer than picking a customer's most recent note
+  // regardless of amount (which could easily be the wrong one when a
+  // customer has several notes).
+  const creditsByCustomer = {};
+  (data.creditNotes || []).forEach(cn => { if (cn.zohoCustomerId) (creditsByCustomer[cn.zohoCustomerId] ||= []).push(cn); });
+
+  // Deposit/Recharge plan lookup (v2.29.280, live-wired v2.29.289) — per
+  // explicit user request, confirmed against a real example: invoice
+  // INV-000706 (₹2,399 total, plan "ProWater Advance"/pro_advance) was
+  // showing Deposit ₹0 / Recharge ₹2,399 because its plan_code never matched;
+  // the correct plan has Setup Fee ₹2,000 / Recurring Price ₹399
+  // (₹2,000+₹399=₹2,399, confirming the match), so it should read Deposit
+  // ₹2,000 / Recharge ₹399 instead.
   //
   // Deliberately a LOCAL helper, not a change to the shared `planInfo`/
   // `depositForCustomer` in shared/core.js — those two are also called by
@@ -3162,38 +3187,37 @@ export function EarnedRevenue() {
   // total stays Recharge, same convention the rest of the app already uses.
   //
   // v2.29.283 — real-world case found via the Plan Code column added above:
-  // Kavitha Dhinesh's invoice (₹2,399 total) has plan_code "STANDARD_1M_399"
-  // in OUR OWN API data, which IS a real, valid, zero-deposit catalog entry
-  // (setupFee ₹0, total ₹399) — a genuinely different plan from the
-  // deposit-bearing "STANDARD_1M_399_SD" (setupFee ₹2,000, total ₹2,399) her
-  // ACTUAL Zoho invoice line item shows. Exact-code matching alone can't
-  // tell these apart — both codes are real catalog entries, and picking the
-  // wrong one isn't a matching bug, it's ambiguous input (our backend's
-  // plan_code for this invoice/subscription doesn't reflect what Zoho's own
-  // invoice says — a data-sync issue upstream of this dashboard, not
-  // something fixable here). But we DO know the invoice's own real total,
-  // and every PLAN_CATALOG entry carries its own expected Total — so among
-  // every candidate plan sharing this code OR this name, prefer whichever
-  // one's Total exactly equals what was actually charged. For Kavitha's
-  // invoice: candidates sharing the name "STANDARD" include both
-  // STANDARD_1M_399 (Total ₹399) and STANDARD_1M_399_SD (Total ₹2,399) —
-  // only the latter matches the real ₹2,399 charged, so that's the one
-  // used, regardless of which one the plan_code field pointed at.
+  // some invoices' plan_code is a real, valid, but WRONG-variant catalog
+  // entry for that specific invoice (a data-sync issue between our backend
+  // and Zoho, not fixable here) — e.g. a zero-deposit plan code on an
+  // invoice whose real line item is actually the deposit-bearing sibling
+  // variant. Exact-code matching alone can't tell these apart when two
+  // plans share the same display NAME. But we DO know the invoice's own
+  // real total, and every plan carries its own expected Total (setup_fee +
+  // recurring_price) — so among every candidate plan sharing this code OR
+  // this name, prefer whichever one's Total exactly equals what was
+  // actually charged, regardless of which one the plan_code field pointed at.
+  //
+  // v2.29.289 — per explicit user request, the lookup now reads live plan
+  // records from `billingApi.getPlans()` (GET /admin/subs-module-get-all-plans,
+  // same source as Billing & Subscription > Plans) instead of the static
+  // PLAN_CATALOG constant, falling back to SEED_PLANS (PLAN_CATALOG reshaped)
+  // when the live fetch is unreachable — same fallback the Plans page uses,
+  // so a dead API leaves this lookup working exactly as it did before.
   const lookupPlanEntry = (code, name, amount) => {
     const c = String(code || "").trim().toLowerCase();
     const n = String(name || "").trim().toLowerCase();
     if (!c && !n) return null;
-    const entries = Object.entries(PLAN_CATALOG); // [code, planObj][]
-    const codeMatch = c && entries.find(([k]) => k.toLowerCase() === c);
-    const candidates = entries
-      .filter(([k, v]) => (c && k.toLowerCase() === c) || (n && String(v.name || "").trim().toLowerCase() === n))
-      .map(([, v]) => v);
+    const plans = (data.plans && data.plans.length) ? data.plans : SEED_PLANS;
+    const codeMatch = c && plans.find(v => String(v.code || "").trim().toLowerCase() === c);
+    const candidates = plans.filter(v =>
+      (c && String(v.code || "").trim().toLowerCase() === c) || (n && String(v.name || "").trim().toLowerCase() === n));
     if (!candidates.length) return null;
     const totalMatch = candidates.find(v => (v.total || 0) === amount);
     // No candidate's Total matches the real invoice amount (e.g. a partial
     // payment) — fall back to the exact code match if there is one, else
     // just the first name match (original priority order).
-    return totalMatch || (codeMatch ? codeMatch[1] : candidates[0]);
+    return totalMatch || (codeMatch || candidates[0]);
   };
 
   const rows = data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).map(i => {
@@ -3225,10 +3249,23 @@ export function EarnedRevenue() {
     const modStart = modMatch?.termStart ? startOfDay(new Date(modMatch.termStart)) : null;
     const modEnd = modMatch?.termEnd ? startOfDay(new Date(modMatch.termEnd)) : null;
     // Interval (v2.29.105) — billing cadence straight off the submodule match
-    // (e.g. "1 month" / "3 months" / "1 year"); "—" when there's no match.
+    // (e.g. "1 month" / "3 months" / "1 year").
+    //
+    // v2.29.290 — per explicit user report: this showed "—" for plenty of
+    // real invoices even though the exact same plan_code correctly shows a
+    // Tenure elsewhere (e.g. prowater_mineral_monthly → "1 months" on
+    // Billing & Subscription > Plans) — the submodule feed simply doesn't
+    // have a match for every invoice, and until now there was no fallback at
+    // all when it didn't. `planEntry` (the same live-plans match already
+    // used for Deposit/Recharge above) carries its own billEvery/
+    // billingInterval, sourced from the identical live API's interval/
+    // interval_unit fields — so when the submodule match is missing, fall
+    // back to the matched plan's own tenure instead of a bare dash.
     const intervalLabel = (modMatch?.intervalCount != null && modMatch.intervalUnit)
       ? `${modMatch.intervalCount} ${modMatch.intervalCount === 1 ? modMatch.intervalUnit.replace(/s$/, "") : modMatch.intervalUnit}`
-      : null;
+      : (planEntry && planEntry.billEvery && planEntry.billingInterval)
+        ? `${planEntry.billEvery} ${planEntry.billEvery === 1 ? String(planEntry.billingInterval).replace(/s$/, "") : planEntry.billingInterval}`
+        : null;
     const fallbackDue = i.dueDate ? startOfDay(new Date(i.dueDate)) : null;
     const fallbackDueValid = fallbackDue && !isNaN(fallbackDue.getTime());
     // Start Date is shown for reference only (v2.29.107) — it no longer feeds
@@ -3280,7 +3317,36 @@ export function EarnedRevenue() {
       : 0;
     const remainingDaysEarned = tenureDays > 0 ? (recharge * remainingDays) / tenureDays : 0;
     const remainingMonthEarned = earnedPerMonth * remainingMonths;
-    return { invoiceId: i.id || "—", invoiceNumber: i.number || "—", referenceNumber: i.referenceNumber || "—", paymentMode: i.paymentMode || "—", customer: i.customerName || "—", phone: custOf(i)?.phone || "", society: societyOf(i), plan, planCode, planMatched: !!planEntry, total, deposit, recharge, months, intervalLabel, earnedPerMonth,
+    // Credit column (v2.29.292, real credit-note number v2.29.293) — per
+    // explicit user domain knowledge: a blank Reference Number on an invoice
+    // means a credit was applied to it in Zoho (a real invoice can be
+    // fully/partially settled by a credit note rather than a payment
+    // reference), so a missing reference number is a reliable signal, not a
+    // data-quality gap. Read from the RAW invoice field, not
+    // `referenceNumber` below — that field already defaults to "—" for
+    // display, which would make every row look credited.
+    const creditApplied = !i.referenceNumber;
+    // When a credit IS implied, look up the specific note so the column can
+    // show the real creditnote_number (e.g. "CN-00014") instead of just
+    // "Yes". Two strategies, in order: (1) the explicit invoice link
+    // (creditByInvoiceNumber — works if the feed ever populates
+    // invoice_number/invoices_applied; confirmed live it currently doesn't),
+    // (2) per explicit user decision, among this customer's OWN credit
+    // notes, the one whose actually-applied amount exactly matches this
+    // invoice's total. Falls back to the generic "Yes" when neither finds a
+    // confident match — showing a guessed/wrong note would be worse.
+    let creditNoteNumber = "";
+    if (creditApplied) {
+      if (i.number && creditByInvoiceNumber[i.number]) {
+        creditNoteNumber = creditByInvoiceNumber[i.number].number;
+      } else {
+        const custId = i.zohoCustomerId || i.zohoId || "";
+        const candidates = custId ? (creditsByCustomer[custId] || []) : [];
+        const exact = candidates.find(cn => Math.abs((cn.totalCreditsUsed ?? cn.amount ?? 0) - total) < 0.01);
+        if (exact) creditNoteNumber = exact.number;
+      }
+    }
+    return { invoiceId: i.id || "—", invoiceNumber: i.number || "—", referenceNumber: i.referenceNumber || "—", creditApplied, creditNoteNumber, paymentMode: i.paymentMode || "—", customer: i.customerName || "—", phone: custOf(i)?.phone || "", society: societyOf(i), plan, planCode, planMatched: !!planEntry, total, deposit, recharge, months, intervalLabel, earnedPerMonth,
       payDay: pd, dueDay: dueValid ? dd : null, nextBillDay: nbValid ? nb : null, tenureDays, daysInPaidMonth, earnedRevenue,
       remainingDays, remainingMonths, remainingDaysEarned, remainingMonthEarned };
   });
@@ -3339,9 +3405,9 @@ export function EarnedRevenue() {
 
   const exportCsv = () => exportToCsv(`prowater-earned-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
     { label: "Invoice #", get: r => r.invoiceNumber }, { label: "Invoice ID", get: r => r.invoiceId },
-    { label: "Reference Number", get: r => r.referenceNumber }, { label: "Payment Mode", get: r => r.paymentMode },
-    { label: "Customer", get: r => r.customer }, { label: "Apartment", get: r => r.society }, { label: "Plan", get: r => r.plan },
-    { label: "Plan Code", get: r => r.planCode }, { label: "Matched in Plan Catalog", get: r => r.planMatched ? "Yes" : "No" },
+    { label: "Reference Number", get: r => r.referenceNumber }, { label: "Credit", get: r => r.creditApplied ? (r.creditNoteNumber || "Yes") : "(-)" }, { label: "Payment Mode", get: r => r.paymentMode },
+    { label: "Customer", get: r => r.customer }, { label: "Mobile Number", get: r => r.phone }, { label: "Apartment", get: r => r.society }, { label: "Plan", get: r => r.plan },
+    { label: "Plan Code", get: r => r.planCode }, { label: "Matched in Plan List", get: r => r.planMatched ? "Yes" : "No" },
     { label: "Start Date", get: r => r.dueDay ? fmtDate(r.dueDay) : "" },
     { label: "Paid on", get: r => (r.payDay && !isNaN(r.payDay.getTime())) ? fmtDate(r.payDay) : "" },
     { label: "End Date", get: r => r.nextBillDay ? fmtDate(r.nextBillDay) : "" },
@@ -3350,7 +3416,6 @@ export function EarnedRevenue() {
     { label: "Earned/month", get: r => r.earnedPerMonth },
     { label: "Tenure days", get: r => r.tenureDays ?? "" },
     { label: "Earned revenue", get: r => r.earnedRevenue.toFixed(2) },
-    { label: "Remaining Month", get: r => r.remainingMonths },
     { label: "Remaining Days", get: r => r.remainingDays },
     { label: "Remaining Days Earned Total Revenue", get: r => r.remainingDaysEarned.toFixed(2) },
     { label: "Remaining Month Earned Total Revenue", get: r => r.remainingMonthEarned.toFixed(2) },
@@ -3368,6 +3433,7 @@ export function EarnedRevenue() {
   const searchDigits = search.replace(/\D/g, "");
   const tableRows = searchQ
     ? sortedRows.filter(r => (r.customer || "").toLowerCase().includes(searchQ) || (r.society || "").toLowerCase().includes(searchQ)
+        || (r.referenceNumber || "").toLowerCase().includes(searchQ) || (r.invoiceNumber || "").toLowerCase().includes(searchQ)
         || (searchDigits && (r.phone || "").replace(/\D/g, "").includes(searchDigits)))
     : sortedRows;
   const visTotal = tableRows.reduce((a, r) => ({
@@ -3480,7 +3546,7 @@ export function EarnedRevenue() {
       </div>
 
       <div style={{ marginTop: 18 }}>
-        <Toolbar q={search} setQ={setSearch} placeholder="Search customer, mobile number or apartment…" count={tableRows.length} />
+        <Toolbar q={search} setQ={setSearch} placeholder="Search customer, mobile number, apartment, invoice # or reference number…" count={tableRows.length} />
         <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.4)" }}>
             <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Per-Invoice Recognition</div>
@@ -3490,7 +3556,7 @@ export function EarnedRevenue() {
             <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 1200 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                  {["Invoice #", "Reference Number", "Customer", "Apartment", "Plan"].map(h => (
+                  {["Invoice #", "Reference Number", "Credit", "Customer", "Mobile Number", "Apartment", "Plan"].map(h => (
                     <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                   ))}
                   <th style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>
@@ -3520,7 +3586,7 @@ export function EarnedRevenue() {
                       Earned Revenue {sort.key === "earned" ? (sort.dir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={12} style={{ opacity: 0.5 }} />}
                     </button>
                   </th>
-                  {["Remaining Month", "Remaining Days", "Remaining Days Earned Total Revenue", "Remaining Month Earned Total Revenue"].map(h => (
+                  {["Remaining Days", "Remaining Days Earned Total Revenue", "Remaining Month Earned Total Revenue"].map(h => (
                     <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                   ))}
                 </tr>
@@ -3530,7 +3596,9 @@ export function EarnedRevenue() {
                   <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", background: r.deposit > 0 ? "rgba(255,149,0,.04)" : undefined }}>
                     <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", fontWeight: 600, color: "#0d2119" }}>{r.invoiceNumber}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", color: "#86868b" }}>{r.referenceNumber}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, fontWeight: r.creditApplied ? 700 : 400, color: r.creditApplied ? "#08805a" : "#94a3b8" }}>{r.creditApplied ? (r.creditNoteNumber || "Yes") : "(-)"}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap" }}>{r.customer}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{r.phone ? fmtPhone(r.phone) : "—"}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{r.society}</td>
                     {/* Plan column (v2.29.281) — added per explicit user report that
                         a real invoice (Kavitha Dhinesh, ₹2,399) still showed Deposit
@@ -3543,14 +3611,14 @@ export function EarnedRevenue() {
                         it's obvious at a glance which rows fell back to the old
                         depositForCustomer() estimate instead of a real catalog hit. */}
                     <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap" }}
-                      title={`Plan code: ${r.planCode || "(blank)"}${r.planMatched ? " — matched in Plan Catalog" : " — NOT found in Plan Catalog (by code or name)"}`}>
+                      title={`Plan code: ${r.planCode || "(blank)"}${r.planMatched ? " — matched in the live plan list" : " — NOT found in the live plan list (by code or name)"}`}>
                       <span style={r.planMatched ? { color: "#475569" } : { color: "#986315", textDecoration: "underline dashed", textUnderlineOffset: 3 }}>
                         {r.plan}
                       </span>
                       {/* Plan Code shown directly, not just in the hover tooltip —
                           per explicit user request ("add the plan code also
                           instead of plan") — this is the exact string
-                          lookupPlanEntry() searches PLAN_CATALOG for. */}
+                          lookupPlanEntry() searches the live plan list for. */}
                       <div style={{ fontSize: 10.5, fontFamily: "ui-monospace,monospace", color: "#94a3b8", marginTop: 2 }}>
                         {r.planCode || "(blank)"}
                       </div>
@@ -3565,7 +3633,6 @@ export function EarnedRevenue() {
                     <td style={{ padding: "14px 18px", color: "#475569" }}>{inr(r.earnedPerMonth)}</td>
                     <td style={{ padding: "14px 18px", color: "#475569" }}>{r.tenureDays ?? "—"}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(r.earnedRevenue))}</td>
-                    <td style={{ padding: "14px 18px", color: "#475569" }}>{r.remainingMonths}</td>
                     <td style={{ padding: "14px 18px", color: "#475569" }}>{r.remainingDays}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 600, color: r.remainingDaysEarned ? "#08805a" : "#86868b" }}>{r.remainingDaysEarned ? inr(Math.round(r.remainingDaysEarned)) : "—"}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 600, color: r.remainingMonthEarned ? "#08805a" : "#86868b" }}>{r.remainingMonthEarned ? inr(Math.round(r.remainingMonthEarned)) : "—"}</td>
@@ -3573,7 +3640,7 @@ export function EarnedRevenue() {
                 ))}
                 {tableRows.length > 0 && (
                   <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={8}>Total ({tableRows.length})</td>
+                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={10}>Total ({tableRows.length})</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(visTotal.total)}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700 }}>{inr(visTotal.deposit)}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(visTotal.recharge)}</td>
@@ -3581,7 +3648,6 @@ export function EarnedRevenue() {
                     <td style={{ padding: "14px 18px" }}></td>
                     <td style={{ padding: "14px 18px" }}></td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(visTotal.earned))}</td>
-                    <td style={{ padding: "14px 18px" }}></td>
                     <td style={{ padding: "14px 18px" }}></td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(visTotal.remDaysEarned))}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(Math.round(visTotal.remMonthEarned))}</td>
