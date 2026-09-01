@@ -566,7 +566,7 @@ export const TAB_SOURCES = {
   // Customer — every sub-tab reads the customers feed only.
   cust_list: ["customers"], cust_all: ["customers"], cust_societies: ["customers"],
   // Billing & Subscription — differs per tab.
-  bill_overview: ["subscriptions", "invoices"], bill_subs: ["subscriptions"],
+  bill_subs: ["subscriptions"],
   bill_invoices: ["invoices"], bill_deposits: ["subscriptions"], bill_plans: ["plans"],
   // Analytics — wildly different data needs per tab; this is the module where the
   // blanket gate was most visibly wrong (12 sub-tabs sharing one 4-source lock).
@@ -785,9 +785,26 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.299";
+export const APP_VERSION = "2.29.316";
 export const VERSION_DATE = "2026-08-31";
 export const VERSION_HISTORY = [
+  { v: "2.29.316", note: "Billing & Subscription: Removed the 'Overview' Tab (`BillingOverview`) Entirely, per explicit user request. Deleted the component (`src/modules/Billing.jsx` — KPI cards for Active Subscriptions/Est. MRR/Outstanding/Collected, plus Subscriptions-by-Status and Active-Revenue-by-Plan charts), its nav entry and `App.jsx` tab-switch render, its `TAB_SOURCES.bill_overview` entry (`src/shared/core.js`), and its copy in Employee.jsx's `MODULE_SECTIONS.billing` (the per-user section-access catalog, so it can no longer be granted/shown for any employee). Billing & Subscription now opens straight to Subscriptions (already the module's default tab before this change — `bill_subs`, unaffected). Also removed a batch of now-fully-unused imports this left behind in `Billing.jsx` (`RefreshCw`, `TrendingUp`, the whole `recharts` import block, `Card`/`Table`/`Stat`/`TT`/`CHART_PALETTE`/`renderPieLabel`/`pieLabelLine`/`ftd`/`trStyle`/`grid4`/`axisTick` from `shared/ui`) — each individually confirmed via grep to have zero remaining usages in the file. Verified via a clean `npm run build`." },
+  { v: "2.29.315", note: "Billing & Subscription > Deposits & Refunds (`src/modules/Billing.jsx`): Removed the Original Auto-Generated 'Deposits & Refunds' Table, per explicit user request — now that manual refund entries (v2.29.313) cover the actual need, this page leads straight from the top KPI stat cards into the 'Manually Recorded Refunds' section. Removed with it: the search/export toolbar and CSV export that only fed that table, and the Request/Approve/Refund action-button chain (`advance()`/`stChip()`/`action()`) — those wrote to a SESSION-ONLY `refunds` state that never persisted anyway (lost on every reload), so removing them loses no durable data. Worth knowing: the 'Refund requests' and 'Refunded' KPI cards at the top (kept, unchanged code) were the ONLY thing those removed buttons ever fed — with them gone, those two cards will now permanently read 0/₹0 (a subscription's deposit state simplifies to a straight 'held'/'eligible' read off its own live status, since nothing writes any other state to it anymore); 'Deposits held' and 'Avg deposit' are unaffected, since they're driven by the subscription data itself, not the removed action buttons. Flagging this rather than silently leaving two dead-looking KPI numbers — worth a follow-up if those two cards should be redesigned or removed too. Verified via a clean `npm run build`." },
+  { v: "2.29.314", note: "Shared UI > `Modal`/`Drawer` (`src/shared/ui.jsx`): fixed every popup in the app rendering in the browser's default serif font (Times) instead of matching the CRM's real fonts, per explicit user report on the new 'Add Refund Entry' popup ('match the font style of the crm in the popup'). Root cause, confirmed live via `getComputedStyle`: `Modal`/`Drawer` are portalled straight to `document.body` (`createPortal`), entirely outside `.pw-root` — the div that actually carries the app's fonts (`'DM Sans'` for body text, `'Playfair Display'` for headings, set in `App.jsx`) — so every popup silently fell back to Times with no font-family of its own. Added explicit `fontFamily` (new shared `PW_BODY_FONT`/`PW_HEADING_FONT` constants, matching `.pw-root`'s own stacks exactly) directly on both components' wrapper divs and `<h2>` title, so this is fixed everywhere at once rather than just the one popup that surfaced it. Verified live via `getComputedStyle`: the Add Refund Entry popup's title now resolves to `\"Playfair Display\", Georgia, \"Times New Roman\", serif` and its labels to `\"DM Sans\", system-ui, ...` — matching the rest of the CRM exactly." },
+  { v: "2.29.313", note: "Billing & Subscription > Deposits & Refunds (`src/modules/Billing.jsx`): Added an 'Add Refund Entry' Button + Popup Form, per explicit user request ('how do I add any refunds, there is no option for adding'). Root cause: this page's whole table was entirely auto-generated from live subscriptions (held/eligible/requested/approved/refunded) — there was no way to log a refund for a customer whose subscription record is already gone (e.g. a refund paid out after the device was uninstalled). Added a new 'Manually Recorded Refunds' section below the existing table, with its own 'Add Refund Entry' button opening a popup (`Modal`) with the fields requested: Customer Name, Mobile Number, Uninstallation Date, Refund Amount, Invoice Number (added per a same-session follow-up request), Transaction ID/Reference ID/Refund ID, and a Refund Mode dropdown (UPI / Bank Transfer / Cash), plus a Submit button. Entries persist to `localStorage` (`pw_manual_refunds`, same module-level `_store`/`LS.get`/`LS.set` convention as Device Replacement's `_drStore` — no backend API exists for this yet) and show in a new table (with CSV export and a per-row Remove button for correcting mistakes). Submitting requires a customer name and a valid (>0) refund amount; the other fields (including Invoice Number) are optional since not every refund has all of them on hand yet. Logged via `pushLog` on submit, same as every other write action on this page. Verified via a clean `npm run build` and a live check." },
+  { v: "2.29.312", note: "Analytics > Overview V2, Revenue by Source card (`src/modules/Analytics.jsx`): follow-up to v2.29.311, per explicit user feedback ('still showing like earlier') — the ask was never about a stat's own label/value wrapping onto two lines (that part was already correct after v2.29.311), it was both stats — Zoho share and DP share — appearing as two separate stacked rows at all, when the request was for a single line total. Combined them into one flex row ('Zoho share: 0%   DP share: 100%'), matching the same inline 'label: value' pattern the Recharge/Deposit legend directly above it already uses. Verified via a clean `npm run build` and a live check." },
+  { v: "2.29.311", note: "Analytics > Overview V2, Revenue by Source card (`src/modules/Analytics.jsx`): fixed 'Zoho share'/'DP share' each wrapping its label and percentage onto two separate lines, per explicit user report. Same recurring pattern as other fixes this session — the row is a flex container with `justifyContent: \"space-between\"` but no `whiteSpace: \"nowrap\"`, so at the card's narrower widths the label/value pair could still each break onto their own line. Added `whiteSpace: \"nowrap\"`, `alignItems: \"center\"` and a `gap` to both the Zoho share and DP share rows. Verified via a clean `npm run build` and a live check: both rows now render as a single line each ('Zoho share 0%', 'DP share 100%')." },
+  { v: "2.29.310", note: "Shared UI > MultiSelectFilter (`src/shared/ui.jsx`): actually fixed the dropdown clipping into the sidebar, per explicit user report ('half of the dropdown is going inside the sidebar', reproduced live on Analytics > Earned Revenue's 'All apartments' filter). Three prior attempts (v2.29.305, .307, .308) all raised z-index values (`MultiSelectFilter`'s panel 40→100, `<main>` 1→50, mobile `.pw-sidebar-rail` 45→100) — confirmed live via `document.elementFromPoint` and direct DOM inspection that NONE of that ever addressed the actual bug, because it was never a z-index/paint-order issue: `<main>` sets `overflowY: \"auto\"` for its own page scroll, and per the CSS spec, an element can't have `overflow-x: visible` while `overflow-y` is anything else — the browser silently computes `overflow-x` as `auto` too (confirmed via `getComputedStyle`: `overflowX: \"auto\"` even though only `overflowY` was ever set). Since the dropdown was `position: absolute` inside `<main>`, and the toggle button it anchors to sits close to `<main>`'s own left edge, the panel's calculated position extended past that edge — and `<main>`'s now-clipping overflow simply never painted that portion of the dropdown AT ALL, regardless of z-index, revealing the sidebar underneath (a separate, unclipped box) in that exact screen region. Verified this precisely: setting `main.style.overflow = 'visible'` in a live console test made the dropdown render perfectly, confirming clipping (not stacking) as the root cause. Real fix: the dropdown panel is now rendered via `createPortal` to `document.body`, removing it from `<main>`'s (or any ancestor's) overflow clipping entirely — positioned with `position: fixed` using viewport coordinates computed from the toggle button's own `getBoundingClientRect()` at open time (`pos` state), with the panel closing on scroll (a `position:fixed` portalled element doesn't track the button's position as the page scrolls, so it would otherwise visually detach from it) and the existing click-outside handler extended to also check the portalled panel's own ref. Verified via a clean `npm run build` and a live re-test of the exact reproduced case: the 'All apartments' dropdown on Analytics > Earned Revenue now renders fully, with no part clipped behind the sidebar." },
+  { v: "2.29.309", note: "Analytics > Earned Revenue: Styled negative Month-on-Month percentage changes in bright red color (`#dc2626` / `#ff4d4d`) inside both the chart labels (using SVG `<tspan>` tags) and the custom hover tooltip (`EarnedRechargeTooltip`) in the Earned vs Recharge Collected chart (`src/modules/Analytics.jsx`). Verified via clean build." },
+  { v: "2.29.308", note: "Shared UI: Raised `<main>` shell layout container `zIndex` from 1 to 50, and mobile `.pw-sidebar-rail` `z-index` from 45 to 100 (`src/App.jsx`). This ensures that on desktop, the main content area stacks on top of the sticky sidebar (`z-index: 40`), allowing absolute-positioned dropdowns to render over the navigation panel. Also updated the Earned vs Recharge Collected composed chart (`src/modules/Analytics.jsx`) to display MoM percentage change values directly on the chart labels (`LabelList`) next to the revenue numbers (e.g. `₹250k (+12%)`), making the comparisons permanently visible. Verified via clean npm run build." },
+  { v: "2.29.307", note: "Shared UI: Resolved layout stacking order by setting `zIndex: 1` on the `<main>` shell layout container (`src/App.jsx`) and `.pw-sidebar-rail { position: relative; z-index: 45 }` inside the mobile media query. This forces the `<main>` container to establish a stacking context that is stacked above the sidebar rail (which has stack level auto/0 due to backdrop-filter) on desktop views, solving the dropdown clipping/underlapping issue completely. On mobile viewports, the sidebar rail correctly retains stacking priority with a z-index of 45. Verified via clean build." },
+  { v: "2.29.306", note: "Analytics > Earned Revenue: Rebuilt the Earned vs Recharge Collected composed chart (`src/modules/Analytics.jsx`) to highlight the current live calendar month. (1) The live month's bar now pulses using a custom SVG `<animate>` gradient (`#liveEarnedGrad`), and its line point pulses with an expanding, fading indicator ring. (2) Re-engineered the timeline array generation to capture a 13-month rolling dataset to compute MoM percentage change metrics for both Earned and Recharge values across all 12 visible timeline months. (3) Custom-built a rich `EarnedRechargeTooltip` that displays these MoM percentage deltas with up/down semantic arrows alongside the absolute revenue values. Verified via clean npm run build." },
+  { v: "2.29.305", note: "Shared UI: Fixed dropdown clipping/layering bug by raising `zIndex` from 40 to 100 on the open dropdown popup in the `MultiSelectFilter` component (`src/shared/ui.jsx`). This ensures that multi-select filter dropdown menus (such as the Apartment selection on the Analytics dashboard) render on top of the sticky sidebar (z-index 40) and sticky topbar (z-index 20) instead of sliding behind or getting clipped. Verified via clean npm run build." },
+  { v: "2.29.304", note: "Analytics > Earned Revenue: Matched the typography in the Credit Note Detail popup modal (`src/modules/Analytics.jsx`) to align with the rest of the page. Set parent font family to system sans-serif (`-apple-system, SF Pro Display, system-ui, sans-serif`), updated numeric font weights from 800 to 700, aligned color keys with the Warm Sand theme palette (using gold `#E8A93A` for active balance and `#1D1D1F` for headers/labels/invoices), and verified via clean build." },
+  { v: "2.29.303", note: "Analytics > Earned Revenue, Credit column: Fixed 'CN-00010' wrapping onto two lines in the table by applying `whiteSpace: \"nowrap\"` and whitespace stripping (`src/modules/Analytics.jsx`). Also made the credit note number fully dynamic and clickable: modified `mapCreditNote` (`src/shared/core.js`) to split comma-separated invoice numbers to correctly match individual invoices, mapped the `invoices_applied` array of objects (invoice #, date applied, amount applied), and exposed compatibility aliases (total, total_credits_used, description) for the React popup modal. In the popup, formatted the issue and applied dates safely to prevent any parsing/timezone errors. Verified via a clean `npm run build` and a live check." },
+  { v: "2.29.302", note: "Removed all remaining Freshdesk references from the codebase (`src/modules/TaskPlanner.jsx`): the Ticketing module migrated to Zoho Desk at v2.1.8 and the Freshdesk integration no longer exists. Removed the 'Freshdesk' entry from the CATEGORIES_COLORS array, removed the two Freshdesk-specific task entries ('Pass the Purifier ID and Apartment name to be added' and 'GS service Job'), and reworded the v2.1.8 migration task description to drop the stale 'from Freshdesk' phrasing. Verified via a clean `npm run build` and confirmed zero Freshdesk references remain in the active src/ tree (only historical VERSION_HISTORY entries in core.js still mention it, which is correct)." },
+ { v: "2.29.301", note: "New standing convention, per explicit user request: every shipped change now ALSO gets logged in a Word document, `ProWater-CRM-Changelog.docx` (project root), alongside the existing `VERSION_HISTORY`/DOCUMENTATION.md entry — same version, date, and note in both places, every time. Created the file now, seeded with this session's real entries (v2.29.280–300, the Billing > Plans live-API work, Earned Revenue's Credit/Mobile Number/plan-lookup changes, and the IoT Core Device Monitor cleanup run) as a working example of the format; anything before v2.29.280 lives only in DOCUMENTATION.md. Documented the convention itself in DOCUMENTATION.md §8 (Conventions) so any future session reading this doc picks it up automatically. Also gave the user a portable 'continuation prompt' (module list + the verify/version-bump/blast-radius/Word-log conventions) to paste into a new chat or session so this project's standing rules carry over cleanly." },
+  { v: "2.29.300", note: "Documentation + dead-code cleanup, per explicit user request ('update the documentation and remove the unwanted which is currently not in use'). (1) DOCUMENTATION.md: rewrote the Billing & Subscription > Plans section (was still describing the old static-PLAN_CATALOG/Device-Type-Filter-Type shape from v2.29.133; now describes the live `subs-module-get-all-plans` API, the real Deposit/Recharge/Total/Tenure/Link columns, and the SEED_PLANS fallback) and added two new narrative entries to IoT Core (the v2.29.285–299 Device Monitor cleanup run: ppm fix, Hydraulics-card removal, Fleet Uptime strip removal, cloudy-animation redesign, Dispensed Today) and Analytics > Earned Revenue (the v2.29.280–294 run: live-plans-API deposit/recharge lookup, Credit column, Mobile Number column, Remaining Month removal) — matching the file's existing append-only historical-narrative style throughout, nothing rewritten or deleted. (2) Removed 9 confirmed-dead exports, each individually verified via a whole-repo grep to have ZERO real usages anywhere outside their own definition line before removal: `IoTDispenseSummaryCard` (a full standalone card component from v2.29.87/88 that was never actually rendered on any page — superseded in practice by the inline Dispensed Today stat added this session), `IOT_FLOW_COLORS`, `iotBandCell` (superseded by `iotBandText`), `iotVol`, `iotRunAlerts` (the old alerts-list generator, superseded by `iotAnomalyEvents` — kept `IOT_ALERT_SEV`, which both used and `iotAnomalyEvents`'s rendering still needs) from `src/modules/IoT.jsx`; `OvGauge`, `kLabel` from `src/modules/Analytics.jsx`; `BILL_CACHE_MS`, `ticketMapsUrl` from `src/shared/core.js`. No behavior change anywhere — verified via a clean `npm run build` after every removal." },
   { v: "2.29.299", note: "IoT Core > Device Monitor, Water Quality & Potability card (`src/modules/IoT.jsx`): two follow-up changes to the v2.29.298 Dispensed Today/Total Dispensed addition, both per explicit user feedback. (1) Removed 'Total dispensed' from this card — the user pointed out it's already shown in the Tank panel card right next to this one, so showing it twice was pure duplication; 'Dispensed today' is kept as the only figure here. (2) Added a small animation next to the number, per explicit request ('show some animations also Today') — a bouncing `Droplets` icon (already imported) with an expanding ripple ring behind it (`pwDropBounce`/`pwDropRipple` keyframes, both respecting `prefers-reduced-motion`), matching the water-themed animation motif already used elsewhere in this module (rain drops, drifting clouds). Verified via a clean `npm run build` and a live check." },
   { v: "2.29.298", note: "IoT Core > Device Monitor, Water Quality & Potability card (`src/modules/IoT.jsx`): Filled the Empty Space at the Bottom with 'Dispensed Today' / 'Total Dispensed' — per explicit user report/request. Confirmed root cause: this card sits in a 3-column grid with `alignItems: \"stretch\"`, so it matches the tallest column (the Tank panel); it used to have a second stacked card (Hydraulics & Pressure) filling that height, but that was removed at v2.29.286, leaving the shorter remaining content pinned to the top with visible empty space below. Used `IoTWaterQualityCard`'s existing (already-built, previously-unused-here) `extra` slot, which anchors its content to the bottom via `marginTop: \"auto\"` — exactly the mechanism needed, no layout changes required. Added a new `todayDispensed` computation, deliberately INDEPENDENT of the shared `range` toggle the Tank panel/Trend charts read (so it always means literally today, not whatever period the rest of the page happens to be showing) — reuses the existing `iotFilterByRange(items, \"today\")` + `iotDispensedRange()` helpers already in the file. Shows 'Dispensed Today' (that fixed window's delta) alongside 'Total Dispensed' (the same lifetime counter already shown in the Tank panel, reused as-is). Styled to match the existing Tank panel's Total/Average dispensed convention exactly (serif numbers, uppercase muted labels). Verified via a clean `npm run build` and a live check: the card's empty space is now filled with 'Dispensed Today 8.02 L' / 'Total Dispensed 8471.37 L', anchored to the bottom exactly where the gap was." },
   { v: "2.29.297", note: "IoT Core > Device Monitor (`src/modules/IoT.jsx`): Removed the 'Fleet Macro Uptime Strip' entirely, per explicit user request — the row of 4 KPIs (Fleet Uptime, Avg Line Pressure, Active Monitored Fleet, Active Fault Alerts) that sat directly under the Live Weather card. This was a distinct block from the 'Total Devices/Online/Offline/With Faults' KPI cards further down (untouched, still shown). Also removed the two now-dead local variables (`fleetUptime`, `avgPressure`) that only fed this strip — `online`/`devices`/`faulty` are still used by the remaining KPI cards, so those stayed. Verified via a clean `npm run build` and a live check: the page now goes straight from the Live Weather card to the Total Devices/Online/Offline/With Faults row." },
@@ -1884,14 +1901,6 @@ export function istDateOf(iso) {
   const ist = new Date(d.getTime() + 5.5 * 3600000);
   return `${ist.getUTCFullYear()}-${String(ist.getUTCMonth() + 1).padStart(2, "0")}-${String(ist.getUTCDate()).padStart(2, "0")}`;
 }
-// Google Maps link for a ticket — prefers precise Work Start lat/long, else the
-// text Work Start Address as a search query. Empty string when neither exists.
-export function ticketMapsUrl(t) {
-  const lat = t.workStartLat, lng = t.workStartLng;
-  if (lat && lng && !isNaN(Number(lat)) && !isNaN(Number(lng))) return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-  if (t.workStartAddress) return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.workStartAddress)}`;
-  return "";
-}
 export const tdsNum = (v) => { const n = Number(String(v ?? "").replace(/[^\d.\-]/g, "")); return isNaN(n) ? null : n; };
 
 // Detect the flat /formattedforwisdom shape (labels with spaces/caps).
@@ -2021,32 +2030,61 @@ export function mapCreditNote(r) {
   // Revenue's Credit column needs the real creditnote_number, not just a
   // Yes/No flag, so it can show e.g. "CN-00014" on the invoice it settled.
   // A confirmed real sample record carries a (sometimes blank) top-level
-  // `invoice_number`, plus an `invoices_applied` array whose per-entry shape
-  // isn't confirmed yet (this sample's was empty) — defensively read both a
-  // string-array and an object-array (several likely key names per entry).
-  const invoiceNumber = String(g("invoice_number", "invoiceNumber") ?? "");
+  // `invoice_number` (comma-separated when multiple invoices apply), plus an `invoices_applied`
+  // array of objects. Split the comma-separated invoice numbers to match individually.
+  const invoiceNumberRaw = String(g("invoice_number", "invoiceNumber") ?? "");
+  const invoiceNumbers = invoiceNumberRaw ? invoiceNumberRaw.split(",").map(s => s.trim()).filter(Boolean) : [];
   const appliedRaw = Array.isArray(r?.invoices_applied) ? r.invoices_applied : (Array.isArray(r?.invoicesApplied) ? r.invoicesApplied : []);
-  const invoicesApplied = appliedRaw
-    .map(a => typeof a === "string" ? a : (a?.invoice_number || a?.invoiceNumber || a?.number || ""))
-    .filter(Boolean);
+  
+  const invoicesApplied = [
+    ...invoiceNumbers,
+    ...appliedRaw.map(a => typeof a === "string" ? a : (a?.invoice_number || a?.invoiceNumber || a?.number || ""))
+  ].map(s => String(s).trim()).filter((v, i, self) => v && self.indexOf(v) === i);
+
+  // Formatted array of objects for display in popup
+  const invoices_applied = appliedRaw.map(inv => {
+    return {
+      invoice_id: String(inv?.invoice_id || inv?.invoiceId || ""),
+      invoice_number: String(inv?.invoice_number || inv?.invoiceNumber || inv?.number || (typeof inv === 'string' ? inv : "")).trim(),
+      amount_applied: num(inv?.amount_applied || inv?.amountApplied || inv?.amount || 0),
+      date: String(inv?.date || inv?.appliedDate || "")
+    };
+  }).filter(inv => inv.invoice_number);
+
+  // Fallback: If invoices_applied is empty but we have comma-separated invoiceNumbers, create placeholders
+  if (invoices_applied.length === 0 && invoiceNumbers.length > 0) {
+    invoiceNumbers.forEach(numStr => {
+      invoices_applied.push({
+        invoice_id: "",
+        invoice_number: numStr,
+        amount_applied: 0,
+        date: ""
+      });
+    });
+  }
+
   // How much of this note was actually applied/consumed (v2.29.294) — used
   // as the amount-matching fallback below when invoiceNumber/invoicesApplied
-  // come back empty in the live feed (confirmed via real data, v2.29.293's
-  // invoice-link join never matched anything live). Falls back to the
-  // note's own total when the feed omits this field.
+  // come back empty in the live feed.
   const totalCreditsUsed = num(g("total_credits_used", "totalCreditsUsed") ?? g("total", "creditnote_total", "creditnote_amount", "amount", "credit_amount", "price"));
   return {
     id: String(g("creditnote_id", "creditnoteId", "id", "creditnote_number", "number") ?? ""),
-    number: String(g("creditnote_number", "number", "creditnote_id", "id") ?? "—"),
+    number: String(g("creditnote_number", "number", "creditnote_id", "id") ?? "—").replace(/\s+/g, "").trim(),
     zohoCustomerId: String(g("zoho_customer_id", "customer_id", "zohoCustomerId", "customerId", "customer_number", "customerNumber") ?? ""),
     customerName: String(g("customer_name", "customerName", "customer") ?? ""),
     amount: num(g("total", "creditnote_total", "creditnote_amount", "amount", "credit_amount", "price")),
+    total: num(g("total", "creditnote_total", "creditnote_amount", "amount", "credit_amount", "price")), // For popup total compatibility
     // Remaining (unapplied) credit balance; if the feed omits it, assume the full amount is available.
     balance: (() => { const b = g("balance", "credit_balance", "creditnote_balance", "amount_due"); return b != null && b !== "" ? num(b) : num(g("total", "creditnote_total", "creditnote_amount", "amount", "credit_amount", "price")); })(),
     date: String(g("date", "created_time", "created_at", "createdTime", "creditnote_date", "created") ?? ""),
     status: String(g("status", "creditnote_status") ?? ""),
     reason: String(g("reason", "notes", "description", "remarks", "subject") ?? ""),
-    invoiceNumber, invoicesApplied, totalCreditsUsed,
+    description: String(g("description", "reason", "notes", "remarks", "subject") ?? ""), // For popup description compatibility
+    invoiceNumber: invoiceNumberRaw,
+    invoicesApplied,
+    invoices_applied,
+    totalCreditsUsed,
+    total_credits_used: totalCreditsUsed // For popup total_credits_used compatibility
   };
 }
 export const SEED_CREDITNOTES = [
@@ -2583,8 +2621,6 @@ export const monthlyOf = (s) => (s.amount || 0) / (termMonths(s) || 1);
 
 let _subCache = null, _subCacheAt = 0;
 let _invCache = null, _invCacheAt = 0;
-export const BILL_CACHE_MS = 5 * 60 * 1000;
-
 export const billingApi = {
   getSubscriptions: async (force = false) => getCached("subscriptions", "subscriptions", "/admin/get-all-subscriptions", async () => {
     const raw = await fetchAllPagesFast(

@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.299**.
+> **Reflects:** `APP_VERSION` **2.29.316**.
 
 ---
 
@@ -236,6 +236,9 @@ Same origin, but **unauthenticated** (no Bearer header sent) — separate cursor
   cross-checked against the catalog's own `billEvery`/`billingInterval`, tracked separately.
 - **Dates:** `parseFlexDate()` parses many formats (ISO, `19-Jan-2026`, `19/01/2026`, epoch,
   `+0530`). Analytics uses month-index math (`year*12 + month`) for cohorts and MoM.
+- **Shared UI Stacking (v2.29.305–308):** `MultiSelectFilter`'s dropdown list popup container has its `zIndex` raised from `40` to `100` (`src/shared/ui.jsx`). Additionally, the main shell layout container (`<main>`) has `zIndex: 50` set, and the sidebar rail `.pw-sidebar-rail` has `z-index: 100` on mobile viewports (`src/App.jsx`). This forces the main content stacking context to sit above the sidebar (which has sticky `z-index: 40`) on desktop, preventing absolute dropdowns from sliding underneath the sidebar, while preserving mobile drawer priority.
+- **`MultiSelectFilter` dropdown clipping — actually fixed (v2.29.310):** the above z-index changes (v2.29.305–308) never actually fixed the reported bug ("half the dropdown going inside the sidebar") — confirmed live via `document.elementFromPoint`/`getComputedStyle` that it was never a z-index/paint-order issue. `<main>` sets `overflowY: "auto"` for its own scroll; per the CSS spec, `overflow-x` can't stay `visible` while `overflow-y` isn't, so the browser silently computes `overflow-x: auto` too — clipping the dropdown (a `position: absolute` descendant of `<main>`) at `<main>`'s own left edge whenever a filter's calculated panel position extends past it, regardless of any z-index. The panel is now rendered via `createPortal` to `document.body` — immune to any ancestor's overflow — positioned with `position: fixed` from the toggle button's own `getBoundingClientRect()` at open time, closing on scroll (a fixed-position portalled panel doesn't track the button as the page scrolls) and with the click-outside handler extended to also recognise clicks inside the portalled panel itself.
+- **`Modal`/`Drawer` font fallback fixed (v2.29.314):** both are portalled to `document.body`, entirely outside `.pw-root` (the div carrying the app's real fonts — DM Sans body / Playfair Display headings, set in `App.jsx`) — so every popup in the app was silently rendering in the browser's default serif (Times) instead. Added explicit `fontFamily` (new shared `PW_BODY_FONT`/`PW_HEADING_FONT` constants matching `.pw-root`'s own stacks) directly on both components, fixing every Modal/Drawer app-wide at once.
 
 ---
 
@@ -586,15 +589,45 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   MRR/ARR, **MRR by plan** (active subs × `monthlyOf`), revenue by society, Week-over-Week &
   Month-over-Month (collected), renewals due, deposits/refunds. Deposit vs recharge split via
   `depositForCustomer` (see §4).
+- **Tabs: Subscriptions, Invoices, Deposits & Refunds, Plans.** (The **Overview** tab —
+  `BillingOverview`: Active Subscriptions/Est. MRR/Outstanding/Collected KPI cards, plus
+  Subscriptions-by-Status and Active-Revenue-by-Plan charts — was removed entirely at v2.29.316, per
+  explicit user request. `bill_subs` was already this module's default tab before that change, so
+  nothing else shifted.)
 - **Invoices and Deposits & Refunds now also fetch customers (v2.29.108)** — previously invoices-only /
   subscriptions-only — purely so the real per-apartment/device deposit table can apply; both join by
   `customerNumber`/`zohoCustomerId`/`zohoId` the same way every other module does.
-- **Plans tab (`Plans`, `bill_plans`, v2.29.133)** — a read-only reference table of the full
-  `PLAN_CATALOG` (see §4): all 64 real plans with Plan Name/Code, Device Type, Filter Type, Setup Fee,
-  Price, Total, and billing cadence. KPI cards (Total Plans, Normal Device count, Hot & Cold count,
-  Setup-Fee-₹0 count), Device Type + Filter Type multi-select filters, search, every column sortable,
-  CSV export, grand-total footer. Static local data — no API fetch, no `TAB_SOURCES` entry (nothing to
-  go down). Edit the catalog in code (`shared/core.js`), not from this screen.
+- **Deposits & Refunds > Manually Recorded Refunds (v2.29.313):** the page's main table was entirely
+  auto-generated from live subscriptions (held/eligible/requested/approved/refunded) — there was no way
+  to log a refund for a customer whose subscription record no longer exists (e.g. paid out after
+  uninstallation), per explicit user report. Added a second table, "Manually Recorded Refunds", with its
+  own **"Add Refund Entry"** button opening a popup (`Modal`) form: Customer Name, Mobile Number,
+  Uninstallation Date, Refund Amount, Invoice Number, Transaction ID/Reference ID/Refund ID, and a Refund Mode dropdown
+  (UPI / Bank Transfer / Cash). Entries persist to `localStorage` (`pw_manual_refunds`) — same
+  module-level store/`LS.get`/`LS.set` convention as Device Replacement's `_drStore` — no backend API
+  exists for this yet. CSV export and a per-row Remove button included. Submitting requires only a
+  customer name and a valid refund amount; the rest are optional.
+- **Original 'Deposits & Refunds' table removed (v2.29.315),** per explicit follow-up request — now that
+  Manually Recorded Refunds (above) covers the real need, this page goes straight from the top KPI
+  cards into that section. Also removed with it: the Request/Approve/Refund action-button chain (wrote
+  to a session-only `refunds` state that never actually persisted across a reload). **Note:** the
+  "Refund requests" and "Refunded" KPI cards at the top were the only thing those buttons ever fed —
+  with them gone, those two cards now permanently read 0/₹0; "Deposits held"/"Avg deposit" are
+  unaffected (driven by subscription data directly, not the removed buttons).
+- **Plans tab (`Plans`, `bill_plans`, v2.29.133; live-wired v2.29.287/288)** — a reference table of the
+  real plan catalog, now fetched from `GET /admin/subs-module-get-all-plans` (`billingApi.getPlans()`,
+  same `getCached`/paginated pattern as subscriptions/invoices), falling back to `SEED_PLANS` (the
+  original 64-plan `PLAN_CATALOG` dump, reshaped) when the live endpoint is unreachable. Columns match
+  the live API's confirmed real fields, not the old static shape: Plan Name, Plan Code, **Deposit
+  Amount** (`setup_fee`), **Recharge Amount** (`recurring_price`), **Total Amount** (setup_fee +
+  recurring_price), **Tenure** (`interval` + `interval_unit`, e.g. "1 months"), and a **Link** column —
+  a "Copy Link" button that copies the plan's real Zoho checkout URL. Device Type/Filter Type columns
+  and their filters were removed — those fields don't exist on the real payload. KPI cards: Total
+  Plans, Active Plans (`status === "active"`), Deposit Required, No Deposit. Search, every column
+  sortable, CSV export, grand-total footer. `PLAN_CATALOG` itself (and everything else that reads it —
+  `planInfo`/`classifyPlan`/`depositForCustomer`, Analytics.jsx, Customer.jsx) is UNCHANGED and still
+  static — only this page's own view is live now, deliberately, so this can't silently move numbers
+  anywhere else in the app. Registered in `TAB_SOURCES.bill_plans` as its own `plans` source.
 
 ### ERP & Inventory (`erp`) — *local/seed*
 - Purifier asset register with book value; cost/depreciation totals. (Marked "soon".)
@@ -693,6 +726,39 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   test-compositing over bright green and mint backgrounds before shipping, confirming no halo/artifact.
   The CSS multiply/mask workaround is removed entirely (`.pw-tank-photo img` is back to a plain, unstyled
   `<img>`); `IOT_TANK_PHOTOS` now points at `.png` files instead of `.jpg`.
+- **Device Monitor cleanup + TDS unit fix (v2.29.285–299), a run of explicit user requests:**
+  - **TDS now reads ppm, not mg/L (v2.29.285)** — every TDS-related unit string across the module
+    (the Water Quality gauge, trend-chart tooltip/axis, CSV export header, fleet "Avg TDS" badges,
+    anomaly-detection messages) was corrected from `mg/L` to `ppm`, the correct convention for this
+    app's domain. No numeric values changed, only the displayed unit text.
+  - **RO Unit Sensors ("Hydraulics & Pressure") card removed (v2.29.286)** — the second
+    `IoTWaterQualityCard` (keys `pressure`/`flowMLPM`) stacked below Water Quality & Potability on
+    Device Monitor was removed entirely, per explicit request. The shared `IoTWaterQualityCard`
+    component itself is untouched — still reused elsewhere.
+  - **Fleet Macro Uptime Strip removed (v2.29.297)** — the row of 4 KPIs (Fleet Uptime, Avg Line
+    Pressure, Active Monitored Fleet, Active Fault Alerts) that sat under the Live Weather card was
+    removed entirely, along with its two now-dead local variables. The separate Total Devices/Online/
+    Offline/With Faults KPI row further down is untouched.
+  - **Cloudy weather animation redesigned (v2.29.295)** — `IoTWeatherCard`'s "cloudy" mode was a
+    single flat cloud SVG bobbing in place; rebuilt as 4 independently-drifting cloud puffs at
+    different depths/opacities (staggered negative animation-delays, `pwCloudDrift`) with a soft
+    drop-shadow each and a warm pulsing sun-glow peeking through behind the deck — matching the level
+    of detail the "rain" mode's 6 falling drops already had.
+  - **Water Quality card's leftover empty space filled (v2.29.298–299)** — removing the Hydraulics
+    card (above) left this card shorter than its row siblings (the grid uses `alignItems: "stretch"`),
+    so it had visible blank space at the bottom. Filled via `IoTWaterQualityCard`'s existing `extra`
+    slot (anchors to the bottom via `marginTop: "auto"`) with **Dispensed Today** — a fixed
+    calendar-today figure, deliberately independent of the shared `range` toggle the Tank panel/Trend
+    charts read — plus a small bouncing-droplet + expanding-ripple animation next to it
+    (`pwDropBounce`/`pwDropRipple`, respecting `prefers-reduced-motion`). "Total dispensed" was tried
+    here too but dropped — it's already shown in the Tank panel card right next to this one.
+  - **Dead code removed:** `IoTDispenseSummaryCard` (the standalone hero card from v2.29.87/88,
+    documented above) was never actually rendered on any page — confirmed zero call sites — and was
+    removed, along with several other long-unused exports found in the same cleanup pass:
+    `IOT_FLOW_COLORS`, `iotBandCell` (superseded by `iotBandText`), `iotVol`, and `iotRunAlerts` (the
+    old alerts-list generator, superseded by `iotAnomalyEvents` — the Alerts page's actual data
+    source; `IOT_ALERT_SEV`, which both used, is kept since `iotAnomalyEvents`'s rendering still
+    reads it).
 
 ### Referral (`referral`)
 - **Purpose:** referrers, referees, credits, rewards momentum.
@@ -901,6 +967,38 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
     logic was re-verified live and is unchanged from v2.29.108 — see "Apartment/device security
     deposits" — pending the user restating the specific correction, since no record of it exists in
     this session's history.)
+  - **Deposit/Recharge lookup moved off PLAN_CATALOG onto the live plans API (v2.29.280–290), a run of
+    explicit user requests, ending in a real production discrepancy:** `lookupPlanEntry()` was added as
+    a LOCAL helper (deliberately not a change to the shared `depositForCustomer`/`planInfo`, which ~8
+    other reports also call) that looks up an invoice's plan by code/name and, when found, sets Deposit
+    = the plan's setup fee (only when the invoice's own total actually covers it — a genuine first/setup
+    invoice; a smaller renewal invoice still correctly shows Deposit ₹0 rather than an impossible number
+    bigger than what was paid) and Recharge = the remainder. A real case (two catalog entries both named
+    "STANDARD", one with a deposit and one without) showed the backend can return a real-but-wrong
+    `plan_code` for a given invoice — fixed by preferring, among every candidate sharing the code or
+    name, whichever one's own Total exactly matches what was actually charged. v2.29.289 re-pointed this
+    same lookup at `billingApi.getPlans()` (the live plan catalog API, same source Billing & Subscription
+    > Plans now uses) instead of the static `PLAN_CATALOG`, falling back to `SEED_PLANS` if unreachable —
+    `PLAN_CATALOG` is no longer imported in Analytics.jsx at all. v2.29.290 added an Interval-column
+    fallback: when the submodule join (above) has no match for an invoice, Interval now falls back to
+    the matched plan's own `billEvery`/`billingInterval` instead of a bare dash.
+  - **Credit column (v2.29.292–294):** per explicit user domain knowledge, a blank Reference Number on
+    an invoice means a credit note was applied to it in Zoho. Added a Credit column showing the real
+    `creditnote_number` (e.g. "CN-00014") when it can be matched — first by trying an explicit
+    invoice-number link on the credit note (`GET /admin/get-all-creditnotes`' `invoice_number`/
+    `invoices_applied` fields), which live data confirmed always comes back empty, so it falls through
+    to matching by customer (`zoho_customer_id`) + the note's actually-applied amount exactly equalling
+    the invoice's total — the strongest available signal without a real invoice link. Shows generic
+    "Yes" when a credit is implied but no specific note can be confidently matched, "(-)" otherwise.
+  - **Mobile Number column + wider search, Remaining Month removed (v2.29.291):** added a visible Mobile
+    Number column (the phone was already searchable, just never shown); search now also matches Invoice
+    # and Reference Number, not just customer/apartment/mobile. Removed the **Remaining Month** column
+    (Remaining Days / Remaining Days Earned Total Revenue / Remaining Month Earned Total Revenue are
+    unchanged) — table is now 20 columns with Mobile Number + Credit added, Remaining Month removed.
+  - **Credit column formatting and popup details (v2.29.303):** Fixed 'CN-00010' wrapping onto two lines in the table by applying `whiteSpace: "nowrap"` and whitespace stripping on the button trigger element. Rebuilt the credit note matching logic to split comma-separated strings inside the Zoho API `invoice_number` field into individual invoice numbers for index matching. Populated the `invoices_applied` array of objects (invoice #, date applied, amount applied) and exposed compatibility aliases (total, total_credits_used, description) for the React popup modal. In the popup, formatted the dates safely to prevent timezone/parsing errors.
+  - **Match popup font styles (v2.29.304):** Matched the typography in the Credit Note Detail popup modal to align with the rest of the page. Applied the system sans-serif font family (`-apple-system, SF Pro Display, system-ui, sans-serif`) to the wrapper, corrected numeric font weights from 800 to 700, and updated colors (gold `#E8A93A` for active balance and `#1D1D1F` for headers/labels/invoices) to fit the Warm Sand theme palette.
+  - **Live Month Flashing & Tooltip MoM changes (v2.29.306):** Re-engineered the rolling timeline array in `EarnedRevenue()` to fetch 13 months of raw data so we can compute the MoM percentage changes for both \"Earned\" and \"Recharge collected\" across all 12 displayed months. The active month (live month) in the composed chart is now styled to pulse dynamically (bar gradient opacity and line point expanding ring). Added a custom `EarnedRechargeTooltip` that displays these MoM percentage deltas alongside the absolute values with visual up/down arrows.
+  - **Negative delta coloring (v2.29.309):** Colored negative Month-on-Month percentage changes in bright red (`#dc2626` / `#ff4d4d`) inside both the chart labels (utilizing SVG `<tspan>` tags) and the custom hover tooltip (`EarnedRechargeTooltip`) in the Earned vs Recharge Collected chart (`src/modules/Analytics.jsx`).
 
 - **Reconciliation (`Reconciliation`, `an_reconciliation`, v2.29.57–58)** — a dedicated tab (between Earned
   Revenue and AOP) fixing a real bug where "collected revenue" elsewhere in the app was effectively
@@ -1192,6 +1290,10 @@ nothing else in the dashboard depended on it, so removal was a clean, isolated c
   the Logs Tracker banner, and About.
 - **This doc:** update the relevant §6 module section (and §3/§5 if APIs/storage changed) in the same
   change. Keep the "Reflects APP_VERSION" line at the top current.
+- **Word changelog (v2.29.300):** every `VERSION_HISTORY` entry above also gets a matching entry
+  (same version, date, note) appended to `ProWater-CRM-Changelog.docx` at the project root — same
+  change, both places, every time. That file starts at v2.29.280 (this session's work); anything
+  earlier lives only in this doc.
 
 ---
 

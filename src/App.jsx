@@ -65,7 +65,7 @@ import { SalesLeads, SalesTrendAnalysis, SalesErrorCorrection, ApartmentLeads, s
 import { TaskPlanner, TaskAdmin } from "./modules/TaskPlanner";
 import { CustomerSocieties, AllCustomers, CustomerDrawer } from "./modules/Customer";
 import { Overview, Referrers, Referees, Credits, AddManualCredit, Analytics as ReferralAnalyticsTab, Backtrack, Tracker } from "./modules/Referral";
-import { BillingOverview, Subscriptions, Invoices, DepositRefunds, Plans } from "./modules/Billing";
+import { Subscriptions, Invoices, DepositRefunds, Plans } from "./modules/Billing";
 import { IoTDevices, IoTAlertsPage } from "./modules/IoT";
 import {
   AnalyticsOverview, CreditsAnalytics, NetRevenue,
@@ -1256,7 +1256,6 @@ const doRefresh = async () => {
       { id: "cust_societies", label: "Societies", icon: Boxes },
     ],
     billing: [
-      { id: "bill_overview", label: "Overview", icon: LayoutDashboard },
       { id: "bill_subs", label: "Subscriptions", icon: RefreshCw },
       { id: "bill_invoices", label: "Invoices", icon: Receipt },
       { id: "bill_deposits", label: "Deposits & Refunds", icon: Wallet },
@@ -1321,7 +1320,7 @@ const doRefresh = async () => {
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: sidebarCollapsed ? "68px 1fr" : "312px 1fr", transition: "grid-template-columns .25s ease", height: "100vh", width: "100%", overflow: "hidden" }} className="shell-grid">
-      <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-sidebar-v3{position:fixed;z-index:40;height:100vh;margin:0;border-radius:0;transform:translateX(-105%);transition:transform .22s ease}.pw-sidebar-v3.open{transform:none}.pw-topbar-burger{display:inline-flex!important}.iot-apt-badge{display:none!important}}`}</style>
+      <style>{`@media(max-width:860px){.shell-grid{grid-template-columns:1fr!important}.pw-sidebar-rail{position:relative;z-index:100}.pw-sidebar-v3{position:fixed;z-index:40;height:100vh;margin:0;border-radius:0;transform:translateX(-105%);transition:transform .22s ease}.pw-sidebar-v3.open{transform:none}.pw-topbar-burger{display:inline-flex!important}.iot-apt-badge{display:none!important}}`}</style>
 
       {/* sidebar — outer <aside> stretches to match the content column's
           height (see the matching comment in Home()). */}
@@ -1404,7 +1403,7 @@ const doRefresh = async () => {
       </aside>
 
       {/* main */}
-      <main style={{ minWidth: 0, background: "linear-gradient(135deg, #FBFAF7 0%, #F7F5EF 55%, #F3F0E8 100%)", height: "100vh", position: "relative", overflowY: "auto" }}>
+      <main style={{ minWidth: 0, background: "linear-gradient(135deg, #FBFAF7 0%, #F7F5EF 55%, #F3F0E8 100%)", height: "100vh", position: "relative", overflowY: "auto", zIndex: 50 }}>
         <div className="pw-app-glow green" />
         <div className="pw-app-glow blue" />
         <div className="pw-topbar" style={{ display: "flex", alignItems: "center", gap: 12, padding: "16px 28px", borderBottom: "1px solid var(--border)", background: "var(--pw-topbar-bg)", backdropFilter: "blur(8px)", position: "sticky", top: 0, zIndex: 20 }}>
@@ -1504,7 +1503,6 @@ const doRefresh = async () => {
             />}
             {tab === "cust_all" && <AllCustomers key={refreshKey} />}
             {tab === "cust_societies" && <CustomerSocieties key={refreshKey} />}
-            {tab === "bill_overview" && <BillingOverview key={refreshKey} />}
             {tab === "bill_subs" && <Subscriptions key={refreshKey} />}
             {tab === "bill_invoices" && <Invoices key={refreshKey} />}
             {tab === "bill_deposits" && <DepositRefunds key={refreshKey} />}

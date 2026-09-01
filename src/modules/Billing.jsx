@@ -7,149 +7,26 @@
    =========================================================================== */
 import React, { useState, useEffect } from "react";
 import {
-  Check, CheckCircle2, ChevronRight, Copy, Download, Landmark, RefreshCw,
-  RotateCcw, TrendingUp, Undo2, Wallet,
+  Check, CheckCircle2, ChevronRight, Copy, Download, Landmark, Plus,
+  RotateCcw, Trash2, Undo2, Wallet,
 } from "lucide-react";
 import {
-  ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, Legend,
-} from "recharts";
-import {
   useAuth, api, billingApi, customerApi, depositForCustomer, exportToCsv,
-  fmtDate, inr, pushLog, SEED_PLANS,
+  fmtDate, inr, LS, pushLog, SEED_PLANS,
 } from "../shared/core";
 import {
-  Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, Modal, Field,
-  Chip, Status, Person, Drawer, DefRow, CHART_PALETTE, renderPieLabel,
-  pieLabelLine, btnGhost, btnPrimary, td, ftd, trStyle, grid4, axisTick,
+  Toolbar, Loading, Empty, ApiError, Modal, Field,
+  Chip, Status, Person, Drawer, DefRow,
+  btnGhost, btnPrimary, inp, td,
   selectStyle, toastStyle, SortHeader,
 } from "../shared/ui";
 
 /* ===========================================================================
-   BILLING & SUBSCRIPTION MODULE (Zoho Billing) — Overview, Subscriptions, Invoices
+   BILLING & SUBSCRIPTION MODULE (Zoho Billing) — Subscriptions, Invoices,
+   Deposits & Refunds, Plans. (The Overview tab/`BillingOverview` — KPI cards
+   + Subscriptions-by-Status/Active-Revenue-by-Plan charts — was removed at
+   v2.29.316, per explicit user request; nothing else in this file read it.)
    =========================================================================== */
-export function BillingOverview() {
-  const { user } = useAuth();
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState("");
-  useEffect(() => {
-    api.logView(user.username, "Viewed Billing overview");
-    Promise.all([billingApi.getSubscriptions(), billingApi.getInvoices()])
-      .then(([subs, invs]) => setData({ subs, invs }))
-      .catch(e => setErr(e.message || "Could not load billing data."));
-  }, []);
-  if (err) return <ApiError msg={err} />;
-  if (!data) return <Loading title="Loading Billing Overview" subtitle="Synchronizing invoices, plans and renewals…" />;
-
-  const { subs, invs } = data;
-  const activeSubs = subs.filter(s => s.status === "active").length;
-  const mrr = subs.filter(s => s.status === "active").reduce((sum, s) => {
-    const u = String(s.interval || "").toLowerCase();
-    const monthly = u.includes("year") || u.includes("annual") ? s.amount / 12
-      : u.includes("quarter") ? s.amount / 3
-      : u.includes("half") ? s.amount / 6
-      : s.amount;
-    return sum + monthly;
-  }, 0);
-  const outstanding = invs.reduce((sum, i) => sum + (i.balance || 0), 0);
-  const overdue = invs.filter(i => i.status === "failed" || (i.balance > 0 && i.rawStatus?.toLowerCase() === "overdue")).length;
-  const collected = invs.filter(i => i.status === "paid").reduce((sum, i) => sum + i.total, 0);
-
-  const stats = [
-    { label: "Active subscriptions", value: activeSubs, icon: RefreshCw, sub: `${subs.length} total`, hero: true },
-    { label: "Est. MRR", value: inr(Math.round(mrr)), icon: TrendingUp, sub: "from active plans" },
-    { label: "Outstanding", value: inr(outstanding), icon: Wallet, sub: `${overdue} overdue invoice${overdue !== 1 ? "s" : ""}` },
-    { label: "Collected", value: inr(collected), icon: CheckCircle2, sub: "paid invoices" },
-  ];
-
-  const subByStatus = Object.values(subs.reduce((acc, s) => {
-    acc[s.status] = acc[s.status] || { name: s.status, value: 0 };
-    acc[s.status].value += 1; return acc;
-  }, {}));
-  const revByPlan = Object.values(subs.reduce((acc, s) => {
-    const k = s.plan || "—";
-    acc[k] = acc[k] || { plan: k, amount: 0 };
-    if (s.status === "active") acc[k].amount += s.amount;
-    return acc;
-  }, {}));
-  const PIE = CHART_PALETTE.slice(0, 6);
-
-  return (
-    <div className="fade-up ov-sans">
-      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
-
-      {/* KPI Cards Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 16 }}>
-        {stats.map((s, i) => (
-          <div key={i} style={{
-            background: "rgba(255, 255, 255, 0.85)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(0,0,0,0.08)",
-            borderRadius: 18,
-            padding: "18px 20px",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
-                {s.label}
-              </span>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <s.icon size={17} color="#08805A" />
-              </div>
-            </div>
-            <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
-              {s.value}
-            </div>
-            <div style={{ fontSize: 12, color: "#86868B" }}>{s.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
-        <style>{`@media(max-width:820px){.an-grid{grid-template-columns:1fr!important}}`}</style>
-        
-        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Subscriptions by Status</div>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Live, paused, cancelled & more</div>
-          </div>
-          <ResponsiveContainer width="100%" height={290}>
-            <PieChart>
-              <Pie data={subByStatus} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} isAnimationActive={false} label={renderPieLabel} labelLine={pieLabelLine}>
-                {subByStatus.map((e, i) => <Cell key={i} fill={PIE[i % PIE.length]} />)}
-              </Pie>
-              <Tooltip content={<TT />} /><Legend iconType="circle" wrapperStyle={{ fontSize: 12.5, color: "#1D1D1F" }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Active Revenue by Plan</div>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Recurring amount per plan</div>
-          </div>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={revByPlan} layout="vertical" margin={{ left: 30, right: 16 }}>
-              <defs>
-                <linearGradient id="bilPlanGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
-                  <stop offset="100%" stopColor="#1E9E4F" stopOpacity={0.7} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
-              <XAxis type="number" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis type="category" dataKey="plan" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={120} />
-              <Tooltip content={<TT prefix="₹" />} cursor={{ fill: "rgba(8,128,90,.06)" }} />
-              <Bar dataKey="amount" name="recurring value" radius={[0, 6, 6, 0]} fill="url(#bilPlanGrad)" maxBarSize={40} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export const monthLabel = (ym) => {
   const [y, m] = String(ym).split("-").map(Number);
   return new Date(y, (m || 1) - 1, 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
@@ -369,14 +246,29 @@ export function Invoices() {
 }
 
 /* ---- Billing: Deposit & Refund management ---- */
+// Manually recorded refunds (v2.29.313) — per explicit user request: this
+// page's main table only ever shows deposits derived from LIVE subscriptions
+// (held/eligible/requested/approved/refunded, entirely auto-generated —
+// there was no way to log a refund that isn't tied to a still-existing
+// subscription record, e.g. one paid out after a customer's device was
+// already uninstalled and their subscription record is gone). This is a
+// separate, manually-entered log, local to this browser (no backend API for
+// it) — same persisted-list convention as Device Replacement's `_drStore`.
+export const MANUAL_REFUNDS_LS_KEY = "pw_manual_refunds";
+export let _manualRefunds = LS.get(MANUAL_REFUNDS_LS_KEY, []) || [];
+export const _saveManualRefunds = () => LS.set(MANUAL_REFUNDS_LS_KEY, _manualRefunds);
+
 export function DepositRefunds() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [custs, setCusts] = useState([]);
   const [err, setErr] = useState("");
-  const [q, setQ] = useState("");
-  const [refunds, setRefunds] = useState({});
   const [toast, setToast] = useState("");
+  const [manualRefunds, setManualRefunds] = useState(() => [..._manualRefunds]);
+  const [showAddRefund, setShowAddRefund] = useState(false);
+  const emptyRefundForm = { name: "", phone: "", uninstallDate: "", amount: "", invoiceNumber: "", refId: "", mode: "UPI" };
+  const [refundForm, setRefundForm] = useState(emptyRefundForm);
+  const setRF = (k, v) => setRefundForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
     api.logView(user.username, "Viewed Deposits & Refunds");
@@ -389,6 +281,31 @@ export function DepositRefunds() {
 
   const flash = m => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
+  const submitManualRefund = () => {
+    const name = refundForm.name.trim();
+    const amount = Number(refundForm.amount);
+    if (!name || !amount || amount <= 0) { flash("Enter a customer name and a valid refund amount."); return; }
+    const entry = {
+      id: crypto.randomUUID(),
+      name, phone: refundForm.phone.trim(), uninstallDate: refundForm.uninstallDate,
+      amount, invoiceNumber: refundForm.invoiceNumber.trim(), refId: refundForm.refId.trim(), mode: refundForm.mode,
+      recordedBy: user.username, recordedAt: new Date().toISOString(),
+    };
+    _manualRefunds = [entry, ..._manualRefunds];
+    _saveManualRefunds();
+    setManualRefunds([..._manualRefunds]);
+    pushLog({ type: "manual_refund_entry", actor: user.username, module: "Billing", detail: `Recorded manual refund: ${inr(entry.amount)} to ${entry.name}` });
+    flash(`Refund entry added · ${entry.name}`);
+    setRefundForm(emptyRefundForm);
+    setShowAddRefund(false);
+  };
+  const removeManualRefund = (id, name) => {
+    _manualRefunds = _manualRefunds.filter(r => r.id !== id);
+    _saveManualRefunds();
+    setManualRefunds([..._manualRefunds]);
+    flash(`Refund entry removed · ${name}`);
+  };
+
   const custBy = {};
   custs.forEach(c => [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber].forEach(k => { if (k) custBy[k] = c; }));
   const custOf = (s) => custBy[s.customerNumber] || custBy[s.zohoCustomerId] || custBy[s.zohoId] || null;
@@ -396,7 +313,11 @@ export function DepositRefunds() {
   const rows = data
     .map(s => {
       const dep = depositForCustomer(custOf(s), s.plan, s.amount, s.planCode);
-      const state = refunds[s.id] || (s.status === "active" ? "held" : "eligible");
+      // v2.29.315: no longer overridable by a session-only refunds map — the
+      // Request/Approve/Refund action buttons that used to write to it lived
+      // only in the table removed at v2.29.315, so this always just reflects
+      // the subscription's own live status now.
+      const state = s.status === "active" ? "held" : "eligible";
       return { s, dep, state };
     })
     .filter(r => r.dep > 0);
@@ -412,36 +333,6 @@ export function DepositRefunds() {
     { label: "Refunded", value: inr(refundedTotal), icon: RotateCcw, sub: "returned to customers" },
     { label: "Avg deposit", value: inr(rows.length ? Math.round(rows.reduce((a, r) => a + r.dep, 0) / rows.length) : 0), icon: Landmark, sub: "per plan" },
   ];
-
-  const advance = (r, next, verb) => {
-    setRefunds(prev => ({ ...prev, [r.s.id]: next }));
-    pushLog({ type: "deposit_refund", actor: user.username, module: "Billing", detail: `${verb}: ${inr(r.dep)} deposit for ${r.s.customerName || r.s.id}` });
-    flash(`${verb} · ${r.s.customerName || r.s.id}`);
-  };
-
-  const stChip = (state) => {
-    const map = { held: ["#08805A", "rgba(8,128,90,0.12)", "Held"], eligible: ["#986315", "rgba(152,99,21,0.12)", "Refund eligible"], requested: ["#986315", "rgba(152,99,21,0.12)", "Requested"], approved: ["#2A86D6", "rgba(42,134,214,0.12)", "Approved"], refunded: ["#08805A", "rgba(8,128,90,0.12)", "Refunded"] };
-    const [c, bg, lbl] = map[state] || ["#86868B", "rgba(0,0,0,0.06)", state];
-    return <span style={{ fontSize: 11, fontWeight: 700, color: c, background: bg, padding: "3px 9px", borderRadius: 999, whiteSpace: "nowrap" }}>{lbl}</span>;
-  };
-
-  const action = (r) => {
-    if (["held", "eligible"].includes(r.state)) return <button onClick={() => advance(r, "requested", "Refund requested")} style={{ ...btnGhost, padding: "6px 12px" }}><Undo2 size={14} /> Request</button>;
-    if (r.state === "requested") return <button onClick={() => advance(r, "approved", "Refund approved")} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 12px", fontSize: 12.5 }}><Check size={14} /> Approve</button>;
-    if (r.state === "approved") return <button onClick={() => advance(r, "refunded", "Refund completed")} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 12px", fontSize: 12.5 }}><Check size={14} /> Mark refunded</button>;
-    return <span style={{ fontSize: 12, color: "#86868B" }}>—</span>;
-  };
-
-  const ql = q.toLowerCase();
-  const shown = rows.filter(r => !ql || `${r.s.customerName} ${r.s.email} ${r.s.id} ${r.s.plan}`.toLowerCase().includes(ql));
-
-  const exportCsv = () => exportToCsv("prowater-deposits.csv", [
-    { label: "Customer", get: r => r.s.customerName },
-    { label: "Subscription", get: r => r.s.id },
-    { label: "Plan", get: r => r.s.plan },
-    { label: "Deposit", get: r => r.dep },
-    { label: "Status", get: r => r.state },
-  ], shown);
 
   return (
     <div className="fade-up ov-sans">
@@ -474,48 +365,94 @@ export function DepositRefunds() {
         ))}
       </div>
 
+      {/* Manually Recorded Refunds (v2.29.313; the auto-generated subscription
+          table this page used to lead with was removed at v2.29.315, per
+          explicit user request) — a manually-entered log, since there's no
+          way to derive a refund for a customer whose subscription record is
+          already gone (e.g. paid out after uninstallation). */}
       <div style={{ marginTop: 18 }}>
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", padding: 22 }}>
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Deposits & Refunds</div>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Refundable security deposits held per plan. Request → approve → refund on cancellation.</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Manually Recorded Refunds</div>
+              <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Refunds paid out on uninstallation, logged directly here — not tied to a live subscription record.</div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {manualRefunds.length > 0 && (
+                <button onClick={() => exportToCsv("prowater-manual-refunds.csv", [
+                  { label: "Customer Name", get: r => r.name }, { label: "Mobile Number", get: r => r.phone },
+                  { label: "Uninstallation Date", get: r => r.uninstallDate }, { label: "Refund Amount", get: r => r.amount },
+                  { label: "Invoice Number", get: r => r.invoiceNumber },
+                  { label: "Transaction/Reference ID", get: r => r.refId }, { label: "Refund Mode", get: r => r.mode },
+                  { label: "Recorded By", get: r => r.recordedBy }, { label: "Recorded At", get: r => r.recordedAt },
+                ], manualRefunds)} style={{ ...btnGhost, padding: "8px 14px" }}><Download size={15} /> Export</button>
+              )}
+              <button onClick={() => setShowAddRefund(true)} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "8px 16px" }}><Plus size={15} /> Add Refund Entry</button>
+            </div>
           </div>
-          <Toolbar q={q} setQ={setQ} placeholder="Search customer, plan or subscription…" count={shown.length}
-            right={<button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>} />
-          
-          <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: 520 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
+          <div className="scroll-thin" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 820 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                  {["Customer", "Subscription", "Plan", "Deposit", "Status", "Action"].map(h => (
-                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: h === "Customer" ? "left" : "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
+                  {["Customer Name", "Mobile Number", "Uninstallation Date", "Refund Amount", "Invoice #", "Transaction / Reference ID", "Refund Mode", "Recorded", ""].map(h => (
+                    <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {shown.map((r, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                    <td style={{ padding: "14px 18px" }}><Person name={r.s.customerName || "—"} email={r.s.email} /></td>
-                    <td style={{ padding: "14px 18px", textAlign: "center" }}><Chip>{r.s.id}</Chip></td>
-                    <td style={{ padding: "14px 18px", textAlign: "center", fontSize: 12.5, color: "#475569" }}>{r.s.plan || "—"}</td>
-                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#08805A" }}>{inr(r.dep)}</td>
-                    <td style={{ padding: "14px 18px", textAlign: "center" }}>{stChip(r.state)}</td>
-                    <td style={{ padding: "14px 18px", textAlign: "center" }}>{action(r)}</td>
+                {manualRefunds.map(r => (
+                  <tr key={r.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
+                    <td style={{ padding: "14px 18px", fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap" }}>{r.name}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569", whiteSpace: "nowrap" }}>{r.phone || "—"}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569", whiteSpace: "nowrap" }}>{r.uninstallDate ? fmtDate(r.uninstallDate) : "—"}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805A", whiteSpace: "nowrap" }}>{inr(r.amount)}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{r.invoiceNumber || "—"}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{r.refId || "—"}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#475569", whiteSpace: "nowrap" }}>{r.mode}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{fmtDate(r.recordedAt)}</td>
+                    <td style={{ padding: "14px 18px" }}>
+                      <button onClick={() => removeManualRefund(r.id, r.name)} title="Remove this entry" style={{ ...btnGhost, padding: "5px 9px", color: "#DC4141", borderColor: "rgba(220,65,65,0.25)" }}><Trash2 size={13} /></button>
+                    </td>
                   </tr>
                 ))}
-                {shown.length > 0 && (
-                  <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119", textAlign: "center" }} colSpan={3}>Total ({shown.length})</td>
-                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#08805A", textAlign: "center" }}>{inr(shown.reduce((a, r) => a + r.dep, 0))}</td>
-                    <td style={{ padding: "14px 18px" }}></td><td style={{ padding: "14px 18px" }}></td>
-                  </tr>
-                )}
-                {shown.length === 0 && <tr><td colSpan={6} style={{ padding: 0 }}><Empty msg="No deposits found (plans at or below ₹1,500 carry no deposit)." /></td></tr>}
+                {manualRefunds.length === 0 && <tr><td colSpan={9} style={{ padding: 0 }}><Empty msg="No manual refund entries yet — click 'Add Refund Entry' to log one." /></td></tr>}
               </tbody>
             </table>
           </div>
         </div>
       </div>
+
+      {showAddRefund && (
+        <Modal title="Add Refund Entry" sub="Deposits & Refunds" onClose={() => setShowAddRefund(false)}>
+          <Field label="Customer Name">
+            <input value={refundForm.name} onChange={e => setRF("name", e.target.value)} placeholder="Full name" style={inp} />
+          </Field>
+          <Field label="Mobile Number">
+            <input value={refundForm.phone} onChange={e => setRF("phone", e.target.value)} placeholder="10-digit number" style={inp} />
+          </Field>
+          <Field label="Uninstallation Date">
+            <input type="date" value={refundForm.uninstallDate} onChange={e => setRF("uninstallDate", e.target.value)} style={inp} />
+          </Field>
+          <Field label="Refund Amount">
+            <input type="number" min="0" value={refundForm.amount} onChange={e => setRF("amount", e.target.value)} placeholder="₹" style={inp} />
+          </Field>
+          <Field label="Invoice Number">
+            <input value={refundForm.invoiceNumber} onChange={e => setRF("invoiceNumber", e.target.value)} placeholder="e.g. INV-000706" style={inp} />
+          </Field>
+          <Field label="Transaction ID / Reference ID / Refund ID">
+            <input value={refundForm.refId} onChange={e => setRF("refId", e.target.value)} placeholder="e.g. UPI-2026-XXXX" style={inp} />
+          </Field>
+          <Field label="Refund Mode">
+            <select value={refundForm.mode} onChange={e => setRF("mode", e.target.value)} style={{ ...selectStyle, width: "100%" }}>
+              <option value="UPI">UPI</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cash">Cash</option>
+            </select>
+          </Field>
+          <button onClick={submitManualRefund} style={{ ...btnPrimary, width: "100%", marginTop: 8, background: "#08805A", color: "#fff", border: "none" }}>Submit</button>
+        </Modal>
+      )}
+
       {toast && <div style={toastStyle}><CheckCircle2 size={16} /> {toast}</div>}
     </div>
   );

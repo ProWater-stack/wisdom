@@ -33,7 +33,7 @@ export const MODULE_SECTIONS = {
   employee:      [{ id: "emp_users", label: "Users" }],
   ticketing:     [{ id: "tk_overview", label: "Overview" }, { id: "tk_tickets", label: "Tickets" }, { id: "tk_ops", label: "Ops Tickets" }],
   customer:      [{ id: "cust_list", label: "Customers" }, { id: "cust_all", label: "All Customers" }, { id: "cust_societies", label: "Societies" }],
-  billing:       [{ id: "bill_overview", label: "Overview" }, { id: "bill_subs", label: "Subscriptions" }, { id: "bill_invoices", label: "Invoices" }, { id: "bill_deposits", label: "Deposits & Refunds" }, { id: "bill_plans", label: "Plans" }],
+  billing:       [{ id: "bill_subs", label: "Subscriptions" }, { id: "bill_invoices", label: "Invoices" }, { id: "bill_deposits", label: "Deposits & Refunds" }, { id: "bill_plans", label: "Plans" }],
   fsm:           [{ id: "fsm_track", label: "Track Technician" }, { id: "fsm_amc", label: "AMC / Maintenance" }, { id: "fsm_quality", label: "Water Quality" }],
   erp:           [{ id: "erp_assets", label: "Asset Lifecycle" }],
   autoscheduler: [{ id: "as_society", label: "Auto GS - Society" }, { id: "as_iot", label: "IoT Alerts" }],

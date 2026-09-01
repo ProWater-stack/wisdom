@@ -56,13 +56,33 @@ export function DateRangePicker({ value, onChange }) {
 export function MultiSelectFilter({ label, options, value, onChange, plural: pluralProp, width = 240 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const box = useRef(null);
+  // Dropdown position (v2.29.308) — this panel is now portalled to
+  // document.body (see below), so it needs its own viewport coordinates
+  // instead of being positioned via `position: absolute` relative to the
+  // toggle button. Computed fresh every time it opens.
+  const [pos, setPos] = useState(null);
+  const box = useRef(null);   // the toggle button wrapper
+  const panel = useRef(null); // the portalled dropdown panel
   useEffect(() => {
     if (!open) return;
-    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    const away = (e) => {
+      if (box.current && !box.current.contains(e.target) && panel.current && !panel.current.contains(e.target)) setOpen(false);
+    };
+    // Also close on scroll — a `position:fixed` portalled panel doesn't
+    // track the toggle button's position as the page scrolls, so it would
+    // otherwise visually "detach" from the button instead of following it.
+    const onScroll = () => setOpen(false);
     document.addEventListener("mousedown", away);
-    return () => document.removeEventListener("mousedown", away);
+    window.addEventListener("scroll", onScroll, true);
+    return () => { document.removeEventListener("mousedown", away); window.removeEventListener("scroll", onScroll, true); };
   }, [open]);
+  const toggleOpen = () => {
+    if (!open && box.current) {
+      const r = box.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    }
+    setOpen(o => !o);
+  };
 
   const plural = pluralProp || pluralise(label);
   const all = value === null;
@@ -81,13 +101,28 @@ export function MultiSelectFilter({ label, options, value, onChange, plural: plu
 
   return (
     <div ref={box} style={{ position: "relative" }}>
-      <button onClick={() => setOpen(o => !o)} title={summary}
+      <button onClick={toggleOpen} title={summary}
         style={{ ...selectStyle, display: "inline-flex", alignItems: "center", gap: 7, maxWidth: width, textAlign: "left", fontWeight: 500 }}>
         <Filter size={14} style={{ flexShrink: 0, color: all ? "var(--muted)" : "var(--teal)" }} />
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
       </button>
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 40, width, background: "#fff",
+      {open && pos && createPortal(
+        // Portalled to document.body (v2.29.308) — this panel used to be
+        // `position: absolute` inside the button's own wrapper, which put it
+        // in the DOM under whichever scrollable ancestor happens to contain
+        // this filter (e.g. the page's <main>). <main> sets overflowY:auto
+        // for its own scrolling, and per the CSS spec that silently forces
+        // overflowX to also compute as non-visible — clipping this panel at
+        // main's own left edge whenever a filter sits close enough to it
+        // (confirmed live: "half of the dropdown going inside the sidebar").
+        // A z-index bump alone (tried at v2.29.305/307 for a different,
+        // real dropdown-vs-topbar issue) can't fix this — the panel was
+        // being clipped before z-index/paint-order even applies. Portalling
+        // to body removes it from every ancestor's overflow entirely;
+        // `pos` (viewport coordinates, computed from the toggle button's own
+        // rect at open time) replaces the old parent-relative absolute
+        // positioning.
+        <div ref={panel} style={{ position: "fixed", top: pos.top, right: pos.right, zIndex: 1000, width, background: "#fff",
           border: "1.5px solid var(--border)", borderRadius: 12, boxShadow: "0 10px 30px rgba(0,0,0,.12)", padding: 10 }}>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={`Search ${plural}…`}
             style={{ ...inp, padding: "7px 10px", fontSize: 13, marginBottom: 8 }} />
@@ -104,7 +139,8 @@ export function MultiSelectFilter({ label, options, value, onChange, plural: plu
               </label>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -884,16 +920,26 @@ export function Field({ label, children }) {
     </label>
   );
 }
+// Shared font stacks (v2.29.314) — `Modal`/`Drawer` are portalled straight to
+// `document.body`, entirely outside `.pw-root` (the div that actually
+// carries the app's real fonts: DM Sans body / Playfair Display headings,
+// set in App.jsx). Without their own explicit font-family, every popup was
+// silently falling back to the browser default (Times) instead of matching
+// the rest of the CRM — confirmed live via getComputedStyle. Applied
+// directly here so every Modal/Drawer in the app is fixed at once, not just
+// one call site.
+export const PW_BODY_FONT = "'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+export const PW_HEADING_FONT = "'Playfair Display',Georgia,'Times New Roman',serif";
 export function Drawer({ title, sub, children, onClose }) {
   return createPortal(
     <div onClick={onClose} style={{ ...overlay, zIndex: 1000 }}>
       <div onClick={e => e.stopPropagation()} className="scroll-thin" style={{
         marginLeft: "auto", width: "min(440px,100%)", height: "100%", background: "#fff", padding: 26, overflowY: "auto",
-        boxShadow: "var(--shadow-lg)", animation: "slideIn .25s ease both"
+        boxShadow: "var(--shadow-lg)", animation: "slideIn .25s ease both", fontFamily: PW_BODY_FONT
       }}>
         <style>{`@keyframes slideIn{from{transform:translateX(20px);opacity:.6}to{transform:none;opacity:1}}`}</style>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 18 }}>
-          <div><p className="eyebrow">{sub}</p><h2 style={{ fontSize: 24 }}>{title}</h2></div>
+          <div><p className="eyebrow">{sub}</p><h2 style={{ fontSize: 24, fontFamily: PW_HEADING_FONT }}>{title}</h2></div>
           <button onClick={onClose} style={iconBtn}><X size={18} /></button>
         </div>
         {children}
@@ -905,9 +951,9 @@ export function Drawer({ title, sub, children, onClose }) {
 export function Modal({ title, sub, children, onClose }) {
   return createPortal(
     <div onClick={onClose} style={{ ...overlay, alignItems: "flex-start", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}>
-      <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(440px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 26, boxShadow: "var(--shadow-lg)", maxHeight: "calc(100vh - 80px)", overflowY: "auto" }}>
+      <div onClick={e => e.stopPropagation()} className="pw-pop" style={{ width: "min(440px,100%)", background: "#fff", borderRadius: "var(--radius)", padding: 26, boxShadow: "var(--shadow-lg)", maxHeight: "calc(100vh - 80px)", overflowY: "auto", fontFamily: PW_BODY_FONT }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18, gap: 12 }}>
-          <div>{sub && <p className="eyebrow">{sub}</p>}<h2 style={{ fontSize: 22 }}>{title}</h2></div>
+          <div>{sub && <p className="eyebrow">{sub}</p>}<h2 style={{ fontSize: 22, fontFamily: PW_HEADING_FONT }}>{title}</h2></div>
           <button onClick={onClose} style={{ ...iconBtn, flexShrink: 0 }}><X size={18} /></button>
         </div>
         {children}

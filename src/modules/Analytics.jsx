@@ -1353,15 +1353,14 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       );
                     })}
                   </div>
-                  <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "rgba(8,128,90,0.06)", border: "1px solid rgba(8,128,90,0.12)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                      <span style={{ color: "#475569" }}>Zoho share</span>
-                      <span style={{ fontWeight: 700, color: "#08805A" }}>{combinedRevCur > 0 ? Math.round((collections / combinedRevCur) * 100) : 0}%</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginTop: 4 }}>
-                      <span style={{ color: "#475569" }}>DP share</span>
-                      <span style={{ fontWeight: 700, color: "#1E9E4F" }}>{combinedRevCur > 0 ? Math.round((dpTotalCur / combinedRevCur) * 100) : 0}%</span>
-                    </div>
+                  {/* Zoho/DP share (v2.29.312) — per explicit follow-up ("still showing like
+                      earlier"), the ask was never about wrapping within one stat's own row (that
+                      part was already fixed at v2.29.311) — it's both stats crammed onto a SINGLE
+                      line together, the same way the Recharge/Deposit legend above it lays out
+                      several "label: value" pairs side by side in one row. */}
+                  <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "rgba(8,128,90,0.06)", border: "1px solid rgba(8,128,90,0.12)", display: "flex", alignItems: "center", gap: 20, fontSize: 12.5, whiteSpace: "nowrap", overflowX: "auto" }}>
+                    <span><span style={{ color: "#475569" }}>Zoho share: </span><span style={{ fontWeight: 700, color: "#08805A" }}>{combinedRevCur > 0 ? Math.round((collections / combinedRevCur) * 100) : 0}%</span></span>
+                    <span><span style={{ color: "#475569" }}>DP share: </span><span style={{ fontWeight: 700, color: "#1E9E4F" }}>{combinedRevCur > 0 ? Math.round((dpTotalCur / combinedRevCur) * 100) : 0}%</span></span>
                   </div>
                 </>
               ) : <Empty msg="No revenue data for this period." />}
@@ -3101,6 +3100,7 @@ export function EarnedRevenue() {
   const { sel, setSel, range } = useDateRange("this_month"); // date-range preset filter
   const [apt, setApt] = useState(null);                     // apartment (society) filter
   const [sort, setSort] = useState({ key: "earned", dir: "desc" }); // per-invoice table sort
+  const [cnPopup, setCnPopup] = useState(null); // credit note detail popup
   const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: (key === "paid" || key === "due" || key === "nextBilling") ? "asc" : "desc" });
   const [search, setSearch] = useState(""); // per-invoice table search (customer / mobile / apartment)
   useEffect(() => {
@@ -3335,18 +3335,19 @@ export function EarnedRevenue() {
     // notes, the one whose actually-applied amount exactly matches this
     // invoice's total. Falls back to the generic "Yes" when neither finds a
     // confident match — showing a guessed/wrong note would be worse.
-    let creditNoteNumber = "";
+    let creditNoteNumber = "", creditNoteObj = null;
     if (creditApplied) {
       if (i.number && creditByInvoiceNumber[i.number]) {
         creditNoteNumber = creditByInvoiceNumber[i.number].number;
+        creditNoteObj = creditByInvoiceNumber[i.number];
       } else {
         const custId = i.zohoCustomerId || i.zohoId || "";
         const candidates = custId ? (creditsByCustomer[custId] || []) : [];
         const exact = candidates.find(cn => Math.abs((cn.totalCreditsUsed ?? cn.amount ?? 0) - total) < 0.01);
-        if (exact) creditNoteNumber = exact.number;
+        if (exact) { creditNoteNumber = exact.number; creditNoteObj = exact; }
       }
     }
-    return { invoiceId: i.id || "—", invoiceNumber: i.number || "—", referenceNumber: i.referenceNumber || "—", creditApplied, creditNoteNumber, paymentMode: i.paymentMode || "—", customer: i.customerName || "—", phone: custOf(i)?.phone || "", society: societyOf(i), plan, planCode, planMatched: !!planEntry, total, deposit, recharge, months, intervalLabel, earnedPerMonth,
+    return { invoiceId: i.id || "—", invoiceNumber: i.number || "—", referenceNumber: i.referenceNumber || "—", creditApplied, creditNoteNumber, creditNoteObj, paymentMode: i.paymentMode || "—", customer: i.customerName || "—", phone: custOf(i)?.phone || "", society: societyOf(i), plan, planCode, planMatched: !!planEntry, total, deposit, recharge, months, intervalLabel, earnedPerMonth,
       payDay: pd, dueDay: dueValid ? dd : null, nextBillDay: nbValid ? nb : null, tenureDays, daysInPaidMonth, earnedRevenue,
       remainingDays, remainingMonths, remainingDaysEarned, remainingMonthEarned };
   });
@@ -3384,16 +3385,41 @@ export function EarnedRevenue() {
 
   // Timeline (12-month rolling ending at range.to)
   const anchorY = range.to.getFullYear(), anchorM = range.to.getMonth() + 1;
-  const timeline = Array.from({ length: 12 }, (_, k) => _addMonths(anchorY, anchorM, k - 11))
-    .filter(([y, m]) => y > 2026 || (y === 2026 && m >= 1))
-    .map(([y, m]) => {
-      const inMonth = aptRows.filter(r => paidInMonth(r, y, m));
-      return {
-        label: _monthShort(y, m),
-        earned: Math.round(inMonth.reduce((s, r) => s + r.earnedRevenue, 0)),
-        recharge: Math.round(inMonth.reduce((s, r) => s + r.recharge, 0)),
-      };
+  const rawMonths = Array.from({ length: 13 }, (_, k) => _addMonths(anchorY, anchorM, k - 12))
+    .filter(([y, m]) => y > 2025 || (y === 2025 && m >= 12));
+  
+  const monthlyData = rawMonths.map(([y, m]) => {
+    const inMonth = aptRows.filter(r => paidInMonth(r, y, m));
+    return {
+      y, m,
+      earned: Math.round(inMonth.reduce((s, r) => s + r.earnedRevenue, 0)),
+      recharge: Math.round(inMonth.reduce((s, r) => s + r.recharge, 0)),
+    };
+  });
+
+  const timeline = [];
+  const liveY = new Date().getFullYear();
+  const liveM = new Date().getMonth() + 1;
+
+  for (let i = 1; i < monthlyData.length; i++) {
+    const curr = monthlyData[i];
+    const prev = monthlyData[i - 1];
+
+    if (!(curr.y > 2026 || (curr.y === 2026 && curr.m >= 1))) continue;
+
+    const earnedDelta = prev.earned > 0 ? Math.round(((curr.earned - prev.earned) / prev.earned) * 100) : null;
+    const rechargeDelta = prev.recharge > 0 ? Math.round(((curr.recharge - prev.recharge) / prev.recharge) * 100) : null;
+
+    timeline.push({
+      label: _monthShort(curr.y, curr.m),
+      earned: curr.earned,
+      recharge: curr.recharge,
+      y: curr.y,
+      m: curr.m,
+      earnedDelta,
+      rechargeDelta,
     });
+  }
 
   const stats = [
     { label: "Total Collection", value: inr(Math.round(totalCollection)), icon: Wallet, sub: rangeText, hero: true, delta: momPct(totalCollection, totalCollectionPrev) },
@@ -3440,6 +3466,37 @@ export function EarnedRevenue() {
     total: a.total + r.total, deposit: a.deposit + r.deposit, recharge: a.recharge + r.recharge,
     earned: a.earned + r.earnedRevenue, remDaysEarned: a.remDaysEarned + r.remainingDaysEarned, remMonthEarned: a.remMonthEarned + r.remainingMonthEarned,
   }), { total: 0, deposit: 0, recharge: 0, earned: 0, remDaysEarned: 0, remMonthEarned: 0 });
+  const EarnedRechargeTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    const data = payload[0].payload;
+    const fmtPct = (val) => {
+      if (val == null) return null;
+      if (val > 0) return ` (▲ +${val}%)`;
+      if (val < 0) return ` (▼ ${val}%)`;
+      return ` (0%)`;
+    };
+    return (
+      <div style={{ background: "var(--forest)", color: "#fff", padding: "10px 14px", borderRadius: 12, fontSize: 12, boxShadow: "var(--shadow-lg)", fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif" }}>
+        <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 12.5 }}>{label}</div>
+        {payload.map((p, i) => {
+          const isEarned = p.dataKey === "earned";
+          const delta = isEarned ? data.earnedDelta : data.rechargeDelta;
+          const deltaStr = fmtPct(delta);
+          const color = isEarned ? "#8DC63F" : "#F59E0B";
+          const isNeg = delta != null && delta < 0;
+          return (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, margin: "4px 0" }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: p.color || color, flexShrink: 0 }} />
+              <span>
+                {p.name}: <strong>{inr(p.value)}</strong>
+                {deltaStr && <span style={{ color: isNeg ? "#ff4d4d" : "#a3e635", fontSize: 11, fontWeight: 700, marginLeft: 4 }}>{deltaStr}</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="fade-up">
@@ -3528,17 +3585,92 @@ export function EarnedRevenue() {
                   <stop offset="0%" stopColor="#08805A" stopOpacity={0.9} />
                   <stop offset="100%" stopColor="#0A7D53" stopOpacity={0.7} />
                 </linearGradient>
+                <linearGradient id="liveEarnedGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#08805A">
+                    <animate attributeName="stop-opacity" values="0.9;0.3;0.9" dur="1.5s" repeatCount="indefinite" />
+                  </stop>
+                  <stop offset="100%" stopColor="#0A7D53">
+                    <animate attributeName="stop-opacity" values="0.7;0.15;0.7" dur="1.5s" repeatCount="indefinite" />
+                  </stop>
+                </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} tickMargin={12} height={38} />
               <YAxis domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={false} tickLine={false} width={64} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-              <Tooltip content={<TT prefix="₹" />} />
+              <Tooltip content={<EarnedRechargeTooltip />} />
               <Legend iconType="circle" wrapperStyle={{ fontSize: 12.5, color: "#1D1D1F", paddingTop: 10 }} />
-              <Bar dataKey="earned" name="Earned" fill="url(#earnedHigGrad)" radius={[8, 8, 0, 0]} maxBarSize={36} isAnimationActive={false}>
-                <LabelList dataKey="earned" position="top" formatter={(v) => v ? inr(v) : ""} style={{ fontSize: 10, fill: "#08805A", fontWeight: 700, fontFamily: "-apple-system, system-ui" }} />
+              <Bar dataKey="earned" name="Earned" radius={[8, 8, 0, 0]} maxBarSize={36} isAnimationActive={false}>
+                {timeline.map((entry, index) => {
+                  const isLive = entry.y === liveY && entry.m === liveM;
+                  return (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={isLive ? "url(#liveEarnedGrad)" : "url(#earnedHigGrad)"}
+                    />
+                  );
+                })}
+                <LabelList dataKey="earned" content={(props) => {
+                  const { x, y, width, value, index } = props;
+                  if (!value) return null;
+                  const item = timeline[index];
+                  const delta = item?.earnedDelta;
+                  const deltaStr = delta != null ? (delta > 0 ? `+${delta}%` : `${delta}%`) : "";
+                  const valStr = value >= 100000 ? `₹${(value / 100000).toFixed(1)}L` : value >= 1000 ? `₹${Math.round(value / 1000)}k` : `₹${value}`;
+                  const deltaColor = delta != null && delta < 0 ? "#dc2626" : "#08805A";
+                  return (
+                    <g>
+                      <text x={x + width / 2} y={y - 8} fill="none" stroke="#ffffff" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke fill" fontSize={9.5} fontWeight={800} textAnchor="middle">
+                        {valStr}
+                        {deltaStr && <tspan dx={4}>({deltaStr})</tspan>}
+                      </text>
+                      <text x={x + width / 2} y={y - 8} fill="#08805A" fontSize={9.5} fontWeight={800} textAnchor="middle">
+                        {valStr}
+                        {deltaStr && <tspan fill={deltaColor} dx={4}>({deltaStr})</tspan>}
+                      </text>
+                    </g>
+                  );
+                }} />
               </Bar>
-              <Line dataKey="recharge" name="Recharge collected" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false}>
-                <LabelList dataKey="recharge" position="bottom" offset={10} formatter={(v) => v ? inr(v) : ""} style={{ fontSize: 10, fill: "#D97706", fontWeight: 700, fontFamily: "-apple-system, system-ui" }} />
+              <Line dataKey="recharge" name="Recharge collected" stroke="#F59E0B" strokeWidth={3} activeDot={{ r: 6 }} isAnimationActive={false}
+                dot={(props) => {
+                  const { cx, cy, payload, index } = props;
+                  if (cx == null || cy == null || !payload) return null;
+                  const isLive = payload.y === liveY && payload.m === liveM;
+                  if (isLive) {
+                    return (
+                      <g key={index}>
+                        <circle cx={cx} cy={cy} r={6} fill="none" stroke="#F59E0B" strokeWidth={2}>
+                          <animate attributeName="r" values="6;12;6" dur="1.5s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values="1;0.15;1" dur="1.5s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx={cx} cy={cy} r={3.5} fill="#F59E0B" stroke="#ffffff" strokeWidth={1.5} />
+                      </g>
+                    );
+                  }
+                  return <circle key={index} cx={cx} cy={cy} r={4} fill="#F59E0B" stroke="#ffffff" strokeWidth={1.5} />;
+                }}
+              >
+                <LabelList dataKey="recharge" content={(props) => {
+                  const { x, y, value, index } = props;
+                  if (!value) return null;
+                  const item = timeline[index];
+                  const delta = item?.rechargeDelta;
+                  const deltaStr = delta != null ? (delta > 0 ? `+${delta}%` : `${delta}%`) : "";
+                  const valStr = value >= 100000 ? `₹${(value / 100000).toFixed(1)}L` : value >= 1000 ? `₹${Math.round(value / 1000)}k` : `₹${value}`;
+                  const deltaColor = delta != null && delta < 0 ? "#dc2626" : "#D97706";
+                  return (
+                    <g>
+                      <text x={x} y={y + 16} fill="none" stroke="#ffffff" strokeWidth={3} strokeLinejoin="round" paintOrder="stroke fill" fontSize={9.5} fontWeight={800} textAnchor="middle">
+                        {valStr}
+                        {deltaStr && <tspan dx={4}>({deltaStr})</tspan>}
+                      </text>
+                      <text x={x} y={y + 16} fill="#D97706" fontSize={9.5} fontWeight={800} textAnchor="middle">
+                        {valStr}
+                        {deltaStr && <tspan fill={deltaColor} dx={4}>({deltaStr})</tspan>}
+                      </text>
+                    </g>
+                  );
+                }} />
               </Line>
             </ComposedChart>
           </ResponsiveContainer>
@@ -3596,7 +3728,13 @@ export function EarnedRevenue() {
                   <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", background: r.deposit > 0 ? "rgba(255,149,0,.04)" : undefined }}>
                     <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", fontWeight: 600, color: "#0d2119" }}>{r.invoiceNumber}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12, whiteSpace: "nowrap", color: "#86868b" }}>{r.referenceNumber}</td>
-                    <td style={{ padding: "14px 18px", fontSize: 12, fontWeight: r.creditApplied ? 700 : 400, color: r.creditApplied ? "#08805a" : "#94a3b8" }}>{r.creditApplied ? (r.creditNoteNumber || "Yes") : "(-)"}</td>
+                    <td style={{ padding: "14px 18px", fontSize: 12, fontWeight: r.creditApplied ? 700 : 400, color: r.creditApplied ? "#08805a" : "#94a3b8", whiteSpace: "nowrap" }}>
+                      {r.creditApplied
+                        ? r.creditNoteObj
+                          ? <button onClick={() => setCnPopup(r.creditNoteObj)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", fontWeight: 700, fontSize: 12, textDecoration: "underline", textUnderlineOffset: 3, padding: 0, whiteSpace: "nowrap" }}>{r.creditNoteNumber || "Yes"}</button>
+                          : <span style={{ whiteSpace: "nowrap" }}>{r.creditNoteNumber || "Yes"}</span>
+                        : "(-)"}
+                    </td>
                     <td style={{ padding: "14px 18px", fontSize: 12.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap" }}>{r.customer}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{r.phone ? fmtPhone(r.phone) : "—"}</td>
                     <td style={{ padding: "14px 18px", fontSize: 12, color: "#475569", whiteSpace: "nowrap" }}>{r.society}</td>
@@ -3659,6 +3797,81 @@ export function EarnedRevenue() {
           {tableRows.length === 0 && <Empty msg="No paid invoices to recognise." />}
         </div>
       </div>
+      {/* Credit Note Detail Popup */}
+      {cnPopup && (() => {
+        const cnPopupDate = (() => {
+          if (!cnPopup.date) return "—";
+          const ds = cnPopup.date;
+          if (ds.includes("T")) {
+            const d = new Date(ds);
+            if (!isNaN(d.getTime())) return fmtDate(d);
+          }
+          const clean = ds.split(" ")[0];
+          const d = new Date(clean + "T00:00:00");
+          if (!isNaN(d.getTime())) return fmtDate(d);
+          const fallback = new Date(ds);
+          return !isNaN(fallback.getTime()) ? fmtDate(fallback) : "—";
+        })();
+        return (
+          <Modal onClose={() => setCnPopup(null)} title={cnPopup.number || "Credit Note"} sub={`Issued · ${cnPopupDate}`}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, fontFamily: "-apple-system, SF Pro Display, system-ui, sans-serif" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div style={{ background: "rgba(243,248,236,.5)", borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Total Credit</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "#1D1D1F" }}>{cnPopup.total_formatted || (cnPopup.total != null ? inr(cnPopup.total) : "—")}</div>
+                </div>
+                <div style={{ background: "rgba(243,248,236,.5)", borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Balance Left</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: cnPopup.balance > 0 ? "#E8A93A" : "#08805A" }}>{cnPopup.balance_formatted || (cnPopup.balance != null ? inr(cnPopup.balance) : "—")}</div>
+                </div>
+                <div style={{ background: "rgba(243,248,236,.5)", borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Credits Used</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: "#475569" }}>{cnPopup.total_credits_used != null ? inr(cnPopup.total_credits_used) : "—"}</div>
+                </div>
+                <div style={{ background: "rgba(243,248,236,.5)", borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Status</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: cnPopup.status === "open" ? "#08805A" : "#86868b", textTransform: "capitalize" }}>{cnPopup.status || "—"}</div>
+                </div>
+              </div>
+              <div style={{ background: "rgba(243,248,236,.5)", borderRadius: 12, padding: "14px 16px" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 4 }}>Description</div>
+                <div style={{ fontSize: 13.5, color: "#475569" }}>{cnPopup.description || "—"}</div>
+              </div>
+              {(cnPopup.invoices_applied || []).length > 0 && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>Applied to {(cnPopup.invoices_applied || []).length} invoice{(cnPopup.invoices_applied.length || 0) > 1 ? "s" : ""}</div>
+                  <div style={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.06)", overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                      <thead>
+                        <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                          <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700, color: "#0a805a", fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em" }}>Invoice #</th>
+                          <th style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700, color: "#0a805a", fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em" }}>Applied On</th>
+                          <th style={{ padding: "10px 14px", textAlign: "right", fontWeight: 700, color: "#0a805a", fontSize: 11, textTransform: "uppercase", letterSpacing: ".05em" }}>Amount Applied</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cnPopup.invoices_applied.map((inv, idx) => (
+                          <tr key={idx} style={{ borderBottom: idx < (cnPopup.invoices_applied.length - 1) ? "1px solid rgba(0,0,0,.04)" : "none" }}>
+                            <td style={{ padding: "10px 14px", fontWeight: 600, color: "#1D1D1F" }}>{inv.invoice_number}</td>
+                            <td style={{ padding: "10px 14px", color: "#475569" }}>
+                              {(() => {
+                                if (!inv.date) return "—";
+                                const d = new Date(inv.date.includes("T") ? inv.date : inv.date + "T00:00:00");
+                                return !isNaN(d.getTime()) ? fmtDate(d) : "—";
+                              })()}
+                            </td>
+                            <td style={{ padding: "10px 14px", textAlign: "right", fontWeight: 600, color: "#08805a" }}>{inv.amount_applied > 0 ? inr(inv.amount_applied) : "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

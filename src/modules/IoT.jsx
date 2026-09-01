@@ -200,7 +200,6 @@ export const IOT_TANK_ONLINE_SECS = 25 * 60; // 25 min (tolerates a missed ~20-m
 export const iotOnline = (ts, win = 120) => !!ts && (Date.now() - new Date(ts).getTime()) / 1000 < win;
 export const iotClock = (ts) => ts ? new Date(ts).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
 export const iotStamp = (ts) => ts ? new Date(ts).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "—";
-export const iotVol = (v) => (v == null || v === "") ? "—" : Number(v).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 // Rounded litres with unit for tables — 152.48 → "152 L".
 export const iotVolL = (v) => (v == null || v === "") ? "—" : `${Math.round(Number(v)).toLocaleString("en-IN")} L`;
 
@@ -472,8 +471,6 @@ export const ValveBadge = ({ state }) => (
 );
 
 
-export const IOT_FLOW_COLORS = ["#0B6F52", "#1E9E4F", "#2A86D6", "#986315", "#2A86D6", "#DC4141"];
-
 export function IoTWave({ kind, color, opacity = 0.5 }) {
   if (kind === "bars") {
     const hs = [5, 7, 6, 9, 7, 11, 8, 13, 7, 10, 6, 12, 9, 15, 8, 11, 7, 14, 10, 17, 11, 13];
@@ -723,55 +720,7 @@ export function IoTRangeChips({ range, setRange }) {
   );
 }
 export const IOT_RANGE_LABEL = { today: "today", yesterday: "yesterday", week: "this week", month: "this month", lastMonth: "last month" };
-// Dispense Summary — a standalone, prominent full-width hero card (visual
-// redesign to match a user-provided mockup, v2.29.87): Total dispensed as a
-// big headline number on the left, Average dispensed/day on the right, both
-// scoped to the shared date-range filter (IOT_RANGE_OPTIONS/range, owned by
-// the parent IoTDevices, same state Trend analysis / Recent readings read).
-// The fuller mockup (v2.29.88) explicitly puts the range chips ON this card
-// (above "Total dispensed"), so they live here too now — same shared state,
-// just a second place to change it (Trend analysis/Recent readings keep
-// their own copies, unchanged; picking a period in any one updates all).
-// totalDispensed is a lifetime counter (not a banded quality metric), so
-// this stays a plain running-total display, never RAG-coloured. Was
-// previously a small inline block tucked inside the RO Unit Sensors card
-// (`IoTDispensedStat`) — promoted to its own card per the mockup.
-export function IoTDispenseSummaryCard({ dispensed, range, setRange }) {
-  const periodLabel = IOT_RANGE_LABEL[range] || "this period";
-  return (
-    <div style={{ ...IOT_CARD, padding: "20px 24px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
-      <div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-          <IoTRangeChips range={range} setRange={setRange} />
-        </div>
-        <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>Total dispensed</div>
-        {!dispensed ? (
-          <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 8 }}>No dispensed-litres data for {periodLabel}.</div>
-        ) : (
-          <>
-            <div className="serif" style={{ fontSize: 36, fontWeight: 800, color: "var(--f)", marginTop: 6, lineHeight: 1 }}>
-              {dispensed.total.toFixed(2)} <span style={{ fontSize: 17, fontWeight: 700, color: "var(--muted)" }}>L</span>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>as of {periodLabel}</div>
-          </>
-        )}
-      </div>
-      {dispensed && (
-        <div style={{ textAlign: "right", marginTop: 38 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--muted)" }}>Average dispensed</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--f)", marginTop: 6 }}>{dispensed.avgPerDay == null ? "—" : `${dispensed.avgPerDay.toFixed(2)} L/day`}</div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>{periodLabel}</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // Recent RO-tank readings — timestamp × (tank % · pH · TDS · temp), newest first.
-// Cell styling for an out-of-range reading — green = normal, amber/red highlighted.
-export const iotBandCell = (band) => band === "red" ? { color: "#DC4141", background: "#FBE8E8", fontWeight: 800 }
-  : band === "amber" ? { color: "#a86e00", background: "#FBF0E0", fontWeight: 700 }
-  : { color: "var(--f)" };
 // Value-only emphasis (no cell fill): out-of-range values go bold, coloured and
 // +1px so the eye catches them without a full amber/red block. (base td = 13.5px)
 export const iotBandText = (band) => band === "red" ? { color: "#DC4141", fontWeight: 800, fontSize: 14.5 }
@@ -1433,55 +1382,8 @@ export function IoTWeatherCard({ weather }) {
     </div>
   );
 }
-// ── IoT Alerts rules engine (deterministic; thresholds per the water-quality
-// business-rules guide). Runs over each device's history + liveness and returns
-// a de-duplicated alert per (device, rule) with an occurrence count. ──────────
+// Severity styling shared by the Alerts page's anomaly-event list below.
 export const IOT_ALERT_SEV = { critical: { c: "#DC4141", bg: "#FBE8E8", label: "Critical" }, high: { c: "#a86e00", bg: "#FBF0E0", label: "High" }, medium: { c: "#2A86D6", bg: "#E5F0FA", label: "Medium" } };
-export function iotRunAlerts(devices, histByDevice) {
-  const alerts = [];
-  const now = Date.now();
-  (devices || []).forEach((d) => {
-    const chrono = [...((histByDevice && histByDevice[d.deviceId]) || [])].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    const lastTs = chrono.length ? new Date(chrono[chrono.length - 1].timestamp).getTime() : (d.timestamp ? new Date(d.timestamp).getTime() : null);
-    // Dead device — no ping for > 24h.
-    if (lastTs == null) alerts.push({ deviceId: d.deviceId, rule: "DEAD", name: "Dead device", sev: "critical", ts: null, value: "never reported", detail: "No telemetry ever received from this device.", action: "Verify install, power and connectivity.", cause: "Never provisioned, or offline since install.", count: 1 });
-    else { const ageH = (now - lastTs) / 3600000; if (ageH > 24) alerts.push({ deviceId: d.deviceId, rule: "DEAD", name: "Dead device", sev: "critical", ts: lastTs, value: `${Math.round(ageH)}h since last ping`, detail: "No telemetry received for over 24 hours.", action: "Dispatch a technician — check power, SIM/connectivity and the sensor unit.", cause: "Power loss, network/SIM drop, or a failed sensor board.", count: 1 }); }
-    if (!iotIsTank(d)) return;
-    const agg = {};
-    const flag = (rule, name, sev, ts, value, detail, action, cause) => { const cur = agg[rule]; if (!cur) agg[rule] = { rule, name, sev, ts, value, detail, action, cause, count: 1 }; else { cur.count++; if (ts >= cur.ts) { cur.ts = ts; cur.value = value; } } };
-    let prev = null; const tdsWin = [];
-    chrono.forEach((it) => {
-      const ts = new Date(it.timestamp).getTime();
-      const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp), tank = iotTank(it.tankLevel).pct;
-      if (ph != null) {
-        if (ph < 6.0 || ph > 9.0) flag("PH_CRIT", "Critical pH out of bounds", "critical", ts, `pH ${ph.toFixed(1)}`, "pH beyond the safe 6.0–9.0 band (BR-PH-01).", "Emergency: divert flow, inspect chemical dosing.", "Dosing failure or acid/alkali intrusion.");
-        else if (ph < 6.5 || ph > 8.5) flag("PH_OOR", "pH out of range", "high", ts, `pH ${ph.toFixed(1)}`, "pH outside the ideal 6.5–8.5 band.", "Check dosing and source water.", "Dosing drift or a source-water shift.");
-      }
-      if (tds != null) {
-        if (tds > 600) flag("TDS_SPIKE", "High TDS contamination spike", "high", ts, `${Math.round(tds)} ppm`, "TDS above 600 ppm (BR-TDS-01).", "Divert to waste; check RO membrane / filtration.", "RO membrane breakdown, scaling, or contamination.");
-        else if (tds > 500) flag("TDS_OOR", "TDS out of safe range", "high", ts, `${Math.round(tds)} ppm`, "TDS above the 500 ppm safe limit.", "Check filtration / RO membrane.", "Membrane wear or high mineral load.");
-        if (tds < 30) flag("TDS_DROP", "Sudden TDS drop (dilution)", "medium", ts, `${Math.round(tds)} ppm`, "TDS below 30 ppm (BR-TDS-02).", "Schedule calibration; check for line breaks.", "Over-purification, dilution, or a disconnected sensor.");
-      }
-      if (tp != null && (tp < 10 || tp > 32)) flag("TEMP_OOR", "Temperature out of range", "high", ts, `${tp.toFixed(1)} °C`, "Water temperature beyond 10–32 °C.", "Inspect heat source / ambient exposure.", "Heat-exchanger fault, solar heating, or cold influx.");
-      if (prev) {
-        const gapMin = (ts - prev.ts) / 60000;
-        if (gapMin > 0 && gapMin <= 15) {
-          if (ph != null && prev.ph != null && Math.abs(ph - prev.ph) > 0.8) flag("PH_DRIFT", "pH rapid drift", "high", ts, `Δ${(ph - prev.ph).toFixed(1)} in ${Math.round(gapMin)}m`, "pH moved > 0.8 within minutes (BR-PH-02).", "Flag chemical-dosing failure; inspect feed pumps.", "Dosing-pump failure.");
-          if (ph != null && prev.ph != null && tds != null && prev.tds != null && (ph - prev.ph) < -0.5 && (tds - prev.tds) > 150) flag("COR_ACID", "Acid / industrial intrusion", "critical", ts, `pH ↓${(prev.ph - ph).toFixed(1)}, TDS ↑${Math.round(tds - prev.tds)}`, "pH crashed while TDS surged — the classic contaminant signature (BR-COR-01).", "Auto-shutdown intake; emergency site inspection.", "Acid or industrial contaminant intrusion.");
-          if (tank != null && prev.tank != null && (prev.tank - tank) >= 25 && gapMin <= 60) flag("TANK_DROP", "Tank level dropped drastically", "high", ts, `${prev.tank}%→${tank}% in ${Math.round(gapMin)}m`, "Tank fell ≥ 25% in a short span.", "Check for a leak/burst or stuck valve; verify the pump.", "Leak/burst, valve failure, or abnormal draw.");
-        }
-      }
-      tdsWin.push(tds); if (tdsWin.length > 24) tdsWin.shift();
-      prev = { ts, ph, tds, tp, tank };
-    });
-    const vals = tdsWin.filter((v) => v != null);
-    if (vals.length >= 20) { const m = vals.reduce((s, v) => s + v, 0) / vals.length; const sd = Math.sqrt(vals.reduce((s, v) => s + (v - m) * (v - m), 0) / vals.length); if (sd < 0.5) flag("FLATLINE", "Sensor frozen / flatline", "medium", lastTs, "σ ≈ 0", "TDS hasn't varied across many samples (BR-SYS-01).", "Raise a 'sensor frozen' ticket; watchdog reboot.", "Frozen ADC or a stuck sensor probe."); }
-    Object.values(agg).forEach((a) => alerts.push({ deviceId: d.deviceId, ...a }));
-  });
-  const sevRank = { critical: 0, high: 1, medium: 2 };
-  alerts.sort((a, b) => (sevRank[a.sev] - sevRank[b.sev]) || ((b.ts || 0) - (a.ts || 0)));
-  return alerts;
-}
 // Per-occurrence anomaly EVENTS (one per triggering reading + dead/flatline),
 // each with a STABLE key so re-detecting the same event across polls doesn't
 // duplicate it in the persisted log.
