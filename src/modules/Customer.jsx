@@ -709,6 +709,12 @@ export function AllCustomers() {
   // range — "All Time" by default so the directory isn't silently narrowed on load.
   const [societyFilter, setSocietyFilter] = useState(null); // null = all
   const [statusFilter, setStatusFilter] = useState(null);  // null = all (unrestricted on load)
+  // Uninstalled/Inactive customers are excluded from the table by default
+  // (v2.29.331, explicit user request: "Dont load the Uninstalled and
+  // In-Active customers by default in the table... When i click on the KPI
+  // card for Inactive customers that time you show it") — toggled on via
+  // the "Inactive customers" stat in the Active Customers KPI card below.
+  const [showInactive, setShowInactive] = useState(false);
   const [stackFilter, setStackFilter] = useState(null);     // null = all; "Zoho" | "DP" (v2.29.113)
   const [deviceTypeFilter, setDeviceTypeFilter] = useState(null); // null = all (v2.29.140)
   const [filterTypeFilter, setFilterTypeFilter] = useState(null); // null = all (v2.29.140)
@@ -1027,6 +1033,14 @@ export function AllCustomers() {
     if (st === "inactive" || dev === "inactive") return { background: "#FFF1E0" };
     return {};
   };
+  // Same Uninstalled/Inactive signal rowTint above already highlights — used
+  // here to actually gate table visibility (v2.29.331) rather than just
+  // color, unless the user has clicked to reveal them (showInactive).
+  const isHiddenByDefault = (c) => {
+    const dev = normSt(c.deviceStatus);
+    const st = normSt(c.status);
+    return dev.includes("uninstall") || st === "inactive" || dev === "inactive";
+  };
 
   // Faceted filter options: options list is computed dynamically per filter.
   // Society clause restored to the CRM-wide default-exclusion convention
@@ -1041,6 +1055,7 @@ export function AllCustomers() {
     (exclude === "deviceType" || (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c)))) &&
     (exclude === "filterType" || (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c)))) &&
     (exclude === "conn" || (connFilter === null ? true : (c.isDpCustomer && (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active")))) &&
+    (showInactive ? isHiddenByDefault(c) : !isHiddenByDefault(c)) &&
     (!ql || matchesQ(c)));
   const societyOptions = Array.from(new Set(facetPop("society").map(c => c.society).filter(Boolean))).sort();
   const statusOptions = Array.from(new Set(facetPop("status").map(c => c.status).filter(Boolean))).sort();
@@ -1054,13 +1069,14 @@ export function AllCustomers() {
     (stackFilter === null || stackFilter.includes(stackOf(c))) &&
     (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
     (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
-    (connFilter === null ? true : (c.isDpCustomer && (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active"))));
+    (connFilter === null ? true : (c.isDpCustomer && (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active"))) &&
+    (showInactive ? isHiddenByDefault(c) : !isHiddenByDefault(c)));
 
   const results = (ql ? filtered.filter(matchesQ) : filtered)
     .slice().sort((a, b) => String(a.purifier_id).localeCompare(String(b.purifier_id), undefined, { numeric: true }));
 
   // Reset filters helper
-  const hasActiveFilters = societyFilter !== null || statusFilter !== null || stackFilter !== null || deviceTypeFilter !== null || filterTypeFilter !== null || connFilter !== null || q !== "";
+  const hasActiveFilters = societyFilter !== null || statusFilter !== null || stackFilter !== null || deviceTypeFilter !== null || filterTypeFilter !== null || connFilter !== null || showInactive || q !== "";
   const handleResetFilters = () => {
     setSocietyFilter(null);
     setStatusFilter(null);
@@ -1068,6 +1084,7 @@ export function AllCustomers() {
     setDeviceTypeFilter(null);
     setFilterTypeFilter(null);
     setConnFilter(null);
+    setShowInactive(false);
     setQ("");
   };
 
@@ -1128,7 +1145,19 @@ export function AllCustomers() {
   const uniqueCustomers = Array.from(uniqueCustomerMap.values());
   const uniqueTotalCount = uniqueCustomers.length;
   const uniqueActiveCount = uniqueCustomers.filter(u => u.isActive).length;
-  const uniqueInactiveCount = uniqueTotalCount - uniqueActiveCount;
+  // Deliberately computed OFF `results` — `results` now excludes Uninstalled/
+  // Inactive customers by default (v2.29.331), so this would silently read 0
+  // whenever they're hidden. This ignores that gate (but still respects the
+  // other society/stack/device/filter-type/search filters) so the KPI stays
+  // accurate and worth clicking even while they're hidden from the table.
+  const inactivePop = withPur.filter(c =>
+    (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
+    (stackFilter === null || stackFilter.includes(stackOf(c))) &&
+    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
+    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
+    (!ql || matchesQ(c)) &&
+    isHiddenByDefault(c));
+  const uniqueInactiveCount = new Set(inactivePop.map(custKey)).size;
   const uniqueDpCount = uniqueCustomers.filter(u => u.isDp).length;
   const uniqueZohoCount = uniqueTotalCount - uniqueDpCount;
 
@@ -1901,7 +1930,17 @@ export function AllCustomers() {
           <div style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             <span style={{ color: "#08805A", fontWeight: 600 }}>{uniqueDpCount.toLocaleString("en-IN")} DP · {uniqueZohoCount.toLocaleString("en-IN")} Zoho</span>
             <span style={{ color: "#C6C6CB" }}> | </span>
-            <span style={{ color: "#DC4141", fontWeight: 600 }}>{uniqueInactiveCount.toLocaleString("en-IN")} Inactive customers</span>
+            {/* Uninstalled/Inactive customers are hidden from the table by
+                default (v2.29.331/335) — clicking this stat ISOLATES the
+                table to show only them (not added alongside the rest);
+                click again to return to the normal default view. */}
+            <span
+              onClick={() => setShowInactive(v => !v)}
+              title={showInactive ? "Showing only Uninstalled/Inactive customers — click to return to the default view" : "Uninstalled/Inactive customers are hidden from the table — click to show only them"}
+              style={{ color: "#DC4141", fontWeight: 600, cursor: "pointer", textDecoration: showInactive ? "underline" : "none" }}
+            >
+              {uniqueInactiveCount.toLocaleString("en-IN")} Inactive customers{showInactive ? " (showing only)" : ""}
+            </span>
           </div>
         </div>
 

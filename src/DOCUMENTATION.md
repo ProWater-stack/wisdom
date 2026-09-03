@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.331**.
+> **Reflects:** `APP_VERSION` **2.29.335**.
 
 ---
 
@@ -82,11 +82,14 @@ charts use it.
 
 ## 2. Authentication, roles & access control
 
-- **Login** (`api.login`): Firebase Auth REST —
+- **Login** (`api.login`, `Login` in `shared/ui.jsx`): Firebase Auth REST —
   `POST identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=VITE_FIREBASE_API_KEY`
   with email+password. On success the **idToken** is stored in `sessionStorage.pw_idToken`
   (+ `pw_tokenExpiry`, 60 min, + `pw_refreshToken`). `authHeaders()` attaches
   `Authorization: Bearer <idToken>` to every backend call.
+  - **Horizontal 2-Column Layout (v2.29.334):** Divided the login popup horizontally per user request into a brand/identity left pane (logo, Wisdom 2.0 branding, version pill, copyright) and a compact right-hand credential form pane with responsive mobile single-column fallback.
+  - **Login Card Footer (v2.29.332):** Displays a version badge pill (`Wisdom 2.0 • v{APP_VERSION}`) and copyright line (`© 2026 ProWater Internal Systems`) pinned neatly inside the layout.
+  - **Sign In Action & Feedback (v2.29.333):** Removed the runner/doorway character animations per user request; the submit button now transitions directly to an emerald green `#08805A` state with a checkmark and **"SUCCESS"** label before navigating into the app.
 - **Session lifetime (reworked v2.29.100):** the Firebase ID token itself only lives ~1h, but an
   ACTIVE session no longer hard-stops there — `api.refreshIdToken()` silently renews it (via
   `POST securetoken.googleapis.com/v1/token`, `grant_type=refresh_token`, using the stored
@@ -447,6 +450,14 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - **All Customers (v2.29.4):** search by Purifier ID / phone / name / email; the results table also carries
   a **Device Type** column (`DeviceTypeBadge`) and, in the toolbar, a **signup-date range** filter ("All
   Time" plus the same Today/…/Custom presets used elsewhere, filtering on each customer's `since` date) and
+  **Uninstalled/Inactive customers are excluded from the table by default (v2.29.335)**, per explicit
+  user request — the same Un-Installed(deviceStatus)/Inactive(status) signal the row-highlighting
+  already uses (`isHiddenByDefault`). The "Active Customers" KPI card's "{N} Inactive customers" stat is
+  clickable and works as an **isolate toggle**: click it once to flip the entire table (and every KPI
+  derived from it) to show ONLY the Uninstalled/Inactive customers — not added alongside the rest — click
+  again to return to the default view. The stat's own count is computed from a separate, ungated
+  population so it stays accurate even while the default view has none of them visible; "Reset Filters"
+  (which now appears once this is toggled) returns to the default hidden view.
   **Society / Status** multi-select filters (`MultiSelectFilter`, v2.29.99 — same component/summary
   convention as the Customers page's Society filter). **v2.29.140:** Device Type now uses the real
   plan-catalog value (same `planInfo`/plan_code join as the Customers page, purifier-ID heuristic as

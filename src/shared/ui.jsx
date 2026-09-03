@@ -8,7 +8,7 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
-  AlertCircle, ArrowUpDown, ArrowUpRight, Camera, CheckCircle2, Eye, EyeOff,
+  AlertCircle, ArrowUpDown, ArrowUpRight, Camera, Check, CheckCircle2, Eye, EyeOff,
   Filter, Image as ImageIcon, Lock, Search, X,
   Briefcase, Receipt, Boxes, Wrench, GitBranch, BarChart3, UserCog,
   ScrollText, Ticket, UserRound, Cpu, Landmark, CalendarClock, Repeat, Info,
@@ -333,13 +333,12 @@ export function Login() {
   const [err, setErr] = useState("");
   const [forgot, setForgot] = useState(false); // open the reset modal
   const [remember, setRemember] = useState(Boolean(rememberedId));
-  const [animating, setAnimating] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const submit = async (e) => {
     if (e) e.preventDefault();
     if (!username.trim()) { setErr("Enter your ID."); return; }
-    if (animating || success) return;
+    if (busy || success) return;
     setErr(""); setBusy(true);
     try {
       const u = await api.login(username.trim(), pw);
@@ -347,14 +346,10 @@ export function Login() {
         if (remember) localStorage.setItem("pw_rememberId", username.trim());
         else localStorage.removeItem("pw_rememberId");
       } catch { /* storage unavailable — ignore */ }
-      setAnimating(true);
+      setSuccess(true);
       setTimeout(() => {
-        setAnimating(false);
-        setSuccess(true);
-        setTimeout(() => {
-          setUser(u);
-        }, 600);
-      }, 1300);
+        setUser(u);
+      }, 400);
     }
     catch (e) {
       setErr(e.message);
@@ -376,236 +371,217 @@ export function Login() {
         .pw-b3 { width: 45px; height: 45px; left: 50%; bottom: -100px; animation-delay: 9s; }
         @keyframes pw-rise { 0% { transform: translateY(0); opacity: 0.6; } 100% { transform: translateY(-130vh); opacity: 0; } }
 
-        .pw-login-card { width: min(430px, 92%); padding: 35px 45px 45px; border-radius: 34px; background: rgba(255,255,255,.62); backdrop-filter: blur(45px) saturate(180%); -webkit-backdrop-filter: blur(45px) saturate(180%); border: 1px solid rgba(255,255,255,.8); box-shadow: 0 40px 100px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.8); animation: pw-show .7s ease; position: relative; z-index: 10; }
-        @keyframes pw-show { from { opacity: 0; transform: translateY(30px) scale(.95); } to { opacity: 1; transform: none; } }
+        .pw-login-card {
+          width: min(800px, 94%);
+          padding: 0;
+          border-radius: 30px;
+          background: rgba(255,255,255,.74);
+          backdrop-filter: blur(45px) saturate(180%);
+          -webkit-backdrop-filter: blur(45px) saturate(180%);
+          border: 1px solid rgba(255,255,255,.85);
+          box-shadow: 0 30px 80px rgba(0,0,0,.11), inset 0 1px 0 rgba(255,255,255,.9);
+          animation: pw-show .6s ease;
+          position: relative;
+          z-index: 10;
+          display: grid;
+          grid-template-columns: 1fr 1.22fr;
+          overflow: hidden;
+        }
+        @keyframes pw-show { from { opacity: 0; transform: translateY(20px) scale(.97); } to { opacity: 1; transform: none; } }
 
-        .pw-login-logo { width: 170px; margin: 0 auto 10px; position: relative; display: flex; align-items: center; justify-content: center; }
-        .pw-login-logo img { width: 100%; display: block; mix-blend-mode: multiply; filter: drop-shadow(0 12px 24px rgba(0,0,0,.12)); }
-        .pw-login-logo:before { content: ""; position: absolute; width: 140px; height: 140px; background: rgba(30, 158, 79,.25); filter: blur(50px); z-index: -1; }
+        .pw-login-side-brand {
+          padding: 38px 34px;
+          background: linear-gradient(160deg, rgba(30,158,79,0.06) 0%, rgba(196,229,56,0.06) 100%);
+          border-right: 1px solid rgba(0,0,0,0.06);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        }
 
-        .pw-login-h1 { margin: 10px 0 25px; font-size: 38px; letter-spacing: -.05em; color: #1d1d1f; font-weight: 800; text-align: center; }
-        .pw-login-desc { font-size: 15px; color: #86868b; margin-bottom: 35px; text-align: center; }
+        .pw-login-side-form {
+          padding: 38px 38px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
 
-        .pw-login-field { margin-bottom: 22px; }
-        .pw-login-label { font-size: 13px; font-weight: 700; display: block; margin-bottom: 8px; color: #1d1d1f; }
-        .pw-login-box { height: 56px; display: flex; align-items: center; background: rgba(255,255,255,.75); border-radius: 18px; border: 1px solid rgba(0,0,0,.06); transition: all 0.3s ease; position: relative; }
-        .pw-login-box:focus-within { border-color: #1E9E4F; box-shadow: 0 0 0 5px rgba(30, 158, 79,.15); background: #ffffff; }
+        .pw-login-logo {
+          width: 140px;
+          margin-bottom: 6px;
+          position: relative;
+        }
+        .pw-login-logo img {
+          width: 100%;
+          display: block;
+          mix-blend-mode: multiply;
+          filter: drop-shadow(0 8px 16px rgba(0,0,0,.08));
+        }
 
-        .pw-login-box input { width: 100%; height: 100%; border: 0; outline: 0; background: none!important; padding: 0 15px; font-size: 16px; color: #1d1d1f!important; font-family: inherit; }
+        .pw-login-h1 {
+          margin: 0 0 6px;
+          font-size: 26px;
+          letter-spacing: -.03em;
+          color: #1d1d1f;
+          font-weight: 800;
+        }
+        .pw-login-desc {
+          font-size: 13.5px;
+          color: #86868b;
+          margin-bottom: 22px;
+          line-height: 1.4;
+        }
+
+        .pw-login-field { margin-bottom: 16px; }
+        .pw-login-label { font-size: 12.5px; font-weight: 700; display: block; margin-bottom: 6px; color: #1d1d1f; }
+        .pw-login-box {
+          height: 50px;
+          display: flex;
+          align-items: center;
+          background: rgba(255,255,255,.82);
+          border-radius: 16px;
+          border: 1px solid rgba(0,0,0,.07);
+          transition: all 0.25s ease;
+          position: relative;
+        }
+        .pw-login-box:focus-within {
+          border-color: #1E9E4F;
+          box-shadow: 0 0 0 4px rgba(30, 158, 79,.14);
+          background: #ffffff;
+        }
+
+        .pw-login-box input {
+          width: 100%;
+          height: 100%;
+          border: 0;
+          outline: 0;
+          background: none!important;
+          padding: 0 14px;
+          font-size: 15px;
+          color: #1d1d1f!important;
+          font-family: inherit;
+        }
         .pw-login-box input:-webkit-autofill,
         .pw-login-box input:-webkit-autofill:hover, 
-        .pw-login-box input:-webkit-autofill:focus { -webkit-box-shadow: 0 0px 0px 1000px #ffffff inset!important; -webkit-text-fill-color: #1d1d1f!important; transition: background-color 5000s ease-in-out 0s; }
+        .pw-login-box input:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0px 0px 1000px #ffffff inset!important;
+          -webkit-text-fill-color: #1d1d1f!important;
+          transition: background-color 5000s ease-in-out 0s;
+        }
 
-        .pw-login-options { display: flex; justify-content: space-between; align-items: center; margin: 25px 0; }
-        .pw-login-remember { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #1d1d1f; cursor: pointer; user-select: none; }
+        .pw-login-options {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin: 18px 0 20px;
+        }
+        .pw-login-remember {
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          font-size: 13px;
+          color: #1d1d1f;
+          cursor: pointer;
+          user-select: none;
+        }
         
-        .pw-login-switch { width: 44px; height: 25px; border-radius: 20px; background: #e5e5ea; position: relative; cursor: pointer; transition: background .25s; display: inline-block; }
+        .pw-login-switch {
+          width: 38px;
+          height: 22px;
+          border-radius: 20px;
+          background: #e5e5ea;
+          position: relative;
+          cursor: pointer;
+          transition: background .25s;
+          display: inline-block;
+        }
         .pw-login-switch.active { background: #1E9E4F; }
-        .pw-login-switch:after { content: ""; position: absolute; width: 21px; height: 21px; background: white; border-radius: 50%; left: 2px; top: 2px; transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), left 0.25s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-        .pw-login-switch.active:after { transform: translateX(19px); }
+        .pw-login-switch:after {
+          content: "";
+          position: absolute;
+          width: 18px;
+          height: 18px;
+          background: white;
+          border-radius: 50%;
+          left: 2px;
+          top: 2px;
+          transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), left 0.25s;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .pw-login-switch.active:after { transform: translateX(16px); }
 
-        .pw-login-forgot { color: #1E9E4F; font-weight: 600; font-size: 14px; background: none; border: none; cursor: pointer; padding: 0; transition: color 0.2s; }
+        .pw-login-forgot {
+          color: #1E9E4F;
+          font-weight: 600;
+          font-size: 13px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 0;
+          transition: color 0.2s;
+        }
         .pw-login-forgot:hover { color: #147339; text-decoration: underline; }
 
         .pw-root button.pw-login-btn, button.pw-login-btn, .pw-login-btn {
           position: relative!important;
-          height: 58px!important;
+          height: 50px!important;
           width: 100%!important;
           border: 0!important;
-          border-radius: 20px!important;
-          background: linear-gradient(135deg, #1E9E4F 0%, #8DC63F 50%, #C4E538 100%)!important;
-          background-size: 200% 200%!important;
-          background-position: 0% 50%!important;
+          border-radius: 16px!important;
+          background: linear-gradient(135deg, #1E9E4F 0%, #16A34A 100%)!important;
           color: white!important;
-          font-size: 17px!important;
+          font-size: 15.5px!important;
           font-weight: 700!important;
           cursor: pointer!important;
-          overflow: hidden!important;
           display: flex!important;
           align-items: center!important;
           justify-content: center!important;
-          box-shadow: 0 15px 35px rgba(196, 229, 56,.3)!important;
-          transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1)!important;
-        }
-        
-        .pw-login-btn::after {
-          content: "";
-          position: absolute;
-          top: 0;
-          left: -120%;
-          width: 70%;
-          height: 100%;
-          background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%);
-          transform: skewX(-25deg);
-          transition: left 0.75s ease-in-out;
-          pointer-events: none;
-          z-index: 5;
+          box-shadow: 0 10px 24px rgba(30, 158, 79, 0.25)!important;
+          transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1)!important;
         }
 
-        .pw-root button.pw-login-btn:hover:not(.animating):not(.success),
-        button.pw-login-btn:hover:not(.animating):not(.success),
-        .pw-login-btn:hover:not(.animating):not(.success) {
-          background-position: 100% 50%!important;
-          transform: translateY(-3px)!important;
-          box-shadow: 0 20px 40px rgba(196, 229, 56,.4)!important;
+        .pw-root button.pw-login-btn:hover:not(:disabled):not(.success),
+        button.pw-login-btn:hover:not(:disabled):not(.success),
+        .pw-login-btn:hover:not(:disabled):not(.success) {
+          background: linear-gradient(135deg, #15803D 0%, #15803D 100%)!important;
+          transform: translateY(-2px)!important;
+          box-shadow: 0 12px 28px rgba(30, 158, 79, 0.35)!important;
         }
-        
-        .pw-login-btn:hover:not(.animating):not(.success)::after {
-          left: 170%;
+
+        .pw-login-btn.success {
+          background: #08805A!important;
+          box-shadow: 0 10px 28px rgba(8, 128, 90, 0.4)!important;
+          transform: scale(1.01)!important;
         }
 
         .pw-btn-arrow {
           display: inline-block;
-          font-size: 18px;
+          font-size: 16px;
           line-height: 1;
-          transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          transition: transform 0.25s ease;
         }
 
-        .pw-login-btn:hover:not(.animating) .pw-btn-arrow {
-          transform: translate(3px, -3px) scale(1.2);
+        .pw-login-btn:hover:not(:disabled) .pw-btn-arrow {
+          transform: translate(2px, -2px);
         }
 
-        .pw-door-wrap {
-          position: absolute;
-          right: 28px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 28px;
-          height: 40px;
-          perspective: 350px;
-          perspective-origin: right center;
-        }
-
-        .pw-door-frame {
-          position: absolute;
-          inset: 0;
-          border: 2.5px solid rgba(255, 255, 255, 0.95);
-          border-radius: 4px 4px 0 0;
-          background: rgba(10, 26, 18, 0.6);
-          box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
-          overflow: hidden;
-        }
-
-        .pw-door-panel {
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(to right, #0d381e, #14532d);
-          border-right: 1.5px solid rgba(255, 255, 255, 0.4);
-          transform-origin: left center;
-          transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-
-        .pw-door-knob {
-          position: absolute;
-          right: 3px;
-          top: 50%;
-          width: 3.5px;
-          height: 3.5px;
-          background: #C4E538;
-          border-radius: 50%;
-          box-shadow: 0 0 4px #C4E538;
-        }
-
-        .pw-runner {
-          position: absolute;
-          left: 15px;
-          bottom: 10px;
-          width: 32px;
-          height: 38px;
-          transform: translateX(0);
-        }
-
-        .runner-torso {
-          animation: runner-bob 0.24s ease-in-out infinite alternate;
-          transform-origin: center bottom;
-        }
-
-        .runner-leg-left {
-          transform-origin: 16px 20px;
-          animation: runner-leg-l 0.3s ease-in-out infinite alternate;
-        }
-
-        .runner-leg-right {
-          transform-origin: 16px 20px;
-          animation: runner-leg-r 0.3s ease-in-out infinite alternate;
-        }
-
-        .runner-arm-left {
-          transform-origin: 16px 12px;
-          animation: runner-arm-l 0.3s ease-in-out infinite alternate;
-        }
-
-        .runner-arm-right {
-          transform-origin: 16px 12px;
-          animation: runner-arm-r 0.3s ease-in-out infinite alternate;
-        }
-
-        @keyframes runner-bob {
-          0% { transform: translateY(0) rotate(8deg); }
-          100% { transform: translateY(-3px) rotate(14deg); }
-        }
-
-        @keyframes runner-leg-l {
-          0% { transform: rotate(-45deg); }
-          100% { transform: rotate(45deg); }
-        }
-
-        @keyframes runner-leg-r {
-          0% { transform: rotate(45deg); }
-          100% { transform: rotate(-45deg); }
-        }
-
-        @keyframes runner-arm-l {
-          0% { transform: rotate(50deg); }
-          100% { transform: rotate(-50deg); }
-        }
-
-        @keyframes runner-arm-r {
-          0% { transform: rotate(-50deg); }
-          100% { transform: rotate(50deg); }
-        }
-
-        .pw-login-btn.animating {
-          cursor: wait!important;
-          background-position: 100% 50%!important;
-        }
-
-        .pw-login-btn.animating .pw-runner {
-          animation: run-to-door 1.25s cubic-bezier(0.35, 0, 0.25, 1) forwards;
-        }
-
-        @keyframes run-to-door {
-          0% { transform: translateX(0) scale(1); opacity: 0; }
-          10% { opacity: 1; }
-          82% { transform: translateX(280px) scale(0.95); opacity: 1; }
-          96% { transform: translateX(298px) scale(0.4); opacity: 0.8; }
-          100% { transform: translateX(304px) scale(0.1); opacity: 0; }
-        }
-
-        .pw-login-btn.animating .pw-door-panel {
-          animation: door-open-close 1.25s ease-in-out forwards;
-        }
-
-        @keyframes door-open-close {
-          0%, 40% { transform: rotateY(0deg); }
-          60%, 88% { transform: rotateY(-80deg); }
-          98%, 100% { transform: rotateY(0deg); }
-        }
-
-        .pw-login-btn.success {
-          background: linear-gradient(135deg, #059669 0%, #10B981 100%)!important;
-          box-shadow: 0 0 30px rgba(16, 185, 129, 0.6)!important;
-          transform: scale(1.02)!important;
-        }
-
-        @media(max-width:500px){
-          .pw-login-card { padding: 30px; }
-          .pw-login-h1 { font-size: 32px; }
-          @keyframes run-to-door {
-            0% { transform: translateX(0); opacity: 0; }
-            10% { opacity: 1; }
-            82% { transform: translateX(200px); opacity: 1; }
-            100% { transform: translateX(220px) scale(0.1); opacity: 0; }
+        @media(max-width: 768px){
+          .pw-login-card {
+            grid-template-columns: 1fr;
+            max-width: 420px;
+          }
+          .pw-login-side-brand {
+            padding: 26px 26px 20px;
+            border-right: none;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+          }
+          .pw-login-side-form {
+            padding: 26px;
+          }
+          .pw-login-brand-footer {
+            display: none;
+          }
+          .pw-login-mobile-footer {
+            display: block!important;
           }
         }
       `}</style>
@@ -635,120 +611,122 @@ export function Login() {
       <div className="pw-bubble pw-b2" />
       <div className="pw-bubble pw-b3" />
 
-      {/* Glass Login Card */}
+      {/* Glass Horizontal Login Card */}
       <div className="pw-login-card">
-        <div className="pw-login-logo">
-          <img src="prowater_logo_transparent_1200x1200.png" alt="ProWater Logo" />
+        {/* Left Side: Brand & Workspace Info */}
+        <div className="pw-login-side-brand">
+          <div>
+            <div className="pw-login-logo">
+              <img src="prowater_logo_transparent_1200x1200.png" alt="ProWater Logo" />
+            </div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: "#1D1D1F", letterSpacing: "-.03em", marginTop: 12 }}>
+              Wisdom 2.0
+            </div>
+            <div style={{ fontSize: 13, color: "#64748B", marginTop: 4, lineHeight: 1.45, fontWeight: 500 }}>
+              ProWater Intelligent Operations & CRM Workspace
+            </div>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(30,158,79,0.09)", border: "1px solid rgba(30,158,79,0.2)", padding: "4px 11px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: "#147339", marginTop: 16 }}>
+              <CheckCircle2 size={13} />
+              <span>Internal Systems Portal</span>
+            </div>
+          </div>
+
+          {/* Desktop Left-Side Footer */}
+          <div className="pw-login-brand-footer" style={{ marginTop: 28, paddingTop: 16, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(30,158,79,0.08)", border: "1px solid rgba(30,158,79,0.18)", padding: "3px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, color: "#147339", marginBottom: 6 }}>
+              <span>Wisdom 2.0</span>
+              <span style={{ opacity: 0.4 }}>•</span>
+              <span>v{APP_VERSION}</span>
+            </div>
+            <div style={{ fontSize: 11, color: "#86868B", fontWeight: 500, letterSpacing: "-0.01em" }}>
+              © 2026 ProWater Internal Systems
+            </div>
+          </div>
         </div>
 
-        <h1 className="pw-login-h1">Sign In</h1>
-        <div className="pw-login-desc">Access your ProWater intelligent workspace.</div>
+        {/* Right Side: Sign In Form */}
+        <div className="pw-login-side-form">
+          <h1 className="pw-login-h1">Sign In</h1>
+          <div className="pw-login-desc">Enter your credentials to access your account.</div>
 
-        <form onSubmit={submit}>
-          <div className="pw-login-field">
-            <label className="pw-login-label">User ID</label>
-            <div className="pw-login-box">
-              <div style={{ paddingLeft: 18, color: "#86868b", display: "flex", alignItems: "center" }}>
-                <UserRound size={20} />
-              </div>
-              <input name="username" value={username} onChange={e => setUsername(e.target.value)}
-                placeholder="Enter your ID" autoComplete="username" />
-            </div>
-          </div>
-
-          <div className="pw-login-field">
-            <label className="pw-login-label">Password</label>
-            <div className="pw-login-box">
-              <div style={{ paddingLeft: 18, color: "#86868b", display: "flex", alignItems: "center" }}>
-                <Lock size={20} />
-              </div>
-              <input name="password" type={show ? "text" : "password"} value={pw} onChange={e => setPw(e.target.value)}
-                placeholder="••••••••" autoComplete="current-password" />
-              <div style={{ paddingRight: 18, cursor: "pointer", color: "#86868b", display: "flex", alignItems: "center" }}
-                onClick={() => setShow(s => !s)} aria-label="toggle password">
-                {show ? <EyeOff size={20} /> : <Eye size={20} />}
+          <form onSubmit={submit}>
+            <div className="pw-login-field">
+              <label className="pw-login-label">User ID</label>
+              <div className="pw-login-box">
+                <div style={{ paddingLeft: 14, color: "#86868b", display: "flex", alignItems: "center" }}>
+                  <UserRound size={18} />
+                </div>
+                <input name="username" value={username} onChange={e => setUsername(e.target.value)}
+                  placeholder="Enter your ID" autoComplete="username" />
               </div>
             </div>
-          </div>
 
-          <div className="pw-login-options">
-            <div className="pw-login-remember" onClick={() => setRemember(r => !r)}>
-              <span className={`pw-login-switch ${remember ? "active" : ""}`} />
-              Remember ID
-            </div>
-            <button type="button" className="pw-login-forgot" onClick={() => setForgot(true)}>
-              Forgot password?
-            </button>
-          </div>
-
-          <button type="submit" disabled={busy} className={`pw-login-btn ${animating ? "animating" : ""} ${success ? "success" : ""}`} style={{ opacity: busy ? 0.7 : 1 }}>
-            {/* Default State Label */}
-            <div className="pw-btn-content" id="btnContent" style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              transition: "opacity 0.25s ease, transform 0.25s ease",
-              zIndex: 2,
-              opacity: animating ? 0 : 1,
-              transform: animating ? "scale(0.85)" : "scale(1)"
-            }}>
-              <span id="btnText">{success ? "Welcome!" : (busy && !animating ? "Signing in…" : "Sign In")}</span>
-              {!success && !(busy && !animating) && <span className="pw-btn-arrow" id="btnArrow">↗</span>}
-            </div>
-
-            {/* Animation Track Stage */}
-            <div className="pw-anim-stage" aria-hidden="true" style={{
-              position: "absolute",
-              inset: 0,
-              opacity: animating ? 1 : 0,
-              pointerEvents: "none",
-              display: "flex",
-              alignItems: "center",
-              zIndex: 3,
-              transition: "opacity 0.25s ease"
-            }}>
-              {/* Running SVG Character */}
-              <div className="pw-runner">
-                <svg viewBox="0 0 32 38" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  {/* Head & Torso */}
-                  <g className="runner-torso">
-                    <circle cx="16" cy="6" r="4.5" fill="#ffffff" />
-                    <path d="M16 11 L16 22" stroke="#ffffff" strokeWidth="3.5" strokeLinecap="round" />
-                  </g>
-                  {/* Arms */}
-                  <g className="runner-arm-left">
-                    <path d="M16 12.5 L10 17 L7 22" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </g>
-                  <g className="runner-arm-right">
-                    <path d="M16 12.5 L22 17 L25 14" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                  </g>
-                  {/* Legs */}
-                  <g className="runner-leg-left">
-                    <path d="M16 21 L10 27 L6 34" stroke="#ffffff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </g>
-                  <g className="runner-leg-right">
-                    <path d="M16 21 L22 26 L27 33" stroke="#ffffff" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
-                  </g>
-                </svg>
-              </div>
-
-              {/* Doorway */}
-              <div className="pw-door-wrap">
-                <div className="pw-door-frame">
-                  <div className="pw-door-panel">
-                    <div className="pw-door-knob"></div>
-                  </div>
+            <div className="pw-login-field">
+              <label className="pw-login-label">Password</label>
+              <div className="pw-login-box">
+                <div style={{ paddingLeft: 14, color: "#86868b", display: "flex", alignItems: "center" }}>
+                  <Lock size={18} />
+                </div>
+                <input name="password" type={show ? "text" : "password"} value={pw} onChange={e => setPw(e.target.value)}
+                  placeholder="••••••••" autoComplete="current-password" />
+                <div style={{ paddingRight: 14, cursor: "pointer", color: "#86868b", display: "flex", alignItems: "center" }}
+                  onClick={() => setShow(s => !s)} aria-label="toggle password">
+                  {show ? <EyeOff size={18} /> : <Eye size={18} />}
                 </div>
               </div>
             </div>
-          </button>
-        </form>
 
-        {err && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", background: "rgba(220,65,65,0.08)", border: "1px solid rgba(220,65,65,0.2)", borderRadius: 14, padding: "12px 16px", color: "#DC4141", fontSize: 13.5, fontWeight: 600, marginTop: 22, animation: "pw-show .3s ease" }}>
-            <AlertCircle size={18} />{err}
+            <div className="pw-login-options">
+              <div className="pw-login-remember" onClick={() => setRemember(r => !r)}>
+                <span className={`pw-login-switch ${remember ? "active" : ""}`} />
+                Remember ID
+              </div>
+              <button type="button" className="pw-login-forgot" onClick={() => setForgot(true)}>
+                Forgot password?
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={busy || success}
+              className={`pw-login-btn ${success ? "success" : ""}`}
+              style={{ opacity: busy && !success ? 0.75 : 1 }}
+            >
+              {success ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 800, letterSpacing: ".04em" }}>
+                  <Check size={18} /> SUCCESS
+                </span>
+              ) : busy ? (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  Signing in…
+                </span>
+              ) : (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span>Sign In</span>
+                  <span className="pw-btn-arrow">↗</span>
+                </span>
+              )}
+            </button>
+          </form>
+
+          {err && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "center", background: "rgba(220,65,65,0.08)", border: "1px solid rgba(220,65,65,0.2)", borderRadius: 12, padding: "10px 14px", color: "#DC4141", fontSize: 13, fontWeight: 600, marginTop: 16, animation: "pw-show .3s ease" }}>
+              <AlertCircle size={16} />{err}
+            </div>
+          )}
+
+          {/* Mobile Only Footer */}
+          <div className="pw-login-mobile-footer" style={{ display: "none", marginTop: 22, paddingTop: 14, borderTop: "1px solid rgba(0,0,0,0.06)", textAlign: "center" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(30,158,79,0.08)", border: "1px solid rgba(30,158,79,0.18)", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, color: "#147339", marginBottom: 4 }}>
+              <span>Wisdom 2.0</span>
+              <span style={{ opacity: 0.4 }}>•</span>
+              <span>v{APP_VERSION}</span>
+            </div>
+            <div style={{ fontSize: 11, color: "#86868b", fontWeight: 500 }}>
+              © 2026 ProWater Internal Systems
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
       {forgot && <ForgotPassword initialUsername={username} onClose={() => setForgot(false)} />}
