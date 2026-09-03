@@ -16,7 +16,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  useAuth, api, norm, LS, API_ORIGIN, fmtDate, fmtTime,
+  useAuth, api, norm, LS, API_ORIGIN, fmtDate, fmtTime, PLAN_AVATAR_COLORS,
 } from "../shared/core";
 import {
   btnGhost, btnPrimary, td, trStyle, grid4, axisTick, selectStyle, toastStyle,
@@ -49,7 +49,6 @@ export const PLAN_PRIORITIES = [
 export const PLAN_SPRINTS_DEFAULT = ["Sprint 1", "Sprint 2", "Sprint 3", "Sprint 4", "Backlog"];
 // Legacy priority labels → P-scale (for tasks created before the switch).
 export const PLAN_PRIO_MIGRATE = { Low: "P3", Medium: "P2", High: "P1", Urgent: "P0" };
-export const PLAN_AVATAR_COLORS = ["#1E9E4F", "#0B6F52", "#0B6F52", "#986315", "#DC4141", "#2A86D6", "#2A86D6", "#2A86D6", "#DC4141", "#2A86D6"];
 // "The Group" tag means exactly these five people (not the vendors / Arun).
 export const PLAN_GROUP = ["Anis", "Sujan", "Harsh", "Sri", "Arjun"];
 // Business-requirement categories every task is filed under.

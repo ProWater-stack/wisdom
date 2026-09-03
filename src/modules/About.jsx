@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   useAuth, api, LS, fmtDate, fmtTime, DR_FS_PROJECT, DR_FS_DB, _drToFsFields, _drScalar,
-  APP_VERSION, VERSION_DATE, VERSION_HISTORY, MODULES,
+  APP_VERSION, VERSION_DATE, VERSION_HISTORY, MODULES, API_USAGE,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Empty, MODULE_ICONS,
@@ -34,51 +34,10 @@ export const MODULE_DOCS = [
   { id: "autoscheduler", label: "Auto Scheduler", summary: "15-day general-service scheduling with auto-raised tickets. Local-first.", points: ["CRO type, backwash & dozing tracking", "Auto ticket on day 14", "Does NOT flag Server Down (local-first)"], source: "local seed / optional /api/gs-schedules" },
   { id: "analytics", label: "Analytics", summary: "Cross-module reporting: referral, sales, billing, earned revenue, apartment performance.", points: ["Referral + Sales insights", "Earned Revenue (day-based accrual)", "Apartment Performance by society / purifier"], source: "aggregates" },
   { id: "planner", label: "Task Planner", summary: "ClickUp-style Kanban board for internal tasks across Scoping → Live.", points: ["7 status columns with drag-and-drop", "Cards carry assignee, email, notes, attachments, start/end dates & priority", "Board + List views, assignee filter & search"], source: "localStorage pw_tasks" },
-  { id: "employee", label: "Employee", summary: "Add & manage dashboard users; login matches email → user for role/access.", points: ["Create / disable users", "Role & module access control"], source: "localStorage pw_users" },
+  { id: "employee", label: "Employee", summary: "Add & manage dashboard users; login matches email → user for role/access. Includes the admin-only Password Vault section.", points: ["Create / disable users", "Role & module access control", "Password Vault: internal service/tool credentials, admin-only section, shared via Firestore, masked in the UI"], source: "localStorage pw_users · Firestore password_vault" },
   { id: "logtracker", label: "Logs Tracker", summary: "Audit trail with IP/geo, version stamp, and an API Failures monitor.", points: ["Every log stamped with app version", "Clear log + CSV export", "Failures tab + Server Down popup"], source: "localStorage pw_logs / pw_failures" },
   { id: "devicereplace", label: "Device Replacement", summary: "Record an old→new purifier swap via a 3-step irreversible wizard.", points: ["Captures old + new device details", "Computes old-device ageing", "Saved to Firebase via backend POST /device-replacement/add; cached locally so it shows + survives reloads", "Records are final (no edit/undo)"], source: "POST /device-replacement/add · localStorage pw_device_replacements" },
   { id: "about", label: "About", summary: "This page — version history and per-module documentation.", points: ["Full changelog", "Searchable module docs"], source: "in-app" },
-];
-export const API_USAGE = [
-  { group: "ProWater backend · api-7ca73ntgua-el.a.run.app (Bearer auth)", items: [
-    { m: "GET", path: "/admin/get-all-customers", use: "Customer accounts (Zoho Contacts) — Customer, Analytics" },
-    { m: "GET", path: "/admin/get-all-subscriptions", use: "Subscriptions (Zoho Billing) — Billing" },
-    { m: "GET", path: "/admin/get-all-invoices", use: "Invoices (Zoho Billing) — Billing, Analytics, Earned Revenue (customer/plan lookup)" },
-    { m: "GET", path: "/admin/get-all-submodules", use: "Subscription term/payment records (Zoho Billing) — Earned Revenue's Start/End-date + Interval enrichment lookup, joined via invoice_id/invoice_number → transaction_id (v2.29.104-106)" },
-    { m: "GET", path: "/admin/subs-module-get-all-plans", use: "Plan catalog (Zoho Billing) — Billing & Subscription · Plans (v2.29.287); falls back to the static PLAN_CATALOG sample data if unreachable" },
-    { m: "GET", path: "/admin/get-all-creditnotes", use: "Credit notes / discounts (Zoho Billing) — Analytics · Credits, All Customers" },
-    { m: "GET", path: "/admin/zoho/get-all-leads", use: "Zoho CRM leads — Sales, Analytics" },
-    { m: "GET", path: "/admin/zoho/get-all-apartments/data", use: "Apartment leads — Sales" },
-    { m: "GET", path: "/admin/get-app-logs", use: "Server app logs — Analytics · App Logs" },
-    { m: "POST", path: "/documents/add?email=", use: "Task Planner attachments — upload files for the signed-in user" },
-    { m: "POST", path: "/device-replacement/add", use: "Save a device-replacement swap → Firebase" },
-    { m: "GET", path: "/api/admin/all-referrals", use: "Referrers + referees + credits — Referral" },
-    { m: "GET", path: "/tickets/formattedforwisdom", use: "Zoho Desk tickets (list, Wisdom-formatted) — Ticketing" },
-    { m: "GET/POST", path: "/api/gs-schedules", use: "Auto GS schedules (optional; local-first)" },
-  ] },
-  { group: "ProWater backend · same origin, but UNAUTHENTICATED feeds (no Bearer header)", items: [
-    { m: "GET", path: "/dp-transactions", use: "Analytics · DP Transaction — row source (cursor-paginated)" },
-    { m: "POST", path: "/dp-transactions/add", use: "DP Transaction's admin-only Upload JSON → Run API (multipart, field \"file\")" },
-  ] },
-  { group: "DrinkPrime · separate origin, unauthenticated, CORS-open", items: [
-    { m: "GET", path: "api.drinkprime.in/payments/payments/payments/v1", use: "Customer · All Customers, DP-stack Transactions sub-page (?loader=true&page=1&pageSize=100&deviceCode={purifier_id}&installationID={dp_installation_id}, v2.29.134 — replaced the old v2/collections endpoint)" },
-    { m: "GET", path: "api.drinkprime.in/sponsor/device/details/syncs", use: "Customer · All Customers, DP-stack Sync History sub-page (?pageSize=10&page=1&orderDir=desc&orderBy=id&deviceCode={purifier_id}, v2.29.127)" },
-    { m: "POST", path: "api.drinkprime.in/sponsor/device/life/conn-check", use: "Customer · All Customers, DP device connectivity check (payload: botId, connectivity) (v2.29.254)" },
-  ] },
-  { group: "Google / Firebase", items: [
-    { m: "POST", path: "identitytoolkit.googleapis.com/…:signInWithPassword", use: "Login — email/password auth" },
-    { m: "POST", path: "firestore.googleapis.com/…:runQuery", use: "App Logs (logs) + Device Replacement read-back (device_replacements)" },
-    { m: "POST/GET/DELETE", path: "firestore.googleapis.com/…/documents/wisdom2.0_releases", use: "App & Technician releases — shared so every login sees the popup (Firestore)" },
-    { m: "GET", path: "firebasestorage.googleapis.com/v0/b/…/o/…?alt=media", use: "Download Task Planner attachments (backend-prowater.firebasestorage.app)" },
-    { m: "GET", path: "fonts.googleapis.com", use: "Web fonts (Playfair Display + DM Sans)" },
-  ] },
-  { group: "External utility APIs", items: [
-    { m: "GET", path: "ipapi.co/json", use: "Client IP + ISP + approx city (audit log)" },
-    { m: "GET", path: "api.ipify.org", use: "Client IP fallback" },
-    { m: "GET", path: "api.bigdatacloud.net/…/reverse-geocode-client", use: "GPS → city name (audit log)" },
-    { m: "GET/POST", path: "…execute-api.ap-southeast-2.amazonaws.com/prod", use: "IoT device status + history (IoT Core)" },
-    { m: "GET", path: "asia-south1-backend-prowater.cloudfunctions.net/weather", use: "Weather history proxy (Google Weather API, key server-side) — IoT Core weather correlation" },
-  ] },
 ];
 export const apiMethodBadge = (m) => { const c = m.includes("POST") ? ["#2A86D6", "#E5F0FA"] : ["#08805A", "#E2F3EE"]; return { fontSize: 11, fontWeight: 700, color: c[0], background: c[1], padding: "2px 8px", borderRadius: 7, fontFamily: "ui-monospace,monospace", whiteSpace: "nowrap" }; };
 /* ===========================================================================

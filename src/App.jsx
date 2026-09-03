@@ -43,9 +43,10 @@ import {
   toCredits, toReferees, toReferrers, toTrend, useAuth, useDateRange,
   useFailures, useSampleData, wait, yoyRange,
   billingApi, creditNoteApi, depositForCustomer, termMonths, monthlyOf,
+  CHART_PALETTE, tkPriority,
 } from "./shared/core";
 import {
-  ApiError, CHART_PALETTE, Card, Chip, DateRangeFilter, DateRangePicker,
+  ApiError, Card, Chip, DateRangeFilter, DateRangePicker,
   DefRow, DeviceTypeBadge, Drawer, Drop, Empty, Field,
   ForgotPassword, Loading, LogChip, Login, Modal, MultiSelectFilter,
   PIE_LABEL_OFFSET, Person, PhotoUploader, SortHeader, Stat, Status,
@@ -56,9 +57,10 @@ import {
 import { AssetLifecycle } from "./modules/ERP";
 import { UsersAdmin } from "./modules/Employee";
 import { DeviceReplacement } from "./modules/DeviceReplacement";
+import { PasswordVault } from "./modules/Vault";
 import { TrackTechnician, MaintenanceSchedule, WaterQuality } from "./modules/FSM";
 import { AutoGSSociety, IoTAlerts } from "./modules/AutoScheduler";
-import { tkStatus, tkPriority, TicketBadge, TicketOverview, OpsKpis, OpsSparesTable, OpsTdsTable, TicketList } from "./modules/Ticketing";
+import { tkStatus, TicketBadge, TicketOverview, SparesTable, TicketList } from "./modules/Ticketing";
 import { ApiUsageDashboard, Logs, Failures } from "./modules/LogsTracker";
 import { ReleaseManager, ReleasePopup, AboutModule } from "./modules/About";
 import { SalesLeads, SalesTrendAnalysis, SalesErrorCorrection, ApartmentLeads, salesApi, notHiddenLead } from "./modules/Sales";
@@ -1245,6 +1247,10 @@ const doRefresh = async () => {
     ],
     employee: [
       { id: "emp_users", label: "Users", icon: UserCog },
+      // Password Vault (v2.29.326) — moved here from its own top-level module
+      // per explicit user request. Admin-only, same conditional-spread pattern
+      // as Referral's Backtrack / Analytics' AOP / Planner's Modify Tasks.
+      ...(isModuleAdmin ? [{ id: "vault_creds", label: "Password Vault", icon: Lock }] : []),
     ],
     ticketing: [
       { id: "tk_overview", label: "Overview", icon: LayoutDashboard },
@@ -1477,6 +1483,7 @@ const doRefresh = async () => {
             {tab === "sales_errors" && <SalesErrorCorrection key={refreshKey} isAdmin={tabIsAdmin} />}
             {tab === "emp_users" && <UsersAdmin key={refreshKey} accessLevel={tabAccess} />}
             {tab === "dr_list" && <DeviceReplacement key={refreshKey} />}
+            {tab === "vault_creds" && isModuleAdmin && <PasswordVault key={refreshKey} />}
             {tab === "about_docs" && <AboutModule key={refreshKey} />}
             {tab === "about_app_rel" && <ReleaseManager key={refreshKey} kind="app" isAdmin={tabIsAdmin} />}
             {tab === "about_tech_rel" && <ReleaseManager key={refreshKey} kind="technician" isAdmin={tabIsAdmin} />}
@@ -1488,7 +1495,11 @@ const doRefresh = async () => {
               hidePriorityFilter
               dateFilterField={t => t.created} />}
             {tab === "tk_ops" && <TicketList key={`ops-${refreshKey}`} isAdmin={tabIsAdmin}
-              preFilter={t => String(t.issueCategory || "").trim().toLowerCase() !== "complaint"}
+              preFilter={t =>
+                String(t.issueCategory || "").trim().toLowerCase() !== "complaint" &&
+                Boolean(t.technicianVisitDate && String(t.technicianVisitDate).trim() && t.technicianVisitDate !== "—") &&
+                Boolean(t.technicianVisitSlot && String(t.technicianVisitSlot).trim() && t.technicianVisitSlot !== "—")
+              }
               hideColumns={["customer", "society", "priority", "status"]}
               hidePriorityFilter
               dateFilterField={t => t.created}
@@ -1498,8 +1509,7 @@ const doRefresh = async () => {
                 { label: "Job Start Time", get: t => fmtIST(t.jobStartTime) },
                 { label: "Job End Time", get: t => fmtIST(t.jobEndTime) },
               ]}
-              topContent={filtered => <OpsKpis tickets={filtered} />}
-              bottomContent={filtered => <><OpsSparesTable tickets={filtered} /><OpsTdsTable tickets={filtered} /></>}
+              bottomContent={filtered => <SparesTable tickets={filtered} />}
             />}
             {tab === "cust_all" && <AllCustomers key={refreshKey} />}
             {tab === "cust_societies" && <CustomerSocieties key={refreshKey} />}

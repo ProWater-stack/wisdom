@@ -17,7 +17,7 @@ import {
   depositForCustomer, CUSTOMER_FIELDS,
   API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate,
   exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety,
-  parsePartsUsed, jobDurationMin, zdIsClosed,
+  parsePartsUsed, jobDurationMin, zdIsClosed, gstBreakup,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, Modal, Drawer,
@@ -570,12 +570,6 @@ export function InvoiceSummaryRow({ icon: Icon, label, value, sub }) {
 // (₹409 total → ₹390 taxable + ₹10 CGST + ₹10 SGST). Independently-rounded
 // components can be ±₹1 off the rounded total — same minor rounding gap
 // present in that reference sheet itself, not something to chase away.
-export function gstBreakup(total) {
-  const t = Number(total) || 0;
-  const taxable = t / 1.05;
-  return { taxable, cgst: taxable * 0.025, sgst: taxable * 0.025, total: t };
-}
-
 export function GstBreakupCard({ total }) {
   if (!(total > 0)) return null;
   const g = gstBreakup(total);

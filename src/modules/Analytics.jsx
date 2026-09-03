@@ -27,12 +27,12 @@ import {
   fmtTime, inr, isoDay, isRealSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
   startOfDay, termMonths, ticketApi, useDateRange, yoyRange, zdIsClosed,
-  bucketKeyOf, bucketsFor,
+  bucketKeyOf, bucketsFor, CHART_PALETTE, AOP_MON,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, WowMomTT, Modal, Drawer,
   Field, Chip, Status, Person, SortHeader, DateRangePicker, DateRangeFilter,
-  MultiSelectFilter, CHART_PALETTE, renderPieLabel, pieLabelLine, GsTextCell,
+  MultiSelectFilter, renderPieLabel, pieLabelLine, GsTextCell,
   btnGhost, btnPrimary, td, ftd, trStyle, grid4, axisTick, selectStyle,
   toastStyle, iconBtn, inp,
 } from "../shared/ui";
@@ -4809,7 +4809,6 @@ export function DPTransactions() {
    =========================================================================== */
 export const AOP_KEY = "pw_aop_targets";
 export const AOP_YEARS = [2026, 2027, 2028];
-export const AOP_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 // Financial-year months for a start year Y: Apr(Y) … Mar(Y+1).
 export const aopFYMonths = (y) => Array.from({ length: 12 }, (_, k) => {
   const mi = 3 + k;                       // Apr = month-index 3

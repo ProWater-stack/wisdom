@@ -6,22 +6,24 @@
 
 import { useState, useEffect } from "react";
 import {
-  AlertCircle, BarChart3 as BarChartIcon, CheckCircle2, ChevronRight, Clock,
-  Download, Droplets, Hourglass, MapPin, Ticket, TrendingUp, Wrench, X,
+  AlertCircle, BarChart3 as BarChartIcon, CheckCircle2, ChevronRight,
+  Download, MapPin, Ticket, TrendingUp, X,
 } from "lucide-react";
 import {
   BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend, ComposedChart, Line, Area, LabelList,
 } from "recharts";
 import {
-  useAuth, api, ticketApi, exportToCsv, fmtTime, fmtIST, jobDurationMin, fmtDuration,
-  parsePartsUsed, istDateOf, tdsNum, zdStatusColor, zdPriorityColor, zdIsClosed,
+  useAuth, api, ticketApi, exportToCsv, fmtTime, fmtIST,
+  parsePartsUsed, istDateOf, zdStatusColor, zdIsClosed,
   ZD_DEFAULT_STATUSES, ZD_PRIORITIES,
+  useDateRange, dateInRange, isoDay, addDays, rangeLabel,
+  CHART_PALETTE, tkPriority,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, DefRow, Drawer, TT,
   grid4, axisTick, td, trStyle, selectStyle, btnGhost, btnPrimary,
-  CHART_PALETTE, renderPieLabel, pieLabelLine, toastStyle,
+  renderPieLabel, pieLabelLine, toastStyle, DateRangePicker,
 } from "../shared/ui";
 
 /* ===========================================================================
@@ -29,7 +31,6 @@ import {
    =========================================================================== */
 // Zoho Desk statuses/priorities are strings; colour them by keyword.
 export const tkStatus = (label) => ({ label: label || "—", color: zdStatusColor(label) });
-export const tkPriority = (label) => ({ label: label || "—", color: zdPriorityColor(label) });
 export function TicketBadge({ value, kind }) {
   const meta = kind === "priority" ? tkPriority(value) : tkStatus(value);
   if (!value) return <span style={{ color: "var(--muted)" }}>—</span>;
@@ -38,13 +39,19 @@ export function TicketBadge({ value, kind }) {
 export function TicketOverview() {
   const { user } = useAuth();
   const [tickets, setTickets] = useState(null);
+  const [trendMode, setTrendMode] = useState("ma"); // "ma" | "spline" | "linear" | "off"
+  const { sel, setSel, range } = useDateRange("this_month"); // v2.29.317: date filter for the Overview
   useEffect(() => { api.logView(user.username, "Viewed Ticketing overview"); ticketApi.getTickets().then(setTickets).catch(() => setTickets([])); }, []);
   if (!tickets) return <Loading title="Loading Ticket Overview" subtitle="Synchronizing support ticket data…" />;
 
-  const openCount = tickets.filter(t => !zdIsClosed(t.status)).length;
-  const urgent = tickets.filter(t => String(t.priority).toLowerCase() === "urgent" && !zdIsClosed(t.status)).length;
-  const resolved = tickets.filter(t => zdIsClosed(t.status)).length;
-  const resolveRate = tickets.length ? Math.round(resolved / tickets.length * 100) : 0;
+  // Every KPI/chart below is scoped to the selected date range, matched
+  // against when each ticket was created (v2.29.317).
+  const filtered = tickets.filter(t => dateInRange(t.created, range));
+
+  const openCount = filtered.filter(t => !zdIsClosed(t.status)).length;
+  const urgent = filtered.filter(t => String(t.priority).toLowerCase() === "urgent" && !zdIsClosed(t.status)).length;
+  const resolved = filtered.filter(t => zdIsClosed(t.status)).length;
+  const resolveRate = filtered.length ? Math.round(resolved / filtered.length * 100) : 0;
 
   const stats = [
     { label: "Open tickets", value: openCount, icon: Ticket, sub: "needs attention", hero: true },
@@ -54,9 +61,9 @@ export function TicketOverview() {
   ];
 
   // Status distribution built from whatever statuses actually appear.
-  const statusOrder = [...ZD_DEFAULT_STATUSES, ...tickets.map(t => t.status)].filter((v, i, a) => a.indexOf(v) === i);
-  const byStatus = statusOrder.map(s => ({ name: s, value: tickets.filter(t => t.status === s).length })).filter(x => x.value > 0);
-  const byCategory = Object.values(tickets.reduce((acc, t) => {
+  const statusOrder = [...ZD_DEFAULT_STATUSES, ...filtered.map(t => t.status)].filter((v, i, a) => a.indexOf(v) === i);
+  const byStatus = statusOrder.map(s => ({ name: s, value: filtered.filter(t => t.status === s).length })).filter(x => x.value > 0);
+  const byCategory = Object.values(filtered.reduce((acc, t) => {
     const k = t.issueCategory || "—";
     acc[k] = acc[k] || { plan: k, amount: 0 };
     acc[k].amount += 1;
@@ -64,9 +71,86 @@ export function TicketOverview() {
   }, {}));
   const PIE = CHART_PALETTE;
 
+  // Daily count of tickets created, one bucket per calendar day across the
+  // whole selected range (zero-filled, so a quiet day shows as 0 rather than a gap).
+  const days = [];
+  for (let d = new Date(range.from); d <= range.to; d = addDays(d, 1)) days.push(new Date(d));
+  const dailyTrend = days.map(d => {
+    const key = isoDay(d);
+    return { label: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }), count: filtered.filter(t => istDateOf(t.created) === key).length };
+  });
+
+  const nD = dailyTrend.length;
+  const sumX = dailyTrend.reduce((s, _, i) => s + i, 0);
+  const sumY = dailyTrend.reduce((s, r) => s + r.count, 0);
+  const sumXY = dailyTrend.reduce((s, r, i) => s + i * r.count, 0);
+  const sumX2 = dailyTrend.reduce((s, _, i) => s + i * i, 0);
+  const denom = nD * sumX2 - sumX * sumX;
+  const slope = denom ? (nD * sumXY - sumX * sumY) / denom : 0;
+  const intercept = nD ? (sumY - slope * sumX) / nD : 0;
+
+  // Adaptive Moving Average for a smooth, natural trend curve
+  const w = dailyTrend.length <= 7 ? 2 : (dailyTrend.length <= 14 ? 3 : 5);
+  dailyTrend.forEach((r, i) => {
+    const start = Math.max(0, i - Math.floor(w / 2));
+    const end = Math.min(dailyTrend.length, i + Math.ceil(w / 2) + 1);
+    const slice = dailyTrend.slice(start, end);
+    const avg = slice.reduce((sum, item) => sum + item.count, 0) / slice.length;
+    r.ma = Math.round(avg * 10) / 10;
+    r.spline = r.count;
+    r.linear = Math.round(Math.max(0, slope * i + intercept) * 10) / 10;
+    r.activeTrend = trendMode === "ma" ? r.ma : (trendMode === "spline" ? r.spline : (trendMode === "linear" ? r.linear : null));
+  });
+
+  const tkTick = Math.max(0, Math.ceil(dailyTrend.length / 10) - 1);
+  const maxDaily = dailyTrend.length ? Math.max(...dailyTrend.map(r => r.count)) : 0;
+  const totalDaily = dailyTrend.reduce((s, r) => s + r.count, 0);
+  const activeDaysCount = dailyTrend.filter(r => r.count > 0).length;
+  const avgDaily = dailyTrend.length ? (totalDaily / dailyTrend.length).toFixed(1) : "0.0";
+
+  const renderDailyBarLabel = (props) => {
+    const { x, y, width, value } = props;
+    if (value == null || value === 0) return null;
+    const badgeW = value > 99 ? 28 : (value > 9 ? 22 : 18);
+    return (
+      <g>
+        <rect
+          x={x + width / 2 - badgeW / 2}
+          y={Math.max(2, y - 20)}
+          width={badgeW}
+          height={16}
+          rx={5}
+          fill="#08805A"
+          stroke="#ffffff"
+          strokeWidth={1.5}
+        />
+        <text
+          x={x + width / 2}
+          y={Math.max(2, y - 20) + 9}
+          fill="#ffffff"
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={10}
+          fontWeight={800}
+          fontFamily="system-ui, -apple-system, sans-serif"
+        >
+          {value}
+        </text>
+      </g>
+    );
+  };
+
+  const trendLabel = trendMode === "ma" ? "Moving Avg" : (trendMode === "spline" ? "Daily Curve" : (trendMode === "linear" ? "Linear Fit" : ""));
+
   return (
     <div className="fade-up ov-sans">
       <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+
+      {/* Filter bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <DateRangePicker value={sel} onChange={setSel} />
+        <span style={{ fontSize: 12.5, color: "#86868B" }}>{rangeLabel(range)} · {filtered.length} ticket{filtered.length !== 1 ? "s" : ""} in view</span>
+      </div>
 
       {ticketApi.usedSample && <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#986315", background: "rgba(152,99,21,0.08)", border: "1px solid rgba(152,99,21,0.18)", padding: "12px 16px", borderRadius: 14, marginBottom: 16 }}>
         <AlertCircle size={16} color="#986315" /> Showing sample data — the Zoho Desk endpoint is unreachable. Once connected, this reflects real tickets.
@@ -100,9 +184,102 @@ export function TicketOverview() {
         ))}
       </div>
 
+      {/* Daily trend — tickets created per day, with styled gradients, smooth trend curve, and data labels */}
+      <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22, marginTop: 18 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Daily Tickets Created</div>
+            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Volume trend for the selected period with dynamic trend curve & data labels</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {dailyTrend.length > 0 && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(8,128,90,0.08)", border: "1px solid rgba(8,128,90,0.18)", padding: "4px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: "#08805A" }}>
+                  <span>Peak:</span> <strong style={{ fontWeight: 800 }}>{maxDaily} tickets</strong>
+                </div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.18)", padding: "4px 10px", borderRadius: 999, fontSize: 11.5, fontWeight: 700, color: "#6366F1" }}>
+                  <span>Daily Avg:</span> <strong style={{ fontWeight: 800 }}>{avgDaily} / day</strong>
+                </div>
+              </div>
+            )}
+            <div style={{ display: "inline-flex", background: "rgba(0,0,0,0.05)", padding: 3, borderRadius: 10, gap: 2 }}>
+              {[
+                { id: "ma", label: "Smooth MA" },
+                { id: "spline", label: "Daily Curve" },
+                { id: "linear", label: "Linear" },
+                { id: "off", label: "Hide Line" },
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setTrendMode(m.id)}
+                  style={{
+                    border: "none",
+                    padding: "4px 10px",
+                    borderRadius: 7,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    background: trendMode === m.id ? "#fff" : "transparent",
+                    color: trendMode === m.id ? "#1D1D1F" : "#86868B",
+                    boxShadow: trendMode === m.id ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
+                    transition: "all .15s ease",
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        {dailyTrend.length ? (
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={dailyTrend} margin={{ left: -10, right: 14, top: 24, bottom: 0 }}>
+              <defs>
+                <linearGradient id="tkBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="#10B981" stopOpacity={0.4} />
+                </linearGradient>
+                <linearGradient id="tkTrendLineGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="#6366F1" />
+                  <stop offset="100%" stopColor="#8B5CF6" />
+                </linearGradient>
+                <linearGradient id="tkTrendAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366F1" stopOpacity={0.15} />
+                  <stop offset="100%" stopColor="#6366F1" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 11.5 }} axisLine={false} tickLine={false} interval={tkTick} />
+              <YAxis tick={{ fill: "#86868B", fontSize: 11.5 }} axisLine={false} tickLine={false} allowDecimals={false} domain={[0, maxDaily > 0 ? maxDaily + 1 : 4]} />
+              <Tooltip content={<TT />} cursor={{ fill: "rgba(8,128,90,0.06)", rx: 6 }} />
+              <Legend iconType="circle" wrapperStyle={{ fontSize: 12.5, color: "#1D1D1F", paddingTop: 12 }} />
+              {trendMode !== "off" && (
+                <Area type="monotone" dataKey="activeTrend" name={trendLabel} stroke="none" fill="url(#tkTrendAreaGrad)" isAnimationActive={false} />
+              )}
+              <Bar dataKey="count" name="Tickets created" radius={[6, 6, 0, 0]} fill="url(#tkBarGrad)" maxBarSize={32} isAnimationActive={false}>
+                <LabelList dataKey="count" position="top" content={renderDailyBarLabel} />
+              </Bar>
+              {trendMode !== "off" && (
+                <Line
+                  type="monotone"
+                  dataKey="activeTrend"
+                  name={trendLabel}
+                  stroke={trendMode === "linear" ? "#D97706" : "url(#tkTrendLineGrad)"}
+                  strokeWidth={3}
+                  strokeDasharray={trendMode === "linear" ? "5 4" : undefined}
+                  dot={trendMode === "spline" ? { r: 3.5, fill: "#fff", stroke: "#6366F1", strokeWidth: 2 } : false}
+                  activeDot={{ r: 6, fill: "#6366F1", stroke: "#fff", strokeWidth: 2 }}
+                  isAnimationActive={false}
+                />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : <Empty msg="No tickets in the selected period." />}
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, marginTop: 18 }} className="an-grid">
         <style>{`@media(max-width:820px){.an-grid{grid-template-columns:1fr!important}}`}</style>
-        
+
         <div style={{ background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Tickets by Status</div>
@@ -144,136 +321,89 @@ export function TicketOverview() {
   );
 }
 
-export function OpsKpis({ tickets }) {
-  const durs = tickets.map(jobDurationMin).filter(v => v != null);
-  const totalMin = durs.reduce((a, b) => a + b, 0);
-  const avgMin = durs.length ? Math.round(totalMin / durs.length) : 0;
-  const reductions = tickets.map(t => {
-    const i = tdsNum(t.inputTds), o = tdsNum(t.outputTds);
-    return (i != null && o != null && i > 0) ? Math.round((i - o) / i * 100) : null;
-  }).filter(v => v != null);
-  const avgRed = reductions.length ? Math.round(reductions.reduce((a, b) => a + b, 0) / reductions.length) : null;
-  const stats = [
-    { label: "Jobs (with timing)", value: durs.length, icon: Wrench, sub: `${tickets.length} tickets in view`, hero: true },
-    { label: "Total job duration", value: fmtDuration(totalMin), icon: Clock, sub: "sum of start → end" },
-    { label: "Avg job duration", value: fmtDuration(avgMin), icon: Hourglass, sub: "per job" },
-    ...(avgRed != null ? [{ label: "Avg TDS reduction", value: avgRed + "%", icon: Droplets, sub: "input → output" }] : []),
-  ];
+export function SparesTable({ tickets }) {
+  const spareCounts = {};
+  let totalPartsCount = 0;
+  let jobsWithSparesCount = 0;
 
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 18 }}>
-      {stats.map((s, i) => (
-        <div key={i} style={{
-          background: "rgba(255, 255, 255, 0.85)",
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          border: "1px solid rgba(0,0,0,0.08)",
-          borderRadius: 18,
-          padding: "18px 20px",
-          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
-              {s.label}
-            </span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-              <s.icon size={17} color="#08805A" />
-            </div>
-          </div>
-          <div className="serif" style={{ fontSize: 28, fontWeight: 700, color: "#1D1D1F", margin: "10px 0 4px", lineHeight: 1.1 }}>
-            {s.value}
-          </div>
-          <div style={{ fontSize: 12, color: "#86868B" }}>{s.sub}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function OpsSparesTable({ tickets }) {
-  const withParts = tickets.filter(t => parsePartsUsed(t.partsUsed).length);
-  const byIssue = {};
-  const overall = {};
-  for (const t of withParts) {
-    const issue = t.issueCategory || "—";
+  for (const t of (tickets || [])) {
     const parts = parsePartsUsed(t.partsUsed);
-    const b = byIssue[issue] || (byIssue[issue] = { jobs: 0, total: 0, parts: {} });
-    b.jobs++;
-    for (const p of parts) { b.parts[p] = (b.parts[p] || 0) + 1; b.total++; overall[p] = (overall[p] || 0) + 1; }
+    if (parts.length > 0) {
+      jobsWithSparesCount++;
+      for (const p of parts) {
+        spareCounts[p] = (spareCounts[p] || 0) + 1;
+        totalPartsCount++;
+      }
+    }
   }
-  const rows = Object.entries(byIssue).map(([issue, b]) => ({ issue, ...b })).sort((a, b) => b.total - a.total);
-  const topSpares = (parts) => Object.entries(parts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, c]) => `${n} ×${c}`).join(", ");
+
+  const rows = Object.entries(spareCounts)
+    .map(([name, count]) => ({
+      name,
+      count,
+      pctOfTotal: totalPartsCount > 0 ? Math.round((count / totalPartsCount) * 100) : 0,
+    }))
+    .sort((a, b) => b.count - a.count);
 
   return (
     <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden", marginTop: 18 }}>
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Spares Used by Issue Type</div>
-        <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>Parts_Used correlated with Issue Category</div>
-      </div>
-      {rows.length === 0 ? <Empty msg="No spares (Parts_Used) recorded for the tickets in view." /> : (
-        <div className="scroll-thin" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                {["Issue Type", "Jobs w/ Spares", "Total Spares", "Avg / Job", "Top Spares"].map((h, idx) => (
-                  <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.issue} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                  <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{r.issue}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.jobs}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.total}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{(r.total / r.jobs).toFixed(1)}</td>
-                  <td style={{ padding: "14px 18px", textAlign: "center", color: "#475569" }}>{topSpares(r.parts)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#1D1D1F" }}>Spares Used</div>
+          <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>
+            Total spare parts consumed across tickets in selected period · {totalPartsCount} part{totalPartsCount !== 1 ? "s" : ""} across {jobsWithSparesCount} job{jobsWithSparesCount !== 1 ? "s" : ""}
+          </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-export function OpsTdsTable({ tickets }) {
-  const wq = tickets.filter(t => /water\s*quality/i.test(String(t.issueCategory || "")) && (tdsNum(t.inputTds) != null || tdsNum(t.outputTds) != null));
-  const rows = wq.map(t => {
-    const i = tdsNum(t.inputTds), o = tdsNum(t.outputTds);
-    const red = (i != null && o != null && i > 0) ? Math.round((i - o) / i * 100) : null;
-    return { id: t.id, ticketNo: t.ticketNo, society: t.society, purifierId: t.purifierId, i, o, red };
-  });
-
-  return (
-    <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden", marginTop: 18 }}>
-      <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
-        <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Water Quality — Input vs Output TDS</div>
-        <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>Issue Category "Water Quality"</div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#08805A", background: "rgba(8,128,90,0.1)", padding: "4px 10px", borderRadius: 999 }}>
+          {rows.length} unique spare{rows.length !== 1 ? "s" : ""}
+        </span>
       </div>
-      {rows.length === 0 ? <Empty msg="No Water Quality tickets with TDS readings in view." /> : (
+      {rows.length === 0 ? (
+        <Empty msg="No spares recorded for the tickets in view." />
+      ) : (
         <div className="scroll-thin" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                {["Ticket", "Society", "Purifier ID", "Input TDS", "Output TDS", "Reduction"].map(h => (
-                  <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
-                ))}
+                <th style={{ padding: "14px 20px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "left", whiteSpace: "nowrap" }}>Spare / Part Name</th>
+                <th style={{ padding: "14px 20px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center", whiteSpace: "nowrap" }}>Count</th>
+                <th style={{ padding: "14px 20px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center", whiteSpace: "nowrap" }}>Share of Total</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
-                <tr key={r.id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                  <td style={{ padding: "14px 18px", fontWeight: 600, color: "#1D1D1F" }}>{r.ticketNo}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.society}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.purifierId}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.i ?? "—"}</td>
-                  <td style={{ padding: "14px 18px", color: "#475569" }}>{r.o ?? "—"}</td>
-                  <td style={{ padding: "14px 18px" }}>{r.red != null ? <span style={{ fontWeight: 700, color: r.red >= 60 ? "#08805A" : r.red >= 40 ? "#986315" : "#DC4141" }}>{r.red}%</span> : "—"}</td>
+              {rows.map((r, idx) => (
+                <tr key={r.name} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", background: idx % 2 === 1 ? "rgba(0,0,0,.01)" : "transparent" }}>
+                  <td style={{ padding: "14px 20px", fontWeight: 600, color: "#1D1D1F", textAlign: "left" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 6, fontSize: 10.5, fontWeight: 800, background: idx === 0 ? "var(--green)" : "var(--mint-2)", color: idx === 0 ? "#fff" : "var(--muted)", flexShrink: 0 }}>
+                        {idx + 1}
+                      </span>
+                      <span>{r.name}</span>
+                    </div>
+                  </td>
+                  <td style={{ padding: "14px 20px", textAlign: "center" }}>
+                    <span style={{ display: "inline-block", fontWeight: 800, fontSize: 14, color: "#08805A", background: "rgba(8,128,90,0.08)", padding: "3px 12px", borderRadius: 999 }}>
+                      {r.count}
+                    </span>
+                  </td>
+                  <td style={{ padding: "14px 20px", textAlign: "center" }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 120 }}>
+                      <div style={{ width: 80, height: 6, borderRadius: 999, background: "var(--mint-2)", overflow: "hidden" }}>
+                        <div style={{ width: `${r.pctOfTotal}%`, height: "100%", borderRadius: 999, background: "#08805A" }} />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>{r.pctOfTotal}%</span>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(0,0,0,.08)", fontWeight: 700 }}>
+                <td style={{ padding: "14px 20px", textAlign: "left", color: "#1D1D1F" }}>Total Spares Used</td>
+                <td style={{ padding: "14px 20px", textAlign: "center", color: "#08805A", fontSize: 14 }}>{totalPartsCount}</td>
+                <td style={{ padding: "14px 20px", textAlign: "center", color: "#475569", fontSize: 12 }}>100%</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}

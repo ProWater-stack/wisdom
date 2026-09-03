@@ -13,7 +13,7 @@ import {
 import {
   useAuth, api, authHeaders, customerApi, fmtDate, fmtTime, deviceType, LS, pushLog,
   API_ORIGIN, _drToFsFields, _drScalar,
-  DR_FS_PROJECT, DR_FS_DB, DR_COLLECTION, DR_FS_BASE,
+  DR_FS_PROJECT, DR_FS_DB, DR_COLLECTION, DR_FS_BASE, DEVICE_TYPES,
 } from "../shared/core";
 import {
   Card, Table, Empty, Loading, Field, Drawer, Chip,
@@ -24,7 +24,6 @@ import {
    DEVICE REPLACEMENT (local-only module) — swap an old purifier for a new one
    3-step wizard: old device → new device → irreversible confirm. No API.
    =========================================================================== */
-export const DEVICE_TYPES = ["Own Device", "Normal", "Hot & Cold"];
 export const DR_LS_KEY = "pw_device_replacements";      // local copy so saved swaps show + survive reloads
 export let _drStore = LS.get(DR_LS_KEY, []) || [];      // the display list of replacement records
 export const _drSave = () => LS.set(DR_LS_KEY, _drStore);

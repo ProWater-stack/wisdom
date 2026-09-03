@@ -20,11 +20,11 @@ import {
 } from "recharts";
 import {
   useAuth, api, parseApiDate, exportToCsv, fmtDate, fmtTime, freeLabel,
-  EXISTING_CREDIT, NEW_CREDIT,
+  EXISTING_CREDIT, NEW_CREDIT, CHART_PALETTE, TIERS,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, Modal, Field,
-  Chip, Status, Person, Drawer, DefRow, CHART_PALETTE, renderPieLabel,
+  Chip, Status, Person, Drawer, DefRow, renderPieLabel,
   pieLabelLine, btnGhost, btnPrimary, td, trStyle, grid4, axisTick,
   selectStyle, toastStyle, inp,
 } from "../shared/ui";
@@ -639,12 +639,6 @@ export function Backtrack() {
    Tracker — search a referrer by phone, show their tier + progress (animated)
    Tiers are based on CONVERTED referrals.
    =========================================================================== */
-export const TIERS = [
-  { key: "none", label: "No tier yet", min: 0, color: "#A9B3AC", bg: "#ECEEED" },
-  { key: "bronze", label: "Bronze Tier", min: 1, color: "#986315", bg: "#FBF0E0" },
-  { key: "silver", label: "Silver Tier", min: 2, color: "#7D8A83", bg: "#ECEEED" },
-  { key: "gold", label: "Gold Tier", min: 6, color: "#986315", bg: "#FBF0E0" },
-];
 export function tierFor(converted) {
   let t = TIERS[0];
   for (const tier of TIERS) if (converted >= tier.min) t = tier;

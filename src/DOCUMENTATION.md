@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.316**.
+> **Reflects:** `APP_VERSION` **2.29.326**.
 
 ---
 
@@ -775,9 +775,18 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   Date"/"…Slot"**, "Job Start/End Time", lat/long, etc.). Mapped by `mapWisdomTicket` (v2.28.6, tolerant of
   label case/spacing); `mapZohoDeskTicket` remains for the raw Zoho shape / sample fallback. This feed has
   no customer NAME (Customer column shows Ticket Owner), Priority, or Created time. List with status/priority
-  filters + detail drawer. **Ops Tickets** sub-tab =
-  Issue Category ≠ Complaint. The Overview "Ops Appointments" card counts tickets by "Technician Visit
-  Date" for today…+3 days.
+  filters + detail drawer. **Ops Tickets** sub-tab (v2.29.319/v2.29.320) =
+  Issue Category ≠ Complaint AND Technician Visit Date is not null/empty AND Technician Visit Slot is not null/empty.
+  Top KPI stat cards and the TDS table were removed in v2.29.320 per explicit user request; replaced the issue-type spares
+  breakdown with a dedicated **Spares Used** summary table aggregating parts and consumption counts dynamically filtered by date.
+  The Overview "Ops Appointments" card counts tickets by "Technician Visit Date" for today…+3 days.
+  **Overview** (v2.29.321/v2.29.322/v2.29.323) — added a date filter (shared `DateRangePicker`/`useDateRange`, presets + custom
+  From–To) that scopes the whole page — KPI cards, Tickets-by-Status donut, Tickets-by-Issue-Type bars — to
+  tickets whose created date falls in the selected period. Added a full-width **"Daily Tickets Created"**
+  chart below the KPI row: one bar per calendar day across the selected range with vertical emerald gradient fills,
+  custom SVG data label badges above active days, an adaptive Rolling Moving Average trend curve rendered as a smooth
+  spline with vibrant Indigo gradients (`#6366F1` to `#8B5CF6`) and soft area shading, an interactive 4-mode trend switcher
+  (Smooth MA, Daily Curve, Linear, Hide Line), and real-time header metric chips (Peak volume, Daily average, Active days count).
 
 ### Auto Scheduler (`autoscheduler`)
 - **Auto GS - Society (`as_society`):** a 15-day general-service schedule per society. Columns:
@@ -1182,6 +1191,17 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
     composition / Apartment performance. The computation feeding it (`dpMomPct`, `topApt`, `idleApts`,
     `dpPos`/`dpNeg`/`dpActs`, `dpHappened`/`dpOngoing`/`dpResult`) was removed too — nothing else in the
     tab depended on it.
+  - **Apartment performance hover removal & dynamic card click filtering (v2.29.317):** Removed unwanted
+    hover magnification on the "Apartment performance" container card by setting `hover={false}` on the `<Card>`.
+    Made each individual apartment performance card interactive: clicking any card (e.g. `CRO_Ashish JK [ Thubarahalli ]`)
+    dynamically sets `apt` to filter the entire DP Transactions view (raw feed table and top KPI cards) to that
+    specific apartment. Clicking the selected card again or clicking the new "Reset apartment filter" pill clears the filter. Updated
+    `aptStats` to calculate period totals across all apartments so cards retain their numbers and remain clickable
+    when a single apartment is selected.
+  - **Selected card styling refinement (v2.29.318):** Refined the selected state of the apartment cards per
+    explicit user request. Removed the "Selected" text pill badge completely, and styled the active selected
+    card with a warm amber/gold `#FFCB56` background, matching amber border, and high-contrast dark `#1D1D1F`
+    typography and icons.
 
 ### Task Planner (`planner`)
 - **Purpose:** ClickUp-style Kanban for internal tasks (Scoping → … → Live).
@@ -1200,6 +1220,22 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
 - Create/disable dashboard users; set role + per-module access **and per-section overrides** (the
   "Sections" expander in the create/edit-access grid — Default/Hidden/View/Edit per tab). Login
   matches email → this record. Storage: `pw_users` (now includes an optional `sections` map).
+- **Password Vault** (`vault_creds` tab, v2.29.325; moved under Employee as its own section at
+  v2.29.326, per explicit user request) — internal service/tool credentials (Zoho, AWS, hosting,
+  vendor portals, WiFi, admin panels, etc: Service name, Username, Password, URL, Notes). **Strictly
+  admin/devops-only**, using the exact same admin-only-tab shape as Referral's Backtrack / Analytics'
+  AOP / Task Planner's Modify Tasks: the tab only spreads into `App.jsx`'s `employee` moduleTabs
+  array when `isModuleAdmin` is true (no separate access level of its own — it inherits the Employee
+  module's own admin/devops grant), and `MODULE_SECTIONS.employee` flags it `adminOnly: true` so the
+  per-user Sections control shows it correctly marked ADMIN. `vaultApi` in `shared/core.js` — shared
+  across every admin via a Cloud Firestore collection (`password_vault`, same `backend-prowater`/
+  `prowaterdb` project as Device Replacement/Releases), reaching every admin login on any device;
+  falls back to a localStorage cache (`pw_vault_cache`) when Firestore is unreachable, same
+  offline-first optimistic-update pattern as `_drStore`/`_releasesCache`. **Passwords are stored as
+  plain text** (masked in the UI behind a per-row show/hide toggle, with one-click copy for
+  username/password) — convenience-level protection matching this app's general client-side-SPA
+  security posture, **not** encryption at rest; the Firestore collection's own security rules are the
+  real access boundary and must restrict reads/writes to admin accounts.
 
 ### Device Replacement (`devicereplace`)
 - **Purpose:** record an old→new purifier swap via a short irreversible wizard (old device → new
@@ -1285,15 +1321,27 @@ nothing else in the dashboard depended on it, so removal was a clean, isolated c
 ## 8. Conventions
 
 - **Version bump:** on every shipped change, bump `APP_VERSION` + prepend a `VERSION_HISTORY` entry in
-  `src/shared/core.js` (also update `MODULE_DOCS` / `API_USAGE` in `src/modules/About.jsx` if a
-  module's behaviour or an endpoint changed). The version shows in the sidebar/home/login footers,
-  the Logs Tracker banner, and About.
+  `src/shared/core.js` (also update `MODULE_DOCS` in `src/modules/About.jsx` / `API_USAGE` in
+  `src/shared/core.js` if a module's behaviour or an endpoint changed). The version shows in the
+  sidebar/home/login footers, the Logs Tracker banner, and About.
 - **This doc:** update the relevant §6 module section (and §3/§5 if APIs/storage changed) in the same
   change. Keep the "Reflects APP_VERSION" line at the top current.
 - **Word changelog (v2.29.300):** every `VERSION_HISTORY` entry above also gets a matching entry
   (same version, date, note) appended to `ProWater-CRM-Changelog.docx` at the project root — same
   change, both places, every time. That file starts at v2.29.280 (this session's work); anything
   earlier lives only in this doc.
+- **Fast Refresh (v2.29.324):** Vite's dev-mode hot-swap can only update a module file "in place"
+  (preserving component state) when EVERY export in that file is a React component — one plain
+  constant/helper export among them is enough to force a full reload of that file and everything
+  importing it, on every edit ("Could not Fast Refresh (\"X\" export is incompatible)" in the dev
+  console). `shared/core.js` holds no components, so it's never subject to the rule. When a file's
+  own non-component export starts surfacing that warning, move the export into `core.js` and
+  re-import it — that was done for `CHART_PALETTE`, `ACCESS_LEVELS`, `DEVICE_TYPES`,
+  `BENGALURU_CENTER`, `AUTO_GS_SEED`, `tkPriority`, `API_USAGE`, `HIDDEN_LEAD_STATUSES`,
+  `PLAN_AVATAR_COLORS`, `TIERS`, `gstBreakup`, `IOT_ALERT_SEV`, `AOP_MON`, and the manual-refunds
+  store (now `manualRefundsApi`) at v2.29.324. Most module files still mix in other plain exports of
+  their own (seed data, API clients, formatters) that can trip the same warning on a future edit —
+  that was a deliberately narrow pass, not a file-by-file guarantee.
 
 ---
 

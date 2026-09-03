@@ -17,21 +17,20 @@ import {
   useAuth, api, apartmentApi, norm, hashStr, momPct, rangeFilter, exportToCsv,
   fmtTime, inr, API_ORIGIN, authHeaders, pushLog, _memCache, _inflight,
   getCached, fetchAllPagesFast, dateInRange, prevRange, rangeLabel,
-  useDateRange, wait, isRealSociety,
+  useDateRange, wait, isRealSociety, CHART_PALETTE, HIDDEN_LEAD_STATUSES,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError,
   SortHeader, MultiSelectFilter, DateRangePicker, DateRangeFilter,
-  CHART_PALETTE, renderPieLabel, pieLabelLine, btnGhost, td,
+  renderPieLabel, pieLabelLine, btnGhost, td,
   ftd, trStyle, selectStyle, toastStyle,
 } from "../shared/ui";
 
 // Case/space-insensitive normaliser used across lead ↔ society/status matching.
 
-// Lead statuses to hide from the Sales tables. EMPTY on purpose — "Convert Done"
-// is shown again (was briefly hidden mid-development). Keep the plumbing so a
-// status can be hidden later by adding its normalised value to this set.
-export const HIDDEN_LEAD_STATUSES = new Set();
+// Lead statuses to hide from the Sales tables. EMPTY on purpose ("Convert Done"
+// is shown again — was briefly hidden mid-development); HIDDEN_LEAD_STATUSES
+// itself now lives in shared/core.js (v2.29.324, Fast Refresh fix).
 export const notHiddenLead = (d) => !HIDDEN_LEAD_STATUSES.has(norm(d.rawStatus));
 export const SALES_STAGES = [
   { id: "new",        label: "New Lead",     color: "#A9B3AC" },

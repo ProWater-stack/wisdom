@@ -10,7 +10,7 @@ import {
   AlertCircle, BarChart3, CalendarClock, CheckCircle2, Download, Droplets,
   MapPin, RotateCcw, Search, ShieldCheck, Target, UserRound, Wrench,
 } from "lucide-react";
-import { useAuth, api, customerApi, hashStr, exportToCsv, fmtDate, deviceType } from "../shared/core";
+import { useAuth, api, customerApi, hashStr, exportToCsv, fmtDate, deviceType, BENGALURU_CENTER } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, Chip, Status,
   Person, DeviceTypeBadge, grid4, btnGhost, td,
@@ -22,7 +22,6 @@ import {
 
 // Bengaluru centre + a few sample technicians. Replace SAMPLE_TECHNICIANS with
 // your live technician-location API when ready (keep the same field shape).
-export const BENGALURU_CENTER = { lat: 12.9716, lng: 77.5946 };
 const SAMPLE_TECHNICIANS = [
   { id: "T-01", name: "Ramesh K", status: "on_job",    lat: 12.9352, lng: 77.6245, area: "Koramangala", job: "Installation · CUS-00045" },
   { id: "T-02", name: "Suresh M", status: "available", lat: 12.9719, lng: 77.6412, area: "Indiranagar", job: "Idle" },

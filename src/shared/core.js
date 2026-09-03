@@ -785,9 +785,19 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.316";
-export const VERSION_DATE = "2026-08-31";
+export const APP_VERSION = "2.29.326";
+export const VERSION_DATE = "2026-09-02";
 export const VERSION_HISTORY = [
+  { v: "2.29.326", note: "Password Vault (v2.29.325) restructured per explicit user follow-up request ('add the module under Employee as a separate section') — no longer a standalone top-level module in the Home grid/sidebar. Removed the `vault` entry from `MODULES` and its 'Tech' group placement entirely; the 'Password Vault' page now lives as a second tab under **Employee** (alongside 'Users'), using the exact same admin-only-tab shape already established for Referral's Backtrack / Analytics' AOP / Task Planner's Modify Tasks — the tab only spreads into `App.jsx`'s `employee` moduleTabs array when `isModuleAdmin` is true, and `MODULE_SECTIONS.employee` lists it with `adminOnly: true` so Employee > Users' per-user Sections control shows it correctly flagged ADMIN. This also simplified access control: since Vault access is now inherited from the Employee module's own admin/devops level rather than a separate module-level grant, the one-off `ADMIN_ONLY_MODULES` special-casing added at v2.29.325 (which limited the Vault row in AccessEditor to only None/Admin/DevOps) was removed — Employee now uses the same full None/View/Supervisor/Admin/DevOps set as every other module, since there's no longer a separate Vault row to restrict. `About.jsx`'s MODULE_DOCS folded the standalone 'Password Vault' entry into Employee's own doc entry; `shared/ui.jsx`'s `MODULE_ICONS` no longer carries the `Lock` mapping added for Vault's now-removed top-level module icon. `vaultApi`/`VAULT_COLLECTION` in `shared/core.js` and `modules/Vault.jsx`'s `PasswordVault` component are unchanged — only where the page is reachable from moved. Verified via a clean `npm run build` and a live pass: confirmed 'Password Vault' no longer appears as its own tile anywhere in the module grid, confirmed it renders correctly as Employee's second sidebar section for an admin, confirmed a View-level Employee user's sidebar shows only 'Users' (no Password Vault entry) and that forcing `pw_tab_employee=vault_creds` directly via sessionStorage for that same user falls back to the Users tab rather than rendering the vault, and confirmed Employee > Users' access editor Sections dropdown correctly lists 'Password Vault ADMIN' alongside 'Users'." },
+  { v: "2.29.325", note: "New module: Password Vault (`src/modules/Vault.jsx`), per explicit user request ('I want to create a password vault and this should be strictly shown only to admin access'). Stores internal service/tool credentials (Service name, Username, Password, URL, Notes) shared across every admin via a new Cloud Firestore collection (`password_vault`, same backend-prowater/prowaterdb project Device Replacement/Releases already use) — reaches every admin login on any device; falls back to a localStorage cache when Firestore is unreachable, same offline-first pattern as `_drStore`/`_releasesCache`. Passwords are masked behind a per-row show/hide toggle plus one-click copy buttons for username/password, with a 'Link' out to the service's URL; add/edit via a popup form, delete with a native confirm. Explicitly scoped per a follow-up clarification: localStorage-only was declined in favor of the shared Firestore store; encryption-at-rest was declined in favor of masked-display-only (plain text at rest, matching this app's general client-side-SPA security posture — flagged clearly in-page and in this doc); contents are internal service/tool logins, not customer data. STRICTLY admin/devops-only, enforced at three layers: (1) the new 'vault' entry in `MODULES` is filtered out of Home's module grid for any access level other than admin/devops, even if somehow granted View/Supervisor; (2) the module's actual render in `App.jsx` is gated by `isModuleAdmin` in the JSX condition itself (mirroring the existing AOP/Backtrack admin-gate pattern) — confirmed live that forcing `pw_active_module=vault` via sessionStorage for a View-level user renders a completely blank page, no data ever fetched or shown; (3) Employee > Users' AccessEditor now offers only None/Admin/DevOps for the Vault row specifically (no View/Supervisor option exists to grant, removing the ambiguity of a 'half-granted' module) — a new `ADMIN_ONLY_MODULES` set in `Employee.jsx` drives this, extensible to future admin-only modules. Also fixed a real bug caught during live verification: `vaultApi.add`/`update` initially only touched the local cache on a *successful* Firestore write (unlike every other offline-first store in this app), so a save that failed against this sandbox's unreachable Firestore silently vanished instead of saving locally — fixed to update the cache optimistically first, then reconcile with Firestore's real doc id on success, matching `_drStore`/`_releasesCache`'s established pattern. Verified via a clean `npm run build` and a full live pass: added/revealed/copied/edited a credential as admin (correctly falls back to 'Saved locally' when Firestore auth fails, as expected in this sandbox), confirmed the module is invisible in the grid AND blank on forced direct navigation for a View-level user, and confirmed the Users admin's access editor only offers None/Admin/DevOps for this one module." },
+  { v: "2.29.324", note: "Dev-tooling fix, no user-visible change: relocated 13 plain constants/helpers (`CHART_PALETTE`, `ACCESS_LEVELS`, `DEVICE_TYPES`, `BENGALURU_CENTER`, `AUTO_GS_SEED`, `tkPriority`, `API_USAGE`, `HIDDEN_LEAD_STATUSES`, `PLAN_AVATAR_COLORS`, `TIERS`, `gstBreakup`, `IOT_ALERT_SEV`, `AOP_MON`) plus the manually-recorded-refunds store (`MANUAL_REFUNDS_LS_KEY`/now `manualRefundsApi`) out of `shared/ui.jsx` and 12 module files into `shared/core.js`, per explicit user request after repeatedly hitting Vite's 'Could not Fast Refresh (\"X\" export is incompatible)' dev-console warning. Root cause: Vite's react-refresh transform can only hot-swap a file in place when EVERY export in it is a React component — one plain constant/helper export forces a full reload of that file and everything importing it on every edit. `shared/core.js` holds no components, so it's never subject to the rule; each symbol is re-imported by its original file at the exact call site it used to live, with zero behavior change. The refunds store specifically needed setter functions (`list/add/remove`) instead of its old direct-reassignment pattern, since an ES module import binding can't be reassigned from the importing file. Deliberately a narrow, targeted pass covering only the exports that had actually surfaced the warning so far — most of these same files still mix in other plain exports (seed data, API clients, formatters) that will trip the same warning again on a future edit; a full fix would mean relocating those too, which was explicitly scoped out this round given the size (~habitually 20-80 more per file). Verified via a clean `npm run build` plus a live spot-check across Employee (Edit Access modal), Billing (Add/Remove Refund Entry), Referral (Tracker tiers), Task Planner (avatar colors), Analytics (AOP month labels), IoT (Alerts page), FSM (Bengaluru map), and Auto Scheduler (Auto GS seed societies) — all rendered correctly with no new console errors." },
+  { v: "2.29.323", note: "Ticketing > Overview (`src/modules/Ticketing.jsx`): Completely overhauled the trendline on the 'Daily Tickets Created' chart per explicit user request ('trend line is not good, make it better'). Replaced the stiff linear slope with a natural adaptive Rolling Moving Average (centered window) rendered as a smooth curved spline in vibrant Indigo/Violet gradients (`#6366F1` to `#8B5CF6`) with soft gradient area shading. Added an interactive 4-way trend mode segmented control ('Smooth MA', 'Daily Curve', 'Linear', 'Hide Line') directly in the card header, giving the user seamless control over curve representations. Verified via a clean `npm run build`." },
+  { v: "2.29.322", note: "Ticketing > Overview (`src/modules/Ticketing.jsx`): Redesigned the 'Daily Tickets Created' chart UI per explicit user request. Added custom SVG emerald data label badges (`#08805A` pill with white text and stroke) directly above daily bars with non-zero tickets, styled the daily bars with modern vertical emerald gradients (`#08805A` to `#10B981`), overlaid an amber trend area gradient fill (`#D97706`) with smooth dashed trend curve and active dots, and added real-time summary header chips (Peak daily volume, Daily average, and Active days count). Verified via a clean `npm run build`." },
+  { v: "2.29.321", note: "Ticketing > Overview (`src/modules/Ticketing.jsx`): Added a date filter (the shared `DateRangePicker`, presets + custom From/To, backed by `useDateRange`) that now scopes every KPI card, the Tickets-by-Status donut, and the Tickets-by-Issue-Type bars to the selected period by ticket created date — per explicit user request. Added a new full-width 'Daily Tickets Created' chart directly below the KPI row: one bar per calendar day across the whole selected range (zero-filled so quiet days show as 0, not a gap), overlaid with a dashed red best-fit trend line computed via simple least-squares linear regression over the daily counts — the same Bar+Line trend-overlay shape used elsewhere in Analytics. Verified via a clean `npm run build` and a live check with the date range set to June 2026 (the sample-data window): KPIs, both existing charts, and the new daily chart all correctly narrowed to the 5 seed tickets in range." },
+  { v: "2.29.320", note: "Ticketing > Ops Tickets (`src/modules/Ticketing.jsx`, `src/App.jsx`): Removed top KPI stat cards (`OpsKpis`), removed 'Water Quality — Input vs Output TDS' table (`OpsTdsTable`), and replaced 'Spares Used by Issue Type' (`OpsSparesTable`) with a dedicated 'Spares Used' table (`SparesTable`) per explicit user request. The new Spares table aggregates all spare parts consumed across the filtered tickets (dynamically updating with the date picker and search filters), displaying the spare part name, ranked badge, consumption count, and percentage share of total parts, alongside summary metrics in the header and footer. Verified via a clean `npm run build`." },
+  { v: "2.29.319", note: "Ticketing > Ops Tickets (`src/App.jsx`): Updated the `preFilter` condition per explicit user request. In addition to excluding tickets with `issueCategory === 'complaint'`, the Ops Tickets view now also requires that `technicianVisitDate` and `technicianVisitSlot` are both non-null, non-empty, and valid (`technicianVisitDate !== '—'` and `technicianVisitSlot !== '—'`), ensuring only scheduled operational jobs with confirmed visit timing appear in this view. Verified via a clean `npm run build`." },
+  { v: "2.29.318", note: "Analytics > DP Transactions (`src/modules/Analytics.jsx`): Refined the selected state of the 'Apartment performance' cards per explicit user request ('when i select any card dont show as selected, no need to show selected, only show the card in FFCB56 color'). Removed the 'Selected' text pill badge completely, and updated the selected card styling to a clean warm amber/gold `#FFCB56` background with dark `#1D1D1F` high-contrast typography, badges, and progress bar fill. Verified via a clean `npm run build`." },
+  { v: "2.29.317", note: "Analytics > DP Transactions (`src/modules/Analytics.jsx`): Removed unwanted hover magnification on the 'Apartment performance' card by adding `hover={false}` to the `<Card>` component. Made the individual apartment performance cards interactive and dynamic: clicking any card (e.g. 'CRO_Ashish JK [ Thubarahalli ]') now filters the entire DP Transactions page (including the raw table and aggregate KPI cards) to that specific apartment, displaying an active emerald border, background tint, and 'Selected' pill. Clicking the active card again or clicking the new 'Reset apartment filter' pill restores the view to all apartments. Also updated `aptStats` to calculate counts across all apartments for the selected date range so all cards retain their period numbers and remain interactive when an apartment is filtered. Verified via a clean `npm run build`." },
   { v: "2.29.316", note: "Billing & Subscription: Removed the 'Overview' Tab (`BillingOverview`) Entirely, per explicit user request. Deleted the component (`src/modules/Billing.jsx` — KPI cards for Active Subscriptions/Est. MRR/Outstanding/Collected, plus Subscriptions-by-Status and Active-Revenue-by-Plan charts), its nav entry and `App.jsx` tab-switch render, its `TAB_SOURCES.bill_overview` entry (`src/shared/core.js`), and its copy in Employee.jsx's `MODULE_SECTIONS.billing` (the per-user section-access catalog, so it can no longer be granted/shown for any employee). Billing & Subscription now opens straight to Subscriptions (already the module's default tab before this change — `bill_subs`, unaffected). Also removed a batch of now-fully-unused imports this left behind in `Billing.jsx` (`RefreshCw`, `TrendingUp`, the whole `recharts` import block, `Card`/`Table`/`Stat`/`TT`/`CHART_PALETTE`/`renderPieLabel`/`pieLabelLine`/`ftd`/`trStyle`/`grid4`/`axisTick` from `shared/ui`) — each individually confirmed via grep to have zero remaining usages in the file. Verified via a clean `npm run build`." },
   { v: "2.29.315", note: "Billing & Subscription > Deposits & Refunds (`src/modules/Billing.jsx`): Removed the Original Auto-Generated 'Deposits & Refunds' Table, per explicit user request — now that manual refund entries (v2.29.313) cover the actual need, this page leads straight from the top KPI stat cards into the 'Manually Recorded Refunds' section. Removed with it: the search/export toolbar and CSV export that only fed that table, and the Request/Approve/Refund action-button chain (`advance()`/`stChip()`/`action()`) — those wrote to a SESSION-ONLY `refunds` state that never persisted anyway (lost on every reload), so removing them loses no durable data. Worth knowing: the 'Refund requests' and 'Refunded' KPI cards at the top (kept, unchanged code) were the ONLY thing those removed buttons ever fed — with them gone, those two cards will now permanently read 0/₹0 (a subscription's deposit state simplifies to a straight 'held'/'eligible' read off its own live status, since nothing writes any other state to it anymore); 'Deposits held' and 'Avg deposit' are unaffected, since they're driven by the subscription data itself, not the removed action buttons. Flagging this rather than silently leaving two dead-looking KPI numbers — worth a follow-up if those two cards should be redesigned or removed too. Verified via a clean `npm run build`." },
   { v: "2.29.314", note: "Shared UI > `Modal`/`Drawer` (`src/shared/ui.jsx`): fixed every popup in the app rendering in the browser's default serif font (Times) instead of matching the CRM's real fonts, per explicit user report on the new 'Add Refund Entry' popup ('match the font style of the crm in the popup'). Root cause, confirmed live via `getComputedStyle`: `Modal`/`Drawer` are portalled straight to `document.body` (`createPortal`), entirely outside `.pw-root` — the div that actually carries the app's fonts (`'DM Sans'` for body text, `'Playfair Display'` for headings, set in `App.jsx`) — so every popup silently fell back to Times with no font-family of its own. Added explicit `fontFamily` (new shared `PW_BODY_FONT`/`PW_HEADING_FONT` constants, matching `.pw-root`'s own stacks exactly) directly on both components' wrapper divs and `<h2>` title, so this is fixed everywhere at once rather than just the one popup that surfaced it. Verified live via `getComputedStyle`: the Add Refund Entry popup's title now resolves to `\"Playfair Display\", Georgia, \"Times New Roman\", serif` and its labels to `\"DM Sans\", system-ui, ...` — matching the rest of the CRM exactly." },
@@ -2015,6 +2025,107 @@ export const _drScalar = (f) => {
 };
 
 /* ===========================================================================
+   Password Vault (v2.29.325; moved under Employee as its own section at
+   v2.29.326) — internal service/tool credentials (Zoho, AWS, hosting, vendor
+   portals, WiFi, admin panels, etc), gated strictly to admin/devops access
+   via the Employee module's own isModuleAdmin (see App.jsx's `employee`
+   moduleTabs entry — the "Password Vault" tab only spreads into the array
+   when isModuleAdmin is true — and the `{tab === "vault_creds" &&
+   isModuleAdmin && ...}` render guard). Shared across every admin via the
+   SAME Cloud Firestore project/database Device Replacement and Releases
+   already use, in its own `password_vault` collection — reaches every admin
+   login on any device. NOTE: passwords are stored as plain text (masked in
+   the UI behind a show/hide toggle, never logged) — this is convenience-level
+   protection matching this app's general client-side-SPA security posture,
+   not encryption at rest. Firestore access itself must be restricted to
+   admin accounts via security rules on the `password_vault` collection.
+   =========================================================================== */
+export const VAULT_COLLECTION = "password_vault";
+const VAULT_FS_BASE = `https://firestore.googleapis.com/v1/projects/${DR_FS_PROJECT}/databases/${DR_FS_DB}/documents`;
+const _vaultHeaders = () => { const t = sessionStorage.getItem("pw_idToken"); return { "Content-Type": "application/json", ...(t ? { Authorization: `Bearer ${t}` } : {}) }; };
+const VAULT_LS_KEY = "pw_vault_cache";
+const saveVaultCache = (rows) => LS.set(VAULT_LS_KEY, rows);
+let _vaultCache = LS.get(VAULT_LS_KEY, []) || [];
+export function mapVaultDoc(doc) {
+  const f = doc.fields || {};
+  return {
+    _docId: (doc.name || "").split("/").pop(),
+    service: _drScalar(f.service), username: _drScalar(f.username), password: _drScalar(f.password),
+    url: _drScalar(f.url), notes: _drScalar(f.notes),
+    createdBy: _drScalar(f.createdBy), createdAt: _drScalar(f.createdAt),
+    updatedBy: _drScalar(f.updatedBy), updatedAt: _drScalar(f.updatedAt),
+  };
+}
+export const vaultApi = {
+  local: () => [..._vaultCache],
+  // Read every credential from Firestore (falls back to the local cache if
+  // unreachable/refused — e.g. security rules deny a non-admin's ID token).
+  fetch: async () => {
+    try {
+      const res = await fetch(`${VAULT_FS_BASE}:runQuery`, {
+        method: "POST", headers: _vaultHeaders(),
+        body: JSON.stringify({ structuredQuery: { from: [{ collectionId: VAULT_COLLECTION }], limit: 500 } }),
+      });
+      if (!res.ok) throw new Error(`Firestore ${res.status}`);
+      const json = await res.json();
+      const rows = (json || []).filter(r => r.document).map(r => mapVaultDoc(r.document))
+        .sort((a, b) => a.service.localeCompare(b.service));
+      _vaultCache = rows; saveVaultCache(rows);
+      return [..._vaultCache];
+    } catch (e) { console.warn("vault fetch failed:", e.message); return [..._vaultCache]; }
+  },
+  // Create one credential. Optimistic local update FIRST (so it shows immediately
+  // and survives reloads even if Firestore is unreachable — same pattern as
+  // _drStore/_releasesCache/_manualRefunds elsewhere in this app), then persist.
+  // A locally-generated id is replaced with Firestore's real one on success.
+  add: async (actor, entry) => {
+    const now = new Date().toISOString();
+    const local = { _docId: `local_${crypto.randomUUID()}`, ...entry, createdBy: actor, createdAt: now, updatedBy: actor, updatedAt: now };
+    _vaultCache = [local, ..._vaultCache].sort((a, b) => a.service.localeCompare(b.service));
+    saveVaultCache(_vaultCache);
+    try {
+      const res = await fetch(`${VAULT_FS_BASE}/${VAULT_COLLECTION}`, {
+        method: "POST", headers: _vaultHeaders(), body: JSON.stringify({ fields: _drToFsFields(entry) }),
+      });
+      if (!res.ok) { let m = `Firestore ${res.status}`; try { const j = await res.json(); if (j?.error?.message) m = j.error.message; } catch { /* keep status */ } throw new Error(m); }
+      const saved = mapVaultDoc(await res.json());
+      _vaultCache = _vaultCache.map(r => r._docId === local._docId ? saved : r).sort((a, b) => a.service.localeCompare(b.service));
+      saveVaultCache(_vaultCache);
+      return { saved: true, record: saved };
+    } catch (e) { return { saved: false, message: e.message, record: local }; }
+  },
+  // Update one credential (full-document replace). Optimistic local update FIRST,
+  // same reasoning as add() above.
+  update: async (actor, docId, entry) => {
+    const now = new Date().toISOString();
+    const existing = _vaultCache.find(r => r._docId === docId);
+    const body = { ...entry, createdBy: existing?.createdBy || actor, createdAt: existing?.createdAt || now, updatedBy: actor, updatedAt: now };
+    const local = { ...body, _docId: docId };
+    _vaultCache = _vaultCache.map(r => r._docId === docId ? local : r).sort((a, b) => a.service.localeCompare(b.service));
+    saveVaultCache(_vaultCache);
+    try {
+      const res = await fetch(`${VAULT_FS_BASE}/${VAULT_COLLECTION}/${docId}`, {
+        method: "PATCH", headers: _vaultHeaders(), body: JSON.stringify({ fields: _drToFsFields(body) }),
+      });
+      if (!res.ok) { let m = `Firestore ${res.status}`; try { const j = await res.json(); if (j?.error?.message) m = j.error.message; } catch { /* keep status */ } throw new Error(m); }
+      const saved = { ...mapVaultDoc(await res.json()), _docId: docId };
+      _vaultCache = _vaultCache.map(r => r._docId === docId ? saved : r).sort((a, b) => a.service.localeCompare(b.service));
+      saveVaultCache(_vaultCache);
+      return { saved: true, record: saved };
+    } catch (e) { return { saved: false, message: e.message, record: local }; }
+  },
+  remove: async (docId) => {
+    _vaultCache = _vaultCache.filter(r => r._docId !== docId);
+    saveVaultCache(_vaultCache);
+    try {
+      const res = await fetch(`${VAULT_FS_BASE}/${VAULT_COLLECTION}/${docId}`, { method: "DELETE", headers: _vaultHeaders() });
+      if (!res.ok) throw new Error(`Firestore ${res.status}`);
+      return { saved: true };
+    } catch (e) { console.warn("vault delete failed:", e.message); return { saved: false, message: e.message }; }
+  },
+};
+
+/* ===========================================================================
    Billing/subscription data layer — hoisted here from App.jsx (was going to
    land in modules/Billing.jsx, but Customer.jsx needs billingApi/
    depositForCustomer/creditNoteApi too, so it lives in core.js like
@@ -2670,4 +2781,122 @@ export const billingApi = {
     _inflight.subscriptions = null; _inflight.invoices = null; _inflight.submodules = null; _inflight.plans = null;
     await Promise.all([billingApi.getSubscriptions(true), billingApi.getInvoices(true), billingApi.getSubmodules(true), billingApi.getPlans(true)]);
   },
+};
+
+/* ============================================================================
+   v2.29.324 — Fast Refresh fixes. Each symbol below used to be declared
+   inside the module file that uses it, mixed in among that file's React
+   components. Vite's react-refresh transform can only hot-swap a file "in
+   place" when EVERY export in it is a component — one plain constant/helper
+   export is enough to make the whole file (and everything that imports it)
+   fall back to a full reload on every edit ("Could not Fast Refresh (\"X\"
+   export is incompatible)" in the dev console). Relocating these here (a
+   components-free file, so the rule never applies to it) restores true Fast
+   Refresh for the files listed. Pure move — no behavior change; each is
+   re-imported by its original file at the exact call site it used to live.
+   NOTE: this was a deliberately narrow pass covering only the exports that
+   had actually surfaced the warning so far — most of these module files
+   still mix in other plain exports of their own (seed data, API clients,
+   formatters) that will trip the same warning again on a future edit; a full
+   fix would mean relocating those too, which was explicitly left for later.
+   ============================================================================ */
+// was shared/ui.jsx
+export const CHART_PALETTE = ["#1E9E4F", "#2A86D6", "#986315", "#DC4141", "#0B6F52", "#7D8A83", "#A9B3AC"];
+// was modules/Employee.jsx (UsersAdmin's access-level dropdown)
+export const ACCESS_LEVELS = [
+  { v: "none", label: "None" },
+  { v: "view", label: "View" },
+  { v: "supervisor", label: "Supervisor" },
+  { v: "admin", label: "Admin" },
+  { v: "devops", label: "DevOps" },
+];
+// was modules/DeviceReplacement.jsx
+export const DEVICE_TYPES = ["Own Device", "Normal", "Hot & Cold"];
+// was modules/FSM.jsx (Bengaluru map default center)
+export const BENGALURU_CENTER = { lat: 12.9716, lng: 77.5946 };
+// was modules/AutoScheduler.jsx (offline-fallback Auto GS seed data)
+export const AUTO_GS_SEED = [
+  { name: "CBR Aakruti",                installedDate: "2026-01-15", totalFlats: 108, numTowers: 2, croType: "Eco crystal", lastBackwash: "2026-06-28", lastDozing: "NA",             offset: 11 },
+  { name: "SVS Ananda Nilayam",         installedDate: "2026-02-10", totalFlats: 168, numTowers: 5, croType: "Alfa Enviro", lastBackwash: "2026-06-25", lastDozing: "2026-06-25",     offset: 14 },
+  { name: "MJR Clique Hydra",           installedDate: "2025-11-20", totalFlats: 300, numTowers: 5, croType: "Eco crystal", lastBackwash: "2026-07-01", lastDozing: "Yet to install", offset: 8 },
+  { name: "Ashish JK",                  installedDate: "2026-03-05", totalFlats: 206, numTowers: 6, croType: "Alfa Enviro", lastBackwash: "2026-07-06", lastDozing: "2026-07-06",     offset: 3 },
+  { name: "Prabhavathi Meghana Towers", installedDate: "2026-01-28", totalFlats: 80,  numTowers: 1, croType: "Eco crystal", lastBackwash: "2026-06-22", lastDozing: "NA",             offset: 17 },
+];
+// was modules/Ticketing.jsx (depends on zdPriorityColor, already defined above in this file)
+export const tkPriority = (label) => ({ label: label || "—", color: zdPriorityColor(label) });
+// was modules/About.jsx (the API Usage reference table on the About page)
+export const API_USAGE = [
+  { group: "ProWater backend · api-7ca73ntgua-el.a.run.app (Bearer auth)", items: [
+    { m: "GET", path: "/admin/get-all-customers", use: "Customer accounts (Zoho Contacts) — Customer, Analytics" },
+    { m: "GET", path: "/admin/get-all-subscriptions", use: "Subscriptions (Zoho Billing) — Billing" },
+    { m: "GET", path: "/admin/get-all-invoices", use: "Invoices (Zoho Billing) — Billing, Analytics, Earned Revenue (customer/plan lookup)" },
+    { m: "GET", path: "/admin/get-all-submodules", use: "Subscription term/payment records (Zoho Billing) — Earned Revenue's Start/End-date + Interval enrichment lookup, joined via invoice_id/invoice_number → transaction_id (v2.29.104-106)" },
+    { m: "GET", path: "/admin/subs-module-get-all-plans", use: "Plan catalog (Zoho Billing) — Billing & Subscription · Plans (v2.29.287); falls back to the static PLAN_CATALOG sample data if unreachable" },
+    { m: "GET", path: "/admin/get-all-creditnotes", use: "Credit notes / discounts (Zoho Billing) — Analytics · Credits, All Customers" },
+    { m: "GET", path: "/admin/zoho/get-all-leads", use: "Zoho CRM leads — Sales, Analytics" },
+    { m: "GET", path: "/admin/zoho/get-all-apartments/data", use: "Apartment leads — Sales" },
+    { m: "GET", path: "/admin/get-app-logs", use: "Server app logs — Analytics · App Logs" },
+    { m: "POST", path: "/documents/add?email=", use: "Task Planner attachments — upload files for the signed-in user" },
+    { m: "POST", path: "/device-replacement/add", use: "Save a device-replacement swap → Firebase" },
+    { m: "GET", path: "/api/admin/all-referrals", use: "Referrers + referees + credits — Referral" },
+    { m: "GET", path: "/tickets/formattedforwisdom", use: "Zoho Desk tickets (list, Wisdom-formatted) — Ticketing" },
+    { m: "GET/POST", path: "/api/gs-schedules", use: "Auto GS schedules (optional; local-first)" },
+  ] },
+  { group: "ProWater backend · same origin, but UNAUTHENTICATED feeds (no Bearer header)", items: [
+    { m: "GET", path: "/dp-transactions", use: "Analytics · DP Transaction — row source (cursor-paginated)" },
+    { m: "POST", path: "/dp-transactions/add", use: "DP Transaction's admin-only Upload JSON → Run API (multipart, field \"file\")" },
+  ] },
+  { group: "DrinkPrime · separate origin, unauthenticated, CORS-open", items: [
+    { m: "GET", path: "api.drinkprime.in/payments/payments/payments/v1", use: "Customer · All Customers, DP-stack Transactions sub-page (?loader=true&page=1&pageSize=100&deviceCode={purifier_id}&installationID={dp_installation_id}, v2.29.134 — replaced the old v2/collections endpoint)" },
+    { m: "GET", path: "api.drinkprime.in/sponsor/device/details/syncs", use: "Customer · All Customers, DP-stack Sync History sub-page (?pageSize=10&page=1&orderDir=desc&orderBy=id&deviceCode={purifier_id}, v2.29.127)" },
+    { m: "POST", path: "api.drinkprime.in/sponsor/device/life/conn-check", use: "Customer · All Customers, DP device connectivity check (payload: botId, connectivity) (v2.29.254)" },
+  ] },
+  { group: "Google / Firebase", items: [
+    { m: "POST", path: "identitytoolkit.googleapis.com/…:signInWithPassword", use: "Login — email/password auth" },
+    { m: "POST", path: "firestore.googleapis.com/…:runQuery", use: "App Logs (logs) + Device Replacement read-back (device_replacements)" },
+    { m: "POST/GET/DELETE", path: "firestore.googleapis.com/…/documents/wisdom2.0_releases", use: "App & Technician releases — shared so every login sees the popup (Firestore)" },
+    { m: "POST/GET/PATCH/DELETE", path: "firestore.googleapis.com/…/documents/password_vault", use: "Password Vault (Employee > Password Vault section) — internal service/tool credentials, admin-only (Firestore; v2.29.325)" },
+    { m: "GET", path: "firebasestorage.googleapis.com/v0/b/…/o/…?alt=media", use: "Download Task Planner attachments (backend-prowater.firebasestorage.app)" },
+    { m: "GET", path: "fonts.googleapis.com", use: "Web fonts (Playfair Display + DM Sans)" },
+  ] },
+  { group: "External utility APIs", items: [
+    { m: "GET", path: "ipapi.co/json", use: "Client IP + ISP + approx city (audit log)" },
+    { m: "GET", path: "api.ipify.org", use: "Client IP fallback" },
+    { m: "GET", path: "api.bigdatacloud.net/…/reverse-geocode-client", use: "GPS → city name (audit log)" },
+    { m: "GET/POST", path: "…execute-api.ap-southeast-2.amazonaws.com/prod", use: "IoT device status + history (IoT Core)" },
+    { m: "GET", path: "asia-south1-backend-prowater.cloudfunctions.net/weather", use: "Weather history proxy (Google Weather API, key server-side) — IoT Core weather correlation" },
+  ] },
+];
+// was modules/Sales.jsx (currently always empty — a hook for hiding specific raw lead statuses app-wide)
+export const HIDDEN_LEAD_STATUSES = new Set();
+// was modules/TaskPlanner.jsx (per-assignee avatar color palette)
+export const PLAN_AVATAR_COLORS = ["#1E9E4F", "#0B6F52", "#0B6F52", "#986315", "#DC4141", "#2A86D6", "#2A86D6", "#2A86D6", "#DC4141", "#2A86D6"];
+// was modules/Referral.jsx (reward-tier thresholds)
+export const TIERS = [
+  { key: "none", label: "No tier yet", min: 0, color: "#A9B3AC", bg: "#ECEEED" },
+  { key: "bronze", label: "Bronze Tier", min: 1, color: "#986315", bg: "#FBF0E0" },
+  { key: "silver", label: "Silver Tier", min: 2, color: "#7D8A83", bg: "#ECEEED" },
+  { key: "gold", label: "Gold Tier", min: 6, color: "#986315", bg: "#FBF0E0" },
+];
+// was modules/Customer.jsx (Indian GST 5% split for an invoice's line-item card)
+export function gstBreakup(total) {
+  const t = Number(total) || 0;
+  const taxable = t / 1.05;
+  return { taxable, cgst: taxable * 0.025, sgst: taxable * 0.025, total: t };
+}
+// was modules/IoT.jsx (Ops Tickets/Alerts severity chip colors)
+export const IOT_ALERT_SEV = { critical: { c: "#DC4141", bg: "#FBE8E8", label: "Critical" }, high: { c: "#a86e00", bg: "#FBF0E0", label: "High" }, medium: { c: "#2A86D6", bg: "#E5F0FA", label: "Medium" } };
+// was modules/Analytics.jsx (AOP month labels)
+export const AOP_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// was modules/Billing.jsx — the manually-recorded-refunds localStorage store.
+// Originally a mutable `export let` reassigned directly from Billing.jsx; an
+// ES module import binding can't be reassigned from the importing file, so
+// moving the store here means Billing.jsx now calls these functions instead.
+export const MANUAL_REFUNDS_LS_KEY = "pw_manual_refunds";
+let _manualRefunds = LS.get(MANUAL_REFUNDS_LS_KEY, []) || [];
+const _saveManualRefunds = () => LS.set(MANUAL_REFUNDS_LS_KEY, _manualRefunds);
+export const manualRefundsApi = {
+  list: () => [..._manualRefunds],
+  add: (entry) => { _manualRefunds = [entry, ..._manualRefunds]; _saveManualRefunds(); return [..._manualRefunds]; },
+  remove: (id) => { _manualRefunds = _manualRefunds.filter(r => r.id !== id); _saveManualRefunds(); return [..._manualRefunds]; },
 };

@@ -18,7 +18,7 @@ import {
   Tooltip, Legend,
 } from "recharts";
 import {
-  useAuth, api, authHeaders, exportToCsv,
+  useAuth, api, authHeaders, exportToCsv, IOT_ALERT_SEV,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, DefRow,
@@ -1382,8 +1382,6 @@ export function IoTWeatherCard({ weather }) {
     </div>
   );
 }
-// Severity styling shared by the Alerts page's anomaly-event list below.
-export const IOT_ALERT_SEV = { critical: { c: "#DC4141", bg: "#FBE8E8", label: "Critical" }, high: { c: "#a86e00", bg: "#FBF0E0", label: "High" }, medium: { c: "#2A86D6", bg: "#E5F0FA", label: "Medium" } };
 // Per-occurrence anomaly EVENTS (one per triggering reading + dead/flatline),
 // each with a STABLE key so re-detecting the same event across polls doesn't
 // duplicate it in the persisted log.

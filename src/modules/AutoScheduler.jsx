@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   useAuth, api, customerApi, apartmentApi, ticketApi, hashStr, fmtDate,
-  fmtTime, isoDay, pushLog, API_BASE, LS,
+  fmtTime, isoDay, pushLog, API_BASE, LS, AUTO_GS_SEED,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, Chip,
@@ -24,13 +24,6 @@ import {
    AUTO SCHEDULER — recurring society general-service (GS) + IoT alerts
    =========================================================================== */
 export const GS_INTERVAL_DAYS = 15;
-export const AUTO_GS_SEED = [
-  { name: "CBR Aakruti",                installedDate: "2026-01-15", totalFlats: 108, numTowers: 2, croType: "Eco crystal", lastBackwash: "2026-06-28", lastDozing: "NA",             offset: 11 },
-  { name: "SVS Ananda Nilayam",         installedDate: "2026-02-10", totalFlats: 168, numTowers: 5, croType: "Alfa Enviro", lastBackwash: "2026-06-25", lastDozing: "2026-06-25",     offset: 14 },
-  { name: "MJR Clique Hydra",           installedDate: "2025-11-20", totalFlats: 300, numTowers: 5, croType: "Eco crystal", lastBackwash: "2026-07-01", lastDozing: "Yet to install", offset: 8 },
-  { name: "Ashish JK",                  installedDate: "2026-03-05", totalFlats: 206, numTowers: 6, croType: "Alfa Enviro", lastBackwash: "2026-07-06", lastDozing: "2026-07-06",     offset: 3 },
-  { name: "Prabhavathi Meghana Towers", installedDate: "2026-01-28", totalFlats: 80,  numTowers: 1, croType: "Eco crystal", lastBackwash: "2026-06-22", lastDozing: "NA",             offset: 17 },
-];
 export const _gsTickets = {};   // society -> ticket id
 export const _iotTickets = {};  // purifier id -> ticket id
 export const _gsAdded = [];     // societies added locally when the endpoint is offline

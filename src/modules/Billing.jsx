@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   useAuth, api, billingApi, customerApi, depositForCustomer, exportToCsv,
-  fmtDate, inr, LS, pushLog, SEED_PLANS,
+  fmtDate, inr, pushLog, SEED_PLANS, manualRefundsApi,
 } from "../shared/core";
 import {
   Toolbar, Loading, Empty, ApiError, Modal, Field,
@@ -254,9 +254,11 @@ export function Invoices() {
 // already uninstalled and their subscription record is gone). This is a
 // separate, manually-entered log, local to this browser (no backend API for
 // it) — same persisted-list convention as Device Replacement's `_drStore`.
-export const MANUAL_REFUNDS_LS_KEY = "pw_manual_refunds";
-export let _manualRefunds = LS.get(MANUAL_REFUNDS_LS_KEY, []) || [];
-export const _saveManualRefunds = () => LS.set(MANUAL_REFUNDS_LS_KEY, _manualRefunds);
+// The store itself (localStorage key + list/add/remove) now lives in
+// shared/core.js as `manualRefundsApi` (v2.29.324, Fast Refresh fix) — it
+// used to be a mutable `export let` reassigned right here, but an ES module
+// import binding can't be reassigned from the importing file, so it moved to
+// setter functions instead.
 
 export function DepositRefunds() {
   const { user } = useAuth();
@@ -264,7 +266,7 @@ export function DepositRefunds() {
   const [custs, setCusts] = useState([]);
   const [err, setErr] = useState("");
   const [toast, setToast] = useState("");
-  const [manualRefunds, setManualRefunds] = useState(() => [..._manualRefunds]);
+  const [manualRefunds, setManualRefunds] = useState(() => manualRefundsApi.list());
   const [showAddRefund, setShowAddRefund] = useState(false);
   const emptyRefundForm = { name: "", phone: "", uninstallDate: "", amount: "", invoiceNumber: "", refId: "", mode: "UPI" };
   const [refundForm, setRefundForm] = useState(emptyRefundForm);
@@ -291,18 +293,14 @@ export function DepositRefunds() {
       amount, invoiceNumber: refundForm.invoiceNumber.trim(), refId: refundForm.refId.trim(), mode: refundForm.mode,
       recordedBy: user.username, recordedAt: new Date().toISOString(),
     };
-    _manualRefunds = [entry, ..._manualRefunds];
-    _saveManualRefunds();
-    setManualRefunds([..._manualRefunds]);
+    setManualRefunds(manualRefundsApi.add(entry));
     pushLog({ type: "manual_refund_entry", actor: user.username, module: "Billing", detail: `Recorded manual refund: ${inr(entry.amount)} to ${entry.name}` });
     flash(`Refund entry added · ${entry.name}`);
     setRefundForm(emptyRefundForm);
     setShowAddRefund(false);
   };
   const removeManualRefund = (id, name) => {
-    _manualRefunds = _manualRefunds.filter(r => r.id !== id);
-    _saveManualRefunds();
-    setManualRefunds([..._manualRefunds]);
+    setManualRefunds(manualRefundsApi.remove(id));
     flash(`Refund entry removed · ${name}`);
   };
 

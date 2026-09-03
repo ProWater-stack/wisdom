@@ -19,7 +19,6 @@ import {
   pluralise, useAuth,
 } from "./core";
 
-export const CHART_PALETTE = ["#1E9E4F", "#2A86D6", "#986315", "#DC4141", "#0B6F52", "#7D8A83", "#A9B3AC"];
 export const PIE_LABEL_OFFSET = 14;
 export const renderPieLabel = ({ cx, cy, midAngle, outerRadius, value, percent }) => {
   if (!value) return null;

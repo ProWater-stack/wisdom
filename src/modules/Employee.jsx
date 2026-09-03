@@ -9,7 +9,7 @@ import {
   AlertCircle, CheckCircle2, ChevronDown, ChevronUp, KeyRound, Lock, Plus,
   ShieldCheck, SlidersHorizontal, Trash2,
 } from "lucide-react";
-import { useAuth, api, fmtDate, MODULES } from "../shared/core";
+import { useAuth, api, fmtDate, MODULES, ACCESS_LEVELS } from "../shared/core";
 import {
   Card, Table, Loading, Field, Modal, Status, Person,
   btnPrimary, iconBtn, inp, td, toastStyle,
@@ -30,7 +30,11 @@ export const MODULE_SECTIONS = {
   sales:         [{ id: "sales_leads", label: "Leads & Deals" }, { id: "sales_apartments", label: "Apartment Leads" }, { id: "sales_trend", label: "Trend Analysis" }, { id: "sales_errors", label: "Error Correction" }],
   planner:       [{ id: "plan_board", label: "Task Board" }, { id: "plan_weekly", label: "Weekly View" }, { id: "plan_admin", label: "Modify Tasks", adminOnly: true }],
   analytics:     [{ id: "an_overview", label: "Overview" }, { id: "analytics", label: "Referral" }, { id: "an_earned", label: "Earned Revenue" }, { id: "an_reconciliation", label: "Reconciliation" }, { id: "an_dptxn", label: "DP Transaction" }, { id: "an_aop", label: "AOP", adminOnly: true }, { id: "an_apartment", label: "Apartment Performance" }, { id: "an_churn", label: "Renewal & Churn Risk" }, { id: "an_billing", label: "Billing" }, { id: "an_revenue", label: "Revenue" }, { id: "an_penetration", label: "Penetration Tracker" }, { id: "an_credits", label: "Credits" }, { id: "an_applogs", label: "App Logs" }],
-  employee:      [{ id: "emp_users", label: "Users" }],
+  // Password Vault (v2.29.326) — moved here from its own top-level module, per
+  // explicit user request; same admin-only-section shape as Backtrack/AOP/
+  // Modify Tasks above (adminOnly: true, gated on the Employee module's own
+  // isModuleAdmin — no separate access level for it anymore).
+  employee:      [{ id: "emp_users", label: "Users" }, { id: "vault_creds", label: "Password Vault", adminOnly: true }],
   ticketing:     [{ id: "tk_overview", label: "Overview" }, { id: "tk_tickets", label: "Tickets" }, { id: "tk_ops", label: "Ops Tickets" }],
   customer:      [{ id: "cust_list", label: "Customers" }, { id: "cust_all", label: "All Customers" }, { id: "cust_societies", label: "Societies" }],
   billing:       [{ id: "bill_subs", label: "Subscriptions" }, { id: "bill_invoices", label: "Invoices" }, { id: "bill_deposits", label: "Deposits & Refunds" }, { id: "bill_plans", label: "Plans" }],
@@ -119,13 +123,6 @@ export function UsersAdmin({ accessLevel = "view" }) {
     </div>
   );
 }
-export const ACCESS_LEVELS = [
-  { v: "none", label: "None" },
-  { v: "view", label: "View" },
-  { v: "supervisor", label: "Supervisor" },
-  { v: "admin", label: "Admin" },
-  { v: "devops", label: "DevOps" },
-];
 export const SECTION_LEVELS = [
   { v: "default", label: "Default" },
   { v: "hidden", label: "Hidden" },
