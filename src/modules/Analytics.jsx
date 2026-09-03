@@ -27,7 +27,7 @@ import {
   fmtTime, inr, isoDay, isRealSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
   startOfDay, termMonths, ticketApi, useDateRange, yoyRange, zdIsClosed,
-  bucketKeyOf, bucketsFor, CHART_PALETTE, AOP_MON,
+  bucketKeyOf, bucketsFor, CHART_PALETTE, AOP_MON, titleCaseName,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, WowMomTT, Modal, Drawer,
@@ -658,8 +658,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // ---- controls --------------------------------------------------------------
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
-  const displayNameRaw = user.name || "Admin";
-  const displayName = displayNameRaw.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  const displayName = titleCaseName(user.name || "Admin");
   const exportOverviewCsv = () => exportToCsv("prowater-overview.csv",
     [{ label: "Metric", get: r => r.k }, { label: "Value", get: r => r.v }],
     [

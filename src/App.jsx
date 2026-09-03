@@ -43,7 +43,7 @@ import {
   toCredits, toReferees, toReferrers, toTrend, useAuth, useDateRange,
   useFailures, useSampleData, wait, yoyRange,
   billingApi, creditNoteApi, depositForCustomer, termMonths, monthlyOf,
-  CHART_PALETTE, tkPriority,
+  CHART_PALETTE, tkPriority, titleCaseName, checkDeployInProgress,
 } from "./shared/core";
 import {
   ApiError, Card, Chip, DateRangeFilter, DateRangePicker,
@@ -703,6 +703,22 @@ function App() {
   const [activeModule, setActiveModule] = useState(() => sessionStorage.getItem("pw_active_module") || null);
   const [sessionWarning, setSessionWarning] = useState(false);
 
+  // Deploy-in-progress banner (v2.29.342) — polls GitHub Actions' public API
+  // for the deploy workflow's latest run every 3 minutes (deliberately not
+  // more often: GitHub's unauthenticated API is capped at 60 requests/hour
+  // PER IP, shared across everyone at the same office/network with this tab
+  // open, so a tighter interval risks the whole team hitting that limit
+  // together). Shown regardless of login state — anyone loading the site
+  // mid-deploy should see it, not just logged-in users.
+  const [deployInProgress, setDeployInProgress] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => checkDeployInProgress().then(v => { if (!cancelled) setDeployInProgress(v); });
+    poll();
+    const t = setInterval(poll, 3 * 60 * 1000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, []);
+
   // Apply the saved light/dark theme once on load.
   useEffect(() => { applyTheme(getStoredTheme()); }, []);
 
@@ -796,6 +812,17 @@ function App() {
     <div className="pw-root">
       <style>{TOKENS}</style>
       <Auth.Provider value={{ user, setUser: onSetUser, activeModule, setActiveModule: onSetActiveModule, sidebarCollapsed, setSidebarCollapsed, toggleSidebarCollapsed }}>
+        {deployInProgress && (
+          <div style={{
+            position: "fixed", top: 0, left: 0, right: 0, zIndex: 10000,
+            background: "#08805A", color: "#fff",
+            padding: "10px 20px", display: "flex", alignItems: "center",
+            justifyContent: "center", gap: 10, fontSize: 13.5, fontWeight: 500
+          }}>
+            <RefreshCw size={16} style={{ animation: "pw-spin .8s linear infinite" }} />
+            Dashboard upgrade in progress — some things may look out of date until it finishes.
+          </div>
+        )}
         {sessionWarning && user && (
           <div style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9999,
@@ -983,7 +1010,7 @@ function Home({ onPick }) {
             <span className="pw-version-pill">v{APP_VERSION}</span>
           </div>
         )}
-        <div className="pw-user-card" title={sidebarCollapsed ? `${user.name} (${user.role})` : undefined}>
+        <div className="pw-user-card" title={sidebarCollapsed ? `${titleCaseName(user.name)} (${user.role})` : undefined}>
           <div className="pw-avatar-wrap">
             <button className="pw-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo">
               {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
@@ -993,7 +1020,7 @@ function Home({ onPick }) {
           {!sidebarCollapsed && (
             <div className="pw-user-info">
               <div className="pw-name-badge">
-                <span className="pw-name">{user.name}</span>
+                <span className="pw-name">{titleCaseName(user.name)}</span>
                 <span className="pw-tag">
                   {user.role === "admin" ? <ShieldCheck size={10} /> : <Eye size={10} />}
                   {String(user.role || "").toUpperCase()}
@@ -1372,7 +1399,7 @@ const doRefresh = async () => {
             <span className="pw-version-pill">v{APP_VERSION}</span>
           </div>
         )}
-        <div className="pw-user-card" title={sidebarCollapsed ? `${user.name} (${user.role})` : undefined}>
+        <div className="pw-user-card" title={sidebarCollapsed ? `${titleCaseName(user.name)} (${user.role})` : undefined}>
           <div className="pw-avatar-wrap">
             <button className="pw-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo">
               {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : String(user.name || "P").trim().charAt(0).toUpperCase()}
@@ -1382,7 +1409,7 @@ const doRefresh = async () => {
           {!sidebarCollapsed && (
             <div className="pw-user-info">
               <div className="pw-name-badge">
-                <span className="pw-name">{user.name}</span>
+                <span className="pw-name">{titleCaseName(user.name)}</span>
                 <span className="pw-tag">
                   {user.role === "admin" ? <ShieldCheck size={10} /> : <Eye size={10} />}
                   {String(user.role || "").toUpperCase()}

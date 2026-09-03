@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.338**.
+> **Reflects:** `APP_VERSION` **2.29.342**.
 
 ---
 
@@ -1231,6 +1231,11 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
 - Create/disable dashboard users; set role + per-module access **and per-section overrides** (the
   "Sections" expander in the create/edit-access grid — Default/Hidden/View/Edit per tab). Login
   matches email → this record. Storage: `pw_users` (now includes an optional `sections` map).
+- **Access levels** (`ACCESS_LEVELS` in `shared/core.js`): None / View / Supervisor / Admin. "DevOps"
+  was removed from the selectable options at v2.29.341, per explicit user request — Admin is now the
+  top tier a new grant can reach. Every existing "admin OR devops" check elsewhere in the app
+  (`isModuleAdmin` and the ~30 places mirroring it, plus Customer's field-level `roles` gates) was
+  deliberately left untouched, so any account already set to DevOps keeps working exactly as before.
 - **Password Vault** (`vault_creds` tab, v2.29.325; moved under Employee as its own section at
   v2.29.326, upgraded with modern popups and features at v2.29.331) — internal service/tool credentials
   (Zoho, AWS, hosting, vendor portals, WiFi, admin panels, etc: Service name, Category, Username, Password, URL, Notes).
@@ -1262,6 +1267,19 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   `shared/core.js`. A 15-second client-side throttle follows 5 wrong attempts. "Forgot PIN?" resets it by re-verifying the real account password via
   the same Firebase `signInWithPassword` call `api.login()` uses (`verifyPassword()`), without
   touching the actual session.
+- **Categories** (v2.29.331, replaced v2.29.340): Google Cloud, SMS, AWS, Zoho, Internal, Firebase,
+  Google Analytics, GoDaddy, Sonarqube, Github, FlutterFlow, Google Admin, BigQuery — one color per
+  category (`CATEGORY_COLORS`), default for a new entry is Internal. A pre-existing entry still
+  tagged with an older category name (e.g. "General") falls back to Internal's color rather than
+  breaking.
+- **Timestamps** (v2.29.340): Created/Updated show an exact `DD-MM-YYYY HH:mm:ss` 24-hour timestamp
+  (`fmtVaultTimestamp`, browser-local time) rather than just a date — so a freshly-created entry
+  visibly shows Created and Updated as the same instant, and an edit visibly moves Updated forward.
+  Created By/Updated By title-case the stored username ("anis" → "Anis") via `capName()`.
+- **Autofill hardening** (v2.29.337/338): the search box and the Add/Edit modal's Service/Username/
+  Password fields all carry `autoComplete="off"` plus distinct `name`s and `data-lpignore`/
+  `data-1p-ignore`, after the browser's own autofill was observed live filling the search box with
+  the logged-in user's account email and pre-populating a suggested password on a brand-new entry.
 
 ### Device Replacement (`devicereplace`)
 - **Purpose:** record an old→new purifier swap via a short irreversible wizard (old device → new
@@ -1373,10 +1391,18 @@ nothing else in the dashboard depended on it, so removal was a clean, isolated c
 
 ## 9. Deploy
 
-1. Get the change into the `soroai/Wisdom2.0` repo's **`main`** branch (this working copy may be a
-   standalone folder, not a git clone — copy the changed `src/` files / this file into the repo,
-   commit, push).
-2. GitHub Actions (`deploy.yml`) builds with the repo secrets and publishes to GitHub Pages.
+1. Get the change into the **`ProWater-stack/wisdom`** repo's **`main`** branch (corrected v2.29.342 —
+   this doc previously said `soroai/Wisdom2.0`, which is stale/wrong; confirmed live against the
+   GitHub API that `ProWater-stack/wisdom` is the real public repo backing
+   `prowater-stack.github.io/wisdom/`, with `.github/workflows/deploy.yml` — "Deploy Wisdom2.0 to
+   GitHub Pages" — as its actual deploy workflow). This working copy may be a standalone folder, not
+   a git clone — copy the changed `src/` files / this file into the repo, commit, push.
+2. GitHub Actions (`deploy.yml`) builds with the repo secrets and publishes to GitHub Pages. While a
+   deploy run is `in_progress`/`queued`, every open tab of the live app shows a green "Dashboard
+   upgrade in progress" banner (v2.29.342) — polled from the public GitHub Actions API every 3
+   minutes (`checkDeployInProgress()` in `shared/core.js`; deliberately unauthenticated, since the
+   repo is public and embedding a real token in this client-side bundle would expose it to anyone
+   loading the live site).
 3. Verify the live app's version footer shows the new `APP_VERSION`.
 
 ---

@@ -729,12 +729,41 @@ export const sessionDayStr = () => new Date().toDateString();
 export const clearSessionStorage = () => {
   ["pw_user", "pw_idToken", "pw_refreshToken", "pw_tokenExpiry", "pw_last_activity", "pw_session_day", "pw_active_module", "pw_vault_unlocked"].forEach(k => sessionStorage.removeItem(k));
 };
+
+/* ---- Deploy-status banner (v2.29.342) — lets the live app show "Dashboard
+   upgrade in progress" while a GitHub Actions deploy is running, per explicit
+   user request. Polls the PUBLIC GitHub REST API for the deploy workflow's
+   most recent run (no auth — the repo is public, confirmed with the user;
+   never embed a real GitHub token in this client-side bundle, since anyone
+   loading the live site could extract and reuse it). Deliberately fails
+   silent (returns false) on any network/rate-limit error rather than ever
+   showing a false "upgrading" banner. ---- */
+export const DEPLOY_REPO = "ProWater-stack/wisdom";
+export const DEPLOY_WORKFLOW_FILE = "deploy.yml";
+export async function checkDeployInProgress() {
+  try {
+    const res = await fetch(
+      `https://api.github.com/repos/${DEPLOY_REPO}/actions/workflows/${DEPLOY_WORKFLOW_FILE}/runs?per_page=1`,
+      { headers: { Accept: "application/vnd.github+json" } }
+    );
+    if (!res.ok) return false;
+    const json = await res.json();
+    const latest = json.workflow_runs?.[0];
+    return !!latest && (latest.status === "in_progress" || latest.status === "queued");
+  } catch { return false; }
+}
 export const THEMES = ["light"];
 export const getStoredTheme = () => { try { const t = localStorage.getItem("pw_theme"); return THEMES.includes(t) ? t : "light"; } catch { return "light"; } };
 export const applyTheme = (t) => { try { const v = THEMES.includes(t) ? t : "light"; document.documentElement.setAttribute("data-theme", v); localStorage.setItem("pw_theme", v); } catch { /* ignore */ } };
 export const inr = (n) => "₹" + (n || 0).toLocaleString("en-IN");
 export const momPct = (cur, prev) => (prev ? Math.round(((cur - prev) / prev) * 100) : null);
 export const fmtDate = d => { if (d == null || d === "") return "—"; const x = new Date(d); return isNaN(x.getTime()) ? "—" : x.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); };
+// Title-cases a displayed name/username ("anis" → "Anis", "arjun marri" →
+// "Arjun Marri") — per explicit user request ("Everywhere you show the
+// username... 1st letter should be capital"), extracted here so every
+// display site shares one implementation instead of each re-deriving it
+// (Analytics' greeting had its own inline copy of this exact logic before).
+export const titleCaseName = (s) => String(s || "").split(" ").map(w => w ? w.charAt(0).toUpperCase() + w.slice(1) : w).join(" ");
 export const fmtTime = d => { if (d == null || d === "") return "—"; const x = new Date(d); return isNaN(x.getTime()) ? "—" : x.toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" }); };
 export const deviceType = (purifierId) => {
   const id = String(purifierId || "").trim().toUpperCase();
@@ -785,9 +814,13 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.338";
+export const APP_VERSION = "2.29.342";
 export const VERSION_DATE = "2026-09-03";
 export const VERSION_HISTORY = [
+  { v: "2.29.342", note: "New: a 'Dashboard upgrade in progress' banner, per explicit user request ('once the testing is done on my local dev and i push it to prod, if there is any ongoing push on the git, show a popup with live loading circling that dashboard upgrade is in progress'). `checkDeployInProgress()` in `shared/core.js` polls the PUBLIC GitHub REST API (`GET /repos/{repo}/actions/workflows/deploy.yml/runs`, unauthenticated — no token embedded, confirmed with the user this repo is public) every 3 minutes from `App.jsx`'s root component; while the latest run's status is `in_progress`/`queued`, every open tab shows a green full-width top banner with a spinning `RefreshCw` icon (reusing the existing `pw-spin` animation), regardless of login state. Deliberately non-blocking — a deploy doesn't break the page someone's already using, only future loads — so it's an FYI banner, not a modal, and there's no auto-reload. Polling interval picked specifically to respect GitHub's 60-requests/hour-per-IP unauthenticated rate limit, which is shared across everyone on the same office network with a tab open. **Real bug caught and fixed during setup**: the exact repo to poll was unverified — DOCUMENTATION.md's Deploy section said `soroai/Wisdom2.0`, which turned out to be genuinely unreachable (confirmed live: both a direct repo lookup and the workflow-runs endpoint returned 404 against it). Diagnosed by testing several candidate owner/repo combinations directly against the GitHub API from the live sandbox; `ProWater-stack/wisdom` came back 200/public and its `.github/workflows/actions/workflows` listing confirmed the real workflow file: `.github/workflows/deploy.yml` ('Deploy Wisdom2.0 to GitHub Pages'). `DEPLOY_REPO` set to the verified value, and DOCUMENTATION.md's Deploy section corrected to match (was stale, unrelated to anything shipped this session). Verified via a clean `npm run build`, confirmed the real API endpoint resolves correctly (returned real recent completed deploy runs), and — since no real deploy was in progress to observe naturally — verified the actual conditional-render path by temporarily patching `window.fetch` to return a synthetic `in_progress` response (with the poll interval briefly shortened for the test, then reverted to the real 3-minute value before shipping): the banner appeared correctly with the right text/spinner, then correctly disappeared once the real API was polled again.", },
+  { v: "2.29.341", note: "Two separate fixes/changes. (1) Employee > Users: removed 'DevOps' from the selectable access levels (`ACCESS_LEVELS` in `shared/core.js`), per explicit user request ('remove devops, as it will be only admin who will have control to it') — every module row now offers only None/View/Supervisor/Admin. Deliberately scoped narrow: every existing 'admin OR devops' check elsewhere in the app (`isModuleAdmin` and the ~30 places mirroring it, plus Customer's field-level `roles` gates) was left untouched, so devops can never be newly assigned from here on, but any real account already set to it keeps working exactly as before rather than being silently locked out — offered as an explicit choice against a full codebase purge, and this narrower option was picked. (2) App-wide: the sidebar user-card's displayed name (`pw-name`, both the Home and Shell instances in `App.jsx`) now title-cases the logged-in user's name ('devops' → 'Devops', 'anis' → 'Anis') instead of showing it raw — per explicit user request ('Everywhere you show the username... 1st letter should be capital'), caught live via a screenshot after an earlier fix had only covered Password Vault's Created By/Updated By columns, not this far more prominent sidebar element. Extracted a shared `titleCaseName()` helper to `shared/core.js` (title-cases each word, e.g. 'arjun marri' → 'Arjun Marri') and reused it to replace Analytics.jsx's own pre-existing inline copy of this exact logic (its Overview greeting), rather than leaving two separate implementations of the same transform. Verified via a clean `npm run build` and a live check: a synthetic user named 'devops' correctly showed 'Devops' in the sidebar, and the Employee > Users access grid correctly offered only None/View/Supervisor/Admin with no DevOps button anywhere." },
+  { v: "2.29.340", note: "Password Vault (`src/modules/Vault.jsx`): three changes. (1) Replaced the generic category list ('DevOps & Cloud', 'Payment & Billing', 'Internal Tools', 'Email & Comm', 'Vendors & Social', 'General') with the actual services this team's credentials cover, per explicit user request (exact list given): Google Cloud, SMS, AWS, Zoho, Internal, Firebase, Google Analytics, GoDaddy, Sonarqube, Github, FlutterFlow, Google Admin, BigQuery — one distinct color per category in `CATEGORY_COLORS`. Default category for a new entry changed from 'General' to 'Internal' (closest catch-all equivalent); every `|| \"General\"` fallback in the file (category badge color lookup, filter matching, form defaults) updated to `|| \"Internal\"` to match, so a pre-existing entry still tagged 'General' from before this change renders with a safe fallback color instead of crashing. (2) Timestamps changed from `fmtTime`'s 'DD Mon, hh:mm:ss am/pm' to an exact 'DD-MM-YYYY HH:mm:ss' 24-hour format per explicit user request ('Timestamp should be show as 03-09-2026 15:31:45 like this') — a new local `fmtVaultTimestamp()` helper, browser-local time (no IST-forcing). (3) Created By/Updated By now title-case the stored username ('anis' → 'Anis') via a new `capName()` helper, per explicit user request — scoped to just these two columns since the credential's OWN Username/Email field (e.g. an email address) should never be capitalized. Verified via a clean `npm run build` and a live pass: category pills showed the new list with correct colors, a pre-existing 'General'-tagged entry still rendered its badge without crashing, a fresh timestamp showed as '03-09-2026 14:06:50', and Created By/Updated By showed 'Admin' instead of 'admin'." },
+  { v: "2.29.339", note: "Password Vault (`src/modules/Vault.jsx`): Created/Updated columns now show a full date+time (`fmtTime`, e.g. '03 Sept, 02:06:50 pm') instead of just the date (`fmtDate`), per explicit user request ('why in the updated also its showing the date... show the timestamp / created should be the 1st created timestamp and Updated also should be the timestamp'). Root cause of the confusion: on a freshly-created entry, Created and Updated are legitimately the exact same instant — correct, not a bug — but showing only the DATE made both columns look like identical, redundant date stamps with no way to see they're actually two independently-tracked fields (or, after an edit, that Updated had genuinely moved forward). Full timestamps make both cases visibly correct: equal down to the second on creation, and Updated visibly advancing past Created after any edit. `fmtDate` import removed (no longer used anywhere in this file). Verified via a clean `npm run build` and a live pass: a freshly-added credential showed Created and Updated both at '03 Sept, 02:06:50 pm' (same instant); editing and re-saving it moved Updated to '03 Sept, 03:45:00 pm' while Created correctly stayed unchanged." },
   { v: "2.29.338", note: "Password Vault (`src/modules/Vault.jsx`): Multi-layered browser autofill defense overhaul per live user issue ('when i am click on add new credential all the data goes off and filters my email ID anis@drinkprime.in... also by default password is entered'). (1) Converted the toolbar search input to `type=\"search\"` with `data-form-type=\"other\"`, `data-lpignore=\"true\"`, and `data-1p-ignore=\"true\"` to prevent Chrome/Safari from pairing it as an account username. (2) Added hidden decoy input traps inside the Add/Edit modal. (3) Set `autoComplete=\"new-password\"` and strict ignore tags on the modal password input to ensure new credentials always open completely blank. Verified via clean `npm run build`." },
   { v: "2.29.337", note: "Password Vault (`src/modules/Vault.jsx`): fixed two real bugs the user caught live — both were the browser's OWN autofill/password-manager kicking in on this page's plain, un-hinted `<input>`s, not app logic. (1) The toolbar's search box was getting silently filled with the logged-in user's own account email (confirmed screenshot: 'anis@drinkprime.in' appeared in Search after opening/closing Add Credential, filtering the table down to '0 results') — Chrome's account-autofill was matching an unlabeled `type=\"text\"` input with no `autoComplete`/`name` hint. Fixed by adding `autoComplete=\"off\"` and a distinct `name` to the search input. (2) The 'Add Credential' modal's Password field showed a pre-filled ~9-character password ('Strength: Fair') on open for a brand-new entry, even though `openAdd()` correctly resets `form` to `emptyEntry` (`password: \"\"`) — Chrome's 'Suggest a strong password' feature was firing on the bare `type=\"password\"` input (no `autoComplete` hint) and injecting a generated value via a real `input` event, which React's controlled `onChange` then captured into state as if the user had typed it. Fixed by adding `autoComplete=\"off\"` plus `data-lpignore=\"true\"`/`data-1p-ignore` (stops LastPass/1Password specifically) and a distinct `name` to the Password field, and the same `autoComplete=\"off\"`/distinct-`name` treatment to the Service and Username/Email fields in the same modal for consistency, since they're equally exposed. NOTE: this sandbox's browser has no saved autofill data matching the user's real profile, so the exact trigger couldn't be reproduced here — verified only that the fields render correctly empty with no regression via a clean `npm run build` and a live open/cancel of the Add Credential modal; the real confirmation is the user re-testing on their own machine, where the bug was actually observed." },
   { v: "2.29.336", note: "Password Vault (`src/modules/Vault.jsx`): added a **Created By** column to the credentials table, per explicit user request ('add created by also here'), reading `e.createdBy` (already captured by `vaultApi.add`/`update` in core.js). Placed right after Created, so each timestamp sits next to its own 'by' column — Created, Created By, Updated, Updated By. Table `minWidth` bumped 1050→1180 and the empty-state row's `colSpan` corrected 10→11 to match. Verified via a clean `npm run build` and a live check: an existing test credential correctly showed 'admin' under both Created By and Updated By." },
@@ -2870,12 +2903,19 @@ export const billingApi = {
 // was shared/ui.jsx
 export const CHART_PALETTE = ["#1E9E4F", "#2A86D6", "#986315", "#DC4141", "#0B6F52", "#7D8A83", "#A9B3AC"];
 // was modules/Employee.jsx (UsersAdmin's access-level dropdown)
+// "DevOps" removed from the selectable levels (v2.29.341) per explicit user
+// request ("remove devops, as it will be only admin who will have control to
+// it") — Admin is now the top tier a new grant can reach. Deliberately left
+// every existing "admin OR devops" check elsewhere in the app (isModuleAdmin
+// and the ~30 places that mirror it) untouched: devops can never be newly
+// assigned from here on, but if any real account is already set to it, that
+// account keeps working exactly as before instead of being silently locked
+// out the moment this ships.
 export const ACCESS_LEVELS = [
   { v: "none", label: "None" },
   { v: "view", label: "View" },
   { v: "supervisor", label: "Supervisor" },
   { v: "admin", label: "Admin" },
-  { v: "devops", label: "DevOps" },
 ];
 // was modules/DeviceReplacement.jsx
 export const DEVICE_TYPES = ["Own Device", "Normal", "Hot & Cold"];

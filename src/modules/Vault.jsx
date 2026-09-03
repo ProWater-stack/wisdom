@@ -17,28 +17,64 @@ import {
   Folder, Globe, KeyRound, Lock, PencilLine, Plus, RefreshCw, Search, Shield,
   ShieldCheck, Sparkles, Tag, Trash2, User, X,
 } from "lucide-react";
-import { useAuth, api, pushLog, vaultApi, vaultPinApi, verifyPassword, fmtDate } from "../shared/core";
+import { useAuth, api, pushLog, vaultApi, vaultPinApi, verifyPassword } from "../shared/core";
 import {
   Loading, Empty, Modal, Field, btnGhost, btnPrimary, inp, toastStyle,
 } from "../shared/ui";
 
+// Vault-specific timestamp format (v2.29.340, explicit user request:
+// "Timestamp should be show as 03-09-2026 15:31:45") — DD-MM-YYYY, 24-hour
+// HH:mm:ss, in the browser's own local time (same convention fmtDate/fmtTime
+// already use elsewhere — no IST-forcing needed).
+const fmtVaultTimestamp = (v) => {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "—";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getDate())}-${p(d.getMonth() + 1)}-${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+// Capitalizes the first letter of a displayed username (e.g. "anis" →
+// "Anis"), per explicit user request ("Everywhere you show the username...
+// 1st letter should be capital") — scoped to Created By/Updated By here,
+// since that's the only place this page shows the app-login username; the
+// credential's OWN Username/Email field is left untouched (capitalizing an
+// email like "ops@prowater.in" would be wrong).
+const capName = (s) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+// Category list replaced per explicit user request (v2.29.340) with the
+// actual services this team's credentials cover, in place of the earlier
+// generic groupings.
 export const VAULT_CATEGORIES = [
   "All",
-  "DevOps & Cloud",
-  "Payment & Billing",
-  "Internal Tools",
-  "Email & Comm",
-  "Vendors & Social",
-  "General",
+  "Google Cloud",
+  "SMS",
+  "AWS",
+  "Zoho",
+  "Internal",
+  "Firebase",
+  "Google Analytics",
+  "GoDaddy",
+  "Sonarqube",
+  "Github",
+  "FlutterFlow",
+  "Google Admin",
+  "BigQuery",
 ];
 
 export const CATEGORY_COLORS = {
-  "DevOps & Cloud": { bg: "rgba(59,130,246,0.09)", text: "#2563EB", border: "rgba(59,130,246,0.22)" },
-  "Payment & Billing": { bg: "rgba(16,185,129,0.09)", text: "#059669", border: "rgba(16,185,129,0.22)" },
-  "Internal Tools": { bg: "rgba(139,92,246,0.09)", text: "#7C3AED", border: "rgba(139,92,246,0.22)" },
-  "Email & Comm": { bg: "rgba(245,158,11,0.09)", text: "#D97706", border: "rgba(245,158,11,0.22)" },
-  "Vendors & Social": { bg: "rgba(236,72,153,0.09)", text: "#DB2777", border: "rgba(236,72,153,0.22)" },
-  "General": { bg: "rgba(100,116,139,0.09)", text: "#475569", border: "rgba(100,116,139,0.22)" },
+  "Google Cloud": { bg: "rgba(59,130,246,0.09)", text: "#2563EB", border: "rgba(59,130,246,0.22)" },
+  "SMS": { bg: "rgba(6,182,212,0.09)", text: "#0891B2", border: "rgba(6,182,212,0.22)" },
+  "AWS": { bg: "rgba(249,115,22,0.09)", text: "#C2410C", border: "rgba(249,115,22,0.22)" },
+  "Zoho": { bg: "rgba(220,38,38,0.09)", text: "#DC2626", border: "rgba(220,38,38,0.22)" },
+  "Internal": { bg: "rgba(100,116,139,0.09)", text: "#475569", border: "rgba(100,116,139,0.22)" },
+  "Firebase": { bg: "rgba(245,158,11,0.09)", text: "#D97706", border: "rgba(245,158,11,0.22)" },
+  "Google Analytics": { bg: "rgba(16,185,129,0.09)", text: "#059669", border: "rgba(16,185,129,0.22)" },
+  "GoDaddy": { bg: "rgba(20,184,166,0.09)", text: "#0D9488", border: "rgba(20,184,166,0.22)" },
+  "Sonarqube": { bg: "rgba(99,102,241,0.09)", text: "#4338CA", border: "rgba(99,102,241,0.22)" },
+  "Github": { bg: "rgba(31,41,55,0.09)", text: "#1F2937", border: "rgba(31,41,55,0.22)" },
+  "FlutterFlow": { bg: "rgba(139,92,246,0.09)", text: "#7C3AED", border: "rgba(139,92,246,0.22)" },
+  "Google Admin": { bg: "rgba(14,165,233,0.09)", text: "#0284C7", border: "rgba(14,165,233,0.22)" },
+  "BigQuery": { bg: "rgba(236,72,153,0.09)", text: "#DB2777", border: "rgba(236,72,153,0.22)" },
 };
 
 // Generate deterministic avatar gradient and initials from service name
@@ -97,7 +133,7 @@ export function checkPasswordStrength(pass = "") {
   return { score, ...meta[score] };
 }
 
-const emptyEntry = { service: "", username: "", password: "", url: "", notes: "", category: "General" };
+const emptyEntry = { service: "", username: "", password: "", url: "", notes: "", category: "Internal" };
 
 /* ===========================================================================
    Vault PIN gate (v2.29.329/v2.29.331) — Interactive 4-digit PIN security lock
@@ -355,7 +391,7 @@ export function PasswordVault() {
   const filtered = useMemo(() => {
     return entries.filter(e => {
       const matchQ = !q.trim() || `${e.service} ${e.username} ${e.url} ${e.category || ""} ${e.notes || ""}`.toLowerCase().includes(q.trim().toLowerCase());
-      const matchCat = activeCategory === "All" || (e.category || "General") === activeCategory;
+      const matchCat = activeCategory === "All" || (e.category || "Internal") === activeCategory;
       return matchQ && matchCat;
     });
   }, [entries, q, activeCategory]);
@@ -365,7 +401,7 @@ export function PasswordVault() {
     const counts = { All: entries.length };
     VAULT_CATEGORIES.forEach(c => { if (c !== "All") counts[c] = 0; });
     entries.forEach(e => {
-      const cat = e.category || "General";
+      const cat = e.category || "Internal";
       counts[cat] = (counts[cat] || 0) + 1;
     });
     return counts;
@@ -396,7 +432,7 @@ export function PasswordVault() {
       password: e.password,
       url: e.url || "",
       notes: e.notes || "",
-      category: e.category || "General"
+      category: e.category || "Internal"
     });
     setShowFormPassword(false);
     setShowForm(true);
@@ -425,7 +461,7 @@ export function PasswordVault() {
         password: form.password,
         url: form.url.trim(),
         notes: form.notes.trim(),
-        category: form.category || "General"
+        category: form.category || "Internal"
       };
       const { saved, message } = editing
         ? await vaultApi.update(user.username, editing._docId, body)
@@ -579,8 +615,8 @@ export function PasswordVault() {
                 const id = e._docId;
                 const shown = revealed.has(id);
                 const avatar = getServiceAvatar(e.service);
-                const cat = e.category || "General";
-                const catStyle = CATEGORY_COLORS[cat] || CATEGORY_COLORS.General;
+                const cat = e.category || "Internal";
+                const catStyle = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Internal;
 
                 return (
                   <tr key={id} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
@@ -692,11 +728,14 @@ export function PasswordVault() {
                       {e.notes || <span style={{ color: "#CBD5E1" }}>—</span>}
                     </td>
 
-                    {/* Timestamps */}
-                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.createdAt ? fmtDate(e.createdAt) : "—"}</td>
-                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.createdBy || "—"}</td>
-                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.updatedAt ? fmtDate(e.updatedAt) : "—"}</td>
-                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.updatedBy || "—"}</td>
+                    {/* Timestamps — full date+time (v2.29.338), not just the date, so a
+                        freshly-created row's identical-looking Created/Updated dates are
+                        visibly the same INSTANT, and a later edit visibly moves Updated
+                        forward instead of just re-showing the same day's date. */}
+                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{fmtVaultTimestamp(e.createdAt)}</td>
+                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{capName(e.createdBy) || "—"}</td>
+                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{fmtVaultTimestamp(e.updatedAt)}</td>
+                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{capName(e.updatedBy) || "—"}</td>
 
                     {/* Row Actions */}
                     <td style={{ padding: "12px 18px" }}>
@@ -768,7 +807,7 @@ export function PasswordVault() {
               </Field>
               <Field label="Category">
                 <select
-                  value={form.category || "General"}
+                  value={form.category || "Internal"}
                   onChange={e => setF("category", e.target.value)}
                   style={{ ...inp, borderRadius: 12, cursor: "pointer", background: "#fff" }}
                 >
