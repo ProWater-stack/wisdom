@@ -497,9 +497,18 @@ export function PasswordVault() {
             <div style={{ position: "relative" }}>
               <Search size={14} color="#86868B" style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" }} />
               <input
+                type="search"
                 value={q}
                 onChange={e => setQ(e.target.value)}
                 placeholder="Search service, username, URL, tags…"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                name="vault_search_filter_query"
                 style={{ ...inp, paddingLeft: 32, width: 250, borderRadius: 12 }}
               />
               {q && (
@@ -730,6 +739,10 @@ export function PasswordVault() {
           sub="Password Vault · Shared Admin Repository"
           onClose={() => { setShowForm(false); setEditing(null); }}
         >
+          {/* Decoy hidden inputs to prevent browser autofill stealing the page inputs */}
+          <input type="text" name="prevent_autofill_user" tabIndex={-1} aria-hidden="true" autoComplete="off" style={{ position: "absolute", opacity: 0, height: 0, width: 0, pointerEvents: "none", zIndex: -1 }} />
+          <input type="password" name="prevent_autofill_pass" tabIndex={-1} aria-hidden="true" autoComplete="new-password" style={{ position: "absolute", opacity: 0, height: 0, width: 0, pointerEvents: "none", zIndex: -1 }} />
+
           <div style={{ display: "grid", gap: 14, paddingTop: 4 }}>
             
             {/* Service & Category Row */}
@@ -741,6 +754,14 @@ export function PasswordVault() {
                     value={form.service}
                     onChange={e => setF("service", e.target.value)}
                     placeholder="e.g. AWS Console, Zoho CRM"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
+                    name="vault_service_name_input"
                     style={{ ...inp, paddingLeft: 34, borderRadius: 12 }}
                   />
                 </div>
@@ -766,6 +787,14 @@ export function PasswordVault() {
                   value={form.username}
                   onChange={e => setF("username", e.target.value)}
                   placeholder="admin@prowater.in or username"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  name="vault_username_credential_input"
                   style={{ ...inp, paddingLeft: 34, borderRadius: 12 }}
                 />
               </div>
@@ -781,6 +810,14 @@ export function PasswordVault() {
                     value={form.password}
                     onChange={e => setF("password", e.target.value)}
                     placeholder="Enter password"
+                    autoComplete="new-password"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-form-type="other"
+                    name="vault_secret_password_input"
                     style={{ ...inp, paddingLeft: 34, paddingRight: 40, borderRadius: 12, fontFamily: showFormPassword ? "ui-monospace, monospace" : "inherit" }}
                   />
                   <button
@@ -830,8 +867,8 @@ export function PasswordVault() {
                       <div
                         key={idx}
                         style={{
-                          borderRadius: 999,
-                          background: formStrength.score >= idx ? formStrength.color : "rgba(0,0,0,0.1)",
+                          borderRadius: 2,
+                          background: idx <= formStrength.score ? formStrength.color : "rgba(0,0,0,0.08)",
                           transition: "background .2s ease"
                         }}
                       />
@@ -842,26 +879,42 @@ export function PasswordVault() {
             </Field>
 
             {/* URL Field */}
-            <Field label="URL / Login Link (optional)">
+            <Field label="URL / Login Link (Optional)">
               <div style={{ position: "relative" }}>
                 <ExternalLink size={14} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
                 <input
                   value={form.url}
                   onChange={e => setF("url", e.target.value)}
                   placeholder="https://console.aws.amazon.com"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
+                  name="vault_service_url_input"
                   style={{ ...inp, paddingLeft: 34, borderRadius: 12 }}
                 />
               </div>
             </Field>
 
             {/* Notes Field */}
-            <Field label="Notes / 2FA / Instructions (optional)">
+            <Field label="Notes / 2FA / Instructions (Optional)">
               <textarea
                 value={form.notes}
                 onChange={e => setF("notes", e.target.value)}
                 placeholder="Recovery codes, specific organization IDs, PINs, or secondary owner info"
                 rows={3}
-                style={{ ...inp, resize: "vertical", fontFamily: "inherit", borderRadius: 12 }}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+                name="vault_service_notes_input"
+                style={{ ...inp, height: "auto", padding: "10px 14px", borderRadius: 12, resize: "vertical", fontFamily: "inherit" }}
               />
             </Field>
 

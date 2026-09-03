@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.336**.
+> **Reflects:** `APP_VERSION` **2.29.338**.
 
 ---
 
@@ -1246,12 +1246,13 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   Base64-obfuscated before every write and decoded on read** (`_vaultEncode`/`_vaultDecode`, added
   v2.29.327, per explicit user request) — masked in the UI behind a per-row show/hide toggle, with
   one-click copy for username/password.
-  - **Features & Popups (v2.29.331):**
+  - **Features & Popups (v2.29.331/v2.29.338):**
     - **Password Generator:** 16-character secure random password generator with one-click insertion in Add/Edit modal.
     - **Password Strength Meter:** Real-time 4-segment strength evaluation with score label, color indicator, and character count.
     - **Category Filters:** Categorization (`DevOps & Cloud`, `Payment & Billing`, `Internal Tools`, `Email & Comm`, `Vendors & Social`, `General`) with interactive filter pills and count badges.
     - **Service Avatars:** Deterministic gradient initials avatar for each service.
     - **In-App Delete Modal:** Sleek confirmation modal replacing native browser alerts.
+    - **Autofill Traps & Isolation (v2.29.338):** Search input scoped with `type="search"`, `data-form-type="other"`, and modal decoy traps with `autoComplete="new-password"` to prevent Chrome/Safari from auto-injecting dashboard credentials.
 - **PIN lock** (v2.29.329/v2.29.331) — a per-device "privacy screen" layered on top of the real access
   controls above, not a replacement for them (a 4-digit PIN is only 10,000 combinations). First
   visit on a device prompts "Create Vault PIN" with 4-box visual digit indicators; later visits require it, once per login session
