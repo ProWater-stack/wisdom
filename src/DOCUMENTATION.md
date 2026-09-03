@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.326**.
+> **Reflects:** `APP_VERSION` **2.29.331**.
 
 ---
 
@@ -1221,9 +1221,9 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   "Sections" expander in the create/edit-access grid — Default/Hidden/View/Edit per tab). Login
   matches email → this record. Storage: `pw_users` (now includes an optional `sections` map).
 - **Password Vault** (`vault_creds` tab, v2.29.325; moved under Employee as its own section at
-  v2.29.326, per explicit user request) — internal service/tool credentials (Zoho, AWS, hosting,
-  vendor portals, WiFi, admin panels, etc: Service name, Username, Password, URL, Notes). **Strictly
-  admin/devops-only**, using the exact same admin-only-tab shape as Referral's Backtrack / Analytics'
+  v2.29.326, upgraded with modern popups and features at v2.29.331) — internal service/tool credentials
+  (Zoho, AWS, hosting, vendor portals, WiFi, admin panels, etc: Service name, Category, Username, Password, URL, Notes).
+  **Strictly admin/devops-only**, using the exact same admin-only-tab shape as Referral's Backtrack / Analytics'
   AOP / Task Planner's Modify Tasks: the tab only spreads into `App.jsx`'s `employee` moduleTabs
   array when `isModuleAdmin` is true (no separate access level of its own — it inherits the Employee
   module's own admin/devops grant), and `MODULE_SECTIONS.employee` flags it `adminOnly: true` so the
@@ -1231,11 +1231,25 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   across every admin via a Cloud Firestore collection (`password_vault`, same `backend-prowater`/
   `prowaterdb` project as Device Replacement/Releases), reaching every admin login on any device;
   falls back to a localStorage cache (`pw_vault_cache`) when Firestore is unreachable, same
-  offline-first optimistic-update pattern as `_drStore`/`_releasesCache`. **Passwords are stored as
-  plain text** (masked in the UI behind a per-row show/hide toggle, with one-click copy for
-  username/password) — convenience-level protection matching this app's general client-side-SPA
-  security posture, **not** encryption at rest; the Firestore collection's own security rules are the
-  real access boundary and must restrict reads/writes to admin accounts.
+  offline-first optimistic-update pattern as `_drStore`/`_releasesCache`. **Passwords are
+  Base64-obfuscated before every write and decoded on read** (`_vaultEncode`/`_vaultDecode`, added
+  v2.29.327, per explicit user request) — masked in the UI behind a per-row show/hide toggle, with
+  one-click copy for username/password.
+  - **Features & Popups (v2.29.331):**
+    - **Password Generator:** 16-character secure random password generator with one-click insertion in Add/Edit modal.
+    - **Password Strength Meter:** Real-time 4-segment strength evaluation with score label, color indicator, and character count.
+    - **Category Filters:** Categorization (`DevOps & Cloud`, `Payment & Billing`, `Internal Tools`, `Email & Comm`, `Vendors & Social`, `General`) with interactive filter pills and count badges.
+    - **Service Avatars:** Deterministic gradient initials avatar for each service.
+    - **In-App Delete Modal:** Sleek confirmation modal replacing native browser alerts.
+- **PIN lock** (v2.29.329/v2.29.331) — a per-device "privacy screen" layered on top of the real access
+  controls above, not a replacement for them (a 4-digit PIN is only 10,000 combinations). First
+  visit on a device prompts "Create Vault PIN" with 4-box visual digit indicators; later visits require it, once per login session
+  (a `pw_vault_unlocked` sessionStorage flag, cleared on logout so a fresh login always re-locks).
+  Stored hashed (SHA-256, salted with the username) in `localStorage`, namespaced per username so
+  more than one admin sharing a device each get their own PIN — see `vaultPinApi`/`sha256Hex` in
+  `shared/core.js`. A 15-second client-side throttle follows 5 wrong attempts. "Forgot PIN?" resets it by re-verifying the real account password via
+  the same Firebase `signInWithPassword` call `api.login()` uses (`verifyPassword()`), without
+  touching the actual session.
 
 ### Device Replacement (`devicereplace`)
 - **Purpose:** record an old→new purifier swap via a short irreversible wizard (old device → new

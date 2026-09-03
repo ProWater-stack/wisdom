@@ -727,7 +727,7 @@ export const useAuth = () => useContext(Auth);
 export const SESSION_IDLE_MS = 60 * 60 * 1000;
 export const sessionDayStr = () => new Date().toDateString();
 export const clearSessionStorage = () => {
-  ["pw_user", "pw_idToken", "pw_refreshToken", "pw_tokenExpiry", "pw_last_activity", "pw_session_day", "pw_active_module"].forEach(k => sessionStorage.removeItem(k));
+  ["pw_user", "pw_idToken", "pw_refreshToken", "pw_tokenExpiry", "pw_last_activity", "pw_session_day", "pw_active_module", "pw_vault_unlocked"].forEach(k => sessionStorage.removeItem(k));
 };
 export const THEMES = ["light"];
 export const getStoredTheme = () => { try { const t = localStorage.getItem("pw_theme"); return THEMES.includes(t) ? t : "light"; } catch { return "light"; } };
@@ -785,9 +785,14 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.326";
-export const VERSION_DATE = "2026-09-02";
+export const APP_VERSION = "2.29.331";
+export const VERSION_DATE = "2026-09-03";
 export const VERSION_HISTORY = [
+  { v: "2.29.331", note: "Password Vault (`src/modules/Vault.jsx`, `src/shared/core.js`): Major UI and feature overhaul per explicit user request ('make the UI better especially for the popups and the features'). (1) Added an integrated 16-character strong password generator (`generateStrongPassword`) with instant 1-click population in the Add/Edit modal. (2) Added a real-time 4-bar password strength evaluation meter (`checkPasswordStrength`) with strength label, color coding, and character counter. (3) Added password show/hide eye toggle inside the modal input. (4) Added category classification ('DevOps & Cloud', 'Payment & Billing', 'Internal Tools', 'Email & Comm', 'Vendors & Social', 'General') with interactive filter pills and live count badges in the toolbar, mapped in `mapVaultDoc`. (5) Added custom color-gradient service initials avatars for every credential in the table. (6) Replaced browser `confirm()` with a modern in-app Delete Confirmation Modal. (7) Upgraded the Vault PIN Gate with interactive 4-box PIN digit visualizations, glowing focus rings, and cooldown timers. Verified via a clean `npm run build`." },
+  { v: "2.29.330", note: "Password Vault (`src/modules/Vault.jsx`): per explicit user request ('Untill the 4 digits is not entered, dont show the Unlock button'), the 'Enter Vault PIN' screen's Unlock button is now only rendered once all 4 digits are typed (`{pin.length === 4 && <button>...}`), rather than always shown but merely enabled — the 'Forgot PIN?' link stays visible throughout. Verified live: typing 1-3 digits shows only the dot placeholders and Forgot PIN link with no Unlock button at all; the 4th digit makes it appear immediately." },
+  { v: "2.29.329", note: "Password Vault: added a 4-digit PIN lock in front of the section, per explicit user request ('create a 4 digit PIN to unlock it, I want the section to be secured'). Framed and built explicitly as a per-device 'privacy screen' layered ON TOP of the real access controls already in place (Firebase Auth + the Firestore email allowlist + the Employee-module admin gate) — NOT a replacement for them: a 4-digit PIN is only 10,000 combinations, so it stops a coworker glancing at an unlocked laptop, not a determined attacker with real access to the data already. Design, offered as two explicit choices and built per the user's picks: (1) **storage** — per-device only, in `localStorage`, hashed with SHA-256 and salted with the username (`vaultPinKey`/`sha256Hex`/`vaultPinApi` in `shared/core.js`) rather than synced via Firestore, so more than one admin sharing the same browser each get their own independent PIN and there's no cross-device reset flow to build; (2) **unlock duration** — once per login session, tracked via a `pw_vault_unlocked` sessionStorage flag now added to `clearSessionStorage()`'s cleared-keys list, so logging out always re-locks it for the next login, matching how the rest of the app already treats a session. Flow, in a new `VaultPinGate` component in `modules/Vault.jsx` (rendered before the vault's own loading/content, so it gates the render regardless of Firestore fetch state): first visit on a device shows 'Create a Vault PIN' (two 4-digit fields, must match); later visits show 'Enter Vault PIN', with a lightweight client-side throttle (a 15-second lockout after 5 wrong attempts — courtesy friction, not real rate-limiting, since this is client-side only); a 'Forgot PIN?' link switches to 'Reset Vault PIN', which requires re-entering the real account password — reusing the exact same Firebase `signInWithPassword` call and username→email resolution as `api.login()` (`verifyPassword()` in `shared/core.js`, deliberately side-channel only — never touches the real session's `pw_idToken`/`pw_user`) — before clearing the old PIN hash and returning to the create-PIN screen. Verified via a clean `npm run build` and a full live pass: create-PIN → immediately unlocked; reload within the same session stays unlocked; simulating logout (clearing session keys) and logging back in correctly re-locks and shows 'Enter Vault PIN' with the Forgot-PIN link now visible (since a PIN already exists on the device); a wrong PIN shows 'Wrong PIN.' inline without unlocking; the correct PIN unlocks and shows the vault table; the Forgot-PIN flow's password check correctly round-trips to Firebase and surfaces 'Incorrect password.' on a deliberately wrong test password, with no crash." },
+  { v: "2.29.328", note: "Password Vault (`src/modules/Vault.jsx`): per explicit user request ('show the created date and updated date and updated by'), the table's single combined 'Updated' column (date + updatedBy stacked) was split into three explicit columns — **Created**, **Updated**, **Updated By** — each reading straight off the record's own `createdAt`/`updatedAt`/`updatedBy` fields (already captured by `vaultApi.add`/`update` in core.js, fixed to actually reach Firestore at v2.29.327). Table `minWidth` bumped 900→1050 and the empty-state row's `colSpan` corrected 7→9 to match the two added columns. Verified via a clean `npm run build` and a live add: a new credential correctly showed 'Created 03 Sept 2026 · Updated 03 Sept 2026 · Updated By admin' across the three columns." },
+  { v: "2.29.327", note: "Password Vault: two fixes/additions found during the user's own live Firestore verification of v2.29.325/326. (1) Real bug: `vaultApi.add()` was sending only the raw form fields (`service`/`username`/`password`/`url`/`notes`) to Firestore, never the `createdBy`/`createdAt`/`updatedBy`/`updatedAt` metadata it builds for the optimistic local cache — confirmed live in the user's own Firestore console (the saved document was missing those four fields entirely). `update()` already built its network body correctly; `add()` now matches it, sending the full object. (2) Per explicit user request ('how can I hide the password in the collection or show as a alphanumeric way'), the `password` field is now Base64-obfuscated before every Firestore write and decoded back on every read (`_vaultEncode`/`_vaultDecode` in `shared/core.js`) — encode happens only in the network payload passed to `_drToFsFields`, never in the optimistic local cache object, so the in-app UI is unaffected. Explicitly scoped as **obfuscation, not encryption** — offered as a choice (real client-side encryption with a master-passphrase unlock vs. cosmetic Base64) and the user picked the cosmetic option; the field is trivially reversible by anyone with read access to it, and this does nothing to protect against someone with actual Firebase/GCP IAM console access to the `backend-prowater` project (a separate permission model from the Firestore security rules covered below) — both caveats were stated plainly before implementing. Decode is backward-compatible: a pre-existing plain-text password (like the user's own first real 'Zoho Billing' entry, saved before this change) isn't valid Base64, so `atob()` throws and the raw value is returned unchanged rather than being garbled — no migration needed, though that one existing document will only get properly Base64-encoded at rest once it's next edited and re-saved through the app. Also, this version's work included walking the user through a real production incident outside this codebase: their Firestore rules were a wide-open `match /{document=**} { allow read, write: if request.auth != null; }` catch-all (any signed-in user, any collection) — helped diagnose this via their actual Firebase console screenshots and rewrite it to a `password_vault`-scoped email allowlist (`request.auth.token.email in [...]`) while leaving every other collection's behavior provably identical (verified the logic: the catch-all's added exclusion condition `!(request.path.size() > 3 && request.path[3] == 'password_vault')` reduces to `true` for every other collection, so nothing else changed). Also helped diagnose a real 'Missing or insufficient permissions' failure post-deploy: the app's login maps a bare username to `${username}@prowater.in` (`api.login` in `shared/core.js`) but passes a typed email straight through unchanged, so the actual Firebase-authenticated identity (confirmed by decoding the ID token's JWT payload client-side) turned out to be `anis@drinkprime.in` — a different string than the `harshlokhande486@gmail.com` shown in the Employee > Users table's stored contact-email field — not a rule bug, just an email-string mismatch, fixed by using the real decoded email in the allowlist. Verified via a clean `npm run build`, a standalone Node round-trip test of `_vaultEncode`/`_vaultDecode` (ASCII, Unicode, empty string, and the legacy-plaintext-decode fallback all correct), and the user's own live confirmation of a successful 'Credential added' write to their real, now-access-controlled Firestore collection." },
   { v: "2.29.326", note: "Password Vault (v2.29.325) restructured per explicit user follow-up request ('add the module under Employee as a separate section') — no longer a standalone top-level module in the Home grid/sidebar. Removed the `vault` entry from `MODULES` and its 'Tech' group placement entirely; the 'Password Vault' page now lives as a second tab under **Employee** (alongside 'Users'), using the exact same admin-only-tab shape already established for Referral's Backtrack / Analytics' AOP / Task Planner's Modify Tasks — the tab only spreads into `App.jsx`'s `employee` moduleTabs array when `isModuleAdmin` is true, and `MODULE_SECTIONS.employee` lists it with `adminOnly: true` so Employee > Users' per-user Sections control shows it correctly flagged ADMIN. This also simplified access control: since Vault access is now inherited from the Employee module's own admin/devops level rather than a separate module-level grant, the one-off `ADMIN_ONLY_MODULES` special-casing added at v2.29.325 (which limited the Vault row in AccessEditor to only None/Admin/DevOps) was removed — Employee now uses the same full None/View/Supervisor/Admin/DevOps set as every other module, since there's no longer a separate Vault row to restrict. `About.jsx`'s MODULE_DOCS folded the standalone 'Password Vault' entry into Employee's own doc entry; `shared/ui.jsx`'s `MODULE_ICONS` no longer carries the `Lock` mapping added for Vault's now-removed top-level module icon. `vaultApi`/`VAULT_COLLECTION` in `shared/core.js` and `modules/Vault.jsx`'s `PasswordVault` component are unchanged — only where the page is reachable from moved. Verified via a clean `npm run build` and a live pass: confirmed 'Password Vault' no longer appears as its own tile anywhere in the module grid, confirmed it renders correctly as Employee's second sidebar section for an admin, confirmed a View-level Employee user's sidebar shows only 'Users' (no Password Vault entry) and that forcing `pw_tab_employee=vault_creds` directly via sessionStorage for that same user falls back to the Users tab rather than rendering the vault, and confirmed Employee > Users' access editor Sections dropdown correctly lists 'Password Vault ADMIN' alongside 'Users'." },
   { v: "2.29.325", note: "New module: Password Vault (`src/modules/Vault.jsx`), per explicit user request ('I want to create a password vault and this should be strictly shown only to admin access'). Stores internal service/tool credentials (Service name, Username, Password, URL, Notes) shared across every admin via a new Cloud Firestore collection (`password_vault`, same backend-prowater/prowaterdb project Device Replacement/Releases already use) — reaches every admin login on any device; falls back to a localStorage cache when Firestore is unreachable, same offline-first pattern as `_drStore`/`_releasesCache`. Passwords are masked behind a per-row show/hide toggle plus one-click copy buttons for username/password, with a 'Link' out to the service's URL; add/edit via a popup form, delete with a native confirm. Explicitly scoped per a follow-up clarification: localStorage-only was declined in favor of the shared Firestore store; encryption-at-rest was declined in favor of masked-display-only (plain text at rest, matching this app's general client-side-SPA security posture — flagged clearly in-page and in this doc); contents are internal service/tool logins, not customer data. STRICTLY admin/devops-only, enforced at three layers: (1) the new 'vault' entry in `MODULES` is filtered out of Home's module grid for any access level other than admin/devops, even if somehow granted View/Supervisor; (2) the module's actual render in `App.jsx` is gated by `isModuleAdmin` in the JSX condition itself (mirroring the existing AOP/Backtrack admin-gate pattern) — confirmed live that forcing `pw_active_module=vault` via sessionStorage for a View-level user renders a completely blank page, no data ever fetched or shown; (3) Employee > Users' AccessEditor now offers only None/Admin/DevOps for the Vault row specifically (no View/Supervisor option exists to grant, removing the ambiguity of a 'half-granted' module) — a new `ADMIN_ONLY_MODULES` set in `Employee.jsx` drives this, extensible to future admin-only modules. Also fixed a real bug caught during live verification: `vaultApi.add`/`update` initially only touched the local cache on a *successful* Firestore write (unlike every other offline-first store in this app), so a save that failed against this sandbox's unreachable Firestore silently vanished instead of saving locally — fixed to update the cache optimistically first, then reconcile with Firestore's real doc id on success, matching `_drStore`/`_releasesCache`'s established pattern. Verified via a clean `npm run build` and a full live pass: added/revealed/copied/edited a credential as admin (correctly falls back to 'Saved locally' when Firestore auth fails, as expected in this sandbox), confirmed the module is invisible in the grid AND blank on forced direct navigation for a View-level user, and confirmed the Users admin's access editor only offers None/Admin/DevOps for this one module." },
   { v: "2.29.324", note: "Dev-tooling fix, no user-visible change: relocated 13 plain constants/helpers (`CHART_PALETTE`, `ACCESS_LEVELS`, `DEVICE_TYPES`, `BENGALURU_CENTER`, `AUTO_GS_SEED`, `tkPriority`, `API_USAGE`, `HIDDEN_LEAD_STATUSES`, `PLAN_AVATAR_COLORS`, `TIERS`, `gstBreakup`, `IOT_ALERT_SEV`, `AOP_MON`) plus the manually-recorded-refunds store (`MANUAL_REFUNDS_LS_KEY`/now `manualRefundsApi`) out of `shared/ui.jsx` and 12 module files into `shared/core.js`, per explicit user request after repeatedly hitting Vite's 'Could not Fast Refresh (\"X\" export is incompatible)' dev-console warning. Root cause: Vite's react-refresh transform can only hot-swap a file in place when EVERY export in it is a React component — one plain constant/helper export forces a full reload of that file and everything importing it on every edit. `shared/core.js` holds no components, so it's never subject to the rule; each symbol is re-imported by its original file at the exact call site it used to live, with zero behavior change. The refunds store specifically needed setter functions (`list/add/remove`) instead of its old direct-reassignment pattern, since an ES module import binding can't be reassigned from the importing file. Deliberately a narrow, targeted pass covering only the exports that had actually surfaced the warning so far — most of these same files still mix in other plain exports (seed data, API clients, formatters) that will trip the same warning again on a future edit; a full fix would mean relocating those too, which was explicitly scoped out this round given the size (~habitually 20-80 more per file). Verified via a clean `npm run build` plus a live spot-check across Employee (Edit Access modal), Billing (Add/Remove Refund Entry), Referral (Tracker tiers), Task Planner (avatar colors), Analytics (AOP month labels), IoT (Alerts page), FSM (Bengaluru map), and Auto Scheduler (Auto GS seed societies) — all rendered correctly with no new console errors." },
@@ -2046,12 +2051,64 @@ const _vaultHeaders = () => { const t = sessionStorage.getItem("pw_idToken"); re
 const VAULT_LS_KEY = "pw_vault_cache";
 const saveVaultCache = (rows) => LS.set(VAULT_LS_KEY, rows);
 let _vaultCache = LS.get(VAULT_LS_KEY, []) || [];
+// Cosmetic-only obfuscation of the password field at rest in Firestore — NOT
+// encryption, trivially reversible by design (per an explicit user choice:
+// "just obfuscate it", not real client-side encryption). Only stops a casual
+// glance at the raw Firestore console from reading the password directly;
+// anyone with read access to the field can decode it in one line. Decode
+// tolerates every credential saved before this was added: a plain-text
+// password isn't valid Base64, so atob() throws and the raw value is
+// returned as-is instead of garbling it.
+const _vaultEncode = (s) => { try { return btoa(unescape(encodeURIComponent(String(s || "")))); } catch { return String(s || ""); } };
+const _vaultDecode = (s) => { try { return decodeURIComponent(escape(atob(String(s || "")))); } catch { return String(s || ""); } };
+
+/* ---- Vault PIN lock (v2.29.329) — a per-device "privacy screen" on top of
+   the real access controls above (Firebase Auth + Firestore email allowlist +
+   Employee-module admin gate), NOT a replacement for them: a 4-digit PIN is
+   only 10,000 combinations, so it stops a coworker glancing at an unlocked
+   laptop, not a determined attacker. Stored hashed (SHA-256, salted with the
+   username so it isn't a bare lookup) in localStorage, namespaced per
+   username so more than one admin sharing the same browser/device each get
+   their own PIN. The "unlocked" flag lives in sessionStorage (cleared by
+   clearSessionStorage() on logout) so a fresh login always re-locks it —
+   matches the "once per session" choice explicitly made for this feature. ---- */
+export const vaultPinKey = (username) => `pw_vault_pin_${username}`;
+export async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+export const vaultPinApi = {
+  hasPin: (username) => !!localStorage.getItem(vaultPinKey(username)),
+  isUnlocked: () => sessionStorage.getItem("pw_vault_unlocked") === "1",
+  unlock: () => sessionStorage.setItem("pw_vault_unlocked", "1"),
+  setPin: async (username, pin) => localStorage.setItem(vaultPinKey(username), await sha256Hex(`${username}:${pin}`)),
+  clearPin: (username) => localStorage.removeItem(vaultPinKey(username)),
+  checkPin: async (username, pin) => (await sha256Hex(`${username}:${pin}`)) === localStorage.getItem(vaultPinKey(username)),
+};
+// Re-verifies the CURRENT user's real account password against Firebase —
+// used only to authorize a forgotten-PIN reset, reusing the exact same
+// email-resolution rule as api.login() below so "however you normally log
+// in" also works here. Deliberately does NOT touch the real session
+// (pw_idToken/pw_user/etc) — this is a side-channel identity check only.
+export async function verifyPassword(username, password) {
+  const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
+  const email = username.includes("@") ? username : `${username}@prowater.in`;
+  try {
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, returnSecureToken: true }) }
+    );
+    const j = await res.json();
+    return j.error ? { ok: false, message: "Incorrect password." } : { ok: true };
+  } catch { return { ok: false, message: "Network error. Check your connection." }; }
+}
 export function mapVaultDoc(doc) {
   const f = doc.fields || {};
   return {
     _docId: (doc.name || "").split("/").pop(),
-    service: _drScalar(f.service), username: _drScalar(f.username), password: _drScalar(f.password),
-    url: _drScalar(f.url), notes: _drScalar(f.notes),
+    service: _drScalar(f.service), username: _drScalar(f.username), password: _vaultDecode(_drScalar(f.password)),
+    url: _drScalar(f.url), notes: _drScalar(f.notes), category: _drScalar(f.category) || "General",
     createdBy: _drScalar(f.createdBy), createdAt: _drScalar(f.createdAt),
     updatedBy: _drScalar(f.updatedBy), updatedAt: _drScalar(f.updatedAt),
   };
@@ -2080,12 +2137,14 @@ export const vaultApi = {
   // A locally-generated id is replaced with Firestore's real one on success.
   add: async (actor, entry) => {
     const now = new Date().toISOString();
-    const local = { _docId: `local_${crypto.randomUUID()}`, ...entry, createdBy: actor, createdAt: now, updatedBy: actor, updatedAt: now };
+    const body = { ...entry, createdBy: actor, createdAt: now, updatedBy: actor, updatedAt: now };
+    const local = { _docId: `local_${crypto.randomUUID()}`, ...body };
     _vaultCache = [local, ..._vaultCache].sort((a, b) => a.service.localeCompare(b.service));
     saveVaultCache(_vaultCache);
     try {
       const res = await fetch(`${VAULT_FS_BASE}/${VAULT_COLLECTION}`, {
-        method: "POST", headers: _vaultHeaders(), body: JSON.stringify({ fields: _drToFsFields(entry) }),
+        method: "POST", headers: _vaultHeaders(),
+        body: JSON.stringify({ fields: _drToFsFields({ ...body, password: _vaultEncode(body.password) }) }),
       });
       if (!res.ok) { let m = `Firestore ${res.status}`; try { const j = await res.json(); if (j?.error?.message) m = j.error.message; } catch { /* keep status */ } throw new Error(m); }
       const saved = mapVaultDoc(await res.json());
@@ -2105,7 +2164,8 @@ export const vaultApi = {
     saveVaultCache(_vaultCache);
     try {
       const res = await fetch(`${VAULT_FS_BASE}/${VAULT_COLLECTION}/${docId}`, {
-        method: "PATCH", headers: _vaultHeaders(), body: JSON.stringify({ fields: _drToFsFields(body) }),
+        method: "PATCH", headers: _vaultHeaders(),
+        body: JSON.stringify({ fields: _drToFsFields({ ...body, password: _vaultEncode(body.password) }) }),
       });
       if (!res.ok) { let m = `Firestore ${res.status}`; try { const j = await res.json(); if (j?.error?.message) m = j.error.message; } catch { /* keep status */ } throw new Error(m); }
       const saved = { ...mapVaultDoc(await res.json()), _docId: docId };
