@@ -557,10 +557,10 @@ export function PasswordVault() {
 
         {/* Credentials Table */}
         <div className="scroll-thin" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 1050 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 1180 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                {["Service", "Category", "Username / Email", "Password", "URL", "Notes", "Created", "Updated", "Updated By", ""].map(h => (
+                {["Service", "Category", "Username / Email", "Password", "URL", "Notes", "Created", "Created By", "Updated", "Updated By", ""].map(h => (
                   <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -685,6 +685,7 @@ export function PasswordVault() {
 
                     {/* Timestamps */}
                     <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.createdAt ? fmtDate(e.createdAt) : "—"}</td>
+                    <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.createdBy || "—"}</td>
                     <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.updatedAt ? fmtDate(e.updatedAt) : "—"}</td>
                     <td style={{ padding: "12px 18px", fontSize: 11.5, color: "#86868B", whiteSpace: "nowrap" }}>{e.updatedBy || "—"}</td>
 
@@ -712,7 +713,7 @@ export function PasswordVault() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ padding: 0 }}>
+                  <td colSpan={11} style={{ padding: 0 }}>
                     <Empty msg={entries.length ? "No credentials match your filters." : "No credentials saved yet — click 'Add Credential' to record your first login."} />
                   </td>
                 </tr>
