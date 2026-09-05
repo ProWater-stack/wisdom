@@ -17,7 +17,7 @@ import {
   Folder, Globe, KeyRound, Lock, PencilLine, Plus, RefreshCw, Search, Shield,
   ShieldCheck, Sparkles, Tag, Trash2, User, X,
 } from "lucide-react";
-import { useAuth, api, pushLog, vaultApi, vaultPinApi, verifyPassword } from "../shared/core";
+import { useAuth, api, pushLog, vaultApi } from "../shared/core";
 import {
   Loading, Empty, Modal, Field, btnGhost, btnPrimary, inp, toastStyle,
 } from "../shared/ui";
@@ -136,237 +136,10 @@ export function checkPasswordStrength(pass = "") {
 const emptyEntry = { service: "", username: "", password: "", url: "", notes: "", category: "Internal" };
 
 /* ===========================================================================
-   Vault PIN gate (v2.29.329/v2.29.331) — Interactive 4-digit PIN security lock
-   =========================================================================== */
-function VaultPinGate({ username, onUnlocked }) {
-  const [mode, setMode] = useState(() => (vaultPinApi.hasPin(username) ? "enter" : "create"));
-  const [pin, setPin] = useState("");
-  const [confirmPin, setConfirmPin] = useState("");
-  const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [attempts, setAttempts] = useState(0);
-  const [lockedUntil, setLockedUntil] = useState(0);
-  const [, forceTick] = useState(0);
-  const digits = (v) => v.replace(/\D/g, "").slice(0, 4);
-
-  useEffect(() => {
-    if (!lockedUntil) return;
-    const t = setInterval(() => forceTick(x => x + 1), 500);
-    return () => clearInterval(t);
-  }, [lockedUntil]);
-  const cooldownLeft = Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1000));
-
-  const submitCreate = async () => {
-    setErr("");
-    if (!/^\d{4}$/.test(pin)) { setErr("Enter exactly 4 digits."); return; }
-    if (pin !== confirmPin) { setErr("PINs don't match."); return; }
-    setBusy(true);
-    try { await vaultPinApi.setPin(username, pin); vaultPinApi.unlock(); onUnlocked(); }
-    finally { setBusy(false); }
-  };
-
-  const submitEnter = async () => {
-    if (cooldownLeft > 0) return;
-    setErr("");
-    if (!/^\d{4}$/.test(pin)) { setErr("Enter exactly 4 digits."); return; }
-    setBusy(true);
-    try {
-      const ok = await vaultPinApi.checkPin(username, pin);
-      if (ok) { vaultPinApi.unlock(); onUnlocked(); return; }
-      const next = attempts + 1;
-      setAttempts(next);
-      setPin("");
-      if (next >= 5) { setLockedUntil(Date.now() + 15000); setErr("Too many wrong attempts — wait 15 seconds."); }
-      else setErr("Incorrect PIN. Please try again.");
-    } finally { setBusy(false); }
-  };
-
-  const submitForgot = async () => {
-    setErr("");
-    if (!password) { setErr("Enter your account password."); return; }
-    setBusy(true);
-    try {
-      const { ok, message } = await verifyPassword(username, password);
-      if (!ok) { setErr(message); return; }
-      vaultPinApi.clearPin(username);
-      setMode("create"); setPin(""); setConfirmPin(""); setPassword(""); setAttempts(0); setLockedUntil(0);
-    } finally { setBusy(false); }
-  };
-
-  const card = {
-    width: 350,
-    background: "rgba(255,255,255,0.95)",
-    backdropFilter: "blur(24px)",
-    WebkitBackdropFilter: "blur(24px)",
-    border: "1px solid rgba(0,0,0,.08)",
-    borderRadius: 24,
-    boxShadow: "0 16px 40px rgba(0,0,0,.08)",
-    padding: "32px 28px",
-    textAlign: "center"
-  };
-  const linkBtn = { ...btnGhost, width: "100%", marginTop: 10, border: "none", background: "transparent", color: "#86868B", fontSize: 12.5 };
-
-  // Render 4 interactive visual PIN boxes
-  const renderPinBoxes = (currentVal) => (
-    <div style={{ display: "flex", justifyContent: "center", gap: 10, margin: "14px 0" }}>
-      {[0, 1, 2, 3].map((idx) => {
-        const isFilled = currentVal.length > idx;
-        const isCurrent = currentVal.length === idx;
-        return (
-          <div
-            key={idx}
-            style={{
-              width: 44,
-              height: 48,
-              borderRadius: 12,
-              border: `2px solid ${isCurrent ? "#08805A" : isFilled ? "rgba(8,128,90,0.4)" : "rgba(0,0,0,0.12)"}`,
-              background: isFilled ? "rgba(8,128,90,0.06)" : "#fff",
-              display: "grid",
-              placeItems: "center",
-              fontSize: 22,
-              fontWeight: 800,
-              color: "#08805A",
-              boxShadow: isCurrent ? "0 0 0 3px rgba(8,128,90,0.15)" : "none",
-              transition: "all .15s ease"
-            }}
-          >
-            {isFilled ? "•" : ""}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  return (
-    <div className="fade-up ov-sans" style={{ display: "grid", placeItems: "center", minHeight: 400, padding: 20 }}>
-      <div style={card}>
-        <div style={{ width: 52, height: 52, borderRadius: 16, background: "rgba(8,128,90,0.1)", display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
-          <Lock size={24} color="#08805A" />
-        </div>
-
-        {mode === "create" && (
-          <>
-            <div style={{ fontWeight: 800, fontSize: 18, color: "#1D1D1F" }}>Create Vault PIN</div>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 4, marginBottom: 14 }}>
-              Set a 4-digit device PIN to secure your internal credentials on this browser.
-            </div>
-            
-            <div style={{ textAlign: "left", fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".04em" }}>New PIN</div>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              autoFocus
-              value={pin}
-              onChange={e => setPin(digits(e.target.value))}
-              placeholder="••••"
-              style={{ ...inp, textAlign: "center", letterSpacing: 8, fontSize: 20, marginBottom: 12 }}
-            />
-            {renderPinBoxes(pin)}
-
-            <div style={{ textAlign: "left", fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".04em" }}>Confirm PIN</div>
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              value={confirmPin}
-              onChange={e => setConfirmPin(digits(e.target.value))}
-              onKeyDown={e => e.key === "Enter" && submitCreate()}
-              placeholder="••••"
-              style={{ ...inp, textAlign: "center", letterSpacing: 8, fontSize: 20 }}
-            />
-            {renderPinBoxes(confirmPin)}
-
-            {err && <div style={{ color: "#DC4141", fontSize: 12.5, marginTop: 8, fontWeight: 600 }}>{err}</div>}
-            
-            {pin.length === 4 && confirmPin.length === 4 && (
-              <button onClick={submitCreate} disabled={busy} style={{ ...btnPrimary, width: "100%", marginTop: 14, background: "#08805A", color: "#fff", border: "none", opacity: busy ? .7 : 1 }}>
-                {busy ? "Saving…" : "Set Vault PIN"}
-              </button>
-            )}
-          </>
-        )}
-
-        {mode === "enter" && (
-          <>
-            <div style={{ fontWeight: 800, fontSize: 18, color: "#1D1D1F" }}>Enter Vault PIN</div>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 4, marginBottom: 16 }}>
-              This section is locked on this device. Enter your 4-digit PIN to unlock.
-            </div>
-
-            <input
-              type="password"
-              inputMode="numeric"
-              maxLength={4}
-              autoFocus
-              value={pin}
-              onChange={e => setPin(digits(e.target.value))}
-              onKeyDown={e => e.key === "Enter" && submitEnter()}
-              disabled={cooldownLeft > 0}
-              placeholder="••••"
-              style={{ ...inp, textAlign: "center", letterSpacing: 10, fontSize: 22, opacity: cooldownLeft > 0 ? 0.5 : 1 }}
-            />
-
-            {renderPinBoxes(pin)}
-
-            {err && (
-              <div style={{ color: "#DC4141", fontSize: 12.5, marginTop: 8, fontWeight: 600 }}>
-                {err}{cooldownLeft > 0 ? ` (${cooldownLeft}s cooldown)` : ""}
-              </div>
-            )}
-
-            {pin.length === 4 && (
-              <button
-                onClick={submitEnter}
-                disabled={busy || cooldownLeft > 0}
-                style={{ ...btnPrimary, width: "100%", marginTop: 14, background: "#08805A", color: "#fff", border: "none", opacity: (busy || cooldownLeft > 0) ? .7 : 1 }}
-              >
-                {busy ? "Checking…" : "Unlock Vault"}
-              </button>
-            )}
-
-            <button onClick={() => { setMode("forgot"); setErr(""); setPassword(""); }} style={linkBtn}>
-              Forgot PIN?
-            </button>
-          </>
-        )}
-
-        {mode === "forgot" && (
-          <>
-            <div style={{ fontWeight: 800, fontSize: 18, color: "#1D1D1F" }}>Reset Vault PIN</div>
-            <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 4, marginBottom: 16 }}>
-              Confirm your identity by entering your CRM account password to reset this device's PIN.
-            </div>
-            <input
-              type="password"
-              autoFocus
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && submitForgot()}
-              placeholder="Enter your account password"
-              style={{ ...inp, textAlign: "center" }}
-            />
-            {err && <div style={{ color: "#DC4141", fontSize: 12.5, marginTop: 10, fontWeight: 600 }}>{err}</div>}
-            <button onClick={submitForgot} disabled={busy} style={{ ...btnPrimary, width: "100%", marginTop: 16, background: "#08805A", color: "#fff", border: "none", opacity: busy ? .7 : 1 }}>
-              {busy ? "Verifying…" : "Verify & Reset PIN"}
-            </button>
-            <button onClick={() => { setMode("enter"); setErr(""); setPassword(""); }} style={linkBtn}>
-              Back to PIN entry
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ===========================================================================
    PasswordVault Main Component
    =========================================================================== */
 export function PasswordVault() {
   const { user } = useAuth();
-  const [unlocked, setUnlocked] = useState(() => vaultPinApi.isUnlocked());
   const [entries, setEntries] = useState(vaultApi.local());
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
@@ -497,7 +270,6 @@ export function PasswordVault() {
     } finally { setDeleting(false); }
   };
 
-  if (!unlocked) return <VaultPinGate username={user.username} onUnlocked={() => setUnlocked(true)} />;
   if (loading) return <Loading title="Loading Password Vault" subtitle="Synchronizing internal credentials…" />;
 
   const formStrength = checkPasswordStrength(form.password);

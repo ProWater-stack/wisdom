@@ -9,8 +9,8 @@
    =========================================================================== */
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  AlertCircle, ArrowDown, ArrowUp, CalendarRange, CheckCircle2, Cpu,
-  Download, Droplets, FlaskConical, Gauge, ShieldCheck, Thermometer, Waves,
+  Activity, AlertCircle, ArrowDown, ArrowUp, CalendarRange, CheckCircle2, Cpu,
+  Download, Droplets, FlaskConical, Gauge, RotateCw, ShieldCheck, Thermometer, Waves,
 } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, ComposedChart, Line, LineChart,
@@ -457,14 +457,17 @@ export const IOT_TANK_CSS = `
 .iot-ecg.alive .iot-ecg-seg{filter:drop-shadow(0 0 5px rgba(30, 158, 79,.5))}
 .iot-ecg.dead .iot-ecg-seg{filter:drop-shadow(0 0 4px rgba(220,65,65,.38));opacity:.8}
 @keyframes iotEcgScroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.pw-refill-tag{position:absolute;left:50%;top:10px;transform:translateX(-50%);z-index:8;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#0a6f8f;background:#e2f4fb;border:1px solid #b9e3f2;box-shadow:0 3px 8px rgba(10,111,143,.16)}
-.pw-refill-tag::before{content:"";width:7px;height:7px;border-radius:50%;background:#0a9dd4;animation:pwRefillBlink 1s ease-in-out infinite}
-@keyframes pwRefillBlink{0%,100%{opacity:.35;transform:scale(.82)}50%{opacity:1;transform:scale(1)}}
-.pw-warm-tag{position:absolute;right:10px;top:10px;z-index:8;display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.02em;color:#a8480a;background:#fdeede;border:1px solid #f4cfa4;box-shadow:0 3px 8px rgba(168,72,10,.16)}
-.pw-warm-tag::before{content:"";width:7px;height:7px;border-radius:50%;background:#e8791a;animation:pwRefillBlink 1.1s ease-in-out infinite}
+.pw-refill-dot{width:7px;height:7px;border-radius:50%;background:#0284C7;animation:pwRefillPulse 1.2s ease-in-out infinite;display:inline-block}
+.pw-warm-dot{width:7px;height:7px;border-radius:50%;background:#D97706;animation:pwRefillPulse 1.2s ease-in-out infinite;display:inline-block}
+@keyframes pwRefillPulse{0%,100%{opacity:.4;transform:scale(.85)}50%{opacity:1;transform:scale(1.25);box-shadow:0 0 8px rgba(2,132,199,.7)}}
+.pw-spin-slow{animation:pwSpinSlow 3s linear infinite}
+@keyframes pwSpinSlow{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.pw-tank.refilling .pw-tank-shell{box-shadow:inset 0 0 15px rgba(2,132,199,.25),0 0 20px rgba(56,189,248,.35),0 8px 24px rgba(0,0,0,.06);border-color:rgba(2,132,199,.65)}
+.pw-refill-inflow-stream{position:absolute;top:0;left:50%;transform:translateX(-50%);width:6px;height:calc(100% - var(--level, 100%) + 10px);background:linear-gradient(180deg,rgba(255,255,255,0.95) 0%,rgba(56,189,248,0.9) 100%);border-radius:3px;z-index:4;animation:pwStreamPulse 0.8s ease-in-out infinite alternate}
+@keyframes pwStreamPulse{0%{opacity:.7;transform:translateX(-50%) scaleX(.85)}100%{opacity:1;transform:translateX(-50%) scaleX(1.15);filter:drop-shadow(0 0 4px rgba(56,189,248,.8))}}
 @media(max-width:1400px){.pw-tank-layout{grid-template-columns:1fr!important;justify-items:center}}
 @media(max-width:1150px){.iot-monitor-grid{grid-template-columns:1fr!important}}
-@media(prefers-reduced-motion:reduce){.iot-ecg-track{animation:none!important}.pw-refill-tag::before,.pw-warm-tag::before{animation:none!important}}
+@media(prefers-reduced-motion:reduce){.iot-ecg-track,.pw-refill-inflow-stream{animation:none!important}.pw-refill-dot,.pw-warm-dot{animation:none!important}}
 `;
 export const ValveBadge = ({ state }) => (
   <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, color: "#fff", background: state === "OPEN" ? "#08805A" : "#DC4141" }}>{state ?? "—"}</span>
@@ -509,19 +512,26 @@ export function IoTTank({ pct = 0, refilling = false, warming = false }) {
         <span>25%</span>
         <span>0%</span>
       </div>
-      <div className="pw-tank" style={{ "--level": `${p}%` }}>
+      <div className={`pw-tank ${refilling ? "refilling" : ""}`} style={{ "--level": `${p}%` }}>
         <div className="pw-tank-lid"></div>
         <div className="pw-tank-neck"></div>
         <div className="pw-tank-shell">
+          {refilling && <div className="pw-refill-inflow-stream"></div>}
           <div className="pw-water">
             <div className="pw-wave wave-a"></div>
             <div className="pw-wave wave-b"></div>
-            <span className="pw-bubble" style={{ left: "22%", width: 6, height: 6, animationDuration: "3.4s", animationDelay: "0s" }}></span>
-            <span className="pw-bubble" style={{ left: "40%", width: 4, height: 4, animationDuration: "2.8s", animationDelay: "1.1s" }}></span>
-            <span className="pw-bubble" style={{ left: "55%", width: 7, height: 7, animationDuration: "4.2s", animationDelay: "0.6s" }}></span>
-            <span className="pw-bubble" style={{ left: "68%", width: 5, height: 5, animationDuration: "3.1s", animationDelay: "1.8s" }}></span>
-            <span className="pw-bubble" style={{ left: "33%", width: 3, height: 3, animationDuration: "2.4s", animationDelay: "2.2s" }}></span>
-            <span className="pw-bubble" style={{ left: "62%", width: 4, height: 4, animationDuration: "3.7s", animationDelay: "0.3s" }}></span>
+            <span className="pw-bubble" style={{ left: "22%", width: 6, height: 6, animationDuration: refilling ? "1.8s" : "3.4s", animationDelay: "0s" }}></span>
+            <span className="pw-bubble" style={{ left: "40%", width: 4, height: 4, animationDuration: refilling ? "1.5s" : "2.8s", animationDelay: "0.5s" }}></span>
+            <span className="pw-bubble" style={{ left: "55%", width: 7, height: 7, animationDuration: refilling ? "2.1s" : "4.2s", animationDelay: "0.3s" }}></span>
+            <span className="pw-bubble" style={{ left: "68%", width: 5, height: 5, animationDuration: refilling ? "1.6s" : "3.1s", animationDelay: "0.9s" }}></span>
+            <span className="pw-bubble" style={{ left: "33%", width: 3, height: 3, animationDuration: refilling ? "1.3s" : "2.4s", animationDelay: "1.1s" }}></span>
+            <span className="pw-bubble" style={{ left: "62%", width: 4, height: 4, animationDuration: refilling ? "1.9s" : "3.7s", animationDelay: "0.2s" }}></span>
+            {refilling && (
+              <>
+                <span className="pw-bubble" style={{ left: "48%", width: 6, height: 6, animationDuration: "1.2s", animationDelay: "0.1s" }}></span>
+                <span className="pw-bubble" style={{ left: "52%", width: 5, height: 5, animationDuration: "1.4s", animationDelay: "0.7s" }}></span>
+              </>
+            )}
           </div>
           <div className="pw-tank-shine"></div>
           <div className="pw-band band-1"></div>
@@ -529,7 +539,7 @@ export function IoTTank({ pct = 0, refilling = false, warming = false }) {
           <div className="pw-band band-3"></div>
         </div>
         <div className="pw-tank-brand">
-          <Droplets size={14} color="#12b981" style={{ opacity: 0.8 }} /> ProWater
+          <Droplets size={14} color={refilling ? "#0284C7" : "#12b981"} style={{ opacity: 0.9 }} /> ProWater
         </div>
         <div className="pw-tank-base"></div>
       </div>
@@ -551,33 +561,135 @@ export function IoTTankPanel({ device, tank, refilling = false, warming = false,
       padding: "16px 20px",
       maxWidth: 620,
       width: "100%",
-      background: "radial-gradient(circle at 52% 35%, rgba(185, 233, 219, 0.27), transparent 45%), linear-gradient(rgb(255, 255, 255), rgb(248, 252, 250))"
+      background: refilling
+        ? "radial-gradient(circle at 52% 35%, rgba(186, 230, 253, 0.35), transparent 50%), linear-gradient(rgb(255, 255, 255), rgb(244, 250, 254))"
+        : "radial-gradient(circle at 52% 35%, rgba(185, 233, 219, 0.27), transparent 45%), linear-gradient(rgb(255, 255, 255), rgb(248, 252, 250))"
     }}>
-      {warming && !refilling && <span className="pw-warm-tag" style={{ top: 16, right: 18 }}>Warming</span>}
-      {refilling && <span className="pw-refill-tag" style={{ top: 16, right: 18 }}>Refilling</span>}
-      <h2 className="serif" style={{ fontSize: 18, fontWeight: 750, color: "var(--f)", lineHeight: 1.1 }}>{device.deviceId}</h2>
-      <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 2 }}>{meta} · Firmware {fw}</div>
+      {/* Header with Title and Status Badge aligned side-by-side (NO OVERLAP) */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h2 className="serif" style={{ fontSize: 18, fontWeight: 750, color: "var(--f)", lineHeight: 1.1, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {device.deviceId}
+          </h2>
+          <div style={{ color: "var(--muted)", fontSize: 11.5, marginTop: 3 }}>
+            {meta} · Firmware {fw}
+          </div>
+        </div>
 
-      <div className="pw-tank-layout" style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 140px", alignItems: "center", minHeight: 250, gap: 6, marginTop: 2 }}>
+        {/* Dynamic Status Badges */}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {refilling ? (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 11px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 800,
+              letterSpacing: ".02em",
+              color: "#0369A1",
+              background: "linear-gradient(135deg, rgba(2,132,199,0.15) 0%, rgba(56,189,248,0.2) 100%)",
+              border: "1px solid rgba(2,132,199,0.3)",
+              boxShadow: "0 2px 8px rgba(2,132,199,0.15)"
+            }}>
+              <span className="pw-refill-dot" />
+              <Droplets size={12} color="#0284C7" />
+              Refilling
+            </span>
+          ) : warming ? (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "4px 10px",
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 800,
+              color: "#D97706",
+              background: "rgba(217,119,6,0.12)",
+              border: "1px solid rgba(217,119,6,0.28)"
+            }}>
+              <span className="pw-warm-dot" />
+              Warming
+            </span>
+          ) : (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 5,
+              padding: "3px 9px",
+              borderRadius: 999,
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: "#08805A",
+              background: "rgba(8,128,90,0.08)",
+              border: "1px solid rgba(8,128,90,0.15)"
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: 999, background: "#08805A" }} />
+              Online
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="pw-tank-layout" style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 140px", alignItems: "center", minHeight: 250, gap: 6, marginTop: 4 }}>
         <IoTTank pct={pct} refilling={refilling} warming={warming} />
 
         <div style={{ alignSelf: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "var(--f)" }}>Tank Level</div>
-          <div className="serif" style={{ marginTop: 5, fontSize: 48, fontWeight: 780, letterSpacing: "-0.05em", color: "var(--f)", lineHeight: 1 }}>{pct}%</div>
-          <div style={{ color: "var(--muted)", fontSize: 12 }}>({tank.label || (pct >= 100 ? "Full" : pct >= 50 ? "Half Full" : "Low")})</div>
-          <div style={{ display: "grid", gap: 9, marginTop: 22 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)" }}>Tank Level</div>
+          <div className="serif" style={{ marginTop: 4, fontSize: 46, fontWeight: 780, letterSpacing: "-0.05em", color: refilling ? "#0369A1" : "var(--f)", lineHeight: 1 }}>
+            {pct}%
+          </div>
+          <div style={{ marginTop: 3 }}>
+            {refilling ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 750, color: "#0284C7", background: "rgba(2,132,199,0.08)", padding: "2px 8px", borderRadius: 6 }}>
+                <RotateCw size={11} className="pw-spin-slow" /> Inflow Active ({tank.label || (pct >= 100 ? "Full" : "Rising")})
+              </span>
+            ) : (
+              <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                ({tank.label || (pct >= 100 ? "Full" : pct >= 50 ? "Half Full" : "Low")})
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gap: 8, marginTop: 18 }}>
             {tank.sensors.map((s) => (
               <div key={s.tag} style={{ display: "grid", gridTemplateColumns: "9px 42px auto", gap: 8, alignItems: "center", fontSize: 12, fontWeight: 650 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 999, background: s.on ? "rgb(5, 169, 122)" : "#b9c3bf" }}></span>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: s.on ? (refilling ? "#0284C7" : "rgb(5, 169, 122)") : "#b9c3bf", boxShadow: (s.on && refilling) ? "0 0 6px rgba(2,132,199,0.6)" : "none" }}></span>
                 <span style={{ color: "var(--f)", fontWeight: 700 }}>{s.tag}</span>
-                <span style={{ color: s.on ? "rgb(0, 125, 89)" : "var(--muted)", fontWeight: 700 }}>{s.on ? "ON" : "OFF"}</span>
+                <span style={{ color: s.on ? (refilling ? "#0284C7" : "rgb(0, 125, 89)") : "var(--muted)", fontWeight: 700 }}>{s.on ? "ON" : "OFF"}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {pct <= 25 && (
+      {/* Refilling Live Status Strip */}
+      {refilling && (
+        <div style={{
+          marginTop: 10,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          padding: "8px 14px",
+          borderRadius: 12,
+          background: "linear-gradient(90deg, rgba(2,132,199,0.08) 0%, rgba(56,189,248,0.12) 100%)",
+          border: "1px solid rgba(2,132,199,0.25)",
+          color: "#0369A1"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 700 }}>
+            <RotateCw size={14} className="pw-spin-slow" color="#0284C7" />
+            <span>RO System Refilling Tank · Fresh Water Inflow Active</span>
+          </div>
+          <span style={{ fontSize: 10.5, fontWeight: 800, color: "#0284C7", background: "rgba(2,132,199,0.18)", padding: "2px 8px", borderRadius: 999, letterSpacing: ".02em", whiteSpace: "nowrap" }}>
+            LIVE REFILL
+          </span>
+        </div>
+      )}
+
+      {pct <= 25 && !refilling && (
         <div style={{ marginTop: 10, marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "8px 12px", borderRadius: 10, background: "#FBE4E4", border: "1px solid #F1B7B7", color: "#DC4141", fontWeight: 800, fontSize: 12.5 }}>
           <AlertCircle size={15} /> SWITCH ON the pump to refill.
         </div>

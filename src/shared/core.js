@@ -727,7 +727,7 @@ export const useAuth = () => useContext(Auth);
 export const SESSION_IDLE_MS = 60 * 60 * 1000;
 export const sessionDayStr = () => new Date().toDateString();
 export const clearSessionStorage = () => {
-  ["pw_user", "pw_idToken", "pw_refreshToken", "pw_tokenExpiry", "pw_last_activity", "pw_session_day", "pw_active_module", "pw_vault_unlocked"].forEach(k => sessionStorage.removeItem(k));
+  ["pw_user", "pw_idToken", "pw_refreshToken", "pw_tokenExpiry", "pw_last_activity", "pw_session_day", "pw_active_module"].forEach(k => sessionStorage.removeItem(k));
 };
 
 /* ---- Deploy-status banner (v2.29.342) — lets the live app show "Dashboard
@@ -814,9 +814,11 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.342";
-export const VERSION_DATE = "2026-09-03";
+export const APP_VERSION = "2.29.344";
+export const VERSION_DATE = "2026-09-05";
 export const VERSION_HISTORY = [
+  { v: "2.29.344", note: "Password Vault (`src/modules/Vault.jsx`, `src/shared/core.js`): removed the 4-digit PIN lock added at v2.29.329-331, per explicit user request ('can you remove the pin option while we go to the password vault section, my boss that is not needed'). The vault now opens directly once its existing three-layer access control passes (Home grid filtering, `isModuleAdmin` render gate, Firestore's own email-allowlist security rules) — no extra device PIN screen in front of it. Deleted the `VaultPinGate` component and the `unlocked`/`setUnlocked` state gating `PasswordVault`'s render, plus the now-unused `vaultPinKey`/`sha256Hex`/`vaultPinApi`/`verifyPassword` exports from `shared/core.js` and the `pw_vault_unlocked` key from `clearSessionStorage()`'s cleared-key list (nothing sets that flag anymore). The real access controls this PIN sat on top of are untouched. Verified via a clean `npm run build`." },
+  { v: "2.29.343", note: "IoT Core > Device Monitor (`src/modules/IoT.jsx`): Overhauled the Tank Refilling presentation per live user request ('if there is a refilling, i want you to show in a better way, currently it overlaps'). (1) Fixed header badge collision: replaced absolute positioning with a responsive flex container so the 'Refilling' status badge sits cleanly in the top-right header with zero overlap over the Device ID and metadata. (2) Enhanced visual refill cues: added an animated water inlet stream pouring into the tank, dynamic bubble animations, glowing tank shell shimmer, active 'Inflow Active' level readout, and a dedicated 'RO System Refilling Tank · Fresh Water Inflow Active' live strip. Verified via clean npm run build." },
   { v: "2.29.342", note: "New: a 'Dashboard upgrade in progress' banner, per explicit user request ('once the testing is done on my local dev and i push it to prod, if there is any ongoing push on the git, show a popup with live loading circling that dashboard upgrade is in progress'). `checkDeployInProgress()` in `shared/core.js` polls the PUBLIC GitHub REST API (`GET /repos/{repo}/actions/workflows/deploy.yml/runs`, unauthenticated — no token embedded, confirmed with the user this repo is public) every 3 minutes from `App.jsx`'s root component; while the latest run's status is `in_progress`/`queued`, every open tab shows a green full-width top banner with a spinning `RefreshCw` icon (reusing the existing `pw-spin` animation), regardless of login state. Deliberately non-blocking — a deploy doesn't break the page someone's already using, only future loads — so it's an FYI banner, not a modal, and there's no auto-reload. Polling interval picked specifically to respect GitHub's 60-requests/hour-per-IP unauthenticated rate limit, which is shared across everyone on the same office network with a tab open. **Real bug caught and fixed during setup**: the exact repo to poll was unverified — DOCUMENTATION.md's Deploy section said `soroai/Wisdom2.0`, which turned out to be genuinely unreachable (confirmed live: both a direct repo lookup and the workflow-runs endpoint returned 404 against it). Diagnosed by testing several candidate owner/repo combinations directly against the GitHub API from the live sandbox; `ProWater-stack/wisdom` came back 200/public and its `.github/workflows/actions/workflows` listing confirmed the real workflow file: `.github/workflows/deploy.yml` ('Deploy Wisdom2.0 to GitHub Pages'). `DEPLOY_REPO` set to the verified value, and DOCUMENTATION.md's Deploy section corrected to match (was stale, unrelated to anything shipped this session). Verified via a clean `npm run build`, confirmed the real API endpoint resolves correctly (returned real recent completed deploy runs), and — since no real deploy was in progress to observe naturally — verified the actual conditional-render path by temporarily patching `window.fetch` to return a synthetic `in_progress` response (with the poll interval briefly shortened for the test, then reverted to the real 3-minute value before shipping): the banner appeared correctly with the right text/spinner, then correctly disappeared once the real API was polled again.", },
   { v: "2.29.341", note: "Two separate fixes/changes. (1) Employee > Users: removed 'DevOps' from the selectable access levels (`ACCESS_LEVELS` in `shared/core.js`), per explicit user request ('remove devops, as it will be only admin who will have control to it') — every module row now offers only None/View/Supervisor/Admin. Deliberately scoped narrow: every existing 'admin OR devops' check elsewhere in the app (`isModuleAdmin` and the ~30 places mirroring it, plus Customer's field-level `roles` gates) was left untouched, so devops can never be newly assigned from here on, but any real account already set to it keeps working exactly as before rather than being silently locked out — offered as an explicit choice against a full codebase purge, and this narrower option was picked. (2) App-wide: the sidebar user-card's displayed name (`pw-name`, both the Home and Shell instances in `App.jsx`) now title-cases the logged-in user's name ('devops' → 'Devops', 'anis' → 'Anis') instead of showing it raw — per explicit user request ('Everywhere you show the username... 1st letter should be capital'), caught live via a screenshot after an earlier fix had only covered Password Vault's Created By/Updated By columns, not this far more prominent sidebar element. Extracted a shared `titleCaseName()` helper to `shared/core.js` (title-cases each word, e.g. 'arjun marri' → 'Arjun Marri') and reused it to replace Analytics.jsx's own pre-existing inline copy of this exact logic (its Overview greeting), rather than leaving two separate implementations of the same transform. Verified via a clean `npm run build` and a live check: a synthetic user named 'devops' correctly showed 'Devops' in the sidebar, and the Employee > Users access grid correctly offered only None/View/Supervisor/Admin with no DevOps button anywhere." },
   { v: "2.29.340", note: "Password Vault (`src/modules/Vault.jsx`): three changes. (1) Replaced the generic category list ('DevOps & Cloud', 'Payment & Billing', 'Internal Tools', 'Email & Comm', 'Vendors & Social', 'General') with the actual services this team's credentials cover, per explicit user request (exact list given): Google Cloud, SMS, AWS, Zoho, Internal, Firebase, Google Analytics, GoDaddy, Sonarqube, Github, FlutterFlow, Google Admin, BigQuery — one distinct color per category in `CATEGORY_COLORS`. Default category for a new entry changed from 'General' to 'Internal' (closest catch-all equivalent); every `|| \"General\"` fallback in the file (category badge color lookup, filter matching, form defaults) updated to `|| \"Internal\"` to match, so a pre-existing entry still tagged 'General' from before this change renders with a safe fallback color instead of crashing. (2) Timestamps changed from `fmtTime`'s 'DD Mon, hh:mm:ss am/pm' to an exact 'DD-MM-YYYY HH:mm:ss' 24-hour format per explicit user request ('Timestamp should be show as 03-09-2026 15:31:45 like this') — a new local `fmtVaultTimestamp()` helper, browser-local time (no IST-forcing). (3) Created By/Updated By now title-case the stored username ('anis' → 'Anis') via a new `capName()` helper, per explicit user request — scoped to just these two columns since the credential's OWN Username/Email field (e.g. an email address) should never be capitalized. Verified via a clean `npm run build` and a live pass: category pills showed the new list with correct colors, a pre-existing 'General'-tagged entry still rendered its badge without crashing, a fresh timestamp showed as '03-09-2026 14:06:50', and Created By/Updated By showed 'Admin' instead of 'admin'." },
@@ -2102,47 +2104,6 @@ let _vaultCache = LS.get(VAULT_LS_KEY, []) || [];
 const _vaultEncode = (s) => { try { return btoa(unescape(encodeURIComponent(String(s || "")))); } catch { return String(s || ""); } };
 const _vaultDecode = (s) => { try { return decodeURIComponent(escape(atob(String(s || "")))); } catch { return String(s || ""); } };
 
-/* ---- Vault PIN lock (v2.29.329) — a per-device "privacy screen" on top of
-   the real access controls above (Firebase Auth + Firestore email allowlist +
-   Employee-module admin gate), NOT a replacement for them: a 4-digit PIN is
-   only 10,000 combinations, so it stops a coworker glancing at an unlocked
-   laptop, not a determined attacker. Stored hashed (SHA-256, salted with the
-   username so it isn't a bare lookup) in localStorage, namespaced per
-   username so more than one admin sharing the same browser/device each get
-   their own PIN. The "unlocked" flag lives in sessionStorage (cleared by
-   clearSessionStorage() on logout) so a fresh login always re-locks it —
-   matches the "once per session" choice explicitly made for this feature. ---- */
-export const vaultPinKey = (username) => `pw_vault_pin_${username}`;
-export async function sha256Hex(str) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-export const vaultPinApi = {
-  hasPin: (username) => !!localStorage.getItem(vaultPinKey(username)),
-  isUnlocked: () => sessionStorage.getItem("pw_vault_unlocked") === "1",
-  unlock: () => sessionStorage.setItem("pw_vault_unlocked", "1"),
-  setPin: async (username, pin) => localStorage.setItem(vaultPinKey(username), await sha256Hex(`${username}:${pin}`)),
-  clearPin: (username) => localStorage.removeItem(vaultPinKey(username)),
-  checkPin: async (username, pin) => (await sha256Hex(`${username}:${pin}`)) === localStorage.getItem(vaultPinKey(username)),
-};
-// Re-verifies the CURRENT user's real account password against Firebase —
-// used only to authorize a forgotten-PIN reset, reusing the exact same
-// email-resolution rule as api.login() below so "however you normally log
-// in" also works here. Deliberately does NOT touch the real session
-// (pw_idToken/pw_user/etc) — this is a side-channel identity check only.
-export async function verifyPassword(username, password) {
-  const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
-  const email = username.includes("@") ? username : `${username}@prowater.in`;
-  try {
-    const res = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,
-      { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, returnSecureToken: true }) }
-    );
-    const j = await res.json();
-    return j.error ? { ok: false, message: "Incorrect password." } : { ok: true };
-  } catch { return { ok: false, message: "Network error. Check your connection." }; }
-}
 export function mapVaultDoc(doc) {
   const f = doc.fields || {};
   return {
