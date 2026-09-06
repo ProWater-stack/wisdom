@@ -361,6 +361,11 @@ export const planMigrate = (t) => ({
   status: t.status === "Scoping" ? "New" : (t.status || "New"),
   priority: planPrio(t.priority),
   sprint: t.sprint || "",
+  // Backfill for tasks saved before completedAt/completedBy existed: a task
+  // already sitting in "Live" was completed at some point, we just don't know
+  // exactly when/by whom — best available signal is its own updatedAt.
+  completedAt: t.completedAt || (t.status === "Live" ? (t.updatedAt || t.createdAt || "") : ""),
+  completedBy: t.completedBy || (t.status === "Live" ? (t.updatedBy || t.createdBy || "") : ""),
 });
 export const planMakeTask = (s) => {
   const now = new Date().toISOString();
@@ -568,7 +573,16 @@ export function TaskPlanner({ initialView = "board" }) {
     // Auto-stamp dates on the transition: start when Picked Up, end when Live.
     if (next.status === "Picked Up" && (!prev || prev.status !== "Picked Up") && !next.startDate) next.startDate = today;
     if (next.status === "Live" && (!prev || prev.status !== "Live") && !next.endDate) next.endDate = today;
-    const stamped = { ...next, updatedAt: new Date().toISOString() };
+    // Completed = entering the "Live" column. Stamp who/when on the way in,
+    // clear it on the way back out (a task moved off Live isn't completed anymore).
+    if (next.status === "Live" && (!prev || prev.status !== "Live")) {
+      next.completedAt = new Date().toISOString();
+      next.completedBy = user.name;
+    } else if (next.status !== "Live" && prev && prev.status === "Live") {
+      next.completedAt = "";
+      next.completedBy = "";
+    }
+    const stamped = { ...next, updatedAt: new Date().toISOString(), updatedBy: user.name };
     if (prev && prev.status !== next.status) pushNotif(prev, next.status);
     persist(prev ? tasks.map(x => x.id === t.id ? stamped : x) : [stamped, ...tasks]);
   };
@@ -582,7 +596,9 @@ export function TaskPlanner({ initialView = "board" }) {
   const blank = (status) => ({
     id: crypto.randomUUID(), title: "", status: status || "New", assignees: [], category: "General", sprint: "",
     email: "", priority: "P2", startDate: "", endDate: "", notes: "", attachments: [],
-    createdBy: user.name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), _new: true,
+    createdBy: user.name, createdAt: new Date().toISOString(),
+    updatedBy: user.name, updatedAt: new Date().toISOString(),
+    completedBy: "", completedAt: "", _new: true,
   });
 
   // "The Group" tasks count as belonging to each of the five group members.
@@ -899,6 +915,25 @@ export function TaskCard({ t, overdue, onOpen, onDragStart, onDragEnd, dragging 
         {t.attachments?.length > 0 && <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11.5, color: "#08805A" }}><Paperclip size={12} />{t.attachments.length}</span>}
         <span style={{ marginLeft: "auto" }}><AssigneeStack names={t.assignees} size={24} /></span>
       </div>
+      {(t.createdAt || t.updatedAt || t.completedAt) && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 9, paddingTop: 9, borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+          {t.createdAt && (
+            <div title={`Created ${fmtTime(t.createdAt)}${t.createdBy ? ` by ${t.createdBy}` : ""}`} style={{ fontSize: 10.5, color: "#86868B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Created {fmtTime(t.createdAt)}{t.createdBy ? ` · ${t.createdBy}` : ""}
+            </div>
+          )}
+          {t.updatedAt && (
+            <div title={`Updated ${fmtTime(t.updatedAt)}${t.updatedBy ? ` by ${t.updatedBy}` : ""}`} style={{ fontSize: 10.5, color: "#86868B", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Updated {fmtTime(t.updatedAt)}{t.updatedBy ? ` · ${t.updatedBy}` : ""}
+            </div>
+          )}
+          {t.completedAt && (
+            <div title={`Completed ${fmtTime(t.completedAt)}${t.completedBy ? ` by ${t.completedBy}` : ""}`} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 600, color: "#08805A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <CheckCircle2 size={11} style={{ flexShrink: 0 }} /> Completed {fmtTime(t.completedAt)}{t.completedBy ? ` · ${t.completedBy}` : ""}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1040,10 +1075,11 @@ export function TaskEditor({ task, onClose, onSave, onDelete, onWarn }) {
           )}
         </div>
 
-        {!isNew && (t.updatedAt || t.createdAt) && (
+        {!isNew && (t.updatedAt || t.createdAt || t.completedAt) && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "2px 14px", fontSize: 11.5, color: "var(--muted)", marginBottom: 14 }}>
             {t.createdAt && <span>Created {fmtTime(t.createdAt)}{t.createdBy ? ` · ${t.createdBy}` : ""}</span>}
-            {t.updatedAt && <span>Last edited {fmtTime(t.updatedAt)}</span>}
+            {t.updatedAt && <span>Last edited {fmtTime(t.updatedAt)}{t.updatedBy ? ` · ${t.updatedBy}` : ""}</span>}
+            {t.completedAt && <span style={{ color: "#08805A", fontWeight: 600 }}>Completed {fmtTime(t.completedAt)}{t.completedBy ? ` · ${t.completedBy}` : ""}</span>}
           </div>
         )}
 

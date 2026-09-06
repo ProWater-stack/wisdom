@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.343**.
+> **Reflects:** `APP_VERSION` **2.29.346**.
 
 ---
 
@@ -1226,6 +1226,14 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   **IndexedDB** (LOCAL badge). The email comes from `sessionStorage.pw_user.email`. **Do not set
   `Content-Type`** on that upload — the browser adds the multipart boundary.
 - **Storage:** `pw_tasks` (metadata) + IndexedDB (`pw_planner`) for local bytes.
+- **Audit stamps** (v2.29.345): every task carries `createdBy`/`createdAt` (set once), `updatedBy`/
+  `updatedAt` (re-stamped on every save — field edits, drag-and-drop moves, and Status-dropdown
+  changes all funnel through the one `upsert()` function), and `completedBy`/`completedAt`, stamped
+  the moment a task's status enters the **Live** column (the board's de-facto "done" state) and
+  cleared if it's later moved back out. Shown on every `TaskCard` (Created/Updated always; a green
+  "✓ Completed" line once applicable) and in the `TaskEditor` footer. `planMigrate()` backfills
+  `completedAt`/`completedBy` for tasks already in Live before this change, using their existing
+  `updatedAt`/`updatedBy` (or `createdAt`/`createdBy`) as the best available signal.
 
 ### Employee (`employee`)
 - Create/disable dashboard users; set role + per-module access **and per-section overrides** (the
@@ -1258,15 +1266,12 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
     - **Service Avatars:** Deterministic gradient initials avatar for each service.
     - **In-App Delete Modal:** Sleek confirmation modal replacing native browser alerts.
     - **Autofill Traps & Isolation (v2.29.338):** Search input scoped with `type="search"`, `data-form-type="other"`, and modal decoy traps with `autoComplete="new-password"` to prevent Chrome/Safari from auto-injecting dashboard credentials.
-- **PIN lock** (v2.29.329/v2.29.331) — a per-device "privacy screen" layered on top of the real access
-  controls above, not a replacement for them (a 4-digit PIN is only 10,000 combinations). First
-  visit on a device prompts "Create Vault PIN" with 4-box visual digit indicators; later visits require it, once per login session
-  (a `pw_vault_unlocked` sessionStorage flag, cleared on logout so a fresh login always re-locks).
-  Stored hashed (SHA-256, salted with the username) in `localStorage`, namespaced per username so
-  more than one admin sharing a device each get their own PIN — see `vaultPinApi`/`sha256Hex` in
-  `shared/core.js`. A 15-second client-side throttle follows 5 wrong attempts. "Forgot PIN?" resets it by re-verifying the real account password via
-  the same Firebase `signInWithPassword` call `api.login()` uses (`verifyPassword()`), without
-  touching the actual session.
+- **PIN lock — removed (v2.29.344).** A 4-digit device PIN was added in front of this section at
+  v2.29.329/331, then removed at v2.29.344 per explicit user request ('can you remove the pin
+  option while we go to the password vault section, my boss that is not needed'). The section now
+  opens directly once the three real access controls above pass — no extra device screen.
+  `VaultPinGate` and the `vaultPinKey`/`sha256Hex`/`vaultPinApi`/`verifyPassword` helpers it used
+  were deleted from `shared/core.js`; nothing sets `pw_vault_unlocked` anymore.
 - **Categories** (v2.29.331, replaced v2.29.340): Google Cloud, SMS, AWS, Zoho, Internal, Firebase,
   Google Analytics, GoDaddy, Sonarqube, Github, FlutterFlow, Google Admin, BigQuery — one color per
   category (`CATEGORY_COLORS`), default for a new entry is Internal. A pre-existing entry still

@@ -15,7 +15,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   AlertCircle, AlertTriangle, Check, CheckCircle2, Copy, ExternalLink, Eye, EyeOff,
   Folder, Globe, KeyRound, Lock, PencilLine, Plus, RefreshCw, Search, Shield,
-  ShieldCheck, Sparkles, Tag, Trash2, User, X,
+  Sparkles, Tag, Trash2, User, X,
 } from "lucide-react";
 import { useAuth, api, pushLog, vaultApi } from "../shared/core";
 import {
@@ -279,14 +279,9 @@ export function PasswordVault() {
       <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
 
       {/* Security notice */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 13, color: "#986315", background: "rgba(152,99,21,0.08)", border: "1px solid rgba(152,99,21,0.18)", padding: "12px 18px", borderRadius: 16, marginBottom: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <Shield size={16} color="#986315" />
-          <span><strong>Admin/DevOps Only</strong> — Shared credentials are masked in this view. Keep this section confidential and never share raw screenshots.</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "#08805A", background: "rgba(8,128,90,0.1)", padding: "3px 10px", borderRadius: 999 }}>
-          <ShieldCheck size={14} color="#08805A" /> Device PIN Active
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#986315", background: "rgba(152,99,21,0.08)", border: "1px solid rgba(152,99,21,0.18)", padding: "12px 18px", borderRadius: 16, marginBottom: 16, flexWrap: "wrap" }}>
+        <Shield size={16} color="#986315" />
+        <span><strong>Admin/DevOps Only</strong> — Shared credentials are masked in this view. Keep this section confidential and never share raw screenshots.</span>
       </div>
 
       <div style={{ background: "rgba(255,255,255,0.88)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 24, boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>

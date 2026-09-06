@@ -893,7 +893,9 @@ function Home({ onPick }) {
   };
 
   const filtered = visible.filter(m => `${m.label} ${m.desc}`.toLowerCase().includes(query.trim().toLowerCase()));
-  const firstNameRaw = String(user.name || user.username || "there").split(" ")[0];
+  // Split on space AND dot so "Arjun.Marri"-style stored names (no space)
+  // still greet with just the first name, not the whole dotted string.
+  const firstNameRaw = String(user.name || user.username || "there").split(/[\s.]+/)[0];
   const firstName = firstNameRaw.charAt(0).toUpperCase() + firstNameRaw.slice(1);
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
