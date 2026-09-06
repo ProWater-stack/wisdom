@@ -43,7 +43,7 @@ import {
   toCredits, toReferees, toReferrers, toTrend, useAuth, useDateRange,
   useFailures, useSampleData, wait, yoyRange,
   billingApi, creditNoteApi, depositForCustomer, termMonths, monthlyOf,
-  CHART_PALETTE, tkPriority, titleCaseName, checkDeployInProgress,
+  CHART_PALETTE, tkPriority, titleCaseName, firstNameOf, checkDeployInProgress,
 } from "./shared/core";
 import {
   ApiError, Card, Chip, DateRangeFilter, DateRangePicker,
@@ -893,10 +893,7 @@ function Home({ onPick }) {
   };
 
   const filtered = visible.filter(m => `${m.label} ${m.desc}`.toLowerCase().includes(query.trim().toLowerCase()));
-  // Split on space AND dot so "Arjun.Marri"-style stored names (no space)
-  // still greet with just the first name, not the whole dotted string.
-  const firstNameRaw = String(user.name || user.username || "there").split(/[\s.]+/)[0];
-  const firstName = firstNameRaw.charAt(0).toUpperCase() + firstNameRaw.slice(1);
+  const firstName = firstNameOf(user.name || user.username) || "there";
   const hour = now.getHours();
   const greeting = hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
   const initials = String(user.name || user.username || "P").trim().charAt(0).toUpperCase();
@@ -1012,7 +1009,7 @@ function Home({ onPick }) {
             <span className="pw-version-pill">v{APP_VERSION}</span>
           </div>
         )}
-        <div className="pw-user-card" title={sidebarCollapsed ? `${titleCaseName(user.name)} (${user.role})` : undefined}>
+        <div className="pw-user-card" title={`${titleCaseName(user.name)} (${user.role})`}>
           <div className="pw-avatar-wrap">
             <button className="pw-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo">
               {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : initials}
@@ -1022,7 +1019,7 @@ function Home({ onPick }) {
           {!sidebarCollapsed && (
             <div className="pw-user-info">
               <div className="pw-name-badge">
-                <span className="pw-name">{titleCaseName(user.name)}</span>
+                <span className="pw-name">{firstNameOf(user.name)}</span>
                 <span className="pw-tag">
                   {user.role === "admin" ? <ShieldCheck size={10} /> : <Eye size={10} />}
                   {String(user.role || "").toUpperCase()}
@@ -1401,7 +1398,7 @@ const doRefresh = async () => {
             <span className="pw-version-pill">v{APP_VERSION}</span>
           </div>
         )}
-        <div className="pw-user-card" title={sidebarCollapsed ? `${titleCaseName(user.name)} (${user.role})` : undefined}>
+        <div className="pw-user-card" title={`${titleCaseName(user.name)} (${user.role})`}>
           <div className="pw-avatar-wrap">
             <button className="pw-avatar" onClick={() => setPhotoOpen(true)} title="Update profile photo">
               {photo ? <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : String(user.name || "P").trim().charAt(0).toUpperCase()}
@@ -1411,7 +1408,7 @@ const doRefresh = async () => {
           {!sidebarCollapsed && (
             <div className="pw-user-info">
               <div className="pw-name-badge">
-                <span className="pw-name">{titleCaseName(user.name)}</span>
+                <span className="pw-name">{firstNameOf(user.name)}</span>
                 <span className="pw-tag">
                   {user.role === "admin" ? <ShieldCheck size={10} /> : <Eye size={10} />}
                   {String(user.role || "").toUpperCase()}

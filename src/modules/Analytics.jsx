@@ -1675,34 +1675,48 @@ export function CreditsAnalytics() {
     return true;
   });
 
-  // Per-customer aggregation (discount given, remaining balance, latest date given).
-  const cnRows = Object.values(filteredNotes.reduce((acc, cn) => {
-    const c = noteCust(cn);
-    const key = cn.zohoCustomerId || cn.id;
-    acc[key] = acc[key] || { name: c?.name || cn.customerName || cn.zohoCustomerId || "—", email: c?.email, society: c?.society || "Unknown", count: 0, amount: 0, balance: 0, lastGiven: null };
-    acc[key].count += 1; acc[key].amount += cn.amount || 0; acc[key].balance += cn.balance || 0;
-    const t = new Date(cn.date).getTime();
-    if (!isNaN(t) && (acc[key].lastGiven == null || t > acc[key].lastGiven)) acc[key].lastGiven = t;
-    return acc;
-  }, {})).sort((a, b) => b.amount - a.amount);
-
   const totalDiscount = filteredNotes.reduce((s, cn) => s + (cn.amount || 0), 0);
   const totalBalance = filteredNotes.reduce((s, cn) => s + (cn.balance || 0), 0);
   const noteCount = filteredNotes.length;
-  const custCount = cnRows.length;
+  const custCount = new Set(filteredNotes.map(cn => cn.zohoCustomerId || cn.id)).size;
+
+  // One row per credit note (v2.29.348) — was previously aggregated per
+  // customer (summing all of a customer's notes into one row), which had no
+  // room for each note's OWN Credit Note # / Invoice #. Per explicit user
+  // request (with a Zoho-style reference screenshot), switched to a flat
+  // per-note listing so both fields — already parsed by mapCreditNote() as
+  // `.number` (creditnote_number) and `.invoicesApplied`/`.invoiceNumber`
+  // (invoice_number) — can be shown as their own columns; the same customer
+  // can now correctly appear on more than one row, one per note.
+  const noteRows = filteredNotes
+    .map(cn => {
+      const c = noteCust(cn);
+      return {
+        ...cn,
+        custName: c?.name || cn.customerName || cn.zohoCustomerId || "—",
+        custEmail: c?.email,
+        society: c?.society || "Unknown",
+        invoiceDisplay: (cn.invoicesApplied && cn.invoicesApplied.length) ? cn.invoicesApplied.join(",") : (cn.invoiceNumber || ""),
+      };
+    })
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const ql = q.trim().toLowerCase();
-  const shownRows = ql ? cnRows.filter(r => `${r.name} ${r.email} ${r.society}`.toLowerCase().includes(ql)) : cnRows;
+  const shownRows = ql
+    ? noteRows.filter(r => `${r.custName} ${r.custEmail} ${r.society} ${r.number} ${r.invoiceDisplay} ${r.status}`.toLowerCase().includes(ql))
+    : noteRows;
 
   const exportCsv = () => exportToCsv("prowater-credit-notes.csv", [
-    { label: "Customer", get: r => r.name },
-    { label: "Email", get: r => r.email },
+    { label: "Customer", get: r => r.custName },
+    { label: "Email", get: r => r.custEmail },
     { label: "Society", get: r => r.society },
-    { label: "Credit notes", get: r => r.count },
-    { label: "Discount total", get: r => r.amount },
+    { label: "Credit Note #", get: r => r.number },
+    { label: "Invoice #", get: r => r.invoiceDisplay },
+    { label: "Status", get: r => r.status },
+    { label: "Amount", get: r => r.amount },
     { label: "Balance", get: r => r.balance },
-    { label: "Last given", get: r => r.lastGiven ? fmtDate(r.lastGiven) : "" },
-  ], cnRows);
+    { label: "Date", get: r => r.date ? fmtDate(r.date) : "" },
+  ], noteRows);
 
 
   return (
@@ -1732,34 +1746,42 @@ export function CreditsAnalytics() {
         <Toolbar q={q} setQ={setQ} placeholder="Search customer or society…" count={shownRows.length} />
         <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", overflow: "hidden" }}>
           <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
-            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Discounts by Customer</div>
-            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{custCount} customers · {inr(totalDiscount)} given · {inr(totalBalance)} balance · {noteCount} credit notes</div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Credit Notes</div>
+            <div style={{ fontSize: 12.5, color: "#86868b", marginTop: 2 }}>{noteCount} credit notes · {custCount} customers · {inr(totalDiscount)} given · {inr(totalBalance)} balance</div>
           </div>
           <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 380px)" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 700 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5, minWidth: 960 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                  {["Customer", "Society", "Notes", "Discount Given", "Status / Balance", "Last Given"].map(h => (
+                  {["Customer", "Society", "Credit Note #", "Invoice #", "Status", "Amount", "Balance", "Date"].map(h => (
                     <th key={h} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {shownRows.map((r, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)" }}>
-                    <td style={{ padding: "14px 18px" }}><Person name={r.name || "—"} email={r.email} /></td>
+                {shownRows.map((r, i) => {
+                  // "open" gets its own amber treatment (not the shared green/yellow
+                  // status-badge palette, per explicit user feedback that its default
+                  // yellow-green read poorly) — the whole row is tinted amber, not just
+                  // the status cell, so an open note is easy to spot scanning the table.
+                  const isOpen = String(r.status || "").toLowerCase() === "open";
+                  const isClosed = String(r.status || "").toLowerCase() === "closed";
+                  return (
+                  <tr key={r.id || i} style={{ borderBottom: "1px solid rgba(0,0,0,.04)", background: isOpen ? "rgba(152,99,21,0.07)" : undefined }}>
+                    <td style={{ padding: "14px 18px" }}><Person name={r.custName || "—"} email={r.custEmail} /></td>
                     <td style={{ padding: "14px 18px", color: "#475569" }}>{r.society}</td>
-                    <td style={{ padding: "14px 18px", fontVariantNumeric: "tabular-nums", color: "#475569" }}>{r.count}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: "#0d2119", whiteSpace: "nowrap" }}>{r.number || "—"}</td>
+                    <td style={{ padding: "14px 18px", color: "#475569", whiteSpace: "nowrap" }}>{r.invoiceDisplay || "—"}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, textTransform: "uppercase", fontSize: 11.5, color: isOpen ? "#986315" : isClosed ? "#08805A" : "#475569" }}>{r.status || "—"}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#986315" }}>{inr(r.amount)}</td>
-                    <td style={{ padding: "14px 18px", fontWeight: 700 }}>
-                      {renderHigStatusBadge(r.balance > 0 ? `Available (${inr(r.balance)})` : "Applied")}
-                    </td>
-                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap", color: "#86868b", fontSize: 12 }}>{r.lastGiven ? fmtDate(r.lastGiven) : "—"}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 700, color: r.balance > 0 ? "#986315" : "#08805a" }}>{inr(r.balance)}</td>
+                    <td style={{ padding: "14px 18px", whiteSpace: "nowrap", color: "#86868b", fontSize: 12 }}>{r.date ? fmtDate(r.date) : "—"}</td>
                   </tr>
-                ))}
+                  );
+                })}
                 {shownRows.length > 0 && (
                   <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={3}>Total ({noteCount} notes)</td>
+                    <td style={{ padding: "14px 18px", textAlign: "center", fontWeight: 700, color: "#0d2119" }} colSpan={5}>Total ({noteCount} notes)</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#986315" }}>{inr(totalDiscount)}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 700, color: "#08805a" }}>{inr(totalBalance)}</td>
                     <td style={{ padding: "14px 18px" }}></td>

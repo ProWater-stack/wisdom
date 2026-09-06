@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.346**.
+> **Reflects:** `APP_VERSION` **2.29.348**.
 
 ---
 
@@ -852,12 +852,17 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   (including the Overview's embedded, read-only copy). CSV export.
 - **Apartment Performance / Earned Revenue / Net Revenue / Billing Analytics / AOP / Credits / App Logs**
   — billing-derived analytics (recharge reconciliation, day-weighted earned-revenue recognition, AOP
-  targets vs recharge cash). **Credits** (rebuilt v2.29.6) shows **only** the live credit notes /
-  discounts from `GET /admin/get-all-creditnotes` — total discount given, note count, customers
-  discounted and avg/note, plus a per-customer table joined by Zoho customer id — with a Period
-  (date-range) filter and a Society filter, search and CSV export (the old unused-credit KPIs / by-society
-  and by-plan charts / holders table were removed). **App Logs** reads the Firestore `logs` collection
-  (with a `GET /admin/get-app-logs` preference).
+  targets vs recharge cash). **Credits** shows the live credit notes / discounts from
+  `GET /admin/get-all-creditnotes` — KPI cards for total discount given, credit balance available, note
+  count, and customers discounted, with a Period (date-range) filter, a Society filter, search and CSV
+  export. **Rebuilt v2.29.348 to a per-credit-note table** (one row per note — the same customer can
+  appear on more than one row), replacing the earlier per-customer summary (v2.29.6): **Customer, Society,
+  Credit Note # (`mapCreditNote().number`, from Zoho's `creditnote_number`), Invoice # (from
+  `invoice_number`, comma-joined when a note settled multiple invoices), Status, Amount, Balance, Date**.
+  An "open" row is tinted amber (background + status text, `#986315`) and a "closed" row's status reads
+  green — a dedicated color choice for this table, not the shared `renderHigStatusBadge()` palette, per
+  explicit user feedback that its default yellow-green read poorly for "open". **App Logs** reads the
+  Firestore `logs` collection (with a `GET /admin/get-app-logs` preference).
   - **Real `paid_date` (v2.29.48):** `GET /admin/get-all-invoices` started returning a genuine `paid_date` field on each invoice (confirmed live, e.g. `INV-000666`). `mapInvoice()` now maps it to `paidDate`; **Earned Revenue's Per-invoice recognition table** uses `paidDate || date` as the invoice's paid date (was: invoice/created date only, used as a proxy). Same day-based proration math, just a more accurate input date; falls back gracefully for older invoices that predate the field. Other "paid date" proxies elsewhere in the file (Net Revenue's `lastModified || date`, a few `status==="paid"` period-bucketing spots) haven't been switched over yet — tracked separately.
   - **Due Date column (v2.29.49):** Per-invoice recognition table + CSV export gained a **Due Date** column (from `invoice.dueDate` / `due_date`), placed between Plan and Paid on. The existing Paid on column was re-checked, not changed — it already reads the real `paidDate` from the API (v2.29.48 above).
   - **Earned/day removed (v2.29.50):** dropped the Earned/day column from the table and CSV (Earned/month, Month End Date, Days remaining, Earned revenue stay). The now-unused `earnedPerDay` field and the `inr2` currency-with-decimals helper (which only existed to format it) were removed too.
