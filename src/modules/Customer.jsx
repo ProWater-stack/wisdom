@@ -16,7 +16,7 @@ import {
   useAuth, api, customerApi, billingApi, creditNoteApi, ticketApi,
   depositForCustomer, CUSTOMER_FIELDS,
   API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate,
-  exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety,
+  exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety, canonicalStatus,
   parsePartsUsed, jobDurationMin, zdIsClosed, gstBreakup,
 } from "../shared/core";
 import {
@@ -104,9 +104,9 @@ export function CustomerSocieties() {
   const withPur = rows.filter(c => c.purifier_id);
 
   // Status & Device Type filters narrow the population BEFORE grouping into societies
-  const statusOptions = Array.from(new Set(withPur.map(c => c.status).filter(Boolean))).sort();
+  const statusOptions = Array.from(new Set(withPur.map(c => canonicalStatus(c.status)).filter(Boolean))).sort();
   const scopedRows = withPur.filter(c =>
-    (statusFilter === null || statusFilter.includes(c.status)) &&
+    (statusFilter === null || statusFilter.includes(canonicalStatus(c.status))) &&
     (deviceTypeFilter === null || deviceTypeFilter.includes(deviceType(c.purifier_id)))
   );
 
@@ -1026,21 +1026,39 @@ export function AllCustomers() {
   // dunning"); was previously a separate yellow. Inactive (either stack's own
   // "inactive" status) stays its own orange.
   const normSt = (s) => String(s || "").toLowerCase().replace(/[\s_-]+/g, "");
+  // Exact (non-hyphen-stripped) "inactive" match (v2.29.374) — deliberately
+  // NOT run through `normSt`, which strips hyphens and would otherwise
+  // wrongly collapse "Inactive" and "In-Active" into the same string. These
+  // are two REAL, DISTINCT status/device_status values in the live API
+  // (confirmed live: a customer with device_status "In-Active" was still
+  // showing up in the "Inactive customers" isolate-toggle table view) — only
+  // "Inactive" (no hyphen) should count; "In-Active" (hyphenated) must not,
+  // per explicit user request. Used everywhere "inactive" is checked below,
+  // instead of the hyphen-stripped `normSt(...) === "inactive"` pattern.
+  const isExactlyInactive = (v) => String(v || "").trim().toLowerCase() === "inactive";
   const rowTint = (c) => {
     const dev = normSt(c.deviceStatus);
     const st = normSt(c.status);
     if (dev.includes("uninstall") || st === "dunning") return { background: "var(--danger-t)" };
-    if (st === "inactive" || dev === "inactive") return { background: "#FFF1E0" };
+    if (isExactlyInactive(c.status) || isExactlyInactive(c.deviceStatus)) return { background: "#FFF1E0" };
     return {};
   };
+  // device_status-only check: Un-Installed, Uninstalled (normSt-unified —
+  // these ARE meant to be the same concept regardless of the hyphen), or
+  // exactly "Inactive" (v2.29.373/374) — deliberately excludes "In-Active"
+  // (hyphenated), a separate real device_status value, per explicit user
+  // request ("it should take only Un-Installed and inactive and not
+  // In-Active — this should not be taken"). Originally scoped only to the
+  // Active Customers KPI card, but a live report ("see this, it is not
+  // excluded" — a device_status="In-Active" row still showing in the
+  // "Inactive customers" isolate-toggle table) showed `isHiddenByDefault`
+  // below needed the identical fix, since it drives that same toggle
+  // (folded into the same v2.29.374).
+  const isDeviceUninstalled = (c) => normSt(c.deviceStatus).includes("uninstall") || isExactlyInactive(c.deviceStatus);
   // Same Uninstalled/Inactive signal rowTint above already highlights — used
   // here to actually gate table visibility (v2.29.331) rather than just
   // color, unless the user has clicked to reveal them (showInactive).
-  const isHiddenByDefault = (c) => {
-    const dev = normSt(c.deviceStatus);
-    const st = normSt(c.status);
-    return dev.includes("uninstall") || st === "inactive" || dev === "inactive";
-  };
+  const isHiddenByDefault = (c) => isDeviceUninstalled(c) || isExactlyInactive(c.status);
 
   // Faceted filter options: options list is computed dynamically per filter.
   // Society clause restored to the CRM-wide default-exclusion convention
@@ -1050,7 +1068,7 @@ export function AllCustomers() {
   // of this screen had silently dropped it (found + restored v2.29.158).
   const facetPop = (exclude) => withPur.filter(c =>
     (exclude === "society" || (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society))) &&
-    (exclude === "status" || (statusFilter === null || statusFilter.includes(c.status))) &&
+    (exclude === "status" || (statusFilter === null || statusFilter.includes(canonicalStatus(c.status)))) &&
     (exclude === "stack" || (stackFilter === null || stackFilter.includes(stackOf(c)))) &&
     (exclude === "deviceType" || (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c)))) &&
     (exclude === "filterType" || (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c)))) &&
@@ -1058,14 +1076,14 @@ export function AllCustomers() {
     (showInactive ? isHiddenByDefault(c) : !isHiddenByDefault(c)) &&
     (!ql || matchesQ(c)));
   const societyOptions = Array.from(new Set(facetPop("society").map(c => c.society).filter(Boolean))).sort();
-  const statusOptions = Array.from(new Set(facetPop("status").map(c => c.status).filter(Boolean))).sort();
+  const statusOptions = Array.from(new Set(facetPop("status").map(c => canonicalStatus(c.status)).filter(Boolean))).sort();
   const stackOptions = Array.from(new Set(facetPop("stack").map(stackOf).filter(Boolean))).sort();
   const deviceTypeOptions = Array.from(new Set(facetPop("deviceType").map(deviceTypeOf).filter(Boolean))).sort();
   const filterTypeOptions = Array.from(new Set(facetPop("filterType").map(filterTypeOf).filter(Boolean))).sort();
 
   const filtered = withPur.filter(c =>
     (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
-    (statusFilter === null || statusFilter.includes(c.status)) &&
+    (statusFilter === null || statusFilter.includes(canonicalStatus(c.status))) &&
     (stackFilter === null || stackFilter.includes(stackOf(c))) &&
     (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
     (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
@@ -1104,27 +1122,35 @@ export function AllCustomers() {
   ], results);
 
   // ── Dynamic KPI Card metrics computed off the active `results` population ──
-  // Status logic for Active Customers: "Active", "In-active", "active", "dunning"
-  const activeStatuses = ["active", "in-active", "dunning"];
 
   // ── Unique-customer identity (v2.29.257, keyed off the API's own ID as of
-  // v2.29.262) ────────────────────────────────────────────────────────────
+  // v2.29.262; DP-stack phone fallback added v2.29.372) ──────────────────
   // `results` is one row per purifier/device profile, not one row per
   // person — a real customer with 2 purifiers gets 2 rows. Roll those up to
   // a real per-customer count for the KPI card, per explicit user request
   // ("pull the records what i have in the get-all-customers API... that
   // also has an identifier in the API"). Key on `c.id` — which the mapper in
-  // customerApi.getCustomers already resolves to `customer_number`, the ONE
-  // identifier get-all-customers guarantees on every real record, Zoho or
-  // DrinkPrime alike (confirmed against real examples of both the user
-  // pasted: Zoho's "CUS-00010" and DP's "267907" — both `customer_number`,
-  // while `zoho_customer_id` is an empty string on the DP one). This is more
-  // reliable than the zohoId/email guess this used before v2.29.260's
-  // removal of the old placeholder-email stub rows, since `id` is the
-  // literal account identifier the API itself hands us, not a derived
-  // guess. Falls back to email only in the unlikely case `id` itself is
-  // blank (defensive — customer_number is present on every payload seen).
-  const custKey = (c) => c.id ? `id:${String(c.id).toLowerCase()}` : c.email ? `e:${String(c.email).toLowerCase()}` : `p:${String(c.purifier_id || "").toLowerCase()}`;
+  // customerApi.getCustomers already resolves to `customer_number` — since
+  // that's confirmed reliably per-PERSON on the Zoho side (verified against
+  // real examples: "CUS-00010"). **DrinkPrime's `customer_number` is NOT
+  // reliably per-person** — confirmed via a real live example (one genuine
+  // customer, "Arun .", phone 7019758560, personally owning 11 purifiers
+  // across 3 different societies) where every single device had its own
+  // distinct `customer_number`, so the id-only key counted him as 11
+  // separate unique customers instead of 1. For DP-stack rows specifically,
+  // dedupe by phone instead (normalized the same way `fmtPhone` displays it,
+  // so "+91 70197 58560" and "7019758560" collapse to the same key) — phone
+  // is the more reliable per-person signal there. Zoho-stack rows are
+  // untouched, still keyed on `id` as before. Falls back to email, then
+  // purifier_id, only if neither id nor (for DP) phone is present.
+  const dpPhoneKey = (c) => { const d = String(c.phone || "").replace(/\D/g, ""); return d.length > 10 && d.startsWith("91") ? d.slice(-10) : d; };
+  const custKey = (c) => {
+    if (c.isDpCustomer) {
+      const ph = dpPhoneKey(c);
+      if (ph) return `dpphone:${ph}`;
+    }
+    return c.id ? `id:${String(c.id).toLowerCase()}` : c.email ? `e:${String(c.email).toLowerCase()}` : `p:${String(c.purifier_id || "").toLowerCase()}`;
+  };
   // Row-level duplicate flag (v2.29.267, explicit user request: "if there is
   // a duplicate row with the user in the table show with a warning sign").
   // Counts how many rows in the current view share the same custKey — any
@@ -1134,10 +1160,38 @@ export function AllCustomers() {
   // investigate, not to silently decide which case it is.
   const custKeyCounts = {};
   results.forEach(c => { const k = custKey(c); custKeyCounts[k] = (custKeyCounts[k] || 0) + 1; });
+  // All-population, ignoring the show/hide-inactive toggle (v2.29.371) — same
+  // filters as `results` but WITHOUT `(showInactive ? isHiddenByDefault(c) :
+  // !isHiddenByDefault(c))`. `results` (and so `uniqueCustomers` before this
+  // fix) already excludes Uninstalled/Inactive customers by default, so the
+  // Active Customers card's "{active} of {total}" headline always showed
+  // active === total whenever the toggle was off — the "of {total}" was
+  // never actually the true total. Per explicit user request ('show 200 of
+  // 230... so that means user will know that 200 are active customers'),
+  // the unique-customer rollup below now runs off this ungated population
+  // instead, so the headline can show a real active-vs-total gap.
+  const allPop = withPur.filter(c =>
+    (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
+    (statusFilter === null || statusFilter.includes(canonicalStatus(c.status))) &&
+    (stackFilter === null || stackFilter.includes(stackOf(c))) &&
+    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
+    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
+    (connFilter === null ? true : (c.isDpCustomer && (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active"))) &&
+    (!ql || matchesQ(c)));
+  // isActive per row — a customer is "active" if their device is NOT
+  // Un-Installed/Uninstalled (`isDeviceUninstalled`, v2.29.373 — purely
+  // device_status-based, per explicit user request), not a customer
+  // subscription-status check. (v2.29.372 briefly used the broader
+  // `isHiddenByDefault`, which also treated a customer status of "inactive"
+  // as reason to count someone inactive; that mixed two different signals
+  // and, before that, an even earlier Zoho-status-only check caused the
+  // same active+inactive-both-at-once bug this line exists to avoid.)
+  // Active and Inactive are strict complements of the exact same
+  // population/identity space, so they always sum to the total.
   const uniqueCustomerMap = new Map();
-  results.forEach(c => {
+  allPop.forEach(c => {
     const k = custKey(c);
-    const isActiveRow = activeStatuses.includes(String(c.status || "").toLowerCase());
+    const isActiveRow = !isDeviceUninstalled(c);
     const prev = uniqueCustomerMap.get(k);
     if (!prev) uniqueCustomerMap.set(k, { isDp: c.isDpCustomer, isActive: isActiveRow });
     else { prev.isDp = prev.isDp || c.isDpCustomer; prev.isActive = prev.isActive || isActiveRow; }
@@ -1145,21 +1199,14 @@ export function AllCustomers() {
   const uniqueCustomers = Array.from(uniqueCustomerMap.values());
   const uniqueTotalCount = uniqueCustomers.length;
   const uniqueActiveCount = uniqueCustomers.filter(u => u.isActive).length;
-  // Deliberately computed OFF `results` — `results` now excludes Uninstalled/
-  // Inactive customers by default (v2.29.331), so this would silently read 0
-  // whenever they're hidden. This ignores that gate (but still respects the
-  // other society/stack/device/filter-type/search filters) so the KPI stays
-  // accurate and worth clicking even while they're hidden from the table.
-  const inactivePop = withPur.filter(c =>
-    (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
-    (stackFilter === null || stackFilter.includes(stackOf(c))) &&
-    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
-    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
-    (!ql || matchesQ(c)) &&
-    isHiddenByDefault(c));
-  const uniqueInactiveCount = new Set(inactivePop.map(custKey)).size;
-  const uniqueDpCount = uniqueCustomers.filter(u => u.isDp).length;
-  const uniqueZohoCount = uniqueTotalCount - uniqueDpCount;
+  const uniqueInactiveCount = uniqueTotalCount - uniqueActiveCount;
+  // DP/Zoho split of the ACTIVE population only (v2.29.370) — per explicit
+  // user request: the card already shows Inactive customers as its own red
+  // stat, so splitting the DP/Zoho line by the TOTAL population (active +
+  // inactive) double-counted the same inactive customers a second time and
+  // didn't actually describe the headline "active" number at all.
+  const uniqueActiveDpCount = uniqueCustomers.filter(u => u.isActive && u.isDp).length;
+  const uniqueActiveZohoCount = uniqueActiveCount - uniqueActiveDpCount;
 
   // Distinct societies in current view & DP / Zoho split
   const resultSocieties = Array.from(new Set(results.map(c => c.society).filter(isRealSociety)));
@@ -1179,11 +1226,36 @@ export function AllCustomers() {
   const normalCount = results.filter(c => deviceTypeOf(c) === "Normal").length;
   const hotColdCount = results.filter(c => deviceTypeOf(c) === "Hot & Cold").length;
 
+  // DP Devices Conn — always scoped to ACTIVE DP customers only (v2.29.377),
+  // per explicit user request ("show only for active customers only and not
+  // for uninstalled or un-installed or dunning customers"). Deliberately
+  // built independent of `results`/`showInactive` (the Active Customers
+  // card's isolate toggle) — toggling "Inactive customers (showing only)"
+  // elsewhere on this page should not also blank out or repopulate this
+  // card with uninstalled customers' devices. Still respects every OTHER
+  // toolbar filter (society/status/stack/deviceType/filterType/connFilter/
+  // search), same as `filtered`, just with the toggle-dependent hide clause
+  // replaced by an unconditional exclude of Un-Installed/Uninstalled
+  // (`isDeviceUninstalled`) AND a "dunning" customer-status exclude (neither
+  // of which the Active Customers KPI's own narrower `isDeviceUninstalled`
+  // check covers, since dunning is a customer-status concept, not
+  // device_status).
+  const dpActivePop = withPur.filter(c =>
+    c.isDpCustomer &&
+    (societyFilter === null ? isRealSociety(c.society) : societyFilter.includes(c.society)) &&
+    (statusFilter === null || statusFilter.includes(canonicalStatus(c.status))) &&
+    (stackFilter === null || stackFilter.includes(stackOf(c))) &&
+    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceTypeOf(c))) &&
+    (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
+    (connFilter === null ? true : (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active")) &&
+    (!ql || matchesQ(c)) &&
+    !isDeviceUninstalled(c) &&
+    normSt(c.status) !== "dunning");
   // Prefers the live-checked result from runBulkConnCheck (a real API ping) for
   // any device that has one; only falls back to the cached deviceStatus field
   // for devices not yet checked (or whose check itself failed — liveConn holds
   // `null` for those, not a false "offline").
-  const dpCustomers = results.filter(c => c.isDpCustomer);
+  const dpCustomers = dpActivePop;
   const isDpOnline = (c) => {
     const live = c.bid ? liveConn[c.bid] : undefined;
     return live === true || live === false ? live : normSt(c.deviceStatus) === "active";
@@ -1920,15 +1992,40 @@ export function AllCustomers() {
               <UserRound size={17} color="#08805A" />
             </div>
           </div>
+          {/* "of {total} unique customers" removed (v2.29.376) — per explicit
+              user request, after it repeatedly read as contradicting the
+              Device Mix card's device count (two different populations/units
+              under similar-looking numbers). The headline is now just the
+              active count on its own; `uniqueTotalCount` is unused here now
+              but stays available for the DP/Zoho/Inactive line below. */}
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
             <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{uniqueActiveCount.toLocaleString("en-IN")}</span>
-            <span style={{ fontSize: 12, color: "#86868B" }}>of {uniqueTotalCount.toLocaleString("en-IN")} unique customers</span>
           </div>
           {/* Collapsed to one line (v2.29.268, explicit request: "show this in 1
               line itself (140 DP · 96 Zoho | 22 Inactive customers)") — was two
               separate lines before. */}
           <div style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            <span style={{ color: "#08805A", fontWeight: 600 }}>{uniqueDpCount.toLocaleString("en-IN")} DP · {uniqueZohoCount.toLocaleString("en-IN")} Zoho</span>
+            {/* DP/Zoho now clickable (v2.29.377), per explicit user request
+                ("this should be clickable like inactive customers") —
+                mirrors the existing stackFilter toggle idiom (same pattern
+                as the DP Devices Conn card's Connected/Disconnected chips):
+                click to isolate the table to just that stack, click again
+                (or click the other one) to switch/clear. */}
+            <span
+              onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "DP") ? null : ["DP"])}
+              title={(stackFilter && stackFilter.length === 1 && stackFilter[0] === "DP") ? "Showing only DP customers — click to return to the default view" : "Click to show only DP customers"}
+              style={{ color: "#08805A", fontWeight: 600, cursor: "pointer", textDecoration: (stackFilter && stackFilter.length === 1 && stackFilter[0] === "DP") ? "underline" : "none" }}
+            >
+              {uniqueActiveDpCount.toLocaleString("en-IN")} DP
+            </span>
+            <span style={{ color: "#08805A", fontWeight: 600 }}> · </span>
+            <span
+              onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "Zoho") ? null : ["Zoho"])}
+              title={(stackFilter && stackFilter.length === 1 && stackFilter[0] === "Zoho") ? "Showing only Zoho customers — click to return to the default view" : "Click to show only Zoho customers"}
+              style={{ color: "#08805A", fontWeight: 600, cursor: "pointer", textDecoration: (stackFilter && stackFilter.length === 1 && stackFilter[0] === "Zoho") ? "underline" : "none" }}
+            >
+              {uniqueActiveZohoCount.toLocaleString("en-IN")} Zoho
+            </span>
             <span style={{ color: "#C6C6CB" }}> | </span>
             {/* Uninstalled/Inactive customers are hidden from the table by
                 default (v2.29.331/335) — clicking this stat ISOLATES the
@@ -2089,7 +2186,20 @@ export function AllCustomers() {
             <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>
               {(ownCount + normalCount + hotColdCount).toLocaleString("en-IN")}
             </span>
-            <span style={{ fontSize: 12, color: "#86868B" }}>total devices</span>
+            {/* Relabeled (v2.29.375), per explicit user request — this count is
+                built off `results`, which respects the Active Customers card's
+                own show/hide-inactive toggle, so it was NEVER a true system-wide
+                device total: by default it silently excludes every inactive
+                customer's devices, while the Active Customers card's "of {N}
+                unique customers" figure includes them — two different
+                populations under one unlabeled "total", which read as a
+                contradiction (252 unique customers vs 231 "total" devices).
+                The label now tracks whichever population `results` actually
+                holds at the moment (flips to "inactive devices" once the
+                isolate-toggle is active), instead of claiming to be a total. */}
+            <span style={{ fontSize: 12, color: "#86868B" }} title={showInactive ? "Devices belonging to Uninstalled/Inactive customers currently shown" : "Devices belonging to active customers only — inactive customers' devices are excluded"}>
+              {showInactive ? "inactive devices" : "active devices"}
+            </span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
             {[
@@ -2264,7 +2374,7 @@ export function Customers({ accessLevel = "view" }) {
   const filterTypeOptions = Array.from(new Set(rows.map(filterTypeOf).filter(Boolean))).sort();
 
   // Active-customers KPI + month-on-month growth in new sign-ups (by `since`).
-  const activeCount = rows.filter(c => c.status === "active").length;
+  const activeCount = rows.filter(c => String(c.status || "").toLowerCase() === "active").length;
   const inactiveCount = rows.length - activeCount;
   // Device-mix KPIs, derived from the purifier ID prefix (see deviceType()).
   const ownCount = rows.filter(c => deviceType(c.purifier_id) === "Own Device").length;

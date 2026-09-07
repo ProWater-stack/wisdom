@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.363**.
+> **Reflects:** `APP_VERSION` **2.29.377**.
 
 ---
 
@@ -244,6 +244,17 @@ Same origin, but **unauthenticated** (no Bearer header sent) — separate cursor
   Billing, Customer profile) now pass `planCode` as the 4th argument. **MRR:** `monthlyOf(sub) = amount
   / termMonths(sub)`; `termMonths` parses the term from the plan name/code (e.g. `…_6M` → 6) — not yet
   cross-checked against the catalog's own `billEvery`/`billingInterval`, tracked separately.
+  **`mapInvoice()` also carries its own `intervalCount`/`intervalUnit` (v2.29.369)** — mirrors
+  `mapSubscription()`'s split fields, since a real Zoho invoice record carries both a numeric `interval`
+  (e.g. `12`) and a separate `interval_unit` string (e.g. `"months"`) as distinct keys; the older single
+  `interval` field masked the numeric count whenever a unit string was also present. Per-Invoice
+  Recognition's `termMonths(sub || {...})` fallback (used when the invoice has no subscription-join
+  match) now passes these through directly instead of relying on `termMonths`'s plan-name-regex fallback.
+  **End Date bugfix (v2.29.369):** when the invoice-to-submodule join (`get-all-submodules`) misses, the
+  fallback End Date used to be hardcoded to "due date + exactly 1 month − 1 day" regardless of the real
+  plan term — a real 12-month invoice (INV-000783) showed an End Date one month out instead of a year
+  out. Now uses `due date + Math.round(months) − 1 day`, where `months` is the same `termMonths(sub)`
+  value the row already computes for its Earned/Month column.
 - **Dates:** `parseFlexDate()` parses many formats (ISO, `19-Jan-2026`, `19/01/2026`, epoch,
   `+0530`). Analytics uses month-index math (`year*12 + month`) for cohorts and MoM.
 - **Shared UI Stacking (v2.29.305–308):** `MultiSelectFilter`'s dropdown list popup container has its `zIndex` raised from `40` to `100` (`src/shared/ui.jsx`). Additionally, the main shell layout container (`<main>`) has `zIndex: 50` set, and the sidebar rail `.pw-sidebar-rail` has `z-index: 100` on mobile viewports (`src/App.jsx`). This forces the main content stacking context to sit above the sidebar (which has sticky `z-index: 40`) on desktop, preventing absolute dropdowns from sliding underneath the sidebar, while preserving mobile drawer priority.
@@ -462,9 +473,62 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   already uses (`isHiddenByDefault`). The "Active Customers" KPI card's "{N} Inactive customers" stat is
   clickable and works as an **isolate toggle**: click it once to flip the entire table (and every KPI
   derived from it) to show ONLY the Uninstalled/Inactive customers — not added alongside the rest — click
-  again to return to the default view. The stat's own count is computed from a separate, ungated
-  population so it stays accurate even while the default view has none of them visible; "Reset Filters"
-  (which now appears once this is toggled) returns to the default hidden view.
+  again to return to the default view; "Reset Filters" (which now appears once this is toggled) returns
+  to the default hidden view. **The headline (just the active count — the "of {total} unique customers"
+  text next to it was removed at v2.29.376, per explicit user request, after repeatedly reading as a
+  contradiction against the Device Mix card's device count) and the Inactive stat are strict complements
+  of one another (v2.29.371)** — both computed off the same `allPop` (the
+  same filters as the table but WITHOUT the show/hide-inactive gate, so the KPI reflects a true total
+  regardless of what the toggle is currently showing) and the same per-row test:
+  `uniqueActiveCount` = customers NOT hidden-by-default, `uniqueInactiveCount = uniqueTotalCount -
+  uniqueActiveCount`. Before this fix, "active" used a DIFFERENT status check (Zoho subscription status
+  active/in-active/dunning) than "inactive" did, so a customer whose device was Un-Installed but whose
+  subscription status still read active/dunning counted in BOTH numbers at once — the three figures
+  didn't reliably add up. **The per-row test itself was narrowed to purely `device_status` at v2.29.373**
+  (`isDeviceUninstalled()`), NOT also a customer subscription status of "inactive", per explicit user
+  request — this KPI card's Active/Inactive split only, at that point. **"Inactive" vs "In-Active" fixed
+  everywhere (v2.29.374)** — these are two REAL, DISTINCT `device_status`/`status` values in the live API
+  with different meanings, but the shared `normSt()` normalizer (strips hyphens before lowercasing,
+  needed so "Un-Installed"/"Uninstalled" collapse to one value) was ALSO silently collapsing "Inactive"
+  and "In-Active" into the same string. A new `isExactlyInactive()` checks "Inactive" as an exact,
+  non-hyphen-stripped match, kept separate from the `normSt`-based "uninstall" check (still correctly
+  hyphen-tolerant). Applied consistently to `isDeviceUninstalled()` (the KPI-only check), `rowTint` (row
+  highlighting), and `isHiddenByDefault` (the table's default-hide gate AND the "Inactive customers"
+  isolate-toggle view) — the latter needed the identical fix after a live report caught a
+  `device_status="In-Active"` customer still appearing in the isolated inactive-only table view, since
+  that toggle is driven by `isHiddenByDefault`, not the narrower KPI check. The card's **"{N} DP · {N}
+  Zoho" line is the split of the ACTIVE population
+  only (v2.29.370)** — it used to split ALL unique customers (active + inactive), which summed to the
+  card's total rather than its active headline, double-counting the same customers the red "Inactive"
+  stat already accounts for. **Unique-customer identity (`custKey`) now keys DrinkPrime-stack rows on
+  phone instead of `id` (v2.29.372)** — `id` (Zoho's `customer_number`) is reliably per-PERSON on the
+  Zoho side, but a real live example ("Arun .", one genuine customer personally owning 11 purifiers
+  across 3 societies) confirmed DrinkPrime assigns a distinct `customer_number` per DEVICE CONNECTION,
+  not per person — so every unique-customer KPI on this page was silently under-deduping any DP customer
+  with more than one device. DP-stack rows (`c.isDpCustomer`) now key on phone (normalized like
+  `fmtPhone` — strips non-digits, drops a leading '91' on 11+ digit numbers); Zoho-stack rows are
+  unchanged, still keyed on `id`. Also fixes the row-level "Duplicate" badge (v2.29.267, shares the same
+  `custKey`) for the same DP multi-device customers.
+  **Device Mix KPI card's "total devices" relabeled to "active devices" / "inactive devices" (v2.29.375)**
+  — its count is built off `results` (the same population the table itself shows, respecting the
+  show/hide-inactive toggle), so it was never actually a system-wide total: by default it silently
+  excludes inactive customers' devices, while the Active Customers card's "of {N} unique customers" DOES
+  include them — two different populations under one unlabeled "total," which read as a contradiction
+  (e.g. 252 unique customers vs. 231 "total" devices) even though the real relationship (a smaller number
+  of active customers owning a slightly larger number of active devices, since some own more than one) is
+  ordinary. The label now tracks whichever population `results` currently holds, flipping between "active
+  devices" and "inactive devices" depending on the isolate-toggle's state — the count itself is unchanged.
+  **"{N} DP · {N} Zoho" is now clickable (v2.29.377)** — same isolate-toggle idiom as the Inactive stat,
+  wired to the pre-existing `stackFilter` state (also driven by the toolbar's own Customer Stack dropdown):
+  click DP or Zoho to isolate the table to that stack, click again to clear. Note this figure is a
+  unique-CUSTOMER count (deduped); the table/DP Devices Conn/Device Mix report DEVICE-row counts for the
+  same stack, which naturally run higher whenever a stack's customers own more than one purifier — not a
+  bug, same dynamic as the note above.
+  **DP Devices Conn is now always scoped to active DP customers (v2.29.377)** — a new `dpActivePop`
+  (mirrors every other current filter, but unconditionally excludes Un-Installed/Uninstalled via
+  `isDeviceUninstalled` AND a customer-status "dunning" exclude) feeds its "of {N} online" headline and
+  BLE/WiFi/GSM sub-stats, replacing the old `results.filter(isDpCustomer)`, which used to flip to showing
+  ONLY the inactive/uninstalled population whenever the Active Customers card's isolate-toggle was on.
   **Society / Status** multi-select filters (`MultiSelectFilter`, v2.29.99 — same component/summary
   convention as the Customers page's Society filter). **v2.29.140:** Device Type now uses the real
   plan-catalog value (same `planInfo`/plan_code join as the Customers page, purifier-ID heuristic as
@@ -849,7 +913,7 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   - **Apartment Performance Time Series (v2.29.352):** Dedicated time-series composed chart showing trailing monthly total revenue with data labels on top of each bar, an amber trend line, and an **internal society filter** dropdown scoped exclusively to this chart.
   - **Plan Tier Distribution:** horizontal bar chart showing active subscriptions grouped by plan tier.
   - **Under-Penetrated Buildings:** active connection density progress tracker highlighting the top 5 apartments with the lowest active density.
-  - **All Apartment Performance:** unified society metrics table detailing deposits and recharges for both Zoho and DrinkPrime (excluding empty rows). Clicking any apartment name opens a **Modal subpage** displaying the list of all Zoho & DrinkPrime customers who made a payment (split by recharges, deposits, and total collected) in that apartment during the selected date range.
+  - **All Apartment Performance:** unified society metrics table detailing deposits and recharges for both Zoho and DrinkPrime (excluding empty rows). Clicking any apartment name opens a **Modal subpage** displaying the list of all Zoho & DrinkPrime customers who made a payment (split by recharges, deposits, and total collected) in that apartment during the selected date range, including a **Device Status** column (v2.29.367) — for Zoho rows read straight off the joined customer record, for DrinkPrime rows joined via `current_device === purifier_id` since DP payment records don't carry `device_status` themselves; badged red (uninstalled) / amber (replaced) / gray (other) using a `normDevSt()` normalizer (strips spaces/underscores/hyphens before lowercasing, so "Un-Installed" and "Uninstalled" badge identically). **Total Customer** (a live headcount, not a "this period" claim) = customer `status` canonicalized to "Active" (`canonicalStatus()`). **Churned and Replaced columns — added v2.29.363, removed v2.29.368.** They read `device_status` (Un-Installed/Uninstalled → Churned, Replaced → Replaced), but `GET /admin/get-all-customers` has no timestamp for when `device_status` last changed — so on a page built entirely around a date-range filter, these counts were really "currently Un-Installed/Replaced, ever," not "became so within the selected period," which read as misleading. Removed rather than mislabeled, pending a real change-date field from the API (confirmed with the user that none currently exists) that would let this be scoped correctly.
   - **Refresh Security:** The top-bar Refresh button is authorized for **admin-only** access (`tabIsAdmin`).
 - **Penetration Tracker (`PenetrationTracker`, `an_penetration`)** — cohort matrix of cumulative
   customers per society, aligned to each society's own **M1 = launch month** (month of its first

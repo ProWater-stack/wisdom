@@ -24,7 +24,7 @@ import {
   useAuth, api, apartmentApi, billingApi, creditNoteApi, customerApi,
   authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer, SEED_PLANS,
   dmy, endOfDay, exportToCsv, fetchAllDpTransactions, fmtDate, fmtPhone,
-  fmtTime, inr, isoDay, isRealSociety, canonicalSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
+  fmtTime, inr, isoDay, isRealSociety, canonicalSociety, canonicalStatus, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
   startOfDay, termMonths, ticketApi, useDateRange, yoyRange, zdIsClosed,
   bucketKeyOf, bucketsFor, CHART_PALETTE, AOP_MON, titleCaseName,
@@ -636,77 +636,29 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     }
   });
 
-  // Pre-load device replacement records from localStorage
-  const drRecords = LS.get("pw_device_replacements", []) || [];
+  // Device-status normalizer (mirrors Customer.jsx's own `normSt`): strips
+  // spaces/underscores/hyphens before lowercasing, so "Un-Installed" and
+  // "Uninstalled" collapse to the same value instead of being treated as
+  // two different device_status strings.
+  const normDevSt = (s) => String(s || "").toLowerCase().replace(/[\s_-]+/g, "");
 
-  // Calculate actual unique device sizes, customer counts, churned counts, and replacements
+  // Calculate actual unique device sizes and customer counts.
+  // Churned/Replaced columns (added v2.29.363, simplified v2.29.366) were removed at
+  // v2.29.368 — per explicit user finding, get-all-customers has no timestamp for when
+  // device_status last changed, so both this table's counts and a same-day popup
+  // breakdown were showing "currently Un-Installed/Replaced, ever" rather than anything
+  // scoped to the selected date range, which read as misleading in a date-filtered table.
   Object.values(combinedAptAgg).forEach(apt => {
     apt.devices = apt.deviceSet ? apt.deviceSet.size : 0;
 
-    // 1. Total Customer: unique customers associated with this apartment
+    // Total Customer: only customers whose status is (canonical) "Active".
     const aptCustSet = new Set();
     fCustomers.forEach(c => {
-      if (cleanAptName(c.society).toLowerCase() === apt.name.toLowerCase()) {
+      if (cleanAptName(c.society).toLowerCase() === apt.name.toLowerCase() && canonicalStatus(c.status) === "Active") {
         aptCustSet.add(c.id || c.zohoId || c.purifier_id || c.email || c.name);
       }
     });
-    paidCur.forEach(i => {
-      if (cleanAptName(societyOf(i)).toLowerCase() === apt.name.toLowerCase()) {
-        aptCustSet.add(i.zohoCustomerId || i.customerNumber || i.customerName);
-      }
-    });
-    (apt.deviceSet || new Set()).forEach(d => aptCustSet.add(d));
     apt.totalCustomers = aptCustSet.size;
-
-    // 2. Churned: inactive, cancelled, uninstalled, or churned customers/subscriptions
-    const churnedSet = new Set();
-    fCustomers.forEach(c => {
-      if (cleanAptName(c.society).toLowerCase() === apt.name.toLowerCase()) {
-        const st = String(c.status || "").toLowerCase();
-        const devSt = String(c.deviceStatus || "").toLowerCase();
-        if (st === "inactive" || st === "cancelled" || st === "churned" || st === "uninstalled" || devSt.includes("uninstall") || devSt.includes("churn")) {
-          churnedSet.add(c.id || c.zohoId || c.purifier_id || c.email || c.name);
-        }
-      }
-    });
-    subs.forEach(s => {
-      if (cleanAptName(societyOf(s)).toLowerCase() === apt.name.toLowerCase()) {
-        const st = String(s.status || "").toLowerCase();
-        if (["cancelled", "expired", "terminated", "inactive"].includes(st)) {
-          churnedSet.add(s.zohoCustomerId || s.customerNumber || s.customerName || s.id);
-        }
-      }
-    });
-    apt.churned = churnedSet.size;
-
-    // 3. Replaced: purifiers or devices replaced in this apartment
-    const replacedSet = new Set();
-    drRecords.forEach(dr => {
-      const pId = dr.old?.purifierId || dr.neu?.purifierId;
-      const matchCust = fCustomers.find(c => c.purifier_id === pId || c.email === dr.old?.email || c.phone === dr.old?.phone);
-      if (matchCust && cleanAptName(matchCust.society).toLowerCase() === apt.name.toLowerCase()) {
-        replacedSet.add(dr.id || `${dr.old?.purifierId}->${dr.neu?.purifierId}`);
-      }
-    });
-    (tickets || []).forEach(t => {
-      const soc = cleanAptName(t.customFields?.["Society Name"] || t.society || "");
-      if (soc.toLowerCase() === apt.name.toLowerCase()) {
-        const cat = String(t.customFields?.["Issue Category"] || "").toLowerCase();
-        const subj = String(t.subject || "").toLowerCase();
-        const desc = String(t.description || "").toLowerCase();
-        if (cat.includes("replace") || subj.includes("replace") || desc.includes("replace") || subj.includes("swap") || desc.includes("swap")) {
-          replacedSet.add(`ticket_${t.id || t.ticketNumber || Math.random()}`);
-        }
-      }
-    });
-    fCustomers.forEach(c => {
-      if (cleanAptName(c.society).toLowerCase() === apt.name.toLowerCase()) {
-        if (String(c.deviceStatus || "").toLowerCase().includes("replace")) {
-          replacedSet.add(`cust_${c.id || c.purifier_id}`);
-        }
-      }
-    });
-    apt.replaced = replacedSet.size;
   });
 
   const allAptRows = Object.values(combinedAptAgg)
@@ -827,7 +779,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       .filter(i => cleanAptName(societyOf(i)) === aptName)
       .map(i => {
         const sub = subs.find(s => s.customerNumber === i.customerNumber || s.zohoCustomerId === i.zohoCustomerId || s.zohoId === i.zohoId);
-        const months = termMonths(sub || { interval: i.interval, plan: i.plan }) || 1;
+        const months = termMonths(sub || { intervalCount: i.intervalCount, intervalUnit: i.intervalUnit, interval: i.interval, plan: i.plan }) || 1;
         const paidDate = i.paidDate || i.date;
         const startDate = i.dueDate ? new Date(i.dueDate) : (paidDate ? new Date(paidDate) : null);
         const endDate = startDate ? new Date(startDate.getFullYear(), startDate.getMonth() + months, startDate.getDate() - 1) : null;
@@ -837,6 +789,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           id: i.id || i.number || Math.random(),
           name: i.customerName || custOf(i)?.name || "Unknown Zoho Customer",
           purifierId: custOf(i)?.purifier_id || i.purifier_id || "—",
+          deviceStatus: custOf(i)?.deviceStatus || "",
           stack: "Zoho",
           recharge: rechVal,
           deposit: depVal,
@@ -847,6 +800,12 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         };
       })
       .filter(p => p.total > 0);
+
+    // DrinkPrime payment records don't carry device_status themselves — join
+    // back to the customer record via current_device === purifier_id (the
+    // same key DP customers' purifier_id is built from) to get it.
+    const custByPurifierId = {};
+    customers.forEach(c => { if (c.purifier_id) custByPurifierId[c.purifier_id] = c; });
 
     // Filter DrinkPrime payments
     const dpList = dpCur
@@ -860,6 +819,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           id: r.id || `dp-${idx}`,
           name: r.CustomerName || "Unknown DP Customer",
           purifierId: r.current_device || "—",
+          deviceStatus: custByPurifierId[r.current_device]?.deviceStatus || "",
           stack: "DrinkPrime",
           recharge: rechVal,
           deposit: depVal,
@@ -874,6 +834,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     const mergedList = [...zohoList, ...dpList].sort((a, b) => b.total - a.total);
     const totalRechargeAmt = mergedList.reduce((s, x) => s + x.recharge, 0);
     const totalDepositAmt = mergedList.reduce((s, x) => s + x.deposit, 0);
+
     const totalCollectedAmt = mergedList.reduce((s, x) => s + x.total, 0);
 
     return (
@@ -958,6 +919,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
                     <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700 }}>Customer Name</th>
                     <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700 }}>Purifier ID</th>
+                    <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>Device Status</th>
                     <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>Paid Date</th>
                     <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>Start Date</th>
                     <th style={{ padding: "12px 16px", color: "#08805A", fontWeight: 700, textAlign: "center" }}>End Date</th>
@@ -972,6 +934,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <tr key={item.id || idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
                       <td style={{ padding: "12px 16px", fontWeight: 650, color: "#1D1D1F" }}>{item.name}</td>
                       <td style={{ padding: "12px 16px", fontFamily: "monospace", color: "#475569" }}>{item.purifierId}</td>
+                      <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                        {(() => {
+                          const norm = normDevSt(item.deviceStatus);
+                          if (!norm) return <span style={{ color: "#94a3b8" }}>—</span>;
+                          const [c, bg] = norm === "uninstalled" ? ["#DC4141", "rgba(220,65,65,0.1)"]
+                            : norm === "replaced" ? ["#986315", "rgba(152,99,21,0.1)"]
+                            : ["#475569", "rgba(71,85,105,0.08)"];
+                          return <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 6, color: c, background: bg, whiteSpace: "nowrap" }}>{item.deviceStatus}</span>;
+                        })()}
+                      </td>
                       <td style={{ padding: "12px 16px", textAlign: "center", color: "#475569" }}>{item.paidDate}</td>
                       <td style={{ padding: "12px 16px", textAlign: "center", color: "#475569" }}>{item.startDate}</td>
                       <td style={{ padding: "12px 16px", textAlign: "center", color: "#475569" }}>{item.endDate}</td>
@@ -986,7 +958,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     </tr>
                   ))}
                   <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(8,128,90,.15)", position: "sticky", bottom: 0, fontWeight: 700 }}>
-                    <td colSpan={6} style={{ padding: "12px 16px", color: "#1D1D1F" }}>Grand Total ({mergedList.length})</td>
+                    <td colSpan={7} style={{ padding: "12px 16px", color: "#1D1D1F" }}>Grand Total ({mergedList.length})</td>
                     <td style={{ padding: "12px 16px", textAlign: "right", color: "#475569" }}>{totalDepositAmt > 0 ? inr(Math.round(totalDepositAmt)) : "—"}</td>
                     <td style={{ padding: "12px 16px", textAlign: "right", color: "#08805A" }}>{totalRechargeAmt > 0 ? inr(Math.round(totalRechargeAmt)) : "—"}</td>
                     <td style={{ padding: "12px 16px", textAlign: "right", color: "#1D1D1F", fontWeight: 800 }}>{inr(Math.round(totalCollectedAmt))}</td>
@@ -1710,8 +1682,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           {/* ── All Apartment Performance Table ───────────────────────────────── */}
           {(() => {
             const allAptTotalCusts    = allAptRows.reduce((s, r) => s + (r.totalCustomers || 0), 0);
-            const allAptTotalChurned  = allAptRows.reduce((s, r) => s + (r.churned || 0), 0);
-            const allAptTotalReplaced = allAptRows.reduce((s, r) => s + (r.replaced || 0), 0);
             const allAptTotalZohoDep  = allAptRows.reduce((s, r) => s + r.zohoDeposit, 0);
             const allAptTotalZohoRech = allAptRows.reduce((s, r) => s + r.zohoRecharge, 0);
             const allAptTotalDpDep    = allAptRows.reduce((s, r) => s + r.dpDeposit, 0);
@@ -1736,8 +1706,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
                           <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "left", verticalAlign: "middle" }}>Apartment Name</th>
                           <th rowSpan={2} style={{ padding: "13px 14px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Total Customer</th>
-                          <th rowSpan={2} style={{ padding: "13px 14px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Churned</th>
-                          <th rowSpan={2} style={{ padding: "13px 14px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Replaced</th>
                           <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>Zoho</th>
                           <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>DrinkPrime</th>
                           <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Total</th>
@@ -1787,12 +1755,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                               <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 700, color: "#1D1D1F" }}>
                                 {r.totalCustomers || 0}
                               </td>
-                              <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 600, color: r.churned > 0 ? "#DC4141" : "#86868B" }}>
-                                {r.churned || 0}
-                              </td>
-                              <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 600, color: r.replaced > 0 ? "#D97706" : "#86868B" }}>
-                                {r.replaced || 0}
-                              </td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}</td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600 }}>{r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}</td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}</td>
@@ -1804,8 +1766,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(8,128,90,.15)" }}>
                           <td style={{ padding: "13px 18px", fontSize: 13, fontWeight: 800, color: "#0d2119", textAlign: "left" }}>Total ({allAptRows.length})</td>
                           <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#1D1D1F" }}>{allAptTotalCusts}</td>
-                          <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: allAptTotalChurned > 0 ? "#DC4141" : "#1D1D1F" }}>{allAptTotalChurned}</td>
-                          <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: allAptTotalReplaced > 0 ? "#D97706" : "#1D1D1F" }}>{allAptTotalReplaced}</td>
                           <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalZohoDep > 0 ? inr(Math.round(allAptTotalZohoDep)) : "—"}</td>
                           <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A" }}>{allAptTotalZohoRech > 0 ? inr(Math.round(allAptTotalZohoRech)) : "—"}</td>
                           <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalDpDep > 0 ? inr(Math.round(allAptTotalDpDep)) : "—"}</td>
@@ -3470,7 +3430,7 @@ export function EarnedRevenue() {
     // setupFee/price directly.
     const deposit = (planEntry && catalogFee > 0 && total >= catalogFee) ? catalogFee : (planEntry ? 0 : depositForCustomer(custOf(i), plan, total, planCode));
     const recharge = Math.max(0, total - deposit);
-    const months = termMonths(sub || { interval: i.interval, plan }) || 1;
+    const months = termMonths(sub || { intervalCount: i.intervalCount, intervalUnit: i.intervalUnit, interval: i.interval, plan }) || 1;
     // Prefer the API's real paid_date (added ~2026-08); fall back to invoice
     // date for older invoices that predate that field. Normalized to midnight
     // (v2.29.109) — a raw parsed timestamp can carry a time-of-day that
@@ -3510,8 +3470,14 @@ export function EarnedRevenue() {
     // the earning math, see the tenure model below.
     const dd = (modStart && !isNaN(modStart.getTime())) ? modStart : fallbackDue;
     const dueValid = dd && !isNaN(dd.getTime());
+    // Fallback End Date (submodule join miss): due date + the plan's REAL term
+    // length, not a hardcoded "+1 month" — `months` (from termMonths(sub), a
+    // few lines above) already knows this is a 12-month plan, a 1-month plan,
+    // etc. Fixed after a real user report: a 12-month subscription's End Date
+    // was showing exactly one month out (07 Sept 2026 -> 06 Oct 2026 instead
+    // of ~07 Sept 2027) whenever the submodule join missed for that invoice.
     const nb = (modEnd && !isNaN(modEnd.getTime())) ? modEnd
-      : (fallbackDueValid ? new Date(fallbackDue.getFullYear(), fallbackDue.getMonth() + 1, fallbackDue.getDate() - 1) : null);
+      : (fallbackDueValid ? new Date(fallbackDue.getFullYear(), fallbackDue.getMonth() + Math.round(months), fallbackDue.getDate() - 1) : null);
     const nbValid = nb && !isNaN(nb.getTime());
     // Recognition model (v2.29.107 — rebuilt to the user's own worked
     // spreadsheet examples, verified to reproduce them exactly):
