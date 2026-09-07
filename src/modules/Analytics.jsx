@@ -24,10 +24,11 @@ import {
   useAuth, api, apartmentApi, billingApi, creditNoteApi, customerApi,
   authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer, SEED_PLANS,
   dmy, endOfDay, exportToCsv, fetchAllDpTransactions, fmtDate, fmtPhone,
-  fmtTime, inr, isoDay, isRealSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
+  fmtTime, inr, isoDay, isRealSociety, canonicalSociety, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
   startOfDay, termMonths, ticketApi, useDateRange, yoyRange, zdIsClosed,
   bucketKeyOf, bucketsFor, CHART_PALETTE, AOP_MON, titleCaseName,
+  planInfo, PLAN_CATALOG,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, WowMomTT, Modal, Drawer,
@@ -164,6 +165,14 @@ export const setFlatsOverride = (society, val) => {
   LS.set("pw_flats_overrides", _flatsOverrides);
 };
 
+export const cleanAptName = (n) => {
+  if (!n) return "";
+  let s = canonicalSociety(n);
+  s = s.replace(/^cro[_\s]+/i, ""); // strip leading "CRO_" or "CRO "
+  s = s.replace(/\s*\[[^\]]+\]/g, ""); // strip trailing brackets like "[ Thubarahalli ]"
+  return canonicalSociety(s.trim());
+};
+
 export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const { user } = useAuth();
   const [data, setData] = useState(null);
@@ -173,6 +182,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const [selSoc, setSelSoc] = useState(null);                  // society filter (null = all)
   const [selSource, setSelSource] = useState(null);            // revenue source filter (null = all)
   const [selectedAptDetails, setSelectedAptDetails] = useState(null);
+  const [showNewCustPopup, setShowNewCustPopup] = useState(false);
   useEffect(() => {
     api.logView(user.username, "Viewed Analytics overview");
     // Each source fails soft (→ []) so one dead endpoint doesn't blank the page.
@@ -211,8 +221,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     for (const k of [rec.zohoCustomerId, rec.zohoId, rec.customerNumber]) if (k && custByKey[k]) return custByKey[k];
     return null;
   };
-  const societyOf = (rec) => custOf(rec)?.society || rec.society || "Unknown";
-  const allSocieties = [...new Set(customers.map(c => c.society).filter(Boolean))].sort();
+  const societyOf = (rec) => canonicalSociety(custOf(rec)?.society || rec.society || "Unknown");
+  const allSocieties = [...new Set(customers.map(c => canonicalSociety(c.society)).filter(Boolean))].sort();
   const socOk = (name) => {
     if (selSoc === null) return isRealSociety(name);
     return selSoc.includes(name);
@@ -250,9 +260,58 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const earnedRevenue = Math.round(sum(paidCur, earnedOf));
   const earnedPrev = Math.round(sum(paidPrev, earnedOf));
 
-  const activeCustomers = fCustomers.filter(c => !c.isDpCustomer && ["active", "in-active", "dunning"].includes(String(c.status || "").toLowerCase())).length;
-  const newThisMonth = fCustomers.filter(c => inR(c.since, range)).length;
-  const newPrev = fCustomers.filter(c => inR(c.since, prev)).length;
+  const activeCustomers = fCustomers.filter(c => !c.isDpCustomer && String(c.status || "").toLowerCase() === "active").length;
+
+  // All signups aligned with Penetration Tracker (subscriptions createdAt/activatedAt + customer since dates)
+  const allSignupMap = new Map();
+
+  // 1. Subscriptions (Zoho subscription sign-ups — identical to Penetration Tracker)
+  (subs || []).forEach(s => {
+    const soc = societyOf(s);
+    const d = parseFlexDate(s.createdAt || s.activatedAt);
+    if (soc && soc !== "Unknown" && d && socOk(soc)) {
+      const key = `sub_${s.id || s.zohoCustomerId || s.customerNumber || Math.random()}_${d.getTime()}`;
+      allSignupMap.set(key, { society: soc, since: d, isDp: false });
+    }
+  });
+
+  // 2. Customers (handles customer profile creation dates and DrinkPrime customers)
+  (customers || []).forEach(c => {
+    const soc = canonicalSociety(c.society || "Unknown");
+    const d = parseFlexDate(c.since);
+    if (soc && soc !== "Unknown" && d && socOk(soc)) {
+      const key = c.isDpCustomer ? `dp_${c.id || c.purifier_id || Math.random()}` : `cust_${c.zohoId || c.id || Math.random()}`;
+      if (!allSignupMap.has(key)) {
+        allSignupMap.set(key, { society: soc, since: d, isDp: !!c.isDpCustomer });
+      }
+    }
+  });
+
+  const allSignups = Array.from(allSignupMap.values());
+
+  const zohoNewCur = allSignups.filter(x => !x.isDp && x.since >= range.from && x.since <= range.to).length;
+  const zohoNewPrev = allSignups.filter(x => !x.isDp && x.since >= prev.from && x.since <= prev.to).length;
+  const dpNewCur = allSignups.filter(x => x.isDp && x.since >= range.from && x.since <= range.to).length;
+  const dpNewPrev = allSignups.filter(x => x.isDp && x.since >= prev.from && x.since <= prev.to).length;
+  const newThisMonth = zohoNewCur + dpNewCur;
+  const newPrev = zohoNewPrev + dpNewPrev;
+
+  // Group new customer additions in current period by apartment for hover breakdown
+  const newCustsByApt = {};
+  allSignups
+    .filter(x => x.since >= range.from && x.since <= range.to)
+    .forEach(x => {
+      const soc = cleanAptName(x.society);
+      if (!soc || !isRealSociety(soc)) return;
+      if (!newCustsByApt[soc]) {
+        newCustsByApt[soc] = { name: soc, total: 0, zoho: 0, dp: 0 };
+      }
+      newCustsByApt[soc].total += 1;
+      if (x.isDp) newCustsByApt[soc].dp += 1;
+      else newCustsByApt[soc].zoho += 1;
+    });
+  const newCustsAptBreakdown = Object.values(newCustsByApt)
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   const custBase = Math.max(0, activeCustomers - newThisMonth);
   const custGrowth = custBase > 0 ? Math.round((newThisMonth / custBase) * 1000) / 10 : (newThisMonth > 0 ? 100 : null);
   const pendingReceivables = sum(fInvs.filter(i => (i.balance || 0) > 0), i => i.balance);
@@ -487,12 +546,14 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const combinedRechargeCur = netRevenue + dpRechargeCur;
   const combinedDepositCur  = depositCollected + dpDepositCur;
 
-  // Unique DP devices / customers
+  // Unique DP devices / active customers
+  const dpActiveCustomers = fCustomers.filter(c => c.isDpCustomer && String(c.status || "").toLowerCase() === "active" && !String(c.deviceStatus || "").toLowerCase().includes("uninstall")).length;
   const dpUniqueDevices = fCustomers.filter(c => c.isDpCustomer && ["active", "in-active", "dunning"].includes(String(c.status || "").toLowerCase())).length;
   const dpUniqueApts    = new Set(dpTxns.map(r => r.partner_name).filter(Boolean)).size;
 
   // Combined SaaS metrics
-  const totalCombinedCustomers = activeCustomers + dpUniqueDevices;
+  const totalActiveCustomers = activeCustomers + dpActiveCustomers;
+  const totalCombinedCustomers = totalActiveCustomers;
   const arpu = totalCombinedCustomers > 0 ? (combinedRechargeCur / totalCombinedCustomers) : 0;
   const ltv = arpu / 0.015; // 1.5% monthly churn rate
 
@@ -509,15 +570,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const dpAptRows = Object.values(dpAptAgg)
     .map(a => ({ ...a, total: a.recharge + a.deposit, devices: a.devices.size }))
     .sort((a, b) => b.total - a.total);
-
-  // Helper to normalize and match Zoho and DrinkPrime apartment/society names case-insensitively
-  const cleanAptName = (n) => {
-    if (!n) return "";
-    let s = String(n).trim();
-    s = s.replace(/^cro[_\s]+/i, ""); // strip leading "CRO_" or "CRO "
-    s = s.replace(/\s*\[[^\]]+\]/g, ""); // strip trailing brackets like "[ Thubarahalli ]"
-    return s.trim();
-  };
 
   // Combined Zoho + DP Apartment-level breakdown (current period)
   const combinedAptAgg = {};
@@ -584,24 +636,120 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     }
   });
 
-  // Calculate actual unique device sizes
+  // Pre-load device replacement records from localStorage
+  const drRecords = LS.get("pw_device_replacements", []) || [];
+
+  // Calculate actual unique device sizes, customer counts, churned counts, and replacements
   Object.values(combinedAptAgg).forEach(apt => {
     apt.devices = apt.deviceSet ? apt.deviceSet.size : 0;
+
+    // 1. Total Customer: unique customers associated with this apartment
+    const aptCustSet = new Set();
+    fCustomers.forEach(c => {
+      if (cleanAptName(c.society).toLowerCase() === apt.name.toLowerCase()) {
+        aptCustSet.add(c.id || c.zohoId || c.purifier_id || c.email || c.name);
+      }
+    });
+    paidCur.forEach(i => {
+      if (cleanAptName(societyOf(i)).toLowerCase() === apt.name.toLowerCase()) {
+        aptCustSet.add(i.zohoCustomerId || i.customerNumber || i.customerName);
+      }
+    });
+    (apt.deviceSet || new Set()).forEach(d => aptCustSet.add(d));
+    apt.totalCustomers = aptCustSet.size;
+
+    // 2. Churned: inactive, cancelled, uninstalled, or churned customers/subscriptions
+    const churnedSet = new Set();
+    fCustomers.forEach(c => {
+      if (cleanAptName(c.society).toLowerCase() === apt.name.toLowerCase()) {
+        const st = String(c.status || "").toLowerCase();
+        const devSt = String(c.deviceStatus || "").toLowerCase();
+        if (st === "inactive" || st === "cancelled" || st === "churned" || st === "uninstalled" || devSt.includes("uninstall") || devSt.includes("churn")) {
+          churnedSet.add(c.id || c.zohoId || c.purifier_id || c.email || c.name);
+        }
+      }
+    });
+    subs.forEach(s => {
+      if (cleanAptName(societyOf(s)).toLowerCase() === apt.name.toLowerCase()) {
+        const st = String(s.status || "").toLowerCase();
+        if (["cancelled", "expired", "terminated", "inactive"].includes(st)) {
+          churnedSet.add(s.zohoCustomerId || s.customerNumber || s.customerName || s.id);
+        }
+      }
+    });
+    apt.churned = churnedSet.size;
+
+    // 3. Replaced: purifiers or devices replaced in this apartment
+    const replacedSet = new Set();
+    drRecords.forEach(dr => {
+      const pId = dr.old?.purifierId || dr.neu?.purifierId;
+      const matchCust = fCustomers.find(c => c.purifier_id === pId || c.email === dr.old?.email || c.phone === dr.old?.phone);
+      if (matchCust && cleanAptName(matchCust.society).toLowerCase() === apt.name.toLowerCase()) {
+        replacedSet.add(dr.id || `${dr.old?.purifierId}->${dr.neu?.purifierId}`);
+      }
+    });
+    (tickets || []).forEach(t => {
+      const soc = cleanAptName(t.customFields?.["Society Name"] || t.society || "");
+      if (soc.toLowerCase() === apt.name.toLowerCase()) {
+        const cat = String(t.customFields?.["Issue Category"] || "").toLowerCase();
+        const subj = String(t.subject || "").toLowerCase();
+        const desc = String(t.description || "").toLowerCase();
+        if (cat.includes("replace") || subj.includes("replace") || desc.includes("replace") || subj.includes("swap") || desc.includes("swap")) {
+          replacedSet.add(`ticket_${t.id || t.ticketNumber || Math.random()}`);
+        }
+      }
+    });
+    fCustomers.forEach(c => {
+      if (cleanAptName(c.society).toLowerCase() === apt.name.toLowerCase()) {
+        if (String(c.deviceStatus || "").toLowerCase().includes("replace")) {
+          replacedSet.add(`cust_${c.id || c.purifier_id}`);
+        }
+      }
+    });
+    apt.replaced = replacedSet.size;
   });
 
   const allAptRows = Object.values(combinedAptAgg)
     .filter(r => r.totalCollected > 0)
     .sort((a, b) => b.totalCollected - a.totalCollected);
 
-  // Plan Distribution calculation (Zoho plan subscriptions + DP active purifiers)
+  // Plan Distribution calculation by plan amount (Zoho subscriptions + DP active purifiers)
   const planCounts = {};
   subs.forEach(s => {
     if (["live", "active", "in_trial"].includes(String(s.status || "").toLowerCase())) {
-      const p = s.plan || "Zoho Standard";
-      planCounts[p] = (planCounts[p] || 0) + 1;
+      let amt = Number(s.amount) || 0;
+      if (!amt && s.planCode) {
+        const p = planInfo(s.planCode);
+        if (p?.price) amt = p.price;
+        else if (p?.total) amt = p.total;
+      }
+      if (!amt && s.plan) {
+        const p = Object.values(PLAN_CATALOG).find(x => x.name && x.name.toLowerCase() === String(s.plan).toLowerCase());
+        if (p?.price) amt = p.price;
+        else if (p?.total) amt = p.total;
+      }
+      if (!amt) {
+        const m = String(s.planCode || s.plan || "").match(/_(\d{3,4})(?:_|$)/) || String(s.planCode || s.plan || "").match(/\b(\d{3,4})\b/);
+        if (m) amt = Number(m[1]);
+      }
+      const label = amt > 0 ? inr(amt) : "Custom / Other";
+      planCounts[label] = (planCounts[label] || 0) + 1;
     }
   });
-  planCounts["DrinkPrime Purifier"] = dpUniqueDevices;
+
+  const dpActiveCusts = fCustomers.filter(c => c.isDpCustomer && ["active", "in-active", "dunning"].includes(String(c.status || "").toLowerCase()));
+  if (dpActiveCusts.length > 0) {
+    dpActiveCusts.forEach(c => {
+      let amt = 0;
+      const m = String(c.plan_name || c.plan || "").match(/\b(\d{3,4})\b/) || String(c.plan_name || c.plan || "").match(/_(\d{3,4})/);
+      if (m) amt = Number(m[1]);
+      const label = amt > 0 ? inr(amt) : "DrinkPrime Purifier";
+      planCounts[label] = (planCounts[label] || 0) + 1;
+    });
+  } else if (dpUniqueDevices > 0) {
+    planCounts["DrinkPrime Purifier"] = dpUniqueDevices;
+  }
+
   const planDistributionData = Object.entries(planCounts).map(([name, value]) => ({
     name,
     value
@@ -1219,39 +1367,139 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           </div>
 
           {/* ── Combined Revenue KPI strip ───────────────────────────────────── */}
-          <div className="scroll-thin" style={{ display: "grid", gridTemplateColumns: "repeat(8, minmax(130px, 1fr))", gap: 12, marginBottom: 16, overflowX: "auto", paddingBottom: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 16 }}>
             {[
-              { label: "Combined Total Collected", value: inr(Math.round(combinedRevCur)),  delta: pct(combinedRevCur, combinedRevPrv),  color: "#08805A", hero: true },
-              { label: "Combined Recharge",        value: inr(Math.round(combinedRechargeCur)), delta: pct(combinedRechargeCur, netPrev + dpRechargePrv), color: "#08805A" },
+              { label: "Total Collection",         value: inr(Math.round(combinedRevCur)),      delta: pct(combinedRevCur, combinedRevPrv),                  color: "#08805A", hero: true },
+              { label: "Combined Recharge",        value: inr(Math.round(combinedRechargeCur)), delta: pct(combinedRechargeCur, netPrev + dpRechargePrv),   color: "#08805A" },
               { label: "Combined Deposit",         value: inr(Math.round(combinedDepositCur)),  delta: pct(combinedDepositCur, depositPrev + dpDepositPrv), color: "#5B21B6" },
-              { label: "DP Total Collected",       value: inr(Math.round(dpTotalCur)),      delta: pct(dpTotalCur, dpTotalPrv),          color: "#1E9E4F" },
-              { label: "DP Recharge",              value: inr(Math.round(dpRechargeCur)),   delta: pct(dpRechargeCur, dpRechargePrv),    color: "#1E9E4F" },
-              { label: "Total Customers",          value: (activeCustomers + dpUniqueDevices).toLocaleString("en-IN"), sub: `Zoho: ${activeCustomers.toLocaleString("en-IN")} · DP: ${dpUniqueDevices.toLocaleString("en-IN")}`, color: "#2A86D6" },
-              { label: "ARPU (Monthly)",           value: inr(Math.round(arpu)), sub: "Avg monthly revenue / customer", color: "#F59E0B" },
-              { label: "LTV (Projected)",          value: inr(Math.round(ltv)), sub: "Based on 1.5% monthly churn", color: "#7C3AED" },
+              { label: "Zoho Recharge",            value: inr(Math.round(netRevenue)),          delta: pct(netRevenue, netPrev),                             color: "#08805A" },
+              { label: "Zoho Deposit",             value: inr(Math.round(depositCollected)),     delta: pct(depositCollected, depositPrev),                   color: "#08805A" },
+              { label: "DP Total Collected",       value: inr(Math.round(dpTotalCur)),          delta: pct(dpTotalCur, dpTotalPrv),                          color: "#1E9E4F" },
+              { label: "DP Recharge",              value: inr(Math.round(dpRechargeCur)),       delta: pct(dpRechargeCur, dpRechargePrv),                    color: "#1E9E4F" },
+              { label: "DP Deposit",               value: inr(Math.round(dpDepositCur)),        delta: pct(dpDepositCur, dpDepositPrv),                      color: "#1E9E4F" },
+              { label: "Active Customers",         value: totalActiveCustomers.toLocaleString("en-IN"), sub: `Zoho: ${activeCustomers.toLocaleString("en-IN")} · DP: ${dpActiveCustomers.toLocaleString("en-IN")}`, color: "#2A86D6" },
+              { label: "New CX",                   value: newThisMonth.toLocaleString("en-IN"), delta: pct(newThisMonth, newPrev), sub: `Zoho: ${zohoNewCur.toLocaleString("en-IN")} · DP: ${dpNewCur.toLocaleString("en-IN")}`, color: "#08805A", isNewCustCard: true },
             ].map((k, i) => (
               // v2.29.274: `hero` no longer renders a gradient card — per
               // explicit user request to make all hero cards the same white
               // style as normal cards, so the delta below is just plain
               // colored text on white, no pill/backdrop needed.
-              <div key={k.label} style={{
-                background: "rgba(255,255,255,0.88)",
-                border: "1px solid rgba(0,0,0,0.08)",
-                borderRadius: 18, padding: "16px 18px",
-                boxShadow: "0 6px 20px rgba(0,0,0,.03)",
-                display: "flex", flexDirection: "column", gap: 4,
-              }}>
-                <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>{k.label}</div>
+              <div
+                key={k.label}
+                onMouseEnter={k.isNewCustCard ? () => setShowNewCustPopup(true) : undefined}
+                onMouseLeave={k.isNewCustCard ? () => setShowNewCustPopup(false) : undefined}
+                style={{
+                  background: "rgba(255,255,255,0.88)",
+                  border: k.isNewCustCard && showNewCustPopup ? "1px solid rgba(8,128,90,0.4)" : "1px solid rgba(0,0,0,0.08)",
+                  borderRadius: 18,
+                  padding: "16px 18px",
+                  boxShadow: k.isNewCustCard && showNewCustPopup ? "0 8px 24px rgba(8,128,90,.12)" : "0 6px 20px rgba(0,0,0,.03)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  minWidth: 0,
+                  position: "relative",
+                  cursor: k.isNewCustCard ? "pointer" : "default",
+                  transition: "border 0.2s ease, box-shadow 0.2s ease"
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={k.label}>{k.label}</div>
+                  {k.isNewCustCard && (
+                    <span style={{ fontSize: 9.5, color: "#08805A", fontWeight: 700, background: "rgba(8,128,90,0.08)", padding: "1px 5px", borderRadius: 5 }}>
+                      Hover
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#1D1D1F", lineHeight: 1.15, letterSpacing: "-.02em" }}>{k.value}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                  {k.delta != null
-                    ? <span style={{ fontSize: 11.5, fontWeight: 700, color: k.delta >= 0 ? "#08805A" : "#DC4141" }}>
-                        {k.delta >= 0 ? "▲" : "▼"} {Math.abs(k.delta)}% {vsPrev}
-                      </span>
-                    : k.sub
-                      ? <span style={{ fontSize: 11, color: "#86868B" }}>{k.sub}</span>
-                      : null}
+                  {k.delta != null && (
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: k.delta >= 0 ? "#08805A" : "#DC4141" }}>
+                      {k.delta >= 0 ? "▲" : "▼"} {Math.abs(k.delta)}% {vsPrev}
+                    </span>
+                  )}
+                  {k.sub && (
+                    <span style={{ fontSize: 11, color: "#86868B" }}>
+                      {k.delta != null ? `(${k.sub})` : k.sub}
+                    </span>
+                  )}
                 </div>
+
+                {/* Hover Popover for New CX */}
+                {k.isNewCustCard && showNewCustPopup && (
+                  <div
+                    onMouseEnter={() => setShowNewCustPopup(true)}
+                    onMouseLeave={() => setShowNewCustPopup(false)}
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 8px)",
+                      right: 0,
+                      minWidth: 280,
+                      maxWidth: 340,
+                      background: "#ffffff",
+                      borderRadius: 16,
+                      boxShadow: "0 16px 36px rgba(0,0,0,0.16), 0 0 0 1px rgba(8,128,90,0.2)",
+                      padding: "14px 16px",
+                      zIndex: 100,
+                      pointerEvents: "auto"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "1px solid rgba(0,0,0,0.06)", paddingBottom: 8, marginBottom: 8 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 800, color: "#1D1D1F" }}>
+                        New CX by Society
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 800, color: "#08805A" }}>
+                        Total: +{newThisMonth}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#86868B", marginBottom: 10 }}>
+                      {rangeLabel(range)} · Apartment Breakdown
+                    </div>
+
+                    <div style={{ maxHeight: 220, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+                      {newCustsAptBreakdown.length === 0 ? (
+                        <div style={{ fontSize: 12, color: "#86868B", textAlign: "center", padding: "10px 0" }}>
+                          No new customer additions in this period.
+                        </div>
+                      ) : (
+                        newCustsAptBreakdown.map(apt => (
+                          <div
+                            key={apt.name}
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              padding: "7px 10px",
+                              borderRadius: 10,
+                              background: "rgba(243,248,236,0.6)",
+                              border: "1px solid rgba(8,128,90,0.08)"
+                            }}
+                          >
+                            <div style={{ minWidth: 0, flex: 1, marginRight: 8 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#1D1D1F", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={apt.name}>
+                                {apt.name}
+                              </div>
+                              <div style={{ fontSize: 10.5, color: "#64748B", marginTop: 1 }}>
+                                Zoho: {apt.zoho} · DP: {apt.dp}
+                              </div>
+                            </div>
+                            <span style={{
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color: "#08805A",
+                              background: "rgba(8,128,90,0.12)",
+                              padding: "2px 7px",
+                              borderRadius: 6,
+                              flexShrink: 0
+                            }}>
+                              +{apt.total}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1418,14 +1666,14 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             {/* Plan Tier Distribution */}
             <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
               <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Plan Tier Distribution</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Active subscription counts by plan tier</div>
+              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Active subscription counts by plan amount</div>
               <div style={{ height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={planDistributionData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
                     <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="name" tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} width={120} />
-                    <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
+                    <Tooltip formatter={(v) => [`${v} subscriptions`, "Active Subscriptions"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
                     <Bar dataKey="value" name="Active Tiers" fill="#2A86D6" radius={[0, 4, 4, 0]} maxBarSize={20} isAnimationActive={false}>
                       <LabelList dataKey="value" position="right" style={{ fontSize: 11, fontWeight: 700, fill: "#2A86D6" }} />
                     </Bar>
@@ -1461,6 +1709,9 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
           {/* ── All Apartment Performance Table ───────────────────────────────── */}
           {(() => {
+            const allAptTotalCusts    = allAptRows.reduce((s, r) => s + (r.totalCustomers || 0), 0);
+            const allAptTotalChurned  = allAptRows.reduce((s, r) => s + (r.churned || 0), 0);
+            const allAptTotalReplaced = allAptRows.reduce((s, r) => s + (r.replaced || 0), 0);
             const allAptTotalZohoDep  = allAptRows.reduce((s, r) => s + r.zohoDeposit, 0);
             const allAptTotalZohoRech = allAptRows.reduce((s, r) => s + r.zohoRecharge, 0);
             const allAptTotalDpDep    = allAptRows.reduce((s, r) => s + r.dpDeposit, 0);
@@ -1480,10 +1731,13 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 </div>
                 {allAptRows.length > 0 ? (
                   <div className="scroll-thin" style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
                       <thead>
                         <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
                           <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "left", verticalAlign: "middle" }}>Apartment Name</th>
+                          <th rowSpan={2} style={{ padding: "13px 14px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Total Customer</th>
+                          <th rowSpan={2} style={{ padding: "13px 14px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Churned</th>
+                          <th rowSpan={2} style={{ padding: "13px 14px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Replaced</th>
                           <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>Zoho</th>
                           <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>DrinkPrime</th>
                           <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Total</th>
@@ -1530,6 +1784,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                               >
                                 {r.name}
                               </td>
+                              <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 700, color: "#1D1D1F" }}>
+                                {r.totalCustomers || 0}
+                              </td>
+                              <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 600, color: r.churned > 0 ? "#DC4141" : "#86868B" }}>
+                                {r.churned || 0}
+                              </td>
+                              <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 600, color: r.replaced > 0 ? "#D97706" : "#86868B" }}>
+                                {r.replaced || 0}
+                              </td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}</td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600 }}>{r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}</td>
                               <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}</td>
@@ -1540,6 +1803,9 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         })}
                         <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(8,128,90,.15)" }}>
                           <td style={{ padding: "13px 18px", fontSize: 13, fontWeight: 800, color: "#0d2119", textAlign: "left" }}>Total ({allAptRows.length})</td>
+                          <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#1D1D1F" }}>{allAptTotalCusts}</td>
+                          <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: allAptTotalChurned > 0 ? "#DC4141" : "#1D1D1F" }}>{allAptTotalChurned}</td>
+                          <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: allAptTotalReplaced > 0 ? "#D97706" : "#1D1D1F" }}>{allAptTotalReplaced}</td>
                           <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalZohoDep > 0 ? inr(Math.round(allAptTotalZohoDep)) : "—"}</td>
                           <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A" }}>{allAptTotalZohoRech > 0 ? inr(Math.round(allAptTotalZohoRech)) : "—"}</td>
                           <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalDpDep > 0 ? inr(Math.round(allAptTotalDpDep)) : "—"}</td>
@@ -1556,55 +1822,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             );
           })()}
 
-          {/* ── Combined Business Health Summary ───────────────────────── */}
-          <div style={{ ...softShadow, padding: 22, marginBottom: 16 }}>
-            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Combined Business Health</h3>
-            <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Unified view across Zoho + DP · {rangeLabel(range)}</div>
-            
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, alignItems: "start" }}>
-              {/* Progress bars list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {[
-                  { label: "Total Revenue (Zoho + DP)", value: inr(Math.round(combinedRevCur)), delta: pct(combinedRevCur, combinedRevPrv), bar: combinedRevCur, max: combinedRevCur, color: "#08805A" },
-                  { label: "Zoho Billing Collection",   value: inr(Math.round(collections)),   delta: pct(collections, collectionsPrev),   bar: collections,  max: combinedRevCur, color: "#1E9E4F" },
-                  { label: "DP System Collection",      value: inr(Math.round(dpTotalCur)),    delta: pct(dpTotalCur, dpTotalPrv),        bar: dpTotalCur,   max: combinedRevCur, color: "#C4E538" },
-                  { label: "Combined Recharge",         value: inr(Math.round(combinedRechargeCur)), delta: null, bar: combinedRechargeCur, max: combinedRevCur, color: "#2A86D6" },
-                  { label: "Combined Deposit",          value: inr(Math.round(combinedDepositCur)),  delta: null, bar: combinedDepositCur,  max: combinedRevCur, color: "#7C3AED" },
-                ].map(m => {
-                  const barPct = m.max > 0 ? Math.min(100, Math.round((m.bar / m.max) * 100)) : 0;
-                  return (
-                    <div key={m.label}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 5 }}>
-                        <span style={{ fontSize: 12.5, color: "#475569" }}>{m.label}</span>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-                          <span style={{ fontSize: 13.5, fontWeight: 800, color: "#1D1D1F" }}>{m.value}</span>
-                          {m.delta != null && <span style={{ fontSize: 10.5, fontWeight: 700, color: m.delta >= 0 ? "#08805A" : "#DC4141" }}>({m.delta >= 0 ? "+" : ""}{m.delta}%)</span>}
-                        </div>
-                      </div>
-                      <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.07)", overflow: "hidden" }}>
-                        <div style={{ width: `${barPct}%`, height: "100%", borderRadius: 999, background: m.color, transition: "width .4s ease" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Combined efficiency badges */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                {[
-                  { label: "Zoho vs Combined", value: combinedRevCur > 0 ? `${Math.round((collections / combinedRevCur) * 100)}%` : "—", color: "#08805A" },
-                  { label: "DP vs Combined",   value: combinedRevCur > 0 ? `${Math.round((dpTotalCur / combinedRevCur) * 100)}%` : "—", color: "#1E9E4F" },
-                  { label: "Recharge Mix",     value: combinedRevCur > 0 ? `${Math.round((combinedRechargeCur / combinedRevCur) * 100)}%` : "—", color: "#2A86D6" },
-                  { label: "DP MoM Growth",    value: dpTotalPrv > 0 ? `${pct(dpTotalCur, dpTotalPrv) >= 0 ? "+" : ""}${pct(dpTotalCur, dpTotalPrv)}%` : "—", color: pct(dpTotalCur, dpTotalPrv) >= 0 ? "#08805A" : "#DC4141" },
-                ].map(b => (
-                  <div key={b.label} style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(243,248,236,.6)", border: "1px solid rgba(8,128,90,.1)" }}>
-                    <div style={{ fontSize: 10.5, color: "#86868B", fontWeight: 600 }}>{b.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: b.color, marginTop: 2 }}>{b.value}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </>
       )}
 
@@ -1826,7 +2043,7 @@ export function NetRevenue() {
     for (const k of [i.zohoCustomerId, i.zohoId, i.customerNumber]) { if (k && custByZoho[k]) return custByZoho[k]; }
     return null;
   };
-  const societyOf = (i) => custOf(i)?.society || i.society || "Unknown";
+  const societyOf = (i) => canonicalSociety(custOf(i)?.society || i.society || "Unknown");
 
   const paidAll = invs.filter(i => i.status === "paid" && i.date);
   const aptOptions = Array.from(new Set(paidAll.map(societyOf).filter(s => s && s !== "Unknown"))).sort();
@@ -2227,7 +2444,7 @@ useEffect(() => {
     for (const k of keys) { if (k && custByZoho[k]) return custByZoho[k]; }
     return null;
   };
-  const societyOf = (rec) => custOf(rec)?.society || rec.society || "Unknown";
+  const societyOf = (rec) => canonicalSociety(custOf(rec)?.society || rec.society || "Unknown");
 
   const raw = data;
   // Plan + date-range filtering. Invoices filter on invoice date; subs on
@@ -2909,7 +3126,7 @@ export const SEED_APP_LOGS = (() => {
     { id: "s5", name: "Sana Kapoor", email: "sana.k@example.com", phone: "+91-9765432100", apartment: "Sobha Dream Acres", purifierId: "PW-90233", device: "Web/Desktop", ip: "49.36.221.10", loginTime: "2026-07-05T07:05:33+05:30", status: "Login Sucessfull", zohoId: "3399543000000350155" },
   ];
   const names = ["Aarav Sharma", "Diya Patel", "Vivaan Reddy", "Ananya Rao", "Kabir Nair", "Ishaan Gupta", "Myra Iyer", "Arjun Menon", "Saanvi Bose", "Reyansh Jain"];
-  const socs = ["MJR Clique Hydra", "Prestige Lakeside", "Sobha Dream Acres", "Brigade Gateway", "Purva Highlands"];
+  const socs = ["MJR Clique Hydra Apartment", "Prestige Lakeside", "Sobha Dream Acres", "Brigade Gateway", "Purva Highlands"];
   const devs = ["iPhone 12", "Samsung Galaxy S23", "Web/Desktop", "OnePlus 11", "iPhone 14 Pro"];
   const gen = [];
   const t0 = Date.parse("2026-07-05T08:30:00+05:30");
@@ -3144,7 +3361,7 @@ export function EarnedRevenue() {
     for (const k of [i.zohoCustomerId, i.zohoId, i.customerNumber]) { if (k && custByZoho[k]) return custByZoho[k]; }
     return null;
   };
-  const societyOf = (i) => custOf(i)?.society || i.society || "Unknown";
+  const societyOf = (i) => canonicalSociety(custOf(i)?.society || i.society || "Unknown");
 
   // Row source is back to invoices (v2.29.104, reverting v2.29.103) — but
   // Start/End date (+ Interval, v2.29.105) are still enriched from
@@ -3928,8 +4145,8 @@ export function Reconciliation() {
   const custByZoho = {};
   (data.cust || []).forEach(c => { [c.zohoId, c.id, c.zohoCustomerId, c.customerNumber].forEach(k => { if (k) custByZoho[k] = c; }); });
   const societyOf = (i) => {
-    for (const k of [i.zohoCustomerId, i.zohoId, i.customerNumber]) { if (k && custByZoho[k]) return custByZoho[k].society || "Unknown"; }
-    return i.society || "Unknown";
+    for (const k of [i.zohoCustomerId, i.zohoId, i.customerNumber]) { if (k && custByZoho[k]) return canonicalSociety(custByZoho[k].society || "Unknown"); }
+    return canonicalSociety(i.society || "Unknown");
   };
   const aptOptions = Array.from(new Set(data.inv.map(societyOf).filter(s => s && s !== "Unknown"))).sort();
   const aptOk = (i) => apt === null ? isRealSociety(societyOf(i)) : apt.includes(societyOf(i));
@@ -5142,12 +5359,17 @@ export function ApartmentPerformance() {
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [ym, setYm] = useState("all");
+  const [chartSoc, setChartSoc] = useState("__ALL__");
   const PER = 12;
   useEffect(() => {
     api.logView(user?.username, "Viewed Apartment Performance");
-    Promise.all([billingApi.getInvoices(), customerApi.getCustomers()])
-      .then(([inv, cust]) => setData({ inv, cust }))
-      .catch(() => setData({ inv: [], cust: [] }));
+    Promise.all([
+      billingApi.getInvoices().catch(() => []),
+      customerApi.getCustomers().catch(() => []),
+      fetchAllDpTransactions().catch(() => ({ rows: [] }))
+    ])
+      .then(([inv, cust, dpResult]) => setData({ inv, cust, dpRows: dpResult?.rows || [] }))
+      .catch(() => setData({ inv: [], cust: [], dpRows: [] }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -5160,6 +5382,157 @@ export function ApartmentPerformance() {
   const custBy = {};
   data.cust.forEach(c => { [c.zohoId, c.id, c.zohoCustomerId].filter(Boolean).forEach(k => { custBy[k] = c; }); });
   const custFor = (i) => custBy[i.zohoCustomerId] || custBy[i.zohoId] || custBy[i.customerNumber] || null;
+
+  const dpTxns = (data.dpRows || []).filter(r => r.row_type === "TRANSACTION");
+
+  // Dropdown list of societies for chart internal filter
+  const sSet = new Set();
+  data.cust.forEach(c => {
+    const name = cleanAptName(c.society);
+    if (name && isRealSociety(name)) sSet.add(name);
+  });
+  dpTxns.forEach(r => {
+    const name = cleanAptName(r.partner_name);
+    if (name && isRealSociety(name)) sSet.add(name);
+  });
+  const chartSocieties = Array.from(sSet).sort((a, b) => a.localeCompare(b));
+
+  // Trailing 7 months calculation for time series graph
+  const curNow = new Date();
+  const cY = curNow.getFullYear(), cM = curNow.getMonth();
+  const aptMonths = [];
+  for (let k = 6; k >= 0; k--) {
+    const d = new Date(cY, cM - k, 1);
+    aptMonths.push({
+      y: d.getFullYear(),
+      m: d.getMonth(),
+      label: d.toLocaleDateString("en-IN", { month: "short" })
+    });
+  }
+
+  // Calculate grand totals across the 7-month window to identify top apartments
+  const aptTotalsMap = {};
+  chartSocieties.forEach(soc => { aptTotalsMap[soc] = 0; });
+  aptMonths.forEach(x => {
+    data.inv.forEach(i => {
+      if (i.status !== "paid" || !i.date) return;
+      const d = new Date(i.date);
+      if (isNaN(d) || d.getFullYear() !== x.y || d.getMonth() !== x.m) return;
+      const c = custFor(i);
+      const soc = cleanAptName(c?.society || i.customerName || "");
+      if (soc && isRealSociety(soc)) {
+        aptTotalsMap[soc] = (aptTotalsMap[soc] || 0) + (i.total || 0);
+      }
+    });
+    dpTxns.forEach(r => {
+      if (!r.Paid_Date) return;
+      const d = new Date(r.Paid_Date);
+      if (isNaN(d) || d.getFullYear() !== x.y || d.getMonth() !== x.m) return;
+      const soc = cleanAptName(r.partner_name || "");
+      if (soc && isRealSociety(soc)) {
+        aptTotalsMap[soc] = (aptTotalsMap[soc] || 0) + (Number(r.revenue_amount) || 0) + (Number(r.deposit_amount) || 0);
+      }
+    });
+  });
+
+  const allAptsWithRev = Object.keys(aptTotalsMap)
+    .filter(k => aptTotalsMap[k] > 0)
+    .sort((a, b) => a.localeCompare(b));
+
+  const APT_SERIES_PALETTE = [
+    "#08805A", // ProWater Signature Emerald
+    "#2563EB", // Cobalt Blue
+    "#7C3AED", // Royal Violet
+    "#0D9488", // Deep Sea Teal
+    "#EA580C", // Warm Tangerine
+    "#4F46E5", // Electric Indigo
+    "#0284C7", // Ocean Azure
+    "#D97706", // Honey Gold
+    "#DB2777", // Vivid Rose
+    "#059669", // Jade Mint
+    "#8B5CF6", // Lavender Purple
+    "#06B6D4", // Bright Cyan
+    "#64748B", // Slate Grey
+    "#E11D48", // Crimson Ruby
+    "#10B981", // Light Emerald
+    "#6366F1", // Indigo Mist
+    "#F59E0B", // Marigold
+    "#3B82F6", // Sky Sapphire
+    "#A855F7", // Amethyst
+    "#14B8A6", // Turquoise
+  ];
+
+  let aptChartSeries = [];
+  if (chartSoc !== "__ALL__") {
+    aptChartSeries = [{ name: chartSoc, color: "#08805A" }];
+  } else {
+    const targetApts = allAptsWithRev.length > 0 ? allAptsWithRev : chartSocieties;
+    aptChartSeries = targetApts.map((name, idx) => ({
+      name,
+      color: APT_SERIES_PALETTE[idx % APT_SERIES_PALETTE.length]
+    }));
+  }
+
+  const m7Apt = aptMonths.map(x => {
+    const monthAptRev = {};
+    chartSocieties.forEach(soc => { monthAptRev[soc] = 0; });
+    let monthTotal = 0;
+
+    data.inv.forEach(i => {
+      if (i.status !== "paid" || !i.date) return;
+      const d = new Date(i.date);
+      if (isNaN(d) || d.getFullYear() !== x.y || d.getMonth() !== x.m) return;
+      const c = custFor(i);
+      const soc = cleanAptName(c?.society || i.customerName || "");
+      if (!soc || !isRealSociety(soc)) return;
+
+      if (chartSoc !== "__ALL__") {
+        if (soc.toLowerCase() === chartSoc.toLowerCase()) {
+          monthAptRev[chartSoc] = (monthAptRev[chartSoc] || 0) + (i.total || 0);
+          monthTotal += (i.total || 0);
+        }
+      } else {
+        monthAptRev[soc] = (monthAptRev[soc] || 0) + (i.total || 0);
+        monthTotal += (i.total || 0);
+      }
+    });
+
+    dpTxns.forEach(r => {
+      if (!r.Paid_Date) return;
+      const d = new Date(r.Paid_Date);
+      if (isNaN(d) || d.getFullYear() !== x.y || d.getMonth() !== x.m) return;
+      const soc = cleanAptName(r.partner_name || "");
+      if (!soc || !isRealSociety(soc)) return;
+
+      const amt = (Number(r.revenue_amount) || 0) + (Number(r.deposit_amount) || 0);
+      if (chartSoc !== "__ALL__") {
+        if (soc.toLowerCase() === chartSoc.toLowerCase()) {
+          monthAptRev[chartSoc] = (monthAptRev[chartSoc] || 0) + amt;
+          monthTotal += amt;
+        }
+      } else {
+        monthAptRev[soc] = (monthAptRev[soc] || 0) + amt;
+        monthTotal += amt;
+      }
+    });
+
+    const dataPoint = {
+      label: x.label,
+      y: x.y,
+      m: x.m,
+      total: Math.round(monthTotal)
+    };
+
+    if (chartSoc !== "__ALL__") {
+      dataPoint[chartSoc] = Math.round(monthAptRev[chartSoc] || 0);
+    } else {
+      aptChartSeries.forEach(s => {
+        dataPoint[s.name] = Math.round(monthAptRev[s.name] || 0);
+      });
+    }
+
+    return dataPoint;
+  });
 
   const paidAll = data.inv.filter(i => i.status === "paid" && (i.total || 0) > 0).map(i => {
     const c = custFor(i);
@@ -5223,6 +5596,114 @@ export function ApartmentPerformance() {
         </select>
       </div>
       <div style={grid4}>{stats.map((s, i) => <Stat key={i} {...s} />)}</div>
+
+      {/* ── Apartment Performance Time Series Chart ───────────────────────── */}
+      <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,.06)", boxShadow: "0 10px 30px rgba(0,0,0,.03)", padding: 22, marginTop: 16, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 12 }}>
+          <div>
+            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>
+              Apartment Performance Time Series
+            </h3>
+            <div style={{ fontSize: 12, color: "#86868B" }}>
+              {chartSoc === "__ALL__" ? "All Apartments (by Society)" : chartSoc} · Monthly revenue with apartment breakdown &amp; trend line · trailing 7 months
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            {/* Legend indicators */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              {aptChartSeries.map(s => (
+                <span key={s.name} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#475569", fontWeight: 600 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} /> {s.name}
+                </span>
+              ))}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B", fontWeight: 600 }}>
+                <span style={{ width: 14, height: 2.5, borderRadius: 2, background: "#F59E0B" }} /> Trend Line
+              </span>
+            </div>
+
+            {/* Internal Society Filter */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <label htmlFor="apt-perf-soc-filter" style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>Society:</label>
+              <select
+                id="apt-perf-soc-filter"
+                value={chartSoc}
+                onChange={(e) => setChartSoc(e.target.value)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(8,128,90,0.25)",
+                  background: "#ffffff",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: "#1D1D1F",
+                  outline: "none",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.04)"
+                }}
+              >
+                <option value="__ALL__">All Apartments (Combined)</option>
+                {chartSocieties.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: 285 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart
+              data={m7Apt}
+              margin={{ top: 28, right: 16, left: -6, bottom: 0 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fill: "#86868B", fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+                width={54}
+                tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`}
+              />
+              <Tooltip
+                formatter={(v, n) => [inr(v), n]}
+                contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }}
+              />
+              {aptChartSeries.map((s, idx) => (
+                <Bar
+                  key={s.name}
+                  dataKey={s.name}
+                  name={s.name}
+                  stackId="aptStack"
+                  fill={s.color}
+                  radius={idx === aptChartSeries.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
+                  maxBarSize={44}
+                  isAnimationActive={false}
+                />
+              ))}
+              <Line
+                type="monotone"
+                dataKey="total"
+                name="Trend"
+                stroke="#F59E0B"
+                strokeWidth={3}
+                dot={{ r: 4.5, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 2 }}
+                activeDot={{ r: 6.5, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 2 }}
+                isAnimationActive={false}
+              >
+                <LabelList
+                  dataKey="total"
+                  position="top"
+                  offset={10}
+                  formatter={v => v ? inr(v) : ""}
+                  style={{ fontSize: 10.5, fontWeight: 800, fill: "#08805A" }}
+                />
+              </Line>
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
       <div style={{ marginTop: 16 }}>
         <Toolbar q={q} setQ={setQ} onChange={handleQChange} placeholder={mode === "apartment" ? "Search apartment…" : "Search purifier ID…"} count={filtered.length}
           right={<button onClick={exportCsv} style={btnGhost}><Download size={15} /> Export</button>} />

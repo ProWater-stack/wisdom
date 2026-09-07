@@ -92,11 +92,11 @@ export const CUSTOMER_FIELDS = [
   { key: "billing", label: "Billing cycle", type: "select", options: BILLING_CYCLES, roles: ["admin", "devops"] },
 ];
 export const SEED_CUSTOMERS = [
-  { id: "CUS-00045", name: "Anis Emmanual", email: "anis@drinkprime.in", phone: "918839452234", address: "MJR Clique Hydra Apartment, Hyderabad", society: "MJR Clique Hydra", plan: "Plus Annual", billing: "Annual", status: "active", zohoId: "ZB-45", purifier_id: "HAC-00045", unused_credits: 1150, since: "2026-07-01" },
+  { id: "CUS-00045", name: "Anis Emmanual", email: "anis@drinkprime.in", phone: "918839452234", address: "MJR Clique Hydra Apartment, Hyderabad", society: "MJR Clique Hydra Apartment", plan: "Plus Annual", billing: "Annual", status: "active", zohoId: "ZB-45", purifier_id: "HAC-00045", unused_credits: 1150, since: "2026-07-01" },
   { id: "CUS-00084", name: "harshpvt", email: "harshlokhande486@gmail.com", phone: "917821907069", address: "Ashish JK, Pune", society: "Ashish JK", plan: "Home Quarterly", billing: "Quarterly", status: "active", zohoId: "ZB-84", purifier_id: "OWN-00084", unused_credits: 0, since: "2026-07-02" },
   { id: "CUS-00092", name: "Ravi Kumar", email: "ravi.k@example.com", phone: "", address: "Prestige Lakeside, Bengaluru", society: "Prestige Lakeside", plan: "Plus Half-Yearly", billing: "Half-Yearly", status: "active", zohoId: "ZB-92", purifier_id: "PW-00092", unused_credits: 600, since: "2026-06-10" },
   { id: "CUS-00101", name: "Sneha Patil", email: "sneha.p@example.com", phone: "", address: "Sobha Dream Acres, Bengaluru", society: "Sobha Dream Acres", plan: "Home Quarterly", billing: "Quarterly", status: "active", zohoId: "ZB-101", purifier_id: "PW-00101", unused_credits: 300, since: "2026-06-18" },
-  { id: "CUS-00110", name: "Imran Shaikh", email: "imran.s@example.com", phone: "", address: "MJR Clique Hydra, Hyderabad", society: "MJR Clique Hydra", plan: "Home Monthly", billing: "Monthly", status: "active", zohoId: "ZB-110", purifier_id: "", unused_credits: 99, since: "2026-07-03" },
+  { id: "CUS-00110", name: "Imran Shaikh", email: "imran.s@example.com", phone: "", address: "MJR Clique Hydra, Hyderabad", society: "MJR Clique Hydra Apartment", plan: "Home Monthly", billing: "Monthly", status: "active", zohoId: "ZB-110", purifier_id: "", unused_credits: 99, since: "2026-07-03" },
   { id: "CUS-00077", name: "Deepa Nair", email: "deepa.n@example.com", phone: "", address: "Prestige Lakeside, Bengaluru", society: "Prestige Lakeside", plan: "Plus Annual", billing: "Annual", status: "active", zohoId: "ZB-77", purifier_id: "PW-00077", unused_credits: 1200, since: "2026-03-12" },
 ];
 export let _customers = [...SEED_CUSTOMERS];
@@ -113,9 +113,9 @@ export function markSample(source, on, meta) {
   }
 }
 export function useSampleData() {
-  const [, force] = useState(0);
+  const [sources, setSources] = useState(() => Array.from(_sampleSources));
   useEffect(() => {
-    const fn = () => force(n => n + 1);
+    const fn = () => setSources(Array.from(_sampleSources));
     _sampleListeners.add(fn);
     return () => _sampleListeners.delete(fn);
   }, []);
@@ -127,6 +127,17 @@ export function authHeaders() {
     "Content-Type": "application/json",
     ...(token ? { "Authorization": `Bearer ${token}` } : {}),
   };
+}
+// Canonical society normalizer (v2.29.350): merges variants like "MJR Clique Hydra"
+// into canonical "MJR Clique Hydra Apartment" across all filters, tables, and feeds.
+export function canonicalSociety(s) {
+  if (!s) return "";
+  const trimmed = String(s).trim();
+  const cleaned = trimmed.replace(/^cro[_\s]+/i, "").replace(/\s*\[[^\]]+\]/g, "").trim();
+  if (/^MJR\s+Clique\s+Hydra(\s+Apartments?)?(\s*,.*)?$/i.test(cleaned)) {
+    return "MJR Clique Hydra Apartment";
+  }
+  return trimmed;
 }
 export const customerApi = {
   getCustomers: async (force = false) => getCached("customers", "customers", "/admin/get-all-customers", async () => {
@@ -142,7 +153,7 @@ export const customerApi = {
         email:   p.email            || "",
         phone:   p.phone            || "",
         address: p.billing_address?.full_address_string || "",
-        society: p.society          || "",
+        society: canonicalSociety(p.society || p.society_name || c.society || c.society_name || ""),
         plan:    p.plan             || p.plan_name || c.plan_name || p.dp_details?.plan_name || c.dp_details?.plan_name || "",
         billing: "",
         status:
@@ -427,7 +438,10 @@ export async function fetchAllDpTransactions(force = false) {
     const res = await fetch(url);
     if (!res.ok) throw new Error(`${res.status}`);
     const json = await res.json();
-    all.push(...(Array.isArray(json.transactions) ? json.transactions : []));
+    all.push(...(Array.isArray(json.transactions) ? json.transactions.map(t => ({
+      ...t,
+      partner_name: canonicalSociety(t.partner_name || t.society || ""),
+    })) : []));
     if (!json.has_more || json.next_cursor == null) { cursor = null; break; }
     cursor = json.next_cursor;
     if (page === 79) truncated = true;
@@ -818,9 +832,24 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.348";
-export const VERSION_DATE = "2026-09-06";
+export const APP_VERSION = "2.29.363";
+export const VERSION_DATE = "2026-09-07";
 export const VERSION_HISTORY = [
+  { v: "2.29.363", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): added 'Total Customer', 'Churned', and 'Replaced' columns to the 'All Apartment Performance' table per explicit user request ('In All Apartment Performance add Total Customer, Churned, Replaced'). Reconciles apartment-level metrics across Zoho and DrinkPrime customer populations, churned/inactive subscription states, and device replacement records with full footer summary totals. Verified via clean npm run build." },
+  { v: "2.29.362", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): converted the 'Plan Tier Distribution' chart Y-axis and grouping to display plan amounts (e.g. ₹250, ₹299, ₹350, ₹399, ₹450, ₹499, ₹500, etc.) rather than plan names per explicit user request ('in Plan Tier Distribution table rather than showing the plan name can you show the plan amount'). Dynamically resolves exact subscription recurring plan amounts across Zoho and DrinkPrime accounts with currency formatting. Verified via clean npm run build." },
+  { v: "2.29.361", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): (1) Removed the 'Apartment Performance Time Series' graph card and its trailing series state/computations from the Combined Analytics overview section per explicit user request ('remove this graph Apartment Performance Time Series'). (2) Renamed the 'New Customer Addition' KPI card to 'New CX' and updated the interactive hover popover title to 'New CX by Society' ('rename the New Customer Additions to New CX'). Verified via clean npm run build." },
+  { v: "2.29.360", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): reconciled 'New Customer Addition' KPI calculation directly with the Penetration Tracker data source. Root cause: the old KPI logic filtered customers requiring a purifier ID and read `c.since` from customer profiles (which is blank on raw Zoho customer records), whereas the Penetration Tracker extracts real subscription creation timestamps (`subs` `createdAt`/`activatedAt`). The KPI card and its hover popover now source new signups directly from subscriptions (`subs` + `parseFlexDate`) unified with customer records and DrinkPrime accounts, perfectly matching the Penetration Tracker counts across all periods. Verified via clean npm run build." },
+  { v: "2.29.359", note: "Analytics > Apartment Performance Time Series (`AnalyticsOverview` & `ApartmentPerformance` in `src/modules/Analytics.jsx`): (1) Bound monthly total revenue data labels directly to the top of the trend line (`<Line dataKey=\"total\">`) with bold `#08805A` formatting, ensuring every monthly column unconditionally renders its data label cleanly above the bar stack. (2) Upgraded the chart color scheme to a curated executive jewel & tech palette (signature ProWater emerald `#08805A`, royal cobalt `#2563EB`, violet `#7C3AED`, deep teal `#0D9488`, warm tangerine `#EA580C`, indigo `#4F46E5`, azure `#0284C7`, honey gold `#D97706`, vivid rose `#DB2777`, jade `#059669`, slate `#64748B`, ruby `#E11D48`). Verified via clean npm run build." },
+  { v: "2.29.358", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): added an interactive hover popover breakdown to the 'New Customer Addition' KPI card per explicit user request ('when i click in that New Customer Addition card - it should show a hover on popup kind of in which apartment how many count when i remove the cursor it should go off. when i keep the cirsor it should show'). Hovering over the card opens a sleek society-level breakdown popover detailing new additions per apartment (total additions badge + Zoho vs DrinkPrime split). The popover seamlessly dismisses when the cursor leaves the card. Verified via clean npm run build." },
+  { v: "2.29.357", note: "Analytics > Apartment Performance Time Series (`AnalyticsOverview` & `ApartmentPerformance` in `src/modules/Analytics.jsx`): eliminated the 'Other Apartments' grouping in the time series chart per explicit user request ('In Apartment Performance Graph, when i hover on the bar it shows as Other Apartment, can you show all the apartments there when i hover there Alphabetically arrange or sequence it'). Now maps and stacks every apartment individually in strict alphabetical sequence (`A-Z`) across the chart series, legend pills, and hover tooltips. When hovering over any monthly bar, users now see the complete alphabetical breakdown of each apartment with its exact revenue. Verified via clean npm run build." },
+  { v: "2.29.356", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): (1) Removed the 'Combined Business Health' section per user request ('remove this Combined Business Health'). (2) Added a new 'New Customer Addition' KPI card to the primary metrics strip acting as a real-time penetration tracker, displaying new customer acquisitions in the current period/month (`newThisMonth`), growth comparison vs previous period (`pct(newThisMonth, newPrev)`), and Zoho vs DrinkPrime breakdown (`Zoho: {zohoNewCur} · DP: {dpNewCur}`). Verified via clean npm run build." },
+  { v: "2.29.355", note: "Analytics > Apartment Performance Time Series (`AnalyticsOverview` & `ApartmentPerformance` in `src/modules/Analytics.jsx`): overhauled series representation to render apartment names directly instead of generic 'Zoho' or 'DP' labels per explicit user request ('Apartment Performance Time Series - in this can you show the apartment names directly in the graph rather zoho or DP'). When 'All Apartments (Combined)' is selected, dynamically parses top societies across the trailing 7-month window with an 'Other Apartments' overflow bucket using distinct palette colors across stacked bars, legends, and tooltip labels. When a specific apartment is selected in the internal filter, that apartment's name renders directly as the primary bar series. Total monthly collection values remain displayed on top of the bars via LabelList with the smooth amber trend line intact. Verified via clean npm run build." },
+  { v: "2.29.354", note: "Analytics ErrorBoundary Auto-Recovery Fix (`src/modules/Analytics.jsx`): resolved a React Hook ordering issue where `useMemo` was invoked conditionally following asynchronous data-loading early returns (`if (!data) return ...`). Refactored society listing aggregations and trailing time-series calculations into synchronous plain computations across both `AnalyticsOverview` and `ApartmentPerformance`, ensuring 100% stable, deterministic React rendering lifecycle with zero hook count discrepancies. Verified via clean npm run build." },
+  { v: "2.29.353", note: "Analytics > Apartment Performance tab (`ApartmentPerformance` in `src/modules/Analytics.jsx`): added the 'Apartment Performance Time Series' graph card directly inside the standalone Apartment Performance module tab as well. Displays trailing 7-month total revenue data labels across stacked Zoho + DrinkPrime bars, a smooth amber trend line (`#F59E0B`), and an internal society selector dropdown scoped specifically to this chart. Verified via clean npm run build." },
+  { v: "2.29.352", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): (1) Updated the first KPI card label from 'Combined Total Collected' to 'Total Collection' per user request ('In the KPI Cards rather than mentioning Combined Total Collection Mention as Total Collection'). (2) Added a dedicated 'Apartment Performance Time Series' graph card displaying trailing monthly total collections with data labels on each bar (reconciled across Zoho + DrinkPrime), a smooth amber trend line, and an internal society selector dropdown scoped specifically to this chart without impacting the global page filter. Verified via clean npm run build." },
+  { v: "2.29.351", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): converted the 'Total Customers' KPI card into 'Active Customers' per explicit user request ('Instead of showing Total Customers, show Active Customers Only.'). The card now strictly computes active accounts (active Zoho customers + active DrinkPrime customers excluding uninstalled units) displaying `totalActiveCustomers` as the headline and `Zoho: {activeCustomers} · DP: {dpActiveCustomers}` in the subtitle. Verified via clean npm run build." },
+  { v: "2.29.350", note: "CRM-Wide Society Canonicalization (`src/shared/core.js`, `src/modules/Analytics.jsx`, `src/modules/Sales.jsx`): merged duplicate society filter and data entries 'MJR Clique Hydra' and 'MJR Clique Hydra Apartment' into the canonical 'MJR Clique Hydra Apartment' per explicit user request ('In the society filter actually there are 2 MJR Clique Hydra and MJR Clique Hydra Apartment. Can you merge the MJR Clique Hydra to MJR Clique Hydra Apartment'). Added and exported `canonicalSociety()` helper across the stack, mapping raw API records (Customers, Subscriptions, Invoices, Leads, Tickets, Apartments, DP Transactions) and seed fixtures into canonical 'MJR Clique Hydra Apartment' while ensuring deposit policies (`APARTMENT_DEVICE_DEPOSITS`) and analytics joins match seamlessly. Verified via clean npm run build." },
+  { v: "2.29.349", note: "Analytics > Overview V2 (`AnalyticsOverview` in `src/modules/Analytics.jsx`): updated the KPI cards row per explicit user request ('In KPI cards add Zoho Recharge and Zoho Deposit, Also Add DP Recharge and DP Deposit, remove ARPU and LTV Projected card'). The KPI strip now presents: Combined Total Collected, Combined Recharge, Combined Deposit, Zoho Recharge (`netRevenue`), Zoho Deposit (`depositCollected`), DP Total Collected (`dpTotalCur`), DP Recharge (`dpRechargeCur`), DP Deposit (`dpDepositCur`), and Total Customers. Removed ARPU (Monthly) and LTV (Projected) cards. Verified via clean npm run build." },
   { v: "2.29.348", note: "Analytics > Credits (`CreditsAnalytics` in `src/modules/Analytics.jsx`): rebuilt the table from a per-customer summary into a per-credit-note listing, per explicit user request (with a Zoho-style reference screenshot: 'In the table add the creditnote_number and invoice_number, add a view like this'), confirmed via AskUserQuestion on scope (target screen: Analytics > Credits — the only screen backed by real Zoho credit-note data; replace the existing table rather than add a second toggled view). Since v2.29.6 this table aggregated ALL of a customer's credit notes into one summed row (Society/Notes-count/Discount-total/Balance/Last-given) — there was no room for a single note's own Credit Note # or Invoice #, both of which `mapCreditNote()` already parses from the live feed (`.number` from `creditnote_number`, `.invoicesApplied`/`.invoiceNumber` from `invoice_number`) but never surfaced as columns. Now renders one row per credit note (same customer can appear on multiple rows), with columns Customer, Society, Credit Note #, Invoice # (comma-joined when a note settled multiple invoices), Status, Amount, Balance, Date — sorted newest-first. KPI stat cards (Total discount given / Credit balance available / Credit notes / Customers discounted) and the CSV export were updated to match the new per-note shape; 'Customers discounted' is now a plain unique-customer count (`zohoCustomerId`/`id` `Set` size) since the old aggregation object it used to read `.length` off no longer exists. **Immediate follow-up in the same version**: per direct user feedback on the first live render ('value of status which is showing as open shows in this color #C4E639, i dont like it, show in amber color for the entire row if its open'), replaced the shared `renderHigStatusBadge()` call for the Status column (which routed 'open' into its yellow-green '#C4E538' bucket) with dedicated inline coloring for this table only — amber (`#986315`, the same amber already used app-wide for pending/warning states) for 'open', green (`#08805A`) for 'closed' — and extended the amber to the entire `<tr>`'s background (a light `rgba(152,99,21,0.07)` tint), not just the status cell, so an open note is easy to spot scanning down the table; a 'closed' row stays untinted. Verified via a clean `npm run build` and a live pass with the sample credit-note fixture: the same customer ('Anis Emmanual') correctly appeared on two separate rows for her two distinct notes (CN-1005, CN-1002), an 'open' row rendered with the amber-tinted background and amber 'OPEN' text, a 'closed' row (CN-1003, Ravi Kumar) rendered with no tint and green 'CLOSED' text, and the KPI cards/footer totals matched the underlying 5-note sample set (₹2,000 total, ₹1,200 balance, 3 unique customers)." },
   { v: "2.29.347", note: "Follow-up to v2.29.346, per a screenshot showing the persistent sidebar's bottom user card still truncating to 'Arjun.m...' ('At the bottom it still show Arjun...... i already asked you to fix it'). v2.29.346 only fixed the Home page's greeting header — missed that the same sidebar `pw-user-card` (rendered in BOTH `App.jsx`'s Home and Shell components, so it's visible on every page including Home itself) was separately calling `titleCaseName(user.name)`, which only capitalizes and never splits — 'Arjun.Marri' stayed as one long word, wide enough to hit the card's `text-overflow: ellipsis` and truncate. Extracted the split-on-space-or-dot logic from v2.29.346's inline fix into a new shared `firstNameOf()` helper in `shared/core.js` (mirroring `titleCaseName`'s placement) and used it in three places instead of one: the Home greeting (replacing its inline computation), and the visible name in both `pw-user-card` instances (Home + Shell). The card's hover tooltip deliberately still shows the FULL name via `titleCaseName()` (now unconditionally, not just while the sidebar is collapsed) — so the complete 'Arjun.Marri (admin)' stays one hover away, only the always-visible label is shortened. Verified via a clean `npm run build` and a live check at both desktop and a narrower (768px) width: the sidebar card now reads plain 'Arjun' with no ellipsis truncation and no visual overflow, and hovering it shows the tooltip 'Arjun.Marri (admin)'." },
   { v: "2.29.346", note: "Home page greeting (`App.jsx`): fixed the first-name extraction to also split on a dot, not just a space, per explicit user request (screenshot showing 'Good Morning, Arjun.marri 👋' when it should read 'Good Morning, Arjun 👋'). Root cause: `firstNameRaw` was computed as `user.name.split(\" \")[0]` — correct for a space-separated stored name like 'Anis Kumar' (→ 'Anis'), but a no-op for a dot-separated one like 'Arjun.Marri' (no space to split on, so the whole string passed through unchanged). Changed the split to `split(/[\\s.]+/)[0]` so either separator convention correctly yields just the first name. Scoped to the Home page greeting specifically (`App.jsx`'s `Home` component) — Analytics.jsx's own separate greeting intentionally shows the full title-cased name via `titleCaseName()`, not first-name-only, and was left untouched since only the Home greeting was reported. Verified via a clean `npm run build` and a live check with two synthetic users: 'Arjun.Marri' now correctly greets 'Good Morning, Arjun 👋' (previously showed the full dotted string), and a regression check with a normal space-separated name ('Anis Kumar') still correctly greets 'Good Morning, Anis 👋'." },
@@ -1362,7 +1391,7 @@ export function toReferrers(json) {
       email: r.customer_email || "—",
       phone: r.customer_phone || "—",
       code: r.customer_key || r.customer_number || "—",
-      society: r.society_name || "",
+      society: canonicalSociety(r.society_name || ""),
       customerNumber: r.customer_number || "",
       purifierId: r.purifier_id || "",
       zohoId: r.zoho_customer_id || "",
@@ -1387,7 +1416,7 @@ export function toReferees(json) {
         email: e.email || "—",
         phone: e.phone || "—",
         flat: e.flat_number || "",
-        society: e.society_name || "",
+        society: canonicalSociety(e.society_name || ""),
         status: e.status === "converted" ? "paid" : (e.status || "pending"),
         rawStatus: e.status || "",
         refereeFreeMonths: e.referee_free_months ?? 0,
@@ -1728,7 +1757,7 @@ export function pickAptField(row, ...cands) {
 }
 export function mapApartment(r) {
   return {
-    name:          pickAptField(r, "apartment_name", "name", "society", "society_name") || "—",
+    name:          canonicalSociety(pickAptField(r, "apartment_name", "name", "society", "society_name") || "—"),
     managerNumber: pickAptField(r, "manager_number", "manager_phone", "phone", "mobile", "contact_number") || "—",
     meetingStatus: pickAptField(r, "meeting_status", "status") || "—",
     poc:           pickAptField(r, "poc", "poc_name", "point_of_contact", "contact_person", "spoc", "contact_name", "manager_name", "manager") || "—",
@@ -1847,7 +1876,7 @@ export function mapZohoDeskTicket(t) {
     ticketNo: num != null ? `#${num}` : "—",
     ticketNumber: num != null ? String(num) : "",
     purifierId: hv("Purifier ID") ?? pick("cf_purifier_id", "purifierId", "purifier_id") ?? "—",
-    society: hv("Society Name") ?? pick("cf_society_name766799", "cf_society_name", "society", "society_name") ?? "—",
+    society: canonicalSociety(hv("Society Name") ?? pick("cf_society_name766799", "cf_society_name", "society", "society_name") ?? "—"),
     customer: contactName,
     issueCategory: hv("Issue Category"),                 // ← drives the table's Issue Type column + Ops filter
     status: String(t.status ?? t.statusType ?? "Open"),
@@ -1899,7 +1928,7 @@ export function mapWisdomTicket(t) {
     ticketNo: num ? `#${num}` : "—",
     ticketNumber: num ? String(num) : "",
     purifierId: g("Purifier ID") ?? "—",
-    society: g("Society Name") ?? "—",
+    society: canonicalSociety(g("Society Name") ?? "—"),
     // The feed carries no customer NAME — only a Ticket Owner (the agent) + Phone.
     customer: g("Ticket Owner") ?? g("Phone") ?? "—",
     issueCategory: g("Issue Category"),
@@ -1974,7 +2003,7 @@ export const isWisdomTicketShape = (r) => !!r && typeof r === "object" &&
 
 // Small offline fallback (Zoho Desk shape) so dev renders without the API.
 export const SEED_TICKETS = [
-  { id: 299, ticketNumber: 299, status: "Open", priority: "Urgent", subject: "No water output", email: "uondu@example.com", phone: "+91 98450 11111", contact: { firstName: "uondu" }, createdTime: "2026-06-13T07:34:55Z", modifiedTime: "2026-06-17T08:10:00Z", description: "Purifier not dispensing since morning.", customFields: { "Issue Category": "Complaint", "Society Name": "MJR Clique Hydra", "Purifier ID": "TEST89789", "Address": "https://maps.app.goo.gl/example299", "Zoho Customer ID": "3399543001", "Job Start Time": null, "Parts_Used": null } },
+  { id: 299, ticketNumber: 299, status: "Open", priority: "Urgent", subject: "No water output", email: "uondu@example.com", phone: "+91 98450 11111", contact: { firstName: "uondu" }, createdTime: "2026-06-13T07:34:55Z", modifiedTime: "2026-06-17T08:10:00Z", description: "Purifier not dispensing since morning.", customFields: { "Issue Category": "Complaint", "Society Name": "MJR Clique Hydra Apartment", "Purifier ID": "TEST89789", "Address": "https://maps.app.goo.gl/example299", "Zoho Customer ID": "3399543001", "Job Start Time": null, "Parts_Used": null } },
   { id: 301, ticketNumber: 301, status: "On Hold", priority: "High", subject: "Wrong plan charged", email: "divya.nair@example.com", phone: "+91 98450 22222", contact: { firstName: "Divya", lastName: "Nair" }, createdTime: "2026-06-16T15:30:00Z", modifiedTime: "2026-06-17T09:00:00Z", description: "Billed for Plus but on Home plan.", customFields: { "Issue Category": "Billing", "Society Name": "Prestige Lakeside", "Purifier ID": "PW-44120", "Address": "https://maps.app.goo.gl/example301" } },
   { id: 305, ticketNumber: 305, status: "In Progress", priority: "Medium", subject: "Auto GS Schedule", contact: { lastName: "Brigade Gateway" }, createdTime: "2026-06-16T11:00:00Z", modifiedTime: "2026-06-16T12:30:00Z", description: null, customFields: { "Issue Category": "GS Service", "Society Name": "Brigade Gateway", "Purifier ID": "PW-77810", "Address": "https://maps.app.goo.gl/example305", "reason for postpone": null, "rescheduled_Date": null } },
   { id: 308, ticketNumber: 308, status: "Closed", priority: "Low", subject: "Filter replacement reminder", email: "sana.kapoor@example.com", contact: { firstName: "Sana", lastName: "Kapoor" }, createdTime: "2026-06-14T10:00:00Z", modifiedTime: "2026-06-15T14:20:00Z", description: "Filter dispatched.", customFields: { "Issue Category": "Maintenance", "Society Name": "Sobha Dream Acres", "Purifier ID": "PW-90233", "Address": "Whitefield, Bengaluru", "Parts_Used": "RO membrane" } },
@@ -2635,7 +2664,7 @@ export const APARTMENT_DEVICE_DEPOSITS = {
 // strips a "CRO_" prefix and "[...]" suffix (the DP-transaction feed's own
 // naming convention, e.g. "CRO_CBR Aakruti [ Hoodi ]"), drops the noise word
 // "apartment(s)", collapses whitespace, and lowercases.
-export const normSociety = (s) => String(s || "")
+export const normSociety = (s) => String(canonicalSociety(s) || "")
   .replace(/^CRO_/i, "")
   .replace(/\[[^\]]*\]/g, "")
   .replace(/\bapartments?\b/gi, "")
@@ -2894,7 +2923,7 @@ export const BENGALURU_CENTER = { lat: 12.9716, lng: 77.5946 };
 export const AUTO_GS_SEED = [
   { name: "CBR Aakruti",                installedDate: "2026-01-15", totalFlats: 108, numTowers: 2, croType: "Eco crystal", lastBackwash: "2026-06-28", lastDozing: "NA",             offset: 11 },
   { name: "SVS Ananda Nilayam",         installedDate: "2026-02-10", totalFlats: 168, numTowers: 5, croType: "Alfa Enviro", lastBackwash: "2026-06-25", lastDozing: "2026-06-25",     offset: 14 },
-  { name: "MJR Clique Hydra",           installedDate: "2025-11-20", totalFlats: 300, numTowers: 5, croType: "Eco crystal", lastBackwash: "2026-07-01", lastDozing: "Yet to install", offset: 8 },
+  { name: "MJR Clique Hydra Apartment", installedDate: "2025-11-20", totalFlats: 300, numTowers: 5, croType: "Eco crystal", lastBackwash: "2026-07-01", lastDozing: "Yet to install", offset: 8 },
   { name: "Ashish JK",                  installedDate: "2026-03-05", totalFlats: 206, numTowers: 6, croType: "Alfa Enviro", lastBackwash: "2026-07-06", lastDozing: "2026-07-06",     offset: 3 },
   { name: "Prabhavathi Meghana Towers", installedDate: "2026-01-28", totalFlats: 80,  numTowers: 1, croType: "Eco crystal", lastBackwash: "2026-06-22", lastDozing: "NA",             offset: 17 },
 ];

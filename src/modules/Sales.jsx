@@ -17,7 +17,7 @@ import {
   useAuth, api, apartmentApi, norm, hashStr, momPct, rangeFilter, exportToCsv,
   fmtTime, inr, API_ORIGIN, authHeaders, pushLog, _memCache, _inflight,
   getCached, fetchAllPagesFast, dateInRange, prevRange, rangeLabel,
-  useDateRange, wait, isRealSociety, CHART_PALETTE, HIDDEN_LEAD_STATUSES,
+  useDateRange, wait, isRealSociety, canonicalSociety, CHART_PALETTE, HIDDEN_LEAD_STATUSES,
 } from "../shared/core";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError,
@@ -87,7 +87,7 @@ export function mapZohoLead(z) {
     flatNo: z.flat_no || pickLeadField(z, ["Flat_No", "Flat_Number", "Door_No"], "flatno", "flatnumber", "doorno", "flat") || "",
     existingRo: z.existing_ro || pickLeadField(z, ["Existing_RO", "Existing_Ro"], "existingro", "existingpurifier") || "",
     referralCode: z.referral_code || pickLeadField(z, ["Referral_Code", "Referal_Code"], "referralcode", "referral") || "",
-    society: z.society_name || z.company || z.Society_Name || z.Company || "—",
+    society: canonicalSociety(z.society_name || z.company || z.Society_Name || z.Company || "—"),
     plan: z.plan_name || z.Plan_Name || "—",
     planTenure: z.plan_tenure || z.Plan_Tenure || "—",
     value: Number(planValue) || 0,
