@@ -9,3 +9,13 @@
 /* Ink, darker step — matches --shell-0 in App.jsx; shows behind the app shell. */
 html, body, #root { margin: 0; padding: 0; width: 100%; min-height: 100vh; background: #06100B; }
 body { background: #06100B; }
+
+/* Recharts (v2.29.387): clicking a bar/sector/point makes it briefly
+   keyboard-focusable for accessibility, which paints the browser's default
+   blue focus outline as a rectangle around the chart's SVG — removed per
+   explicit user request ("there is a blue line which is shown if i click on
+   any graph as a rectangle, please remove it"). Scoped to Recharts' own
+   wrapper/surface/shapes only, not a global focus-outline reset. */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus,
+.recharts-surface:focus { outline: none !important; }

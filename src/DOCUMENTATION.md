@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.379**.
+> **Reflects:** `APP_VERSION` **2.29.387**.
 
 ---
 
@@ -95,7 +95,11 @@
 
 ### Charts gotcha
 Recharts bars must set `isAnimationActive={false}` or they render at 0 height in this app. All
-charts use it.
+charts use it. **`src/index.css` (v2.29.387)** also suppresses the browser's default blue
+focus-outline rectangle Recharts paints around a chart after clicking a bar/point/sector (it makes
+clicked shapes briefly keyboard-focusable for accessibility) — scoped to `.recharts-wrapper`/
+`.recharts-surface`, not a global focus-outline reset, per explicit user request ("there is a blue
+line which is shown if i click on any graph as a rectangle, please remove it").
 
 ---
 
@@ -704,7 +708,9 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - **How:** `GET /admin/get-all-subscriptions` + `/admin/get-all-invoices`. Billing Analytics shows
   MRR/ARR, **MRR by plan** (active subs × `monthlyOf`), revenue by society, Week-over-Week &
   Month-over-Month (collected), renewals due, deposits/refunds. Deposit vs recharge split via
-  `depositForCustomer` (see §4).
+  `depositForCustomer` (see §4). (v2.29.381 briefly added an Average ARPU KPI card and per-month ARPU
+  lines here — reverted at v2.29.382, per explicit user correction that Overview V2 was always the
+  intended page, not Billing; see Analytics > Overview V2 below.)
 - **Tabs: Subscriptions, Invoices, Deposits & Refunds, Plans.** (The **Overview** tab —
   `BillingOverview`: Active Subscriptions/Est. MRR/Outstanding/Collected KPI cards, plus
   Subscriptions-by-Status and Active-Revenue-by-Plan charts — was removed entirely at v2.29.316, per
@@ -940,12 +946,40 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   test customer with dunning status + an overdue invoice + a renewal due in 7 days) — correctly scored
   High with all three reasons listed, then the test data was removed.
 
-- **Overview V2 (`AnalyticsOverview`, `an_overview_v2`)** — a unified, filtered command dashboard for Zoho Billing + DrinkPrime. Loads customers, subscriptions, invoices, leads, **referrers**, tickets, apartments, and DrinkPrime transaction logs. Two filters scope the page: a **date-range picker** (This Month/Quarter/Year/Custom, compared vs the previous equal period) and a **Society multi-select**. Every chart honours both filters.
-  - **KPI row:** Displays 9 cards in a responsive grid: Total Collection, Combined Recharge, Combined Deposit, Zoho Recharge, Zoho Deposit, DP Total Collected, DP Recharge, DP Deposit, and Active Customers (Zoho + DP active split reconciled).
+- **Overview V2 (`AnalyticsOverview`, `an_overview_v2`)** — a unified, filtered command dashboard for Zoho Billing + DrinkPrime. Loads customers, subscriptions, invoices, leads, **referrers**, tickets, apartments, and DrinkPrime transaction logs. Three filters scope the page: a **date-range picker** (This Month/Quarter/Year/Custom, compared vs the previous equal period), a **Society multi-select**, and (combined/Overview V2 only) a **Customer Stack multi-select** (v2.29.387, per explicit user request — DP / Zoho, same convention as Customer.jsx's own Customer Stack picker). Every chart honours all three filters. The Stack filter gates the four base populations everything else is built from: `fInvs`/`fSubs` (Zoho-only — invoices/subscriptions don't exist on DP) go empty when Zoho is excluded, `dpTxns` (DP-only) goes empty when DP is excluded, `fCustomers` (mixed) is filtered per-row by its `isDpCustomer` flag — so the KPI strip and every chart built on those populations are automatically scoped with no further plumbing. **Bug fixed v2.29.386:** every DP-derived figure on this page (Combined Recharge/Deposit/Total Collection's DP half, DP Total Collected/Recharge/Deposit, Revenue by Source's DP slices, Combined Monthly Collection's DP contribution) silently ignored the Society filter — only the Zoho half of each combined figure was ever actually scoped. Root cause: `dpTxns` (the base of every DP figure) only filtered on `row_type`, never on society. Fixed by filtering it with `socOk(cleanAptName(r.partner_name))`, the same `socOk` check every other society-scoped set on this page already uses — `cleanAptName` already normalizes DP's raw `partner_name` into the same canonical-society space (it calls `canonicalSociety` internally).
+  - **KPI row:** Displays 12 cards in this exact order (v2.29.383, per explicit user request): Total
+    Collection, Combined Recharge, Combined Deposit, **Zoho Collection (v2.29.383)** — Zoho-only
+    counterpart to DP Total Collected, reusing `collections` (= `netRevenue + depositCollected` by
+    construction) — Zoho Recharge, Zoho Deposit, DP Total Collected, DP Recharge, DP Deposit,
+    **Average ARPU (v2.29.382)** — combined Zoho+DP recharge ÷ total active customers, an `arpu`
+    figure this file already computed for an internal LTV estimate but never actually surfaced until
+    v2.29.382 — Active Customers, and New CX (Zoho + DP active split reconciled).
   - **Revenue by Source:** Pie Chart with percentage data labels showing Zoho Recharge, Zoho Deposit, DP Recharge, and DP Deposit shares.
   - **Combined Monthly Collection:** stacked Zoho + DP collection trends bar chart (trailing 7 months).
+  - **Total Revenue vs Expected Revenue / MoM Growth Trend (v2.29.382):** two charts added per explicit
+    user request, right after Combined Monthly Collection. "Total Revenue vs Expected Revenue" is a
+    linear-projection Actual-vs-Forecast composed chart — Expected (Forecast) renders as a **Bar**
+    (v2.29.384, per explicit user request; was a dashed line at launch), colored **light olive/
+    yellow-green** (`#A9BA5A`, v2.29.387 — a rose color from v2.29.385 was called out as "pink" and
+    swapped here), while Total (Actual) is a line, colored a **darker olive green** (`#6B8E23`,
+    v2.29.385 — distinct from both the lighter forecast bar and the app's own brand green `#08805A`
+    used everywhere else, but still on-theme; the palette was iterated live per user feedback across
+    both versions before landing here) — it also carries a per-month **ARPU** line (teal,
+    `#14B8A6`) on its own secondary right-hand axis. "MoM Growth Trend" is Collected + % change over
+    the trailing 7 months, single axis — it briefly also carried an ARPU line (v2.29.382), removed at
+    v2.29.385 per explicit user request. Both reuse `faData`/`momData`, computed unconditionally in
+    this component regardless of its `combined` prop — the same data already powers the "Forecast vs
+    Actual"/"Month-on-Month (MoM) Revenue Growth" charts on the legacy (pre-v2.29.141, no longer in the
+    sidebar) plain "Overview" tab.
   - **Apartment Performance Time Series (v2.29.352):** Dedicated time-series composed chart showing trailing monthly total revenue with data labels on top of each bar, an amber trend line, and an **internal society filter** dropdown scoped exclusively to this chart.
-  - **Plan Tier Distribution:** horizontal bar chart showing active subscriptions grouped by plan tier.
+  - **Plan Tier Distribution:** horizontal bar chart showing active subscriptions grouped by plan tier
+    (Zoho subscriptions + DP active purifiers), as a **percentage of the current filtered total**
+    (v2.29.386, per explicit user request — was a raw count before), so a bar reads e.g. "25%" rather
+    than "1"; the percentage is computed against `planCountsTotal`, itself already scoped to the page's
+    Society/date filters. **Bug fixed v2.29.380:** the Zoho half read straight off the raw, unfiltered
+    subscriptions list — the Society filter (at the top of this page) never actually narrowed it, even
+    though the DP half already was correctly scoped. Both halves now consistently apply the same
+    `socOk(societyOf(...))` check every other society-scoped set on this page already uses.
   - **Under-Penetrated Buildings:** active connection density progress tracker highlighting the top 5 apartments with the lowest active density.
   - **All Apartment Performance:** unified society metrics table detailing deposits and recharges for both Zoho and DrinkPrime (excluding empty rows). Clicking any apartment name opens a **Modal subpage** displaying the list of all Zoho & DrinkPrime customers who made a payment (split by recharges, deposits, and total collected) in that apartment during the selected date range, including a **Device Status** column (v2.29.367) — for Zoho rows read straight off the joined customer record, for DrinkPrime rows joined via `current_device === purifier_id` since DP payment records don't carry `device_status` themselves; badged red (uninstalled) / amber (replaced) / gray (other) using a `normDevSt()` normalizer (strips spaces/underscores/hyphens before lowercasing, so "Un-Installed" and "Uninstalled" badge identically). **Total Customer** (a live headcount, not a "this period" claim) = customer `status` canonicalized to "Active" (`canonicalStatus()`). **Churned and Replaced columns — added v2.29.363, removed v2.29.368.** They read `device_status` (Un-Installed/Uninstalled → Churned, Replaced → Replaced), but `GET /admin/get-all-customers` has no timestamp for when `device_status` last changed — so on a page built entirely around a date-range filter, these counts were really "currently Un-Installed/Replaced, ever," not "became so within the selected period," which read as misleading. Removed rather than mislabeled, pending a real change-date field from the API (confirmed with the user that none currently exists) that would let this be scoped correctly.
   - **Refresh Security:** The top-bar Refresh button is authorized for **admin-only** access (`tabIsAdmin`).

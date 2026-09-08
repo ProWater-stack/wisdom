@@ -11,7 +11,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   AlertCircle, ArrowDown, ArrowUp, ArrowUpDown, Ban, Boxes,
   CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, Coins, Download,
-  Droplets, GitBranch, Hourglass, Info, Landmark, PlayCircle, Receipt,
+  Droplets, ExternalLink, GitBranch, Hourglass, Info, Landmark, PlayCircle, Receipt,
   RefreshCw, Repeat, RotateCcw, Scale, ScrollText, Search, Target, Ticket,
   TrendingUp, Upload, Users, Wallet, X, Cpu, Clock, Zap,
 } from "lucide-react";
@@ -180,9 +180,26 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const [, setFlatsTick] = useState(0);   // re-render after a Total-Flats edit
   const { sel, setSel, range } = useDateRange("this_month");   // working date filter
   const [selSoc, setSelSoc] = useState(null);                  // society filter (null = all)
+  // Customer Stack filter (v2.29.387, per explicit user request: "add in
+  // the filters as Stack for DP and Zoho") — null = both; else an array
+  // containing "DP" and/or "Zoho", same convention as Customer.jsx's own
+  // `stackFilter`/Customer Stack `MultiSelectFilter`.
+  const [selStack, setSelStack] = useState(null);
   const [selSource, setSelSource] = useState(null);            // revenue source filter (null = all)
   const [selectedAptDetails, setSelectedAptDetails] = useState(null);
   const [showNewCustPopup, setShowNewCustPopup] = useState(false);
+  const [kpiModal, setKpiModal] = useState(null);              // universal KPI / chart drilldown modal
+  const [modalQ, setModalQ] = useState("");
+  const [toast, setToast] = useState("");
+  const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2400); };
+  const hasActiveFilters = (sel && sel.preset !== "this_month") || selSoc !== null || selStack !== null || selSource !== null;
+  const handleResetFilters = () => {
+    setSel({ preset: "this_month" });
+    setSelSoc(null);
+    setSelStack(null);
+    setSelSource(null);
+    flash("All filters reset to default");
+  };
   useEffect(() => {
     api.logView(user.username, "Viewed Analytics overview");
     // Each source fails soft (→ []) so one dead endpoint doesn't blank the page.
@@ -227,10 +244,18 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     if (selSoc === null) return isRealSociety(name);
     return selSoc.includes(name);
   };
+  // Customer Stack filter (v2.29.387) — gates the two underlying data
+  // populations (`fInvs`/`fSubs` for Zoho, `dpTxns` for DP) so every figure
+  // built on top of them (KPI strip, Revenue by Source, Combined Monthly
+  // Collection, Plan Tier Distribution, etc.) is automatically scoped with
+  // no further plumbing, same pattern as the Society fix at v2.29.386.
+  const stackOk = (s) => selStack === null || selStack.includes(s);
 
-  // ---- society-filtered base sets -------------------------------------------
-  const fInvs = invs.filter(i => socOk(societyOf(i)));
-  const fCustomers = customers.filter(c => c.purifier_id && socOk(c.society || "Unknown"));
+  // ---- society + stack-filtered base sets -----------------------------------
+  // Invoices are a Zoho-only concept (DP has no invoices — see `dpTxns`
+  // below), so the whole population is gated by `stackOk("Zoho")` at once.
+  const fInvs = stackOk("Zoho") ? invs.filter(i => socOk(societyOf(i))) : [];
+  const fCustomers = customers.filter(c => c.purifier_id && socOk(c.society || "Unknown") && stackOk(c.isDpCustomer ? "DP" : "Zoho"));
   const fPaid = fInvs.filter(i => i.status === "paid");
 
   // ---- range slices (current period vs previous equal period) ---------------
@@ -270,8 +295,12 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     const soc = societyOf(s);
     const d = parseFlexDate(s.createdAt || s.activatedAt);
     if (soc && soc !== "Unknown" && d && socOk(soc)) {
+      const c = custOf(s);
+      const name = s.customerName || s.customer_name || s.name || c?.name || "Zoho Customer";
+      const phone = c?.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : (s.phone ? String(s.phone).replace(/\D/g, "").slice(-10) : "—");
+      const purifierId = c?.purifier_id || s.purifierId || s.purifier_id || "—";
       const key = `sub_${s.id || s.zohoCustomerId || s.customerNumber || Math.random()}_${d.getTime()}`;
-      allSignupMap.set(key, { society: soc, since: d, isDp: false });
+      allSignupMap.set(key, { name, phone, purifierId, society: soc, since: d, isDp: false });
     }
   });
 
@@ -280,9 +309,12 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     const soc = canonicalSociety(c.society || "Unknown");
     const d = parseFlexDate(c.since);
     if (soc && soc !== "Unknown" && d && socOk(soc)) {
+      const name = c.name || (c.isDpCustomer ? "DrinkPrime Customer" : "Zoho Customer");
+      const phone = c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—";
+      const purifierId = c.purifier_id || "—";
       const key = c.isDpCustomer ? `dp_${c.id || c.purifier_id || Math.random()}` : `cust_${c.zohoId || c.id || Math.random()}`;
       if (!allSignupMap.has(key)) {
-        allSignupMap.set(key, { society: soc, since: d, isDp: !!c.isDpCustomer });
+        allSignupMap.set(key, { name, phone, purifierId, society: soc, since: d, isDp: !!c.isDpCustomer });
       }
     }
   });
@@ -334,21 +366,33 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const anchor = range.to.getTime() < now.getTime() ? range.to : now;
   const curY = anchor.getFullYear(), curM = anchor.getMonth();
   const m7 = [];
-  for (let k = 6; k >= 0; k--) { const d = new Date(curY, curM - k, 1); m7.push({ y: d.getFullYear(), m: d.getMonth(), collected: 0, billed: 0, deposits: 0, earned: 0, newC: 0, recv: 0 }); }
+  // `payers` tracks each month's distinct PAYING customers (not rendered
+  // directly — only used to derive `.arpu` below), so ARPU can be trended
+  // per month on Forecast vs Actual / MoM Revenue Growth, per explicit user
+  // request ("add Average ARPU in the KPI card and add it in analytics
+  // Total revenue versus expected revenue, MoM Growth Trend" — on Overview
+  // V2, not the Billing tab, per an explicit follow-up correction).
+  for (let k = 6; k >= 0; k--) { const d = new Date(curY, curM - k, 1); m7.push({ y: d.getFullYear(), m: d.getMonth(), collected: 0, billed: 0, deposits: 0, earned: 0, newC: 0, recv: 0, payers: new Set() }); }
   const find7 = (y, m) => m7.find(x => x.y === y && x.m === m);
   fInvs.forEach(i => {
     if (!i.date) return; const d = new Date(i.date); if (isNaN(d)) return;
     const s = find7(d.getFullYear(), d.getMonth()); if (!s) return;
     s.billed += i.total;
-    if (i.status === "paid") { s.collected += i.total; s.deposits += depositForCustomer(custOf(i), i.plan, i.total, i.planCode); s.earned += earnedOf(i); }
+    if (i.status === "paid") {
+      s.collected += i.total; s.deposits += depositForCustomer(custOf(i), i.plan, i.total, i.planCode); s.earned += earnedOf(i);
+      s.payers.add(i.customerNumber || i.zohoCustomerId || i.zohoId || i.email || i.id);
+    }
     if ((i.balance || 0) > 0) s.recv += i.balance;
   });
+  // Per-month ARPU = that month's collected cash ÷ that month's distinct
+  // paying customers.
+  m7.forEach(x => { x.arpu = x.payers.size ? Math.round(x.collected / x.payers.size) : 0; });
   fCustomers.forEach(c => { if (!c.since) return; const d = new Date(c.since); if (isNaN(d)) return; const s = find7(d.getFullYear(), d.getMonth()); if (s) s.newC += 1; });
   const refSpark = m7.map(x => fReferrers.filter(r => { const d = new Date(r.joined); return !isNaN(d) && d.getFullYear() === x.y && d.getMonth() === x.m; }).length);
   const spark = {
     revenue: m7.map(x => x.collected), net: m7.map(x => x.collected - x.deposits),
     earned: m7.map(x => x.earned), customers: m7.map(x => x.newC), deposits: m7.map(x => x.deposits),
-    collections: m7.map(x => x.collected), billed: m7.map(x => x.billed),
+    collections: m7.map(x => x.collected), billed: m7.map(x => x.billed), arpu: m7.map(x => x.arpu),
   };
 
   // Penetration-based active customers: cumulative sign-ups (subscriptions joined to a
@@ -367,8 +411,18 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
   // ---- KPI tiles -------------------------------------------------------------
   const vsPrev = "vs " + (PRESET_UNIT[sel.preset] === "month" ? monthYr(prev.from.getFullYear(), prev.from.getMonth()) : "prev period");
+  // Average ARPU (v2.29.382) — collections this period ÷ active customers as
+  // of the period end, per explicit user request ("add Average ARPU in the
+  // KPI card... on Overview V2, not Billing"). Same formula the pre-existing
+  // "ARPU (Per Customer)" figure in the ARR & Unit Economics strip below
+  // already uses (`arpuVal`, computed later in this function) — duplicated
+  // here rather than reordering that code, since `collections`/`pcNow` are
+  // both already available at this point in the function.
+  const arpuNow = pcNow > 0 ? Math.round(collections / pcNow) : 0;
+  const arpuPrev = pcPrev > 0 ? Math.round(collectionsPrev / pcPrev) : 0;
   const kpis = [
     { label: "Total Collection", value: inr(collections), delta: pct(collections, collectionsPrev), icon: Coins, color: "#08805A", spark: spark.collections, hero: true },
+    { label: "Average ARPU", value: inr(arpuNow), delta: pct(arpuNow, arpuPrev), icon: Target, color: "#08805A", spark: spark.arpu },
     { label: "Earned Revenue", value: inr(earnedRevenue), delta: pct(earnedRevenue, earnedPrev), icon: Scale, color: "#08805A", spark: spark.earned },
     { label: "Recharge collected", value: inr(netRevenue), delta: pct(netRevenue, netPrev), icon: Wallet, color: "#08805A", spark: spark.net },
     { label: "Deposit collected", value: inr(depositCollected), delta: pct(depositCollected, depositPrev), icon: Landmark, color: "#08805A", spark: spark.deposits },
@@ -377,7 +431,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   ];
 
   // ---- Revenue by plan — MRR by plan ----------------------------------------
-  const fSubs = subs.filter(s =>
+  // Subscriptions are a Zoho-only concept, same as invoices above.
+  const fSubs = !stackOk("Zoho") ? [] : subs.filter(s =>
     s.status === "active" &&
     socOk(societyOf(s)) &&
     (!s.activatedAt || new Date(s.activatedAt) <= range.to));   // active as of the period end
@@ -427,9 +482,9 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const sxy = xs.reduce((a, x, i) => a + x * ys[i], 0), sxx = xs.reduce((a, x) => a + x * x, 0);
   const slope = (n * sxx - sx * sx) ? (n * sxy - sx * sy) / (n * sxx - sx * sx) : 0;
   const intercept = (sy - slope * sx) / (n || 1);
-  const faData = fa.map((x, i) => ({ label: monthShort(x.y, x.m), actual: Math.round(x.collected), forecast: Math.max(0, Math.round(intercept + slope * i)) }));
+  const faData = fa.map((x, i) => ({ label: monthShort(x.y, x.m), actual: Math.round(x.collected), forecast: Math.max(0, Math.round(intercept + slope * i)), arpu: x.arpu }));
   const nd = new Date(curY, curM + 1, 1);
-  faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)) });
+  faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)), arpu: null });
 
   // ---- Month-on-Month (MoM) collected (trailing 7 months) -----------------
   const momData = m7.map((x, idx) => {
@@ -440,7 +495,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       y: x.y,
       m: x.m,
       collected: Math.round(x.collected),
-      pct: pctChange
+      pct: pctChange,
+      arpu: x.arpu
     };
   });
 
@@ -519,7 +575,23 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // ──────────────────────────────────────────────────────────────────────────
   // DP + COMBINED ANALYTICS — computed from dpRows (TRANSACTION rows only)
   // ──────────────────────────────────────────────────────────────────────────
-  const dpTxns = (dpRows || []).filter(r => r.row_type === "TRANSACTION");
+  // `socOk(cleanAptName(r.partner_name))` (v2.29.386, real bug fix per
+  // explicit user report — "make the KPI cards dynamic... based on
+  // selection it should change" — the Society filter at the top of this
+  // page was silently doing nothing to any DP-derived figure): every OTHER
+  // society-scoped set on this page (`fInvs`/`fCustomers`/`fSubs`) already
+  // applies `socOk`, but `dpTxns` never did, so picking a society only ever
+  // narrowed the Zoho half of Total Collection/Combined Recharge/Combined
+  // Deposit/Revenue by Source/Combined Monthly Collection while every DP
+  // figure (DP Recharge/DP Deposit/DP Total Collected, and DP's share of
+  // Combined Recharge/Deposit/Total Collection) kept showing every society's
+  // DP revenue regardless of the filter. `cleanAptName` already normalizes
+  // DP's raw `partner_name` into the same canonical-society space `socOk`
+  // expects (it calls `canonicalSociety` internally, same as `societyOf`
+  // does for Zoho records) — reused rather than reinvented.
+  // DP transactions are a DP-only concept, gated by `stackOk("DP")`
+  // (v2.29.387) the same way `fInvs`/`fSubs` above are gated to Zoho.
+  const dpTxns = !stackOk("DP") ? [] : (dpRows || []).filter(r => r.row_type === "TRANSACTION" && socOk(cleanAptName(r.partner_name)));
 
   // Date-slice helper for DP rows (uses Paid_Date)
   const dpInR = (r, rg) => {
@@ -665,9 +737,17 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     .filter(r => r.totalCollected > 0)
     .sort((a, b) => b.totalCollected - a.totalCollected);
 
-  // Plan Distribution calculation by plan amount (Zoho subscriptions + DP active purifiers)
+  // Plan Distribution calculation by plan amount (Zoho subscriptions + DP active purifiers).
+  // Zoho half was reading straight off the raw, unfiltered `subs` array — never
+  // scoped to the Society filter at all — while the DP half a few lines below
+  // (`dpActiveCusts`, from `fCustomers`) already was, so picking a society only
+  // ever partially filtered this chart. Fixed per explicit user report ("when
+  // i am applying filter of society... it is not applying the filter in Plan
+  // Tier Distribution") by applying the same `socOk(societyOf(s))` check every
+  // other society-scoped set in this component already uses (see `fInvs`/
+  // `fSubs` above).
   const planCounts = {};
-  subs.forEach(s => {
+  subs.filter(s => socOk(societyOf(s))).forEach(s => {
     if (["live", "active", "in_trial"].includes(String(s.status || "").toLowerCase())) {
       let amt = Number(s.amount) || 0;
       if (!amt && s.planCode) {
@@ -702,9 +782,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     planCounts["DrinkPrime Purifier"] = dpUniqueDevices;
   }
 
+  const planCountsTotal = Object.values(planCounts).reduce((s, v) => s + v, 0);
+  // `pct` (v2.29.386, per explicit user request: "show percentage" instead
+  // of raw counts) — of `planCountsTotal`, which is already scoped to the
+  // page's current Society/date filters (both `fSubs`/`fCustomers`, which
+  // feed `planCounts` above, already respect them), so the percentages
+  // themselves are dynamic without any extra plumbing.
   const planDistributionData = Object.entries(planCounts).map(([name, value]) => ({
     name,
-    value
+    value,
+    pct: planCountsTotal > 0 ? Math.round((value / planCountsTotal) * 1000) / 10 : 0,
   })).sort((a, b) => b.value - a.value);
 
   // Under-penetrated apartments calculation (Connection Density)
@@ -730,13 +817,18 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     .sort((a, b) => a.pct - b.pct)
     .slice(0, 5);
 
-  // Revenue by Source donut (for current period)
+  // Revenue by Source donut (for current period). Colors (v2.29.388, per
+  // explicit user-provided redesign) — cyan for Zoho Recharge, green for
+  // Zoho Deposit, two mint/teal tones for the DP side — real slices/values
+  // unchanged, only the palette and chart chrome (center total, card
+  // legend) were redesigned.
   const revBySource = [
-    { name: "Zoho Recharge", value: Math.round(netRevenue),      fill: "#08805A" },
-    { name: "Zoho Deposit",  value: Math.round(depositCollected), fill: "#34d399" },
-    { name: "DP Recharge",   value: Math.round(dpRechargeCur),   fill: "#1E9E4F" },
-    { name: "DP Deposit",    value: Math.round(dpDepositCur),    fill: "#86efac" },
+    { name: "Zoho Deposit",  value: Math.round(depositCollected), fill: "#0A6E46", pctColor: "#0A6E46" },
+    { name: "Zoho Recharge", value: Math.round(netRevenue),      fill: "#76C043", pctColor: "#5B9530" },
+    { name: "DP Recharge",   value: Math.round(dpRechargeCur),   fill: "#B4D998", pctColor: "#0A6E46" },
+    { name: "DP Deposit",    value: Math.round(dpDepositCur),    fill: "#DDE5D4", pctColor: "#697D61" },
   ].filter(x => x.value > 0);
+  const revBySourceTotal = revBySource.reduce((s, x) => s + x.value, 0);
 
   // 7-month stacked chart: Zoho collected + DP collected per month
   const dpM7 = m7.map(x => {
@@ -768,6 +860,756 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       { k: "Outstanding", v: pendingReceivables }, { k: "Growth Rate %", v: growthRate == null ? 0 : growthRate },
       { k: "Collection Efficiency %", v: Math.round(efficiency * 10) / 10 },
     ]);
+
+  // ── Unified Customer Map & Payment Provider for Universal Drilldowns ─
+  const custByPurifierId = {};
+  customers.forEach(c => { if (c.purifier_id) custByPurifierId[c.purifier_id] = c; });
+
+  const getUnifiedPayments = () => {
+    // Filter Zoho payments
+    const zohoList = paidCur.map(i => {
+      const depVal = depositForCustomer(custOf(i), i.plan, i.total, i.planCode) || 0;
+      const rechVal = Math.max(0, i.total - depVal);
+      const c = custOf(i);
+      return {
+        id: `zoho-${i.id || i.number || Math.random()}`,
+        name: i.customerName || c?.name || "Zoho Customer",
+        phone: c?.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—",
+        purifierId: c?.purifier_id || i.purifier_id || "—",
+        society: societyOf(i),
+        plan: i.plan || c?.plan || "—",
+        deviceStatus: c?.deviceStatus || "",
+        stack: "Zoho",
+        recharge: rechVal,
+        deposit: depVal,
+        total: i.total,
+        paidDate: i.paidDate || i.date ? fmtDate(new Date(i.paidDate || i.date)) : "—",
+      };
+    }).filter(p => p.total > 0);
+
+    // Filter DrinkPrime payments
+    const dpList = dpCur.map((r, idx) => {
+      const rechVal = Number(r.revenue_amount) || 0;
+      const depVal = Number(r.deposit_amount) || 0;
+      const apt = cleanAptName(r.partner_name || "Unknown");
+      const cRec = custByPurifierId[r.current_device];
+      return {
+        id: `dp-${r.id || idx}`,
+        name: r.CustomerName || cRec?.name || "DrinkPrime Customer",
+        phone: cRec?.phone ? String(cRec.phone).replace(/\D/g, "").slice(-10) : (r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"),
+        purifierId: r.current_device || "—",
+        society: apt,
+        plan: r.plan_name || cRec?.plan || "DrinkPrime",
+        deviceStatus: cRec?.deviceStatus || "",
+        stack: "DrinkPrime",
+        recharge: rechVal,
+        deposit: depVal,
+        total: rechVal + depVal,
+        paidDate: r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—",
+      };
+    }).filter(p => p.total > 0);
+
+    return [...zohoList, ...dpList].sort((a, b) => b.total - a.total);
+  };
+
+  // ── Render Universal KPI & Chart Drilldown Modal ──────────────────────
+  const renderKpiDrilldownModal = () => {
+    if (!kpiModal) return null;
+    const { type, filter, aptFilter, tierName, title, sub } = kpiModal;
+    const mq = modalQ.toLowerCase().trim();
+
+    // 1. Payments drilldown
+    if (type === "payments") {
+      let list = getUnifiedPayments();
+      if (filter === "recharge") list = list.filter(x => x.recharge > 0);
+      else if (filter === "deposit") list = list.filter(x => x.deposit > 0);
+      else if (filter === "zoho_all") list = list.filter(x => x.stack === "Zoho");
+      else if (filter === "zoho_recharge") list = list.filter(x => x.stack === "Zoho" && x.recharge > 0);
+      else if (filter === "zoho_deposit") list = list.filter(x => x.stack === "Zoho" && x.deposit > 0);
+      else if (filter === "dp_all") list = list.filter(x => x.stack === "DrinkPrime");
+      else if (filter === "dp_recharge") list = list.filter(x => x.stack === "DrinkPrime" && x.recharge > 0);
+      else if (filter === "dp_deposit") list = list.filter(x => x.stack === "DrinkPrime" && x.deposit > 0);
+
+      if (aptFilter) {
+        list = list.filter(x => cleanAptName(x.society).toLowerCase() === cleanAptName(aptFilter).toLowerCase());
+      }
+
+      const filtered = mq
+        ? list.filter(x => `${x.name} ${x.purifierId} ${x.society} ${x.phone} ${x.stack} ${x.plan}`.toLowerCase().includes(mq))
+        : list;
+
+      const totRech = filtered.reduce((s, x) => s + x.recharge, 0);
+      const totDep = filtered.reduce((s, x) => s + x.deposit, 0);
+      const totAll = filtered.reduce((s, x) => s + x.total, 0);
+
+      const exportCsv = () => exportToCsv("prowater-payments-drilldown.csv", [
+        { label: "Customer Name", get: x => x.name },
+        { label: "Phone", get: x => x.phone },
+        { label: "Purifier ID", get: x => x.purifierId },
+        { label: "Society", get: x => x.society },
+        { label: "Stack", get: x => x.stack },
+        { label: "Device Status", get: x => x.deviceStatus },
+        { label: "Paid Date", get: x => x.paidDate },
+        { label: "Deposit", get: x => x.deposit },
+        { label: "Recharge", get: x => x.recharge },
+        { label: "Total", get: x => x.total },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>KPI Drill-Down · {rangeLabel(range)}</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{title}</h2>
+                {sub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{sub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalCloseBtnStyle}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            {/* Toolbar & Search */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search customer, purifier ID, society…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 12.5, color: "#475569" }}>
+                  Deposit: <strong style={{ color: "#475569" }}>{inr(Math.round(totDep))}</strong> · Recharge: <strong style={{ color: "#08805A" }}>{inr(Math.round(totRech))}</strong> · Total: <strong style={{ color: "#1D1D1F", fontSize: 14 }}>{inr(Math.round(totAll))}</strong>
+                </div>
+                <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={modalTh}>Customer Name</th>
+                      <th style={modalTh}>Phone</th>
+                      <th style={modalTh}>Purifier ID</th>
+                      <th style={modalTh}>Society</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Stack</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Device Status</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Paid Date</th>
+                      <th style={{ ...modalTh, textAlign: "right" }}>Deposit</th>
+                      <th style={{ ...modalTh, textAlign: "right" }}>Recharge</th>
+                      <th style={{ ...modalTh, textAlign: "right" }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item, idx) => (
+                      <tr key={item.id || idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{item.name}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{item.phone}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>{item.purifierId}</td>
+                        <td style={{ padding: "11px 14px", color: "#1D1D1F" }}>{item.society}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: item.stack === "Zoho" ? "rgba(30,158,79,0.1)" : "rgba(42,134,214,0.1)", color: item.stack === "Zoho" ? "#1E9E4F" : "#2A86D6" }}>
+                            {item.stack}
+                          </span>
+                        </td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          {item.deviceStatus ? (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, color: normDevSt(item.deviceStatus) === "uninstalled" ? "#DC4141" : "#475569", background: normDevSt(item.deviceStatus) === "uninstalled" ? "rgba(220,65,65,0.1)" : "rgba(71,85,105,0.08)" }}>
+                              {item.deviceStatus}
+                            </span>
+                          ) : <span style={{ color: "#94a3b8" }}>—</span>}
+                        </td>
+                        <td style={{ padding: "11px 14px", textAlign: "center", color: "#64748B" }}>{item.paidDate}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", color: item.deposit > 0 ? "#475569" : "#94a3b8" }}>{item.deposit > 0 ? inr(Math.round(item.deposit)) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", color: item.recharge > 0 ? "#08805A" : "#94a3b8", fontWeight: item.recharge > 0 ? 600 : 400 }}>{item.recharge > 0 ? inr(Math.round(item.recharge)) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 700, color: "#1D1D1F" }}>{inr(Math.round(item.total))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ padding: 40 }}><Empty msg="No matching transactions found." /></div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 2. Active Customers drilldown
+    if (type === "active_customers") {
+      let custs = fCustomers.filter(c => canonicalStatus(c.status) === "Active");
+      if (aptFilter) {
+        custs = custs.filter(c => cleanAptName(c.society).toLowerCase() === cleanAptName(aptFilter).toLowerCase());
+      }
+      const filtered = mq
+        ? custs.filter(c => `${c.name} ${c.purifier_id} ${c.society} ${c.phone} ${c.plan} ${c.isDpCustomer ? "DrinkPrime DP" : "Zoho"}`.toLowerCase().includes(mq))
+        : custs;
+
+      const zohoActive = filtered.filter(c => !c.isDpCustomer).length;
+      const dpActive = filtered.filter(c => c.isDpCustomer).length;
+      const socCount = new Set(filtered.map(c => cleanAptName(c.society)).filter(Boolean)).size;
+
+      const exportCsv = () => exportToCsv("prowater-active-customers.csv", [
+        { label: "Customer Name", get: c => c.name },
+        { label: "Phone", get: c => c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—" },
+        { label: "Purifier ID", get: c => c.purifier_id },
+        { label: "Society", get: c => c.society },
+        { label: "Plan", get: c => c.plan || c.plan_name || "—" },
+        { label: "Stack", get: c => c.isDpCustomer ? "DrinkPrime" : "Zoho" },
+        { label: "Status", get: c => c.status },
+        { label: "Since", get: c => c.since ? fmtDate(new Date(c.since)) : "—" },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>Customer Directory · Active Accounts</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{title}</h2>
+                {sub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{sub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalCloseBtnStyle}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search customer, purifier ID, society, phone…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 12.5, color: "#475569" }}>
+                  Total: <strong style={{ color: "#08805A" }}>{filtered.length}</strong> (Zoho: <strong>{zohoActive}</strong> · DP: <strong>{dpActive}</strong>) · Societies: <strong>{socCount}</strong>
+                </div>
+                <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={modalTh}>Customer Name</th>
+                      <th style={modalTh}>Phone</th>
+                      <th style={modalTh}>Purifier ID</th>
+                      <th style={modalTh}>Society</th>
+                      <th style={modalTh}>Plan</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Stack</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Device Status</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Since Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((c, idx) => (
+                      <tr key={c.id || idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{c.name || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—"}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>{c.purifier_id || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#1D1D1F" }}>{c.society || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#475569" }}>{c.plan || c.plan_name || "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: c.isDpCustomer ? "rgba(42,134,214,0.1)" : "rgba(30,158,79,0.1)", color: c.isDpCustomer ? "#2A86D6" : "#1E9E4F" }}>
+                            {c.isDpCustomer ? "DrinkPrime" : "Zoho"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, color: "#08805A", background: "rgba(8,128,90,0.1)" }}>
+                            Active
+                          </span>
+                        </td>
+                        <td style={{ padding: "11px 14px", textAlign: "center", color: "#64748B" }}>{c.since ? fmtDate(new Date(c.since)) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ padding: 40 }}><Empty msg="No active customers match your search." /></div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 3. New CX drilldown
+    if (type === "new_cx") {
+      const signupsInPeriod = allSignups.filter(x => x.since >= range.from && x.since <= range.to);
+      const filtered = mq
+        ? signupsInPeriod.filter(x => `${x.name || ""} ${x.society} ${x.phone || ""} ${x.purifierId || ""} ${x.isDp ? "DrinkPrime DP" : "Zoho"}`.toLowerCase().includes(mq))
+        : signupsInPeriod;
+
+      const exportCsv = () => exportToCsv("prowater-new-cx.csv", [
+        { label: "Customer Name", get: x => x.name || "—" },
+        { label: "Society Name", get: x => x.society },
+        { label: "Phone", get: x => x.phone || "—" },
+        { label: "Purifier ID", get: x => x.purifierId || "—" },
+        { label: "Stack", get: x => x.isDp ? "DrinkPrime" : "Zoho" },
+        { label: "Onboarded Date", get: x => fmtDate(x.since) },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>Penetration & Growth · {rangeLabel(range)}</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{title}</h2>
+                {sub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{sub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalCloseBtnStyle}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            {/* Society summary cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
+              {newCustsAptBreakdown.slice(0, 6).map(apt => (
+                <div key={apt.name} style={{ background: "rgba(243,248,236,0.6)", padding: "10px 14px", borderRadius: 12, border: "1px solid rgba(8,128,90,0.12)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1D1D1F", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={apt.name}>{apt.name}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#08805A" }}>+{apt.total}</span>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: "#64748B", marginTop: 3 }}>Zoho: {apt.zoho} · DP: {apt.dp}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search customer, society, phone, purifier ID, stack…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 12.5, color: "#475569" }}>
+                  Total New Additions: <strong style={{ color: "#08805A" }}>{filtered.length}</strong> (Zoho: <strong>{filtered.filter(x => !x.isDp).length}</strong> · DP: <strong>{filtered.filter(x => x.isDp).length}</strong>)
+                </div>
+                <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={modalTh}>#</th>
+                      <th style={modalTh}>Customer Name</th>
+                      <th style={modalTh}>Society Name</th>
+                      <th style={modalTh}>Phone</th>
+                      <th style={modalTh}>Purifier ID</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Stack</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Onboarding Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", color: "#86868B", fontSize: 12 }}>{idx + 1}</td>
+                        <td style={{ padding: "11px 14px", fontWeight: 700, color: "#1D1D1F" }}>{item.name || "—"}</td>
+                        <td style={{ padding: "11px 14px", fontWeight: 600, color: "#08805A" }}>{item.society}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{item.phone || "—"}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#475569" }}>{item.purifierId || "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: item.isDp ? "rgba(42,134,214,0.1)" : "rgba(30,158,79,0.1)", color: item.isDp ? "#2A86D6" : "#1E9E4F" }}>
+                            {item.isDp ? "DrinkPrime" : "Zoho"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "11px 14px", textAlign: "center", color: "#08805A", fontWeight: 600 }}>{fmtDate(item.since)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ padding: 40 }}><Empty msg="No new customer additions in this period." /></div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 4. Plan Tier drilldown
+    if (type === "plan_tier") {
+      const tierSubs = [];
+      subs.filter(s => socOk(societyOf(s))).forEach(s => {
+        if (["live", "active", "in_trial"].includes(String(s.status || "").toLowerCase())) {
+          let amt = Number(s.amount) || 0;
+          if (!amt && s.planCode) {
+            const p = planInfo(s.planCode);
+            if (p?.price) amt = p.price;
+            else if (p?.total) amt = p.total;
+          }
+          if (!amt && s.plan) {
+            const p = Object.values(PLAN_CATALOG).find(x => x.name && x.name.toLowerCase() === String(s.plan).toLowerCase());
+            if (p?.price) amt = p.price;
+            else if (p?.total) amt = p.total;
+          }
+          if (!amt) {
+            const m = String(s.planCode || s.plan || "").match(/_(\d{3,4})(?:_|$)/) || String(s.planCode || s.plan || "").match(/\b(\d{3,4})\b/);
+            if (m) amt = Number(m[1]);
+          }
+          const label = amt > 0 ? inr(amt) : "Custom / Other";
+          if (label === tierName) {
+            const c = custOf(s);
+            tierSubs.push({
+              name: s.customerName || c?.name || "Zoho Customer",
+              phone: c?.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—",
+              purifierId: c?.purifier_id || s.purifierId || "—",
+              society: societyOf(s),
+              plan: s.plan || s.planName || "—",
+              amount: amt,
+              stack: "Zoho",
+              status: canonicalStatus(s.status || c?.status) || "Active",
+            });
+          }
+        }
+      });
+
+      dpActiveCusts.forEach(c => {
+        let amt = 0;
+        const m = String(c.plan_name || c.plan || "").match(/\b(\d{3,4})\b/) || String(c.plan_name || c.plan || "").match(/_(\d{3,4})/);
+        if (m) amt = Number(m[1]);
+        const label = amt > 0 ? inr(amt) : "DrinkPrime Purifier";
+        if (label === tierName) {
+          tierSubs.push({
+            name: c.name || "DrinkPrime Customer",
+            phone: c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—",
+            purifierId: c.purifier_id || "—",
+            society: cleanAptName(c.society || "Unknown"),
+            plan: c.plan_name || c.plan || "DrinkPrime Plan",
+            amount: amt,
+            stack: "DrinkPrime",
+            status: canonicalStatus(c.status) || "Active",
+          });
+        }
+      });
+
+      const filtered = mq
+        ? tierSubs.filter(x => `${x.name} ${x.phone} ${x.purifierId} ${x.society} ${x.plan} ${x.stack} ${x.status}`.toLowerCase().includes(mq))
+        : tierSubs;
+
+      const exportCsv = () => exportToCsv(`prowater-plan-tier-${String(tierName || "").replace(/[^\w-]/g, "_")}.csv`, [
+        { label: "Customer Name", get: x => x.name },
+        { label: "Phone", get: x => x.phone },
+        { label: "Purifier ID", get: x => x.purifierId },
+        { label: "Society", get: x => x.society },
+        { label: "Plan Name", get: x => x.plan },
+        { label: "Plan Amount", get: x => inr(x.amount) },
+        { label: "Stack", get: x => x.stack },
+        { label: "Status", get: x => x.status },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>Plan Tier Distribution · Active Subscriptions</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{title}</h2>
+                {sub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{sub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalCloseBtnStyle}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search customer, phone, purifier ID, society, plan…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 12.5, color: "#475569" }}>
+                  Active on this Tier: <strong style={{ color: "#2A86D6" }}>{filtered.length}</strong> (Zoho: <strong>{filtered.filter(x => x.stack === "Zoho").length}</strong> · DP: <strong>{filtered.filter(x => x.stack === "DrinkPrime").length}</strong>)
+                </div>
+                <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={modalTh}>Customer Name</th>
+                      <th style={modalTh}>Phone</th>
+                      <th style={modalTh}>Purifier ID</th>
+                      <th style={modalTh}>Society</th>
+                      <th style={modalTh}>Plan Name</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Stack</th>
+                      <th style={{ ...modalTh, textAlign: "right" }}>Amount</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{item.name}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{item.phone}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>{item.purifierId}</td>
+                        <td style={{ padding: "11px 14px", color: "#1D1D1F" }}>{item.society}</td>
+                        <td style={{ padding: "11px 14px", color: "#475569" }}>{item.plan}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: item.stack === "Zoho" ? "rgba(30,158,79,0.1)" : "rgba(42,134,214,0.1)", color: item.stack === "Zoho" ? "#1E9E4F" : "#2A86D6" }}>
+                            {item.stack}
+                          </span>
+                        </td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 700, color: "#2A86D6" }}>{item.amount > 0 ? inr(item.amount) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, color: "#08805A", background: "rgba(8,128,90,0.1)" }}>
+                            {item.status || "Active"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "rgba(243,248,236,.85)", borderTop: "2px solid rgba(8,128,90,0.18)" }}>
+                      <td style={{ padding: "12px 14px", fontWeight: 800, color: "#1D1D1F" }}>Total Count</td>
+                      <td style={{ padding: "12px 14px", color: "#64748B" }}>—</td>
+                      <td style={{ padding: "12px 14px", color: "#64748B" }}>—</td>
+                      <td style={{ padding: "12px 14px", color: "#475569", fontWeight: 600 }}>{new Set(filtered.map(x => x.society)).size} societies</td>
+                      <td style={{ padding: "12px 14px", color: "#64748B" }}>—</td>
+                      <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 700, fontSize: 11.5 }}>
+                        Zoho: {filtered.filter(x => x.stack === "Zoho").length} · DP: {filtered.filter(x => x.stack === "DrinkPrime").length}
+                      </td>
+                      <td style={{ padding: "12px 14px", textAlign: "right", fontWeight: 800, color: "#2A86D6", fontSize: 13.5 }}>
+                        {inr(filtered.reduce((s, x) => s + (x.amount || 0), 0))}
+                      </td>
+                      <td style={{ padding: "12px 14px", textAlign: "center", fontWeight: 800, color: "#08805A", fontSize: 14 }}>
+                        {filtered.length} Subscriptions
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              ) : (
+                <div style={{ padding: 40 }}><Empty msg="No subscriptions match this tier." /></div>
+              )}
+            </div>
+
+            {/* Total Count Sticky Summary Strip at Bottom */}
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 12,
+              marginTop: 12,
+              padding: "12px 18px",
+              background: "rgba(243,248,236,0.9)",
+              border: "1px solid rgba(8,128,90,0.18)",
+              borderRadius: 12,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#64748B" }}>Total Count:</span>
+                <span style={{ fontSize: 18, fontWeight: 800, color: "#08805A" }}>{filtered.length} Subscriptions</span>
+                <span style={{ fontSize: 12, color: "#475569", fontWeight: 600, background: "rgba(0,0,0,0.05)", padding: "3px 8px", borderRadius: 6 }}>
+                  Zoho: <strong>{filtered.filter(x => x.stack === "Zoho").length}</strong> · DrinkPrime: <strong>{filtered.filter(x => x.stack === "DrinkPrime").length}</strong>
+                </span>
+                <span style={{ fontSize: 12, color: "#64748B" }}>
+                  Societies: <strong>{new Set(filtered.map(x => x.society)).size}</strong>
+                </span>
+              </div>
+              <div style={{ fontSize: 13, color: "#475569" }}>
+                Total Monthly Value: <strong style={{ color: "#2A86D6", fontSize: 15, fontWeight: 800 }}>{inr(filtered.reduce((s, x) => s + (x.amount || 0), 0))}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 5. ARPU drilldown
+    if (type === "arpu") {
+      const aptArpuList = allAptRows.map(r => {
+        const totalRech = r.zohoRecharge + r.dpRecharge;
+        const aptArpu = r.totalCustomers > 0 ? Math.round(totalRech / r.totalCustomers) : 0;
+        return {
+          name: r.name,
+          totalCustomers: r.totalCustomers,
+          recharge: totalRech,
+          arpu: aptArpu,
+          totalCollected: r.totalCollected
+        };
+      }).sort((a, b) => b.arpu - a.arpu);
+
+      const filtered = mq
+        ? aptArpuList.filter(x => x.name.toLowerCase().includes(mq))
+        : aptArpuList;
+
+      const exportCsv = () => exportToCsv("prowater-arpu-breakdown.csv", [
+        { label: "Apartment", get: x => x.name },
+        { label: "Active Customers", get: x => x.totalCustomers },
+        { label: "Recharge Collected", get: x => x.recharge },
+        { label: "Average ARPU", get: x => x.arpu },
+        { label: "Total Collected", get: x => x.totalCollected },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>Unit Economics & ARPU Ranking · {rangeLabel(range)}</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{title}</h2>
+                {sub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{sub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalCloseBtnStyle}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            {/* Macro Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 16 }}>
+              <div style={{ background: "rgba(42,134,214,0.08)", padding: "14px 16px", borderRadius: 14, border: "1px solid rgba(42,134,214,0.2)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#2A86D6", textTransform: "uppercase" }}>Combined ARPU</div>
+                <div className="serif" style={{ fontSize: 24, fontWeight: 800, color: "#1D1D1F", marginTop: 4 }}>{inr(Math.round(arpu))}</div>
+                <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Combined recharge ({inr(Math.round(combinedRechargeCur))}) ÷ {totalActiveCustomers} Active CX</div>
+              </div>
+              <div style={{ background: "rgba(8,128,90,0.08)", padding: "14px 16px", borderRadius: 14, border: "1px solid rgba(8,128,90,0.2)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#08805A", textTransform: "uppercase" }}>Zoho ARPU</div>
+                <div className="serif" style={{ fontSize: 24, fontWeight: 800, color: "#1D1D1F", marginTop: 4 }}>{activeCustomers > 0 ? inr(Math.round(netRevenue / activeCustomers)) : "—"}</div>
+                <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Zoho recharge ({inr(Math.round(netRevenue))}) ÷ {activeCustomers} Zoho CX</div>
+              </div>
+              <div style={{ background: "rgba(30,158,79,0.08)", padding: "14px 16px", borderRadius: 14, border: "1px solid rgba(30,158,79,0.2)" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#1E9E4F", textTransform: "uppercase" }}>DrinkPrime ARPU</div>
+                <div className="serif" style={{ fontSize: 24, fontWeight: 800, color: "#1D1D1F", marginTop: 4 }}>{dpActiveCustomers > 0 ? inr(Math.round(dpRechargeCur / dpActiveCustomers)) : "—"}</div>
+                <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>DP recharge ({inr(Math.round(dpRechargeCur))}) ÷ {dpActiveCustomers} DP CX</div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search apartment…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                <Download size={13} /> Export CSV
+              </button>
+            </div>
+
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={modalTh}>Apartment Name</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Active Customers</th>
+                      <th style={{ ...modalTh, textAlign: "right" }}>Recharge Collected</th>
+                      <th style={{ ...modalTh, textAlign: "right" }}>Average ARPU</th>
+                      <th style={{ ...modalTh, textAlign: "right" }}>Total Collected</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{item.name}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center", fontWeight: 700, color: "#1D1D1F" }}>{item.totalCustomers}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", color: "#08805A", fontWeight: 600 }}>{inr(item.recharge)}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 800, color: "#2A86D6", fontSize: 13.5 }}>{inr(item.arpu)}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", color: "#1D1D1F", fontWeight: 700 }}>{inr(item.totalCollected)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ padding: 40 }}><Empty msg="No apartments found." /></div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const modalOverlayStyle = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(10,26,18,0.5)",
+    backdropFilter: "blur(6px)",
+    WebkitBackdropFilter: "blur(6px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    zIndex: 1000,
+  };
+  const modalWindowStyle = {
+    width: "min(1100px, 95%)",
+    background: "#fff",
+    borderRadius: 20,
+    padding: 24,
+    boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+    maxHeight: "calc(100vh - 40px)",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  };
+  const modalCloseBtnStyle = {
+    width: 32,
+    height: 32,
+    borderRadius: "50%",
+    background: "rgba(0,0,0,0.05)",
+    display: "grid",
+    placeItems: "center",
+    cursor: "pointer",
+    border: "none",
+    transition: "background 0.2s",
+  };
+  const modalTh = {
+    padding: "12px 14px",
+    color: "#08805A",
+    fontWeight: 700,
+    fontSize: 11.5,
+    letterSpacing: ".04em",
+    textTransform: "uppercase",
+  };
 
   // ── Render Modal for Recharged Customers in Clicked Apartment ──────
   const renderAptDetailsModal = () => {
@@ -994,6 +1836,32 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
           <DateRangePicker value={sel} onChange={setSel} />
           <MultiSelectFilter label="Society" options={allSocieties} value={selSoc} onChange={setSelSoc} width={220} />
+          {/* Customer Stack filter (v2.29.387, per explicit user request:
+              "add in the filters as Stack for DP and Zoho") — only shown on
+              the combined (Overview V2) page, since the legacy plain
+              Overview never loads any DP data at all for this to scope. */}
+          {combined && <MultiSelectFilter label="Customer Stack" options={["DP", "Zoho"]} value={selStack} onChange={setSelStack} width={190} />}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              title="Reset all filters to default"
+              style={{
+                ...btnGhost,
+                color: "#DC4141",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12.5,
+                padding: "7px 12px",
+                borderRadius: 10,
+                background: "rgba(220,65,65,0.08)",
+                border: "1px solid rgba(220,65,65,0.2)",
+                cursor: "pointer",
+              }}
+            >
+              <RotateCcw size={13} /> Reset Filters
+            </button>
+          )}
           <button onClick={exportOverviewCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none" }}><Download size={16} /> Export</button>
         </div>
       </div>
@@ -1156,23 +2024,32 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Linear projection model</div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 14, margin: "12px 0 6px" }}>
+            <div style={{ display: "flex", gap: 14, margin: "12px 0 6px", flexWrap: "wrap" }}>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#08805A" }} /> Actual</span>
               <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#c5c5c7" }} /> Forecast</span>
+              {/* ARPU (v2.29.382), per explicit user request ("Total revenue
+                  versus expected revenue... add Average ARPU"). */}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#2A86D6" }} /> ARPU</span>
             </div>
             <div style={{ height: 190 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={faData} margin={{ top: 18, right: 14, left: -6, bottom: 0 }}>
+                <LineChart data={faData} margin={{ top: 18, right: 30, left: -6, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
                   <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-                  <Tooltip formatter={(v, n) => [inr(v), n === "actual" ? "Actual" : "Forecast"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
-                  <Line type="monotone" dataKey="actual" stroke="#08805A" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3.5, fill: "#08805A" }} connectNulls={false}>
+                  <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                  {/* Secondary axis for ARPU (v2.29.382) — a per-customer average
+                      doesn't share a scale with total revenue, so it gets its own
+                      right-hand axis rather than distorting Actual/Forecast. */}
+                  <YAxis yAxisId="arpu" orientation="right" domain={["auto", "auto"]} tick={{ fill: "#2A86D6", fontSize: 12 }} axisLine={false} tickLine={false} width={50}
+                    tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
+                  <Tooltip formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Actual" : n === "forecast" ? "Forecast" : "ARPU"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
+                  <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#08805A" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3.5, fill: "#08805A" }} connectNulls={false}>
                     <LabelList dataKey="actual" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#08805A" }} />
                   </Line>
-                  <Line type="monotone" dataKey="forecast" stroke="#86868B" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={{ r: 3, fill: "#86868B" }}>
+                  <Line yAxisId="rev" type="monotone" dataKey="forecast" stroke="#86868B" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={{ r: 3, fill: "#86868B" }}>
                     <LabelList dataKey="forecast" position="bottom" offset={10} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#6E6E73" }} />
                   </Line>
+                  <Line yAxisId="arpu" type="monotone" dataKey="arpu" stroke="#2A86D6" strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} dot={{ r: 3, fill: "#2A86D6" }} connectNulls={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -1205,15 +2082,20 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
       {/* ── Month-on-Month (MoM) Revenue Growth ────────────────────────────── */}
       <div style={{ ...softShadow, padding: 22, marginBottom: 16, minWidth: 0 }}>
-        <div style={{ marginBottom: 10 }}>
-          <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Month-on-Month (MoM) Revenue Growth</h3>
-          <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Recharge &amp; Collections · trailing 7 months</div>
+        <div style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Month-on-Month (MoM) Revenue Growth</h3>
+            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Recharge &amp; Collections · trailing 7 months</div>
+          </div>
+          {/* ARPU (v2.29.382), per explicit user request ("MoM Growth Trend...
+              add Average ARPU"). */}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#2A86D6" }} /> ARPU</span>
         </div>
         <div style={{ height: 270 }}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
               data={momData}
-              margin={{ left: 8, right: 12, top: 26, bottom: 0 }}
+              margin={{ left: 8, right: 30, top: 26, bottom: 0 }}
               style={{ cursor: "pointer" }}
               onClick={(state) => {
                 if (state && state.activePayload && state.activePayload.length) {
@@ -1238,12 +2120,17 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
               <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-              <Tooltip formatter={(v) => [inr(v), "Collected"]} cursor={{ fill: "rgba(8,128,90,.06)" }} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
-              <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="url(#momBarGrad)" maxBarSize={36} isAnimationActive={false}>
+              <YAxis yAxisId="rev" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+              {/* Secondary axis for ARPU (v2.29.382) — same reasoning as
+                  Forecast vs Actual above. */}
+              <YAxis yAxisId="arpu" orientation="right" tick={{ fill: "#2A86D6", fontSize: 12 }} axisLine={false} tickLine={false} width={50}
+                tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
+              <Tooltip formatter={(v, n) => [inr(v), n]} cursor={{ fill: "rgba(8,128,90,.06)" }} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
+              <Bar yAxisId="rev" dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="url(#momBarGrad)" maxBarSize={36} isAnimationActive={false}>
                 <LabelList dataKey="collected" position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 10, fill: "#08805A", fontWeight: 700 }} />
               </Bar>
-              <Line type="monotone" dataKey="collected" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+              <Line yAxisId="rev" type="monotone" dataKey="collected" name="Trend" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false} />
+              <Line yAxisId="arpu" type="monotone" dataKey="arpu" name="ARPU" stroke="#2A86D6" strokeWidth={2} strokeDasharray="3 3" dot={{ r: 3, fill: "#2A86D6" }} isAnimationActive={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
@@ -1339,18 +2226,32 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           </div>
 
           {/* ── Combined Revenue KPI strip ───────────────────────────────────── */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
             {[
-              { label: "Total Collection",         value: inr(Math.round(combinedRevCur)),      delta: pct(combinedRevCur, combinedRevPrv),                  color: "#08805A", hero: true },
-              { label: "Combined Recharge",        value: inr(Math.round(combinedRechargeCur)), delta: pct(combinedRechargeCur, netPrev + dpRechargePrv),   color: "#08805A" },
-              { label: "Combined Deposit",         value: inr(Math.round(combinedDepositCur)),  delta: pct(combinedDepositCur, depositPrev + dpDepositPrv), color: "#5B21B6" },
-              { label: "Zoho Recharge",            value: inr(Math.round(netRevenue)),          delta: pct(netRevenue, netPrev),                             color: "#08805A" },
-              { label: "Zoho Deposit",             value: inr(Math.round(depositCollected)),     delta: pct(depositCollected, depositPrev),                   color: "#08805A" },
-              { label: "DP Total Collected",       value: inr(Math.round(dpTotalCur)),          delta: pct(dpTotalCur, dpTotalPrv),                          color: "#1E9E4F" },
-              { label: "DP Recharge",              value: inr(Math.round(dpRechargeCur)),       delta: pct(dpRechargeCur, dpRechargePrv),                    color: "#1E9E4F" },
-              { label: "DP Deposit",               value: inr(Math.round(dpDepositCur)),        delta: pct(dpDepositCur, dpDepositPrv),                      color: "#1E9E4F" },
-              { label: "Active Customers",         value: totalActiveCustomers.toLocaleString("en-IN"), sub: `Zoho: ${activeCustomers.toLocaleString("en-IN")} · DP: ${dpActiveCustomers.toLocaleString("en-IN")}`, color: "#2A86D6" },
-              { label: "New CX",                   value: newThisMonth.toLocaleString("en-IN"), delta: pct(newThisMonth, newPrev), sub: `Zoho: ${zohoNewCur.toLocaleString("en-IN")} · DP: ${dpNewCur.toLocaleString("en-IN")}`, color: "#08805A", isNewCustCard: true },
+              // Order per explicit user request (v2.29.383): Total Collection,
+              // Combined Recharge, Combined Deposit, Zoho Collection, Zoho
+              // Recharge, Zoho Deposit, DP Total Collected, DP Recharge, DP
+              // Deposit, Average ARPU, Active Customers, New CX.
+              { label: "Total Collection",         value: inr(Math.round(combinedRevCur)),      delta: pct(combinedRevCur, combinedRevPrv),                  color: "#08805A", hero: true, modalType: "payments", modalFilter: "all", modalTitle: "Total Collection Transactions", modalSub: `All Zoho & DrinkPrime paid transactions in ${rangeLabel(range)}` },
+              { label: "Combined Recharge",        value: inr(Math.round(combinedRechargeCur)), delta: pct(combinedRechargeCur, netPrev + dpRechargePrv),   color: "#08805A", modalType: "payments", modalFilter: "recharge", modalTitle: "Combined Recharge Transactions", modalSub: `All Zoho & DrinkPrime recharge payments in ${rangeLabel(range)}` },
+              { label: "Combined Deposit",         value: inr(Math.round(combinedDepositCur)),  delta: pct(combinedDepositCur, depositPrev + dpDepositPrv), color: "#5B21B6", modalType: "payments", modalFilter: "deposit", modalTitle: "Combined Deposit Transactions", modalSub: `All Zoho & DrinkPrime deposit payments in ${rangeLabel(range)}` },
+              // Zoho Collection (v2.29.383) — Zoho-only counterpart to "DP
+              // Total Collected" below (`collections` already equals
+              // netRevenue + depositCollected by construction, same relation
+              // as dpTotalCur = dpRechargeCur + dpDepositCur).
+              { label: "Zoho Collection",          value: inr(Math.round(collections)),         delta: pct(collections, collectionsPrev),                    color: "#08805A", modalType: "payments", modalFilter: "zoho_all", modalTitle: "Zoho Collection Transactions", modalSub: `All Zoho paid invoices in ${rangeLabel(range)}` },
+              { label: "Zoho Recharge",            value: inr(Math.round(netRevenue)),          delta: pct(netRevenue, netPrev),                             color: "#08805A", modalType: "payments", modalFilter: "zoho_recharge", modalTitle: "Zoho Recharge Transactions", modalSub: `All Zoho recharge payments in ${rangeLabel(range)}` },
+              { label: "Zoho Deposit",             value: inr(Math.round(depositCollected)),     delta: pct(depositCollected, depositPrev),                   color: "#08805A", modalType: "payments", modalFilter: "zoho_deposit", modalTitle: "Zoho Deposit Transactions", modalSub: `All Zoho deposit payments in ${rangeLabel(range)}` },
+              { label: "DP Total Collected",       value: inr(Math.round(dpTotalCur)),          delta: pct(dpTotalCur, dpTotalPrv),                          color: "#1E9E4F", modalType: "payments", modalFilter: "dp_all", modalTitle: "DrinkPrime Total Collections", modalSub: `All DrinkPrime transaction records in ${rangeLabel(range)}` },
+              { label: "DP Recharge",              value: inr(Math.round(dpRechargeCur)),       delta: pct(dpRechargeCur, dpRechargePrv),                    color: "#1E9E4F", modalType: "payments", modalFilter: "dp_recharge", modalTitle: "DrinkPrime Recharge Collections", modalSub: `All DrinkPrime recharge records in ${rangeLabel(range)}` },
+              { label: "DP Deposit",               value: inr(Math.round(dpDepositCur)),        delta: pct(dpDepositCur, dpDepositPrv),                      color: "#1E9E4F", modalType: "payments", modalFilter: "dp_deposit", modalTitle: "DrinkPrime Deposit Collections", modalSub: `All DrinkPrime deposit records in ${rangeLabel(range)}` },
+              // Average ARPU (v2.29.382, moved here v2.29.383 per explicit
+              // user request). `arpu` (combined recharge ÷ total active
+              // customers, Zoho + DP) was already computed below for the LTV
+              // estimate but never actually surfaced until v2.29.382.
+              { label: "Average ARPU",             value: inr(Math.round(arpu)),                 sub: `Combined recharge ÷ ${totalActiveCustomers.toLocaleString("en-IN")} active`, color: "#2A86D6", modalType: "arpu", modalTitle: "Average ARPU & Unit Economics", modalSub: `Average Revenue Per User and apartment breakdown in ${rangeLabel(range)}` },
+              { label: "Active Customers",         value: totalActiveCustomers.toLocaleString("en-IN"), sub: `Zoho: ${activeCustomers.toLocaleString("en-IN")} · DP: ${dpActiveCustomers.toLocaleString("en-IN")}`, color: "#2A86D6", modalType: "active_customers", modalTitle: "Active Customers Directory", modalSub: `All active customer subscriptions across Zoho & DrinkPrime` },
+              { label: "New CX",                   value: newThisMonth.toLocaleString("en-IN"), delta: pct(newThisMonth, newPrev), sub: `Zoho: ${zohoNewCur.toLocaleString("en-IN")} · DP: ${dpNewCur.toLocaleString("en-IN")}`, color: "#08805A", isNewCustCard: true, modalType: "new_cx", modalTitle: "New Customer Additions", modalSub: `All customer signups and onboarding in ${rangeLabel(range)}` },
             ].map((k, i) => (
               // v2.29.274: `hero` no longer renders a gradient card — per
               // explicit user request to make all hero cards the same white
@@ -1358,6 +2259,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               // colored text on white, no pill/backdrop needed.
               <div
                 key={k.label}
+                onClick={() => setKpiModal({ type: k.modalType, filter: k.modalFilter, title: k.modalTitle, sub: k.modalSub })}
                 onMouseEnter={k.isNewCustCard ? () => setShowNewCustPopup(true) : undefined}
                 onMouseLeave={k.isNewCustCard ? () => setShowNewCustPopup(false) : undefined}
                 style={{
@@ -1371,17 +2273,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   gap: 4,
                   minWidth: 0,
                   position: "relative",
-                  cursor: k.isNewCustCard ? "pointer" : "default",
-                  transition: "border 0.2s ease, box-shadow 0.2s ease"
+                  cursor: "pointer",
+                  transition: "border 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease"
                 }}
+                title={`Click to view ${k.label} breakdown & transactions`}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={k.label}>{k.label}</div>
-                  {k.isNewCustCard && (
-                    <span style={{ fontSize: 9.5, color: "#08805A", fontWeight: 700, background: "rgba(8,128,90,0.08)", padding: "1px 5px", borderRadius: 5 }}>
-                      Hover
-                    </span>
-                  )}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6, minHeight: 28 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "#86868B", lineHeight: 1.25, flex: 1 }} title={k.label}>{k.label}</div>
+                  <span style={{ fontSize: 9.5, color: k.color || "#08805A", fontWeight: 700, background: `${k.color || "#08805A"}12`, padding: "2px 5px", borderRadius: 5, display: "inline-flex", alignItems: "center", gap: 2, flexShrink: 0 }} title={k.isNewCustCard ? "Hover for breakdown or click to view details" : `Click to view ${k.label} details`}>
+                    <ExternalLink size={10} />
+                  </span>
                 </div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#1D1D1F", lineHeight: 1.15, letterSpacing: "-.02em" }}>{k.value}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -1400,6 +2301,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 {/* Hover Popover for New CX */}
                 {k.isNewCustCard && showNewCustPopup && (
                   <div
+                    onClick={(e) => e.stopPropagation()}
                     onMouseEnter={() => setShowNewCustPopup(true)}
                     onMouseLeave={() => setShowNewCustPopup(false)}
                     style={{
@@ -1480,13 +2382,13 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 16, marginBottom: 16 }}>
 
             {/* Revenue by Source donut */}
-            <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+            <div style={{ background: "#FFFFFF", border: "1px solid rgba(0, 0, 0, 0.07)", borderRadius: 20, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.02)", padding: 22, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
                 <div>
-                  <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Revenue by Source</h3>
-                  <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Zoho Billing vs DP System · {rangeLabel(range)}</div>
+                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: "0px 0px 4px", letterSpacing: "-0.01em" }}>Revenue by Source</h3>
+                  <div style={{ fontSize: 12, color: "#86868B" }}>Zoho Billing vs DP System · {rangeLabel(range)}</div>
                 </div>
-                {selSource && (
+                {selSource ? (
                   <button
                     onClick={() => setSelSource(null)}
                     style={{
@@ -1497,18 +2399,23 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       alignItems: "center",
                       gap: 4,
                       borderRadius: 6,
-                      borderColor: "rgba(30,158,79,.3)",
-                      color: "#08805A",
-                      background: "rgba(30,158,79,.06)"
+                      borderColor: "rgba(10, 110, 70, .3)",
+                      color: "#0A6E46",
+                      background: "rgba(10, 110, 70, .06)",
+                      cursor: "pointer"
                     }}
                   >
                     Clear filter <X size={10} />
                   </button>
+                ) : (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: "#0A6E46", background: "rgba(10, 110, 70, 0.08)", padding: "3px 9px", borderRadius: 9999 }}>
+                    Click slice to filter
+                  </span>
                 )}
               </div>
               {revBySource.length > 0 ? (
                 <>
-                  <div style={{ height: 220 }}>
+                  <div style={{ height: 190, position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
@@ -1517,11 +2424,9 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                           nameKey="name"
                           cx="50%"
                           cy="50%"
-                          innerRadius="46%"
-                          outerRadius="68%"
+                          innerRadius="50%"
+                          outerRadius="74%"
                           paddingAngle={3}
-                          label={({ name, percent }) => `${name} (${Math.round(percent * 100)}%)`}
-                          labelLine={{ stroke: "rgba(0,0,0,0.15)", strokeWidth: 1 }}
                           isAnimationActive={false}
                           style={{ cursor: "pointer" }}
                           onClick={(d) => {
@@ -1537,49 +2442,70 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                               opacity={selSource === null || selSource === e.name ? 1 : 0.28}
                               stroke={selSource === e.name ? "#1d1d1f" : "none"}
                               strokeWidth={selSource === e.name ? 2.5 : 0}
-                              style={{ outline: "none" }}
+                              style={{ outline: "none", cursor: "pointer" }}
                             />
                           ))}
                         </Pie>
                         <Tooltip formatter={(v) => inr(Math.round(v))} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
                       </PieChart>
                     </ResponsiveContainer>
+                    {/* Center Hole Total */}
+                    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.04em", color: "#86868B" }}>TOTAL REV</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: "#1D1D1F" }}>{inr(revBySourceTotal)}</div>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", marginTop: 4 }}>
+
+                  {/* Legend Cards */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 10 }}>
                     {revBySource.map(s => {
                       const isActive = selSource === s.name;
+                      const pct = revBySourceTotal > 0 ? Math.round((s.value / revBySourceTotal) * 100) : 0;
                       return (
                         <div
                           key={s.name}
                           onClick={() => setSelSource(isActive ? null : s.name)}
                           style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 6,
-                            fontSize: 12,
                             cursor: "pointer",
-                            padding: "4px 8px",
-                            borderRadius: 8,
-                            background: isActive ? "rgba(0,0,0,0.04)" : "transparent",
-                            border: isActive ? "1px solid rgba(0,0,0,0.08)" : "1px solid transparent",
-                            transition: "all 0.2s ease"
+                            padding: "10px 12px",
+                            borderRadius: 14,
+                            background: isActive ? "rgba(10, 110, 70, 0.06)" : "#FAFBF9",
+                            border: isActive ? "1px solid #0A6E46" : "1px solid rgba(0, 0, 0, 0.05)",
+                            transition: "all 0.15s ease"
                           }}
+                          title={`Click to filter table by ${s.name}`}
                         >
-                          <span style={{ width: 10, height: 10, borderRadius: 3, background: s.fill, flexShrink: 0 }} />
-                          <span style={{ color: isActive ? "#1d1d1f" : "#475569", fontWeight: isActive ? 700 : 500 }}>{s.name}:</span>
-                          <span style={{ fontWeight: 700, color: "#1D1D1F" }}>{inr(s.value)}</span>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#555558", fontWeight: 500 }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.fill, flexShrink: 0 }} />
+                              {s.name}
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: s.pctColor || s.fill }}>{pct}%</span>
+                          </div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "#1D1D1F", marginTop: 2, paddingLeft: 13 }}>{inr(s.value)}</div>
                         </div>
                       );
                     })}
                   </div>
-                  {/* Zoho/DP share (v2.29.312) — per explicit follow-up ("still showing like
-                      earlier"), the ask was never about wrapping within one stat's own row (that
-                      part was already fixed at v2.29.311) — it's both stats crammed onto a SINGLE
-                      line together, the same way the Recharge/Deposit legend above it lays out
-                      several "label: value" pairs side by side in one row. */}
-                  <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "rgba(8,128,90,0.06)", border: "1px solid rgba(8,128,90,0.12)", display: "flex", alignItems: "center", gap: 20, fontSize: 12.5, whiteSpace: "nowrap", overflowX: "auto" }}>
-                    <span><span style={{ color: "#475569" }}>Zoho share: </span><span style={{ fontWeight: 700, color: "#08805A" }}>{combinedRevCur > 0 ? Math.round((collections / combinedRevCur) * 100) : 0}%</span></span>
-                    <span><span style={{ color: "#475569" }}>DP share: </span><span style={{ fontWeight: 700, color: "#1E9E4F" }}>{combinedRevCur > 0 ? Math.round((dpTotalCur / combinedRevCur) * 100) : 0}%</span></span>
+
+                  {/* Bottom Comparison Strip */}
+                  <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "rgba(10, 110, 70, 0.05)", border: "1px solid rgba(10, 110, 70, 0.1)", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, flexWrap: "wrap", gap: 8 }}>
+                    <div
+                      onClick={() => setKpiModal({ type: "payments", filter: "zoho_all", title: "Zoho Collection Transactions", sub: `All Zoho paid invoices in ${rangeLabel(range)}` })}
+                      style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+                      title="Click to view Zoho payments"
+                    >
+                      <span style={{ color: "#555558" }}>Zoho share:</span>
+                      <span style={{ fontWeight: 700, color: "#0A6E46" }}>{combinedRevCur > 0 ? Math.round((collections / combinedRevCur) * 100) : 0}%</span>
+                    </div>
+                    <div
+                      onClick={() => setKpiModal({ type: "payments", filter: "dp_all", title: "DrinkPrime Transactions", sub: `All DrinkPrime transaction records in ${rangeLabel(range)}` })}
+                      style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+                      title="Click to view DrinkPrime transactions"
+                    >
+                      <span style={{ color: "#555558" }}>DP share:</span>
+                      <span style={{ fontWeight: 700, color: "#5B9530" }}>{combinedRevCur > 0 ? Math.round((dpTotalCur / combinedRevCur) * 100) : 0}%</span>
+                    </div>
                   </div>
                 </>
               ) : <Empty msg="No revenue data for this period." />}
@@ -1588,7 +2514,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             {/* 7-month Zoho + DP stacked bar */}
             <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
               <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Combined Monthly Collection</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Zoho + DP stacked · trailing 7 months</div>
+              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Zoho + DP stacked · trailing 7 months (Click month bar to filter)</div>
               <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: "#08805A" }} /> Zoho</span>
                 <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: "#C4E538" }} /> DP</span>
@@ -1610,6 +2536,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                             from: isoDay(fromDate),
                             to: isoDay(toDate)
                           });
+                          flash(`Filtered period to ${p.label} (${monthYr(p.y, p.m)})`);
                         }
                       }
                     }}
@@ -1632,22 +2559,248 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             </div>
           </div>
 
+          {/* ── Total Revenue vs Expected Revenue + MoM Growth Trend ───────────── */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, marginBottom: 16 }}>
+            {/* Total Revenue vs Expected Revenue */}
+            <div style={{ background: "#FFFFFF", border: "1px solid rgba(0, 0, 0, 0.07)", borderRadius: 20, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.02)", padding: 22, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: "0px 0px 4px", letterSpacing: "-0.01em" }}>Total Revenue vs Expected Revenue</h3>
+                  <div style={{ fontSize: 12, color: "#86868B" }}>Linear projection model (Click month bar to filter)</div>
+                </div>
+                
+                {/* Legend */}
+                <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#0A6E46" }} /> Total (Actual)
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: "#E3EADE" }} /> Expected (Forecast)
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
+                    <span style={{ width: 14, height: 0, borderTop: "2px dashed #76C043" }} /> ARPU
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ height: 230 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={faData}
+                    margin={{ top: 18, right: 30, left: -6, bottom: 0 }}
+                    style={{ cursor: "pointer" }}
+                    onClick={(state) => {
+                      if (state && state.activePayload && state.activePayload.length) {
+                        const p = state.activePayload[0].payload;
+                        if (p.y != null && p.m != null) {
+                          const fromDate = new Date(p.y, p.m, 1);
+                          const toDate = new Date(p.y, p.m + 1, 0);
+                          setSel({
+                            preset: "custom",
+                            from: isoDay(fromDate),
+                            to: isoDay(toDate)
+                          });
+                          flash(`Filtered period to ${p.label} (${monthYr(p.y, p.m)})`);
+                        }
+                      }
+                    }}
+                  >
+                    <defs>
+                      <linearGradient id="warmThemeGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#0A6E46" stopOpacity={0.14} />
+                        <stop offset="100%" stopColor="#0A6E46" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.04)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.08)" }} tickLine={false} />
+                    <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                    <YAxis yAxisId="arpu" orientation="right" domain={["auto", "auto"]} tick={{ fill: "#609A32", fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={50}
+                      tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
+                    <Tooltip formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Total (Actual)" : n === "forecast" ? "Expected (Forecast)" : "ARPU"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }} cursor={{ fill: "rgba(10,110,70,0.04)" }} />
+                    <Bar yAxisId="rev" dataKey="forecast" fill="#EEF2E8" radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                      {faData.map((entry, idx) => (
+                        <Cell key={`cell-fc-${idx}`} fill={entry.actual == null ? "#DDE5D4" : "#EEF2E8"} />
+                      ))}
+                      <LabelList dataKey="forecast" position="top" offset={8} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : (v ? inr(v) : "")} style={{ fontSize: 9.5, fontWeight: 600, fill: "#697D61" }} />
+                    </Bar>
+                    <Area yAxisId="rev" type="monotone" dataKey="actual" fill="url(#warmThemeGrad)" stroke="none" isAnimationActive={false} />
+                    <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false} dot={{ r: 4, fill: "#FFFFFF", stroke: "#0A6E46", strokeWidth: 2.5 }} connectNulls={false}>
+                      <LabelList dataKey="actual" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#0A6E46" }} />
+                    </Line>
+                    <Line yAxisId="arpu" type="monotone" dataKey="arpu" stroke="#76C043" strokeWidth={2.2} strokeDasharray="4 4" isAnimationActive={false} dot={{ r: 3, fill: "#76C043" }} connectNulls={false} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* MoM Growth Trend */}
+            <div style={{ background: "#FFFFFF", border: "1px solid rgba(0, 0, 0, 0.07)", borderRadius: 20, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.02)", padding: 22, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+                <div>
+                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: "0px 0px 4px", letterSpacing: "-0.01em" }}>MoM Growth Trend</h3>
+                  <div style={{ fontSize: 12, color: "#86868B" }}>Recharge &amp; Collections · trailing 7 months (Click month bar to filter)</div>
+                </div>
+                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: "#EEF2E8" }} /> Collections
+                  </span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
+                    <span style={{ width: 14, height: 0, borderTop: "2.5px solid #0A6E46" }} /> Growth Trend
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ height: 230 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart
+                    data={momData}
+                    margin={{ left: 8, right: 12, top: 26, bottom: 0 }}
+                    style={{ cursor: "pointer" }}
+                    onClick={(state) => {
+                      if (state && state.activePayload && state.activePayload.length) {
+                        const p = state.activePayload[0].payload;
+                        if (p.y != null && p.m != null) {
+                          const fromDate = new Date(p.y, p.m, 1);
+                          const toDate = new Date(p.y, p.m + 1, 0);
+                          setSel({
+                            preset: "custom",
+                            from: isoDay(fromDate),
+                            to: isoDay(toDate)
+                          });
+                          flash(`Filtered period to ${p.label} (${monthYr(p.y, p.m)})`);
+                        }
+                      }
+                    }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.04)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.08)" }} tickLine={false} />
+                    <YAxis tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                    <Tooltip formatter={(v, n) => [inr(v), n]} cursor={{ fill: "rgba(10,110,70,0.04)" }} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }} />
+                    <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="#EEF2E8" maxBarSize={32} isAnimationActive={false}>
+                      {momData.map((entry, idx) => (
+                        <Cell key={`mom-cell-${idx}`} fill={idx === momData.length - 1 ? "#DDE5D4" : "#EEF2E8"} />
+                      ))}
+                      <LabelList
+                        dataKey="pct"
+                        content={(props) => {
+                          const { x, y, width, value, index } = props;
+                          if (value == null) return null;
+                          const isLast = index === momData.length - 1;
+                          const positive = value > 0;
+                          const bg = isLast ? "#0A6E46" : positive ? "rgba(10, 110, 70, 0.1)" : "rgba(220, 65, 65, 0.1)";
+                          const fg = isLast ? "#FFFFFF" : positive ? "#0A6E46" : "#DC4141";
+                          const text = `${value > 0 ? "+" : ""}${value}%`;
+                          const bw = Math.max(34, text.length * 6.5 + 14);
+                          const cx = x + width / 2;
+                          const cy = y - 12;
+                          return (
+                            <g key={`pct-${index}`} transform={`translate(${cx},${cy})`}>
+                              <rect x={-bw / 2} y={-12} width={bw} height={16} rx={4} fill={bg} />
+                              <text x={0} y={-1} fill={fg} fontSize={9} fontWeight={700} textAnchor="middle">{text}</text>
+                            </g>
+                          );
+                        }}
+                      />
+                    </Bar>
+                    <Line
+                      type="monotone" dataKey="collected" name="Trend" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false}
+                      dot={(props) => {
+                        const { cx, cy, index } = props;
+                        const isLast = index === momData.length - 1;
+                        return <circle key={`dot-${index}`} cx={cx} cy={cy} r={isLast ? 4 : 3.5} fill={isLast ? "#0A6E46" : "#ffffff"} stroke="#0A6E46" strokeWidth={2.5} />;
+                      }}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              {(() => {
+                const momPeak = momData.reduce((best, m) => (best === null || m.collected > best.collected ? m : best), null);
+                let momStreak = 0;
+                for (let i = momData.length - 1; i >= 1; i--) {
+                  if (momData[i].pct != null && momData[i].pct > 0) momStreak++; else break;
+                }
+                return (
+                  <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "#FAFBF9", border: "1px solid rgba(0, 0, 0, 0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, flexWrap: "wrap", gap: 6 }}>
+                    <span style={{ color: "#86868B" }}>Trailing 7M Peak: <strong style={{ color: "#1D1D1F" }}>{momPeak ? `${momPeak.label} (${inr(momPeak.collected)})` : "—"}</strong></span>
+                    {momStreak >= 2 && (
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600, color: "#0A6E46" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#0A6E46" }} />
+                        {momStreak}-Month Consecutive Growth
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
           {/* ── SaaS Analytics: Plan Distribution & Expansion Opportunities ──── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, marginBottom: 16 }}>
-            
+
             {/* Plan Tier Distribution */}
             <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
               <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Plan Tier Distribution</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Active subscription counts by plan amount</div>
+              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Active subscription counts by plan amount (Click bar to drill down)</div>
               <div style={{ height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={planDistributionData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                  <BarChart
+                    data={planDistributionData}
+                    layout="vertical"
+                    margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
+                    style={{ cursor: "pointer" }}
+                    onClick={(state) => {
+                      if (state && state.activePayload && state.activePayload.length) {
+                        const p = state.activePayload[0].payload;
+                        if (p && p.name) {
+                          setKpiModal({
+                            type: "plan_tier",
+                            tierName: p.name,
+                            title: `Plan Tier: ${p.name}`,
+                            sub: `${p.value} active subscriptions (${p.pct}% of active tiers)`
+                          });
+                        }
+                      }
+                    }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
                     <XAxis type="number" hide />
                     <YAxis type="category" dataKey="name" tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
-                    <Tooltip formatter={(v) => [`${v} subscriptions`, "Active Subscriptions"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
-                    <Bar dataKey="value" name="Active Tiers" fill="#2A86D6" radius={[0, 4, 4, 0]} maxBarSize={20} isAnimationActive={false}>
-                      <LabelList dataKey="value" position="right" style={{ fontSize: 11, fontWeight: 700, fill: "#2A86D6" }} />
+                    <Tooltip formatter={(v, n, entry) => [`${entry.payload.pct}% (${v} subscriptions) · Click to view`, "Active Subscriptions"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
+                    <Bar
+                      dataKey="value"
+                      name="Active Tiers"
+                      fill="#2A86D6"
+                      radius={[0, 4, 4, 0]}
+                      maxBarSize={20}
+                      isAnimationActive={false}
+                      onClick={(entry) => {
+                        const target = entry && (entry.payload || entry);
+                        if (target && target.name) {
+                          setKpiModal({
+                            type: "plan_tier",
+                            tierName: target.name,
+                            title: `Plan Tier: ${target.name}`,
+                            sub: `${target.value} active subscriptions (${target.pct}% of active tiers)`
+                          });
+                        }
+                      }}
+                    >
+                      {planDistributionData.map((entry, index) => (
+                        <Cell
+                          key={`tier-cell-${index}`}
+                          cursor="pointer"
+                          fill="#2A86D6"
+                          onClick={() => {
+                            setKpiModal({
+                              type: "plan_tier",
+                              tierName: entry.name,
+                              title: `Plan Tier: ${entry.name}`,
+                              sub: `${entry.value} active subscriptions (${entry.pct}% of active tiers)`
+                            });
+                          }}
+                        />
+                      ))}
+                      <LabelList dataKey="pct" position="right" formatter={(v) => `${v}%`} style={{ fontSize: 11, fontWeight: 700, fill: "#2A86D6", cursor: "pointer" }} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -1681,25 +2834,47 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
           {/* ── All Apartment Performance Table ───────────────────────────────── */}
           {(() => {
-            const allAptTotalCusts    = allAptRows.reduce((s, r) => s + (r.totalCustomers || 0), 0);
-            const allAptTotalZohoDep  = allAptRows.reduce((s, r) => s + r.zohoDeposit, 0);
-            const allAptTotalZohoRech = allAptRows.reduce((s, r) => s + r.zohoRecharge, 0);
-            const allAptTotalDpDep    = allAptRows.reduce((s, r) => s + r.dpDeposit, 0);
-            const allAptTotalDpRech   = allAptRows.reduce((s, r) => s + r.dpRecharge, 0);
-            const allAptTotalCollected = allAptRows.reduce((s, r) => s + r.totalCollected, 0);
+            const displayedAptRows = selSource
+              ? allAptRows.filter(r => {
+                  if (selSource === "Zoho Recharge") return r.zohoRecharge > 0;
+                  if (selSource === "Zoho Deposit") return r.zohoDeposit > 0;
+                  if (selSource === "DP Recharge") return r.dpRecharge > 0;
+                  if (selSource === "DP Deposit") return r.dpDeposit > 0;
+                  if (selSource === "Zoho") return (r.zohoRecharge + r.zohoDeposit) > 0;
+                  if (selSource === "DrinkPrime" || selSource === "DP") return (r.dpRecharge + r.dpDeposit) > 0;
+                  return true;
+                })
+              : allAptRows;
+
+            const allAptTotalCusts    = displayedAptRows.reduce((s, r) => s + (r.totalCustomers || 0), 0);
+            const allAptTotalZohoDep  = displayedAptRows.reduce((s, r) => s + r.zohoDeposit, 0);
+            const allAptTotalZohoRech = displayedAptRows.reduce((s, r) => s + r.zohoRecharge, 0);
+            const allAptTotalDpDep    = displayedAptRows.reduce((s, r) => s + r.dpDeposit, 0);
+            const allAptTotalDpRech   = displayedAptRows.reduce((s, r) => s + r.dpRecharge, 0);
+            const allAptTotalCollected = displayedAptRows.reduce((s, r) => s + r.totalCollected, 0);
 
             return (
               <div style={{ ...softShadow, padding: 0, marginBottom: 16, overflow: "hidden" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "18px 20px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
                   <div>
                     <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>All Apartment Performance</h3>
-                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Combined Zoho &amp; DrinkPrime metrics · {rangeLabel(range)}</div>
+                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Combined Zoho &amp; DrinkPrime metrics · {rangeLabel(range)}{selSource ? ` · Filtered: ${selSource}` : ""}</div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: "rgba(30,158,79,0.1)", color: "#1E9E4F" }}>
-                    {allAptRows.length} apartments total
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {selSource && (
+                      <button
+                        onClick={() => setSelSource(null)}
+                        style={{ ...btnGhost, fontSize: 11, padding: "3px 8px", color: "#08805A", borderColor: "rgba(8,128,90,0.2)" }}
+                      >
+                        Showing {selSource} (Clear) <X size={11} />
+                      </button>
+                    )}
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: "rgba(30,158,79,0.1)", color: "#1E9E4F" }}>
+                      {displayedAptRows.length} apartments
+                    </span>
+                  </div>
                 </div>
-                {allAptRows.length > 0 ? (
+                {displayedAptRows.length > 0 ? (
                   <div className="scroll-thin" style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
                       <thead>
@@ -1718,7 +2893,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         </tr>
                       </thead>
                       <tbody>
-                        {allAptRows.map((r, i) => {
+                        {displayedAptRows.map((r, i) => {
                           const isSelected = selSoc && selSoc.includes(r.name);
                           return (
                             <tr
@@ -1748,29 +2923,170 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                                   textAlign: "left",
                                   cursor: "pointer"
                                 }}
-                                title="Click to view recharged customers"
+                                title="Click to view apartment details & recharge customers"
                               >
                                 {r.name}
                               </td>
-                              <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 700, color: "#1D1D1F" }}>
+                              <td
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setKpiModal({
+                                    type: "active_customers",
+                                    aptFilter: r.name,
+                                    title: `${r.name} · Active Customers`,
+                                    sub: `${r.totalCustomers || 0} active customers in ${r.name}`
+                                  });
+                                }}
+                                style={{
+                                  padding: "13px 14px",
+                                  textAlign: "center",
+                                  fontSize: 13,
+                                  fontWeight: 700,
+                                  color: "#08805A",
+                                  textDecoration: "underline",
+                                  cursor: "pointer"
+                                }}
+                                title="Click to view active customer directory for this apartment"
+                              >
                                 {r.totalCustomers || 0}
                               </td>
-                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}</td>
-                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600 }}>{r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}</td>
-                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569" }}>{r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}</td>
-                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600 }}>{r.dpRecharge > 0 ? inr(Math.round(r.dpRecharge)) : "—"}</td>
-                              <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F" }}>{inr(Math.round(r.totalCollected))}</td>
+                              <td
+                                onClick={(e) => {
+                                  if (r.zohoDeposit > 0) {
+                                    e.stopPropagation();
+                                    setKpiModal({
+                                      type: "payments",
+                                      aptFilter: r.name,
+                                      filter: "zoho_deposit",
+                                      title: `${r.name} · Zoho Deposit`,
+                                      sub: `Zoho deposit payments in ${rangeLabel(range)}`
+                                    });
+                                  }
+                                }}
+                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569", cursor: r.zohoDeposit > 0 ? "pointer" : "default" }}
+                                title={r.zohoDeposit > 0 ? "Click to view Zoho deposit payments" : ""}
+                              >
+                                {r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}
+                              </td>
+                              <td
+                                onClick={(e) => {
+                                  if (r.zohoRecharge > 0) {
+                                    e.stopPropagation();
+                                    setKpiModal({
+                                      type: "payments",
+                                      aptFilter: r.name,
+                                      filter: "zoho_recharge",
+                                      title: `${r.name} · Zoho Recharge`,
+                                      sub: `Zoho recharge payments in ${rangeLabel(range)}`
+                                    });
+                                  }
+                                }}
+                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600, cursor: r.zohoRecharge > 0 ? "pointer" : "default" }}
+                                title={r.zohoRecharge > 0 ? "Click to view Zoho recharge payments" : ""}
+                              >
+                                {r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}
+                              </td>
+                              <td
+                                onClick={(e) => {
+                                  if (r.dpDeposit > 0) {
+                                    e.stopPropagation();
+                                    setKpiModal({
+                                      type: "payments",
+                                      aptFilter: r.name,
+                                      filter: "dp_deposit",
+                                      title: `${r.name} · DrinkPrime Deposit`,
+                                      sub: `DrinkPrime deposit records in ${rangeLabel(range)}`
+                                    });
+                                  }
+                                }}
+                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569", cursor: r.dpDeposit > 0 ? "pointer" : "default" }}
+                                title={r.dpDeposit > 0 ? "Click to view DrinkPrime deposit records" : ""}
+                              >
+                                {r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}
+                              </td>
+                              <td
+                                onClick={(e) => {
+                                  if (r.dpRecharge > 0) {
+                                    e.stopPropagation();
+                                    setKpiModal({
+                                      type: "payments",
+                                      aptFilter: r.name,
+                                      filter: "dp_recharge",
+                                      title: `${r.name} · DrinkPrime Recharge`,
+                                      sub: `DrinkPrime recharge records in ${rangeLabel(range)}`
+                                    });
+                                  }
+                                }}
+                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600, cursor: r.dpRecharge > 0 ? "pointer" : "default" }}
+                                title={r.dpRecharge > 0 ? "Click to view DrinkPrime recharge records" : ""}
+                              >
+                                {r.dpRecharge > 0 ? inr(Math.round(r.dpRecharge)) : "—"}
+                              </td>
+                              <td
+                                onClick={(e) => {
+                                  if (r.totalCollected > 0) {
+                                    e.stopPropagation();
+                                    setKpiModal({
+                                      type: "payments",
+                                      aptFilter: r.name,
+                                      filter: "all",
+                                      title: `${r.name} · All Payments`,
+                                      sub: `All payments in ${rangeLabel(range)}`
+                                    });
+                                  }
+                                }}
+                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F", cursor: r.totalCollected > 0 ? "pointer" : "default" }}
+                                title="Click to view all payments for this apartment"
+                              >
+                                {inr(Math.round(r.totalCollected))}
+                              </td>
                             </tr>
                           );
                         })}
                         <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(8,128,90,.15)" }}>
-                          <td style={{ padding: "13px 18px", fontSize: 13, fontWeight: 800, color: "#0d2119", textAlign: "left" }}>Total ({allAptRows.length})</td>
-                          <td style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#1D1D1F" }}>{allAptTotalCusts}</td>
-                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalZohoDep > 0 ? inr(Math.round(allAptTotalZohoDep)) : "—"}</td>
-                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A" }}>{allAptTotalZohoRech > 0 ? inr(Math.round(allAptTotalZohoRech)) : "—"}</td>
-                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700 }}>{allAptTotalDpDep > 0 ? inr(Math.round(allAptTotalDpDep)) : "—"}</td>
-                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A" }}>{allAptTotalDpRech > 0 ? inr(Math.round(allAptTotalDpRech)) : "—"}</td>
-                          <td style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F" }}>{inr(Math.round(allAptTotalCollected))}</td>
+                          <td style={{ padding: "13px 18px", fontSize: 13, fontWeight: 800, color: "#0d2119", textAlign: "left" }}>Total ({displayedAptRows.length})</td>
+                          <td
+                            onClick={() => setKpiModal({ type: "active_customers", title: "Active Customers Directory", sub: "All active customer subscriptions across Zoho & DrinkPrime" })}
+                            style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A", textDecoration: "underline", cursor: "pointer" }}
+                            title="Click to view all active customers"
+                          >
+                            {allAptTotalCusts}
+                          </td>
+                          <td
+                            onClick={() => setKpiModal({ type: "payments", filter: "zoho_deposit", title: "All Zoho Deposits", sub: `All Zoho deposit payments in ${rangeLabel(range)}` })}
+                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                            title="Click to view all Zoho deposit payments"
+                          >
+                            {allAptTotalZohoDep > 0 ? inr(Math.round(allAptTotalZohoDep)) : "—"}
+                          </td>
+                          <td
+                            onClick={() => setKpiModal({ type: "payments", filter: "zoho_recharge", title: "All Zoho Recharges", sub: `All Zoho recharge payments in ${rangeLabel(range)}` })}
+                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A", cursor: "pointer" }}
+                            title="Click to view all Zoho recharge payments"
+                          >
+                            {allAptTotalZohoRech > 0 ? inr(Math.round(allAptTotalZohoRech)) : "—"}
+                          </td>
+                          <td
+                            onClick={() => setKpiModal({ type: "payments", filter: "dp_deposit", title: "All DrinkPrime Deposits", sub: `All DrinkPrime deposit records in ${rangeLabel(range)}` })}
+                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+                            title="Click to view all DrinkPrime deposit records"
+                          >
+                            {allAptTotalDpDep > 0 ? inr(Math.round(allAptTotalDpDep)) : "—"}
+                          </td>
+                          <td
+                            onClick={() => setKpiModal({ type: "payments", filter: "dp_recharge", title: "All DrinkPrime Recharges", sub: `All DrinkPrime recharge records in ${rangeLabel(range)}` })}
+                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A", cursor: "pointer" }}
+                            title="Click to view all DrinkPrime recharge records"
+                          >
+                            {allAptTotalDpRech > 0 ? inr(Math.round(allAptTotalDpRech)) : "—"}
+                          </td>
+                          <td
+                            onClick={() => setKpiModal({ type: "payments", filter: "all", title: "Total Collection Transactions", sub: `All Zoho & DrinkPrime paid transactions in ${rangeLabel(range)}` })}
+                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F", cursor: "pointer" }}
+                            title="Click to view all transactions"
+                          >
+                            {inr(Math.round(allAptTotalCollected))}
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -1800,7 +3116,29 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           ))}
         </div>
       )}
+      {renderKpiDrilldownModal()}
       {renderAptDetailsModal()}
+      {toast && (
+        <div style={{
+          position: "fixed",
+          bottom: 24,
+          right: 24,
+          background: "#1D1D1F",
+          color: "#fff",
+          padding: "10px 18px",
+          borderRadius: 12,
+          fontSize: 13,
+          fontWeight: 600,
+          boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+          zIndex: 99999,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} />
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
