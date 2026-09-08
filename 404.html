@@ -1,0 +1,34 @@
+<!doctype html>
+<!--
+  GitHub Pages is a static host with no server-side routing, so it serves
+  this file for ANY path it doesn't recognize as a real file — which, since
+  v2.29.379 added real browser paths like /wisdom/allcustomers, now includes
+  every one of the app's own pretty URLs on a hard reload or a shared link.
+  This is the standard, well-known workaround (rafgraph/spa-github-pages):
+  redirect back to the real app at "/wisdom/", smuggling the originally
+  requested path through as a query string (since that part of the URL IS
+  actually served by GitHub Pages), and index.html's own matching decode
+  script (see its <head>) puts the real path back via history.replaceState
+  before the app ever renders — so the user never sees this page or the
+  redirect, and the app opens directly on the right screen.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ProWater Wisdom 2.0</title>
+    <script>
+      // pathSegmentsToKeep = 1 → keep the "/wisdom" base segment, redirect
+      // everything after it into the query string.
+      var pathSegmentsToKeep = 1;
+      var l = window.location;
+      l.replace(
+        l.protocol + "//" + l.hostname + (l.port ? ":" + l.port : "") +
+        l.pathname.split("/").slice(0, 1 + pathSegmentsToKeep).join("/") + "/?/" +
+        l.pathname.slice(1).split("/").slice(pathSegmentsToKeep).join("/").replace(/&/g, "~and~") +
+        (l.search ? "&" + l.search.slice(1).replace(/&/g, "~and~") : "") +
+        l.hash
+      );
+    </script>
+  </head>
+  <body></body>
+</html>
