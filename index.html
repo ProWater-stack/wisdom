@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>prowater-dashboard</title>
+    <script>
+      // Matching decode half of public/404.html's GitHub Pages SPA redirect
+      // (v2.29.379) — restores the real path (e.g. /wisdom/allcustomers)
+      // BEFORE the app boots, so a hard reload/shared link on a real page
+      // opens straight there instead of flashing Home. No-op on a normal
+      // load (query string doesn't start with "/?/").
+      (function (l) {
+        if (l.search[1] === "/") {
+          var decoded = l.search.slice(1).split("&").map(function (s) {
+            return s.replace(/~and~/g, "&");
+          }).join("?");
+          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
+        }
+      })(window.location);
+    </script>
   </head>
   <body style="margin:0;padding:0;background:#0a1a0f">
     <div id="root" style="min-height:100vh;background:#0a1a0f"></div>

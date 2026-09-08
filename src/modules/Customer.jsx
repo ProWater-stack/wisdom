@@ -19,6 +19,7 @@ import {
   exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety, canonicalStatus,
   parsePartsUsed, jobDurationMin, zdIsClosed, gstBreakup,
 } from "../shared/core";
+import { parseLocation, syncPath } from "../shared/router";
 import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, TT, Modal, Drawer,
   Field, Chip, Status, Person, SortHeader, DateRangePicker, MultiSelectFilter,
@@ -982,6 +983,55 @@ export function AllCustomers() {
       .catch(() => { setSyncHistory([]); setSyncHistoryTotal(0); setSyncHistoryErr(true); })
       .finally(() => setSyncHistoryLoading(false));
   }, [sel, subtab]);
+
+  // Deep-linking (v2.29.379), per explicit user request ("if i open any
+  // purifier ID in the all customers then it should take the default
+  // purifier id and show it in the url... /wisdom/allcustomers/BLE58C3D25").
+  // Matches a customer by Purifier ID first (what the URL/user actually
+  // recognizes), falling back to `id` for the rare record with none.
+  const findByDetail = (list, detail) => {
+    const d = String(detail || "").toLowerCase();
+    return list.find(c => String(c.purifier_id || "").toLowerCase() === d)
+      || list.find(c => String(c.id || "").toLowerCase() === d);
+  };
+  // Auto-opens the customer named in the URL's detail segment once the list
+  // has loaded. Runs (and gives up) exactly once per mount, tracked by this
+  // ref rather than depending on `sel` — a user closing the detail view
+  // (Back to All Customers) must NOT cause this to reopen it.
+  const urlCheckedRef = useRef(false);
+  useEffect(() => {
+    if (urlCheckedRef.current || !data) return;
+    urlCheckedRef.current = true;
+    const { tab: urlTab, detail } = parseLocation();
+    if (urlTab !== "cust_all" || !detail) return;
+    const match = findByDetail(data.customers, detail);
+    if (match) { setSel(match); setSubtab("profile"); }
+  }, [data]);
+  // Keeps the URL's detail segment in sync with the open/closed customer —
+  // guarded on `urlCheckedRef` so it never fires before the effect above has
+  // had its one chance to restore a customer FROM the URL on initial load
+  // (which would otherwise wipe that same detail segment out first).
+  useEffect(() => {
+    if (!urlCheckedRef.current) return;
+    syncPath("customer", "cust_all", sel ? (sel.purifier_id || sel.id) : null);
+  }, [sel]);
+  // Browser Back/Forward while this tab is open: closes the detail view when
+  // the URL's detail segment disappears, or opens a different customer when
+  // it changes to another valid one. A module/tab-level change is handled by
+  // Shell/App's own popstate listeners (App.jsx), not here.
+  useEffect(() => {
+    const onPop = () => {
+      if (!data) return;
+      const { tab: urlTab, detail } = parseLocation();
+      if (urlTab !== "cust_all") return;
+      if (!detail) { setSel(null); return; }
+      if (sel && String(sel.purifier_id || sel.id).toLowerCase() === detail.toLowerCase()) return;
+      const match = findByDetail(data.customers, detail);
+      if (match) { setSel(match); setSubtab("profile"); }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [data, sel]);
   if (!data) return <AllCustomersLoadingScreen />;
   const { customers, subs, invs, tickets, referrers, referees, creditNotes, submodules } = data;
 
@@ -1188,24 +1238,26 @@ export function AllCustomers() {
   // same active+inactive-both-at-once bug this line exists to avoid.)
   // Active and Inactive are strict complements of the exact same
   // population/identity space, so they always sum to the total.
-  const uniqueCustomerMap = new Map();
-  allPop.forEach(c => {
-    const k = custKey(c);
-    const isActiveRow = !isDeviceUninstalled(c);
-    const prev = uniqueCustomerMap.get(k);
-    if (!prev) uniqueCustomerMap.set(k, { isDp: c.isDpCustomer, isActive: isActiveRow });
-    else { prev.isDp = prev.isDp || c.isDpCustomer; prev.isActive = prev.isActive || isActiveRow; }
-  });
-  const uniqueCustomers = Array.from(uniqueCustomerMap.values());
-  const uniqueTotalCount = uniqueCustomers.length;
-  const uniqueActiveCount = uniqueCustomers.filter(u => u.isActive).length;
+  //
+  // Counts DEVICES/ROWS, not deduped unique people (v2.29.378) — per
+  // explicit user request. A single customer with 12 device connections
+  // (e.g. one apartment resident on DP with 12 purifiers) used to collapse
+  // to "1" here while DP Devices Conn and Device Mix, both row-counted,
+  // showed "12" for the exact same population — reading as a contradiction.
+  // The unique-customer dedup (custKey/dpPhoneKey, added in v2.29.372 for
+  // the "Arun" case) is kept for the per-row "×N" duplicate badge in the
+  // table, but this KPI card no longer dedupes at all: it always counts
+  // rows, matching every sibling card everywhere, filtered or not.
+  const uniqueTotalCount = allPop.length;
+  const activeRows = allPop.filter(c => !isDeviceUninstalled(c));
+  const uniqueActiveCount = activeRows.length;
   const uniqueInactiveCount = uniqueTotalCount - uniqueActiveCount;
   // DP/Zoho split of the ACTIVE population only (v2.29.370) — per explicit
   // user request: the card already shows Inactive customers as its own red
   // stat, so splitting the DP/Zoho line by the TOTAL population (active +
   // inactive) double-counted the same inactive customers a second time and
   // didn't actually describe the headline "active" number at all.
-  const uniqueActiveDpCount = uniqueCustomers.filter(u => u.isActive && u.isDp).length;
+  const uniqueActiveDpCount = activeRows.filter(c => c.isDpCustomer).length;
   const uniqueActiveZohoCount = uniqueActiveCount - uniqueActiveDpCount;
 
   // Distinct societies in current view & DP / Zoho split

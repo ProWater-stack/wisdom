@@ -45,6 +45,7 @@ import {
   billingApi, creditNoteApi, depositForCustomer, termMonths, monthlyOf,
   CHART_PALETTE, tkPriority, titleCaseName, firstNameOf, checkDeployInProgress,
 } from "./shared/core";
+import { MODULE_TABS, parseLocation, syncPath } from "./shared/router";
 import {
   ApiError, Card, Chip, DateRangeFilter, DateRangePicker,
   DefRow, DeviceTypeBadge, Drawer, Drop, Empty, Field,
@@ -700,8 +701,40 @@ function App() {
     return null;
   });
   // Persist the open module so a hard refresh stays on the same page (not Home).
-  const [activeModule, setActiveModule] = useState(() => sessionStorage.getItem("pw_active_module") || null);
+  // URL routing (v2.29.379, explicit user request — real browser paths like
+  // /wisdom/allcustomers instead of the URL never changing): the real
+  // browser URL is now the FIRST source of truth for which module to land
+  // on (e.g. a direct/shared link to /wisdom/allcustomers), falling back to
+  // the pre-existing sessionStorage-based "resume where I left off" only
+  // when the URL itself doesn't encode a module (a bare "/wisdom/" load).
+  const [activeModule, setActiveModule] = useState(() => {
+    try {
+      const fromUrl = parseLocation().module;
+      if (fromUrl) return fromUrl;
+    } catch { /* ignore */ }
+    return sessionStorage.getItem("pw_active_module") || null;
+  });
   const [sessionWarning, setSessionWarning] = useState(false);
+
+  // Browser Back/Forward across modules (e.g. Home <-> a module) — Shell (see
+  // below) owns the finer tab-level and any record-detail-level segments of
+  // the URL via its own popstate listener, since it's the one that knows the
+  // current module's actual tabs; this one only reacts to the module itself
+  // changing (or clearing back to Home).
+  useEffect(() => {
+    const onPop = () => onSetActiveModule(parseLocation().module);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  // Going back to Home (activeModule → null, e.g. the "Back to modules"
+  // button) unmounts Shell entirely, so Shell's own module/tab URL-sync
+  // effect never gets a chance to run for this transition — without this,
+  // the URL would silently keep showing the module you just left. Only
+  // pushes when the URL doesn't already say Home (e.g. skips a redundant
+  // push on a popstate-driven Home, where the URL already changed first).
+  useEffect(() => {
+    if (activeModule === null && parseLocation().module !== null) syncPath(null, null, null);
+  }, [activeModule]);
 
   // Deploy-in-progress banner (v2.29.342) — polls GitHub Actions' public API
   // for the deploy workflow's latest run every 3 minutes (deliberately not
@@ -1173,8 +1206,51 @@ function Shell({ module = "referral", onHome }) {
     : "overview";
   // Restore the last-open sub-tab so a hard refresh stays on the same page. An
   // invalid/stale tab is corrected to the first visible section by the effect below.
-  const [tab, setTab] = useState(() => sessionStorage.getItem("pw_tab_" + module) || defaultTab);
+  // URL routing (v2.29.379): the real browser URL wins first, if it names a
+  // tab that belongs to THIS module (e.g. a direct link to /wisdom/societies
+  // opened while `module` is already "customer") — falls back to the
+  // pre-existing sessionStorage/defaultTab resume behavior otherwise.
+  const [tab, setTab] = useState(() => {
+    try {
+      const fromUrl = parseLocation();
+      if (fromUrl.module === module && fromUrl.tab) return fromUrl.tab;
+    } catch { /* ignore */ }
+    return sessionStorage.getItem("pw_tab_" + module) || defaultTab;
+  });
   useEffect(() => { sessionStorage.setItem("pw_tab_" + module, tab); }, [module, tab]);
+  // Keeps the real browser URL in sync with module+tab — pretty flat paths
+  // per explicit user request (see shared/router.js for the full design).
+  // Deliberately stateless/idempotent (no "is this the first run" ref):
+  // compares the CURRENT actual browser URL's module+tab against this
+  // Shell's own, and only pushes a fresh bare path when they genuinely
+  // differ (a real in-app tab/module change) — when they already match, it
+  // does nothing at all, which correctly leaves any record-detail segment
+  // in place (e.g. /wisdom/allcustomers/HAC-00045) for a page component like
+  // AllCustomers to resolve on its own. A ref-based "only push after mount"
+  // version of this was tried first and had a real bug: React StrictMode's
+  // dev-only double-invocation of effects flipped the ref on its FIRST
+  // (simulated) pass, so the second pass ran as if it were a real change and
+  // force-stripped a freshly-loaded deep link's detail segment before
+  // AllCustomers' own mount effect ever got to read it. Comparing against
+  // the actual URL instead of a mutable ref sidesteps that entirely — the
+  // outcome is identical no matter how many times this effect happens to run
+  // for the same module/tab.
+  useEffect(() => {
+    const cur = parseLocation();
+    if (cur.module === module && cur.tab === tab) return;
+    syncPath(module, tab, null);
+  }, [module, tab]);
+  // Browser Back/Forward between tabs WITHIN this module (a module-level
+  // change is handled by App()'s own popstate listener, which remounts this
+  // whole Shell with a new `module` prop).
+  useEffect(() => {
+    const onPop = () => {
+      const parsed = parseLocation();
+      if (parsed.module === module && parsed.tab) setTab(parsed.tab);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [module]);
   const [mobileNav, setMobileNav] = useState(false);
   const [now, setNow] = useState(new Date());          // system clock (top-right)
   const [loginAt] = useState(() => Date.now());        // session start for the timer

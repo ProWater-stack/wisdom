@@ -9,7 +9,7 @@
 > same commit. The living, dated change-log lives in `VERSION_HISTORY` inside `src/shared/core.js`;
 > this doc describes the *current* design.
 >
-> **Reflects:** `APP_VERSION` **2.29.377**.
+> **Reflects:** `APP_VERSION` **2.29.379**.
 
 ---
 
@@ -53,10 +53,17 @@
   first. When hunting for a data-layer function, check `shared/core.js` first, then the module file
   whose name matches the domain.
   Entry: `src/main.jsx` → `src/index.css`. Small helper in `src/lib/` (`apiUsageTracker.js`).
-- **Build/deploy:** Vite (`npm run build`). Base path **`/Wisdom2.0/`** (see `vite.config.js`).
+- **Build/deploy:** Vite (`npm run build`). Base path **`/wisdom/`** (see `vite.config.js`).
   Deployed to **GitHub Pages** by GitHub Actions (`.github/workflows/deploy.yml`) on push to `main`;
   build-time env comes from repo **secrets** (`VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_EMAIL`,
-  `VITE_API_ORIGIN`). Local `deploy` script uses `gh-pages -d dist`.
+  `VITE_API_ORIGIN`). Local `deploy` script uses `gh-pages -d dist`. **`public/404.html`
+  (v2.29.379)** is GitHub Pages' own SPA-routing workaround (the well-known
+  rafgraph/spa-github-pages pattern) — GitHub Pages is a static host with no server-side routing, so
+  it serves this file for any real app path (e.g. `/wisdom/allcustomers`) it doesn't recognize as an
+  actual file; it redirects back to `/wisdom/` with the real path smuggled through the query string,
+  and a matching decode script in `index.html`'s `<head>` restores it via `history.replaceState`
+  before the app renders — so a hard reload or a shared link to a real page opens directly there,
+  invisibly.
 - **UI:** no component library. Inline styles + CSS variables (brand tokens defined in a `<style>`
   block near the top of `App.jsx`). v2.29.169 briefly redesigned the `Home` launcher's sidebar with
   **Tailwind CSS v4** utility classes instead; v2.29.175 reverted that whole redesign back to the
@@ -67,9 +74,21 @@
   `src/index.css` — worth stripping out next time someone's in these files, but harmless to leave
   as-is meanwhile. Fonts: Playfair Display (headings) + DM Sans (body).
   Charts: **Recharts**. Icons: **lucide-react**.
-- **State/routing:** React hooks only (no Redux). `useAuth()` context holds the logged-in `user`,
-  the active `module` and `tab`. `MODULES` (registry) + `moduleTabs` (per-module sub-tabs) drive
-  navigation; each tab renders a component.
+- **State/routing:** React hooks only (no Redux, no react-router). `useAuth()` context holds the
+  logged-in `user`, the active `module` and `tab`. `MODULES` (registry) + `moduleTabs` (per-module
+  sub-tabs) drive navigation; each tab renders a component. **Real browser URLs (v2.29.379)** — per
+  explicit user request ("when i go to any module the url remain the same... make it as
+  /wisdom/allcustomers") — `shared/router.js` keeps `window.history` in sync with that same
+  module/tab state: every (module, tab) pair gets one flat URL segment derived from the tab's own
+  label ("All Customers" -> `/wisdom/allcustomers`, "Societies" -> `/wisdom/societies`), not a nested
+  `/module/tab` path. `App.jsx`'s `activeModule` and Shell's own `tab` each read `parseLocation()` on
+  mount (falling back to the pre-existing sessionStorage resume behavior when the URL doesn't encode
+  one) and push/replace via `syncPath()` on change; both directions are stateless/idempotent (compare
+  the current actual URL to the desired module/tab rather than tracking "have I run before" in a
+  ref) specifically because an earlier ref-based version broke under React StrictMode's dev-only
+  double-invoked effects. A page component can add its own RECORD-level URL segment on top of this —
+  Customer > All Customers is the reference implementation (opens `/wisdom/allcustomers/<Purifier
+  ID>`, see its own section below) — the same pattern is reusable by any other module later.
 - **Data:** live from the ProWater Cloud Run backend, Firebase, Zoho (through the backend) and AWS
   IoT; a few modules are local/seed. Every list fetch fails soft to seed/sample data so one dead
   endpoint never blanks the page (it raises a "Showing sample data" banner instead).
@@ -520,10 +539,25 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
   devices" and "inactive devices" depending on the isolate-toggle's state — the count itself is unchanged.
   **"{N} DP · {N} Zoho" is now clickable (v2.29.377)** — same isolate-toggle idiom as the Inactive stat,
   wired to the pre-existing `stackFilter` state (also driven by the toolbar's own Customer Stack dropdown):
-  click DP or Zoho to isolate the table to that stack, click again to clear. Note this figure is a
-  unique-CUSTOMER count (deduped); the table/DP Devices Conn/Device Mix report DEVICE-row counts for the
-  same stack, which naturally run higher whenever a stack's customers own more than one purifier — not a
-  bug, same dynamic as the note above.
+  click DP or Zoho to isolate the table to that stack, click again to clear.
+  **Active Customers headline/DP/Zoho/Inactive now count DEVICES, not deduped unique people (v2.29.378)**
+  — v2.29.377 briefly described this figure as a unique-customer count that legitimately runs lower than
+  the table/DP Devices Conn/Device Mix's device-row counts for the same stack; caught live when a single
+  real customer with 12 DrinkPrime device connections showed "Active Customers: 1" against "12" everywhere
+  else for the identical filtered population. Per explicit user request (confirmed via AskUserQuestion to
+  apply always, not just when a search narrows the table), the `custKey`/`dpPhoneKey` dedup (added v2.29.372
+  to collapse a DP customer's multiple connections into one person) was removed from this KPI's own rollup:
+  `uniqueTotalCount`/`uniqueActiveCount`/the DP-Zoho split now all count rows in `allPop` directly, so this
+  card matches DP Devices Conn and Device Mix unit-for-unit. The dedup logic itself is untouched and still
+  drives the table's own per-row "Duplicate" badge — a separate, still-wanted feature.
+  **All Customers deep-links by Purifier ID (v2.29.379)** — the reference implementation of the new
+  app-wide URL routing (`shared/router.js`, see Architecture & stack above). Opening a customer
+  pushes `/wisdom/allcustomers/<Purifier ID>` (falling back to `id` for the rare record with none);
+  closing it (or switching tabs/modules) drops back to the bare `/wisdom/allcustomers`. A page load
+  straight on a URL with that segment — a hard reload or a shared link — auto-opens the matching
+  customer once the list has loaded; Back/Forward across it is handled by a `popstate` listener. The
+  pre-existing `custKey`/`dpPhoneKey` unique-customer dedup is unrelated to this — the URL always uses
+  the clicked ROW's own Purifier ID, same identity concept as the table's "Duplicate" badge above.
   **DP Devices Conn is now always scoped to active DP customers (v2.29.377)** — a new `dpActivePop`
   (mirrors every other current filter, but unconditionally excludes Un-Installed/Uninstalled via
   `isDeviceUninstalled` AND a customer-status "dunning" exclude) feeds its "of {N} online" headline and
