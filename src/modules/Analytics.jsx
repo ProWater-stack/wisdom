@@ -5993,9 +5993,9 @@ export function DPTransactions() {
       const tb = b[sortField] ? new Date(b[sortField]).getTime() : 0;
       return (ta - tb) * (sort.dir === "asc" ? 1 : -1);
     });
-  const grandDeposit = tableRows.reduce((s, r) => s + (r.deposit || 0), 0);
-  const grandRevenue = tableRows.reduce((s, r) => s + (r.recharge || 0), 0);
-  const grandTotalPaid = tableRows.reduce((s, r) => s + (r.totalPaid || 0), 0);
+  const grandDeposit = tableRows.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
+  const grandRevenue = tableRows.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+  const grandTotalPaid = tableRows.reduce((s, r) => s + (Number(r.transaction_amount) || ((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0))), 0);
   const grandEarnedRevenue = tableRows.reduce((s, r) => s + (r.earnedRevenue || 0), 0);
   const grandRemainingEarned = tableRows.reduce((s, r) => s + (r.remainingDaysEarned || 0), 0);
 
@@ -6041,10 +6041,9 @@ export function DPTransactions() {
     { label: "Validity", get: r => validityOf(r) ?? "" },
     { label: "Litres", get: r => litresOf(r) ?? "" },
     { label: "Plan", get: r => r.Plan || "" },
-    { label: "Deposit amount", get: r => r.deposit_amount ?? "" },
-    { label: "Revenue amount", get: r => r.revenue_amount ?? "" },
-    { label: "Total Paid", get: r => (r.deposit_amount != null || r.revenue_amount != null) ? ((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0)) : "" },
-    { label: "Transaction amount", get: r => r.transaction_amount ?? "" },
+    { label: "Deposit", get: r => r.deposit_amount ?? "" },
+    { label: "Recharge", get: r => r.revenue_amount ?? "" },
+    { label: "Total Amount", get: r => r.transaction_amount ?? ((r.deposit_amount != null || r.revenue_amount != null) ? ((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0)) : "") },
     { label: "City", get: r => r.City || "" },
     { label: "Device status", get: r => r.device_status || "" },
   ], tableRows);
@@ -6216,7 +6215,7 @@ export function DPTransactions() {
               sortHeader("paid", "Paid date"),
               "Apartment", "Customer", "Phone", "Device", "Type", "Transaction Key",
               sortHeader("start", "Start Date"), sortHeader("end", "End Date"),
-              "Validity", "Litres", "Plan", "Deposit", "Revenue", "Total Paid"]} maxHeight="calc(100vh - 460px)">
+              "Validity", "Litres", "Plan", "Deposit", "Recharge", "Total Amount"]} maxHeight="calc(100vh - 460px)">
             {pageRows.map((r, i) => (
               <tr key={r.id ? `${r.id}-${i}` : i} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
@@ -6256,7 +6255,7 @@ export function DPTransactions() {
                 <td style={{ ...td, fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.deposit_amount != null ? inr(r.deposit_amount) : "—"}</td>
                 <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.revenue_amount != null ? inr(r.revenue_amount) : "—"}</td>
                 <td style={{ ...td, color: "#08805A", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap" }}>
-                  {(r.deposit_amount != null || r.revenue_amount != null) ? inr((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0)) : "—"}
+                  {r.transaction_amount != null ? inr(r.transaction_amount) : ((r.deposit_amount != null || r.revenue_amount != null) ? inr((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0)) : "—")}
                 </td>
               </tr>
             ))}
@@ -6265,7 +6264,7 @@ export function DPTransactions() {
                 <td style={{ ...ftd, textAlign: "center" }} colSpan={12}>Grand Total ({tableRows.length})</td>
                 <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandDeposit))}</td>
                 <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandRevenue))}</td>
-                <td style={{ ...ftd, textAlign: "center", color: "#08805A", fontWeight: 800 }}>{inr(Math.round(grandDeposit + grandRevenue))}</td>
+                <td style={{ ...ftd, textAlign: "center", color: "#08805A", fontWeight: 800 }}>{inr(Math.round(grandTotalPaid))}</td>
               </tr>
             )}
             {tableRows.length === 0 && <tr><td colSpan={15} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
