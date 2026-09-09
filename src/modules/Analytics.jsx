@@ -2077,7 +2077,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
       {/* ── Penetration Tracker ────────────────────────────────────────────── */}
       <div style={{ marginBottom: 16 }}>
-        <PenetrationTracker subsData={subs} custsData={customers} societyFilter={selSoc} asOf={anchor} embedded />
+        <PenetrationTracker subsData={subs} custsData={customers} societyFilter={selSoc} stackFilter={selStack} asOf={anchor} embedded />
       </div>
 
       {/* ── Month-on-Month (MoM) Revenue Growth ────────────────────────────── */}
@@ -3534,12 +3534,12 @@ export const setLaunchOverride = (society, ym) => {
 export const ymToIdx = (ym) => { const [y, m] = String(ym).split("-").map(Number); return (y && m) ? y * 12 + (m - 1) : null; };
 export const idxToYm = (idx) => `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
 
-export function PenetrationTracker({ subsData, custsData, societyFilter = null, asOf, embedded = false } = {}) {
+export function PenetrationTracker({ subsData, custsData, societyFilter = null, stackFilter = null, asOf, embedded = false } = {}) {
   const { user } = useAuth();
   const [, forceRerender] = useState(0);                       // re-render after a launch edit
   const canEditLaunch = user.role === "admin" && !embedded;    // only admins, only in the standalone view
   // When embedded in the Overview, the parent passes already-loaded subs/customers
-  // (plus the society filter and an as-of date) so this view follows the page filters.
+  // (plus the society filter, stack filter and an as-of date) so this view follows the page filters.
   const provided = Array.isArray(subsData) && Array.isArray(custsData);
   const [data, setData] = useState(provided ? { subs: subsData, custs: custsData } : null);
   const [err, setErr] = useState("");
@@ -3570,11 +3570,24 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
     socByCust[keyLc(s.zohoCustomerId)] || socByCust[keyLc(s.zohoId)] ||
     socByCust[keyLc(s.customerNumber)] || socByCust[keyLc(s.email)] || "";
 
-  // One subscription = one sign-up: society (from the customer join) + created_at.
+  // Stack filter & Society filter scoping
+  const stackOk = (st) => !stackFilter || stackFilter.length === 0 || stackFilter.includes(st);
   const socFilterSet = societyFilter && societyFilter.length ? new Set(societyFilter) : null;
-  const custs = data.subs
-    .map(s => ({ society: societyOfSub(s), since: parseFlexDate(s.createdAt || s.activatedAt) }))
-    .filter(x => x.society && x.since && (!socFilterSet || socFilterSet.has(x.society)));
+
+  const custsFromSubs = stackOk("Zoho")
+    ? data.subs
+        .map(s => ({ society: canonicalSociety(societyOfSub(s)), since: parseFlexDate(s.createdAt || s.activatedAt) }))
+        .filter(x => x.society && x.since && isRealSociety(x.society) && (!socFilterSet || socFilterSet.has(x.society)))
+    : [];
+
+  const custsFromDp = stackOk("DP")
+    ? (data.custs || [])
+        .filter(c => c.isDpCustomer)
+        .map(c => ({ society: canonicalSociety(c.society || ""), since: parseFlexDate(c.since) }))
+        .filter(x => x.society && x.since && isRealSociety(x.society) && (!socFilterSet || socFilterSet.has(x.society)))
+    : [];
+
+  const custs = [...custsFromSubs, ...custsFromDp];
 
   if (!custs.length) {
     const total = data.subs.length;
@@ -5973,7 +5986,8 @@ export function DPTransactions() {
       (r.phone || "").toLowerCase().includes(searchQ) ||
       (r.current_device || "").toLowerCase().includes(searchQ) ||
       (r.partner_name || "").toLowerCase().includes(searchQ) ||
-      (r.CustomerName || "").toLowerCase().includes(searchQ))
+      (r.CustomerName || "").toLowerCase().includes(searchQ) ||
+      (r.transaction_key || "").toLowerCase().includes(searchQ))
     .sort((a, b) => {
       const ta = a[sortField] ? new Date(a[sortField]).getTime() : 0;
       const tb = b[sortField] ? new Date(b[sortField]).getTime() : 0;
@@ -6029,6 +6043,7 @@ export function DPTransactions() {
     { label: "Plan", get: r => r.Plan || "" },
     { label: "Deposit amount", get: r => r.deposit_amount ?? "" },
     { label: "Revenue amount", get: r => r.revenue_amount ?? "" },
+    { label: "Total Paid", get: r => (r.deposit_amount != null || r.revenue_amount != null) ? ((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0)) : "" },
     { label: "Transaction amount", get: r => r.transaction_amount ?? "" },
     { label: "City", get: r => r.City || "" },
     { label: "Device status", get: r => r.device_status || "" },
@@ -6170,7 +6185,7 @@ export function DPTransactions() {
       )}
 
       <div style={{ marginTop: 18 }}>
-        <Toolbar q={search} setQ={setSearch} placeholder="Search phone, device or apartment…" count={tableRows.length}
+        <Toolbar q={search} setQ={setSearch} placeholder="Search phone, device, transaction key, apartment or customer…" count={tableRows.length}
           right={
             <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Payment Type</span>
@@ -6199,9 +6214,9 @@ export function DPTransactions() {
             sub="Raw records from the DP Transactions feed — filtered by Paid_Date, apartment, payment type and transaction type.">
             <Table head={[
               sortHeader("paid", "Paid date"),
-              "Apartment", "Customer", "Phone", "Device", "Type",
+              "Apartment", "Customer", "Phone", "Device", "Type", "Transaction Key",
               sortHeader("start", "Start Date"), sortHeader("end", "End Date"),
-              "Validity", "Litres", "Plan", "Deposit", "Revenue"]} maxHeight="calc(100vh - 460px)">
+              "Validity", "Litres", "Plan", "Deposit", "Revenue", "Total Paid"]} maxHeight="calc(100vh - 460px)">
             {pageRows.map((r, i) => (
               <tr key={r.id ? `${r.id}-${i}` : i} style={{ borderBottom: "1px solid var(--border)" }}>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r.Paid_Date ? fmtDate(new Date(r.Paid_Date)) : "—"}</td>
@@ -6226,6 +6241,13 @@ export function DPTransactions() {
                     {r.row_type || "—"}
                   </span>
                 </td>
+                <td style={{ ...td, fontSize: 11.5, textAlign: "center", whiteSpace: "nowrap" }}>
+                  {r.transaction_key ? (
+                    <span style={{ display: "inline-block", fontFamily: "ui-monospace,SFMono-Regular,Menlo,monospace", fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 6, background: "rgba(0,0,0,0.04)", color: "var(--slate)", whiteSpace: "nowrap" }} title={r.transaction_key}>
+                      {r.transaction_key}
+                    </span>
+                  ) : "—"}
+                </td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_start_date"] ? fmtDate(new Date(r["t.validity_start_date"])) : "—"}</td>
                 <td style={{ ...td, whiteSpace: "nowrap", fontSize: 12.5 }}>{r["t.validity_end_date"] ? fmtDate(new Date(r["t.validity_end_date"])) : "—"}</td>
                 <td style={{ ...td, fontSize: 12.5, textAlign: "center", whiteSpace: "nowrap" }}>{validityOf(r) != null ? Number(validityOf(r)).toLocaleString("en-IN") : "—"}</td>
@@ -6233,16 +6255,20 @@ export function DPTransactions() {
                 <td style={{ ...td, fontSize: 12, textAlign: "center", whiteSpace: "nowrap" }}>{r.Plan || "—"}</td>
                 <td style={{ ...td, fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.deposit_amount != null ? inr(r.deposit_amount) : "—"}</td>
                 <td style={{ ...td, color: "var(--teal-d)", fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>{r.revenue_amount != null ? inr(r.revenue_amount) : "—"}</td>
+                <td style={{ ...td, color: "#08805A", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap" }}>
+                  {(r.deposit_amount != null || r.revenue_amount != null) ? inr((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0)) : "—"}
+                </td>
               </tr>
             ))}
             {tableRows.length > 0 && (
               <tr>
-                <td style={{ ...ftd, textAlign: "center" }} colSpan={11}>Grand Total ({tableRows.length})</td>
+                <td style={{ ...ftd, textAlign: "center" }} colSpan={12}>Grand Total ({tableRows.length})</td>
                 <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandDeposit))}</td>
                 <td style={{ ...ftd, textAlign: "center" }}>{inr(Math.round(grandRevenue))}</td>
+                <td style={{ ...ftd, textAlign: "center", color: "#08805A", fontWeight: 800 }}>{inr(Math.round(grandDeposit + grandRevenue))}</td>
               </tr>
             )}
-            {tableRows.length === 0 && <tr><td colSpan={13} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
+            {tableRows.length === 0 && <tr><td colSpan={15} style={{ padding: 0 }}><Empty msg="No transactions match this filter." /></td></tr>}
           </Table>
           {tableRows.length > 0 && (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "12px 16px", flexWrap: "wrap" }}>
