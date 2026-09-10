@@ -577,34 +577,59 @@ export function GstBreakupCard({ total }) {
   const taxPct = Math.round((g.taxable / g.total) * 1000) / 10;
   const gstPct = Math.round((100 - taxPct) * 10) / 10;
 
+  // Restyled v2.29.402, per an explicit user-provided before/after mockup.
+  // The 4 rows now use per-item icon tinting (green for the taxable value,
+  // amber for the two GST lines) and the Total row gets its own highlighted
+  // treatment (solid icon, bordered background, bigger bold value) — none of
+  // which the shared `InvoiceSummaryRow` (still used unchanged elsewhere on
+  // this page, e.g. Due date/Payment date) supports, so these 4 rows are
+  // inlined here instead of reusing it.
+  const gstRow = (Icon, label, value, tone) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 12, transition: "background 0.15s ease" }}>
+      <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: tone === "amber" ? "#FFFBEB" : "#F4F8F5", color: tone === "amber" ? "#B45309" : "#08805A", flexShrink: 0, border: `1px solid ${tone === "amber" ? "rgba(217,119,6,0.12)" : "rgba(8,128,90,0.1)"}` }}><Icon size={16} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{label}</div>
+      </div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", textAlign: "right" }}>{value}</div>
+    </div>
+  );
+
   return (
-    <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+    <div style={{ background: "#FFFFFF", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px -10px rgba(0,0,0,0.04), 0 2px 6px -2px rgba(0,0,0,0.02)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", boxSizing: "border-box" }}>
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F", margin: 0 }}>GST Breakup</h3>
-            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Paid amount: {inr(Math.round(g.total))}</div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>GST Breakup</h3>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Paid amount: <strong style={{ color: "#0F172A" }}>{inr(Math.round(g.total))}</strong></div>
           </div>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>5% GST Standard</span>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.1)", color: "#08805A", border: "1px solid rgba(8,128,90,0.15)", letterSpacing: "0.02em" }}>5% GST Standard</span>
         </div>
 
         {/* Visual Ratio Bar */}
-        <div style={{ margin: "14px 0 16px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, color: "#86868B", marginBottom: 6 }}>
-            <span>Taxable ({taxPct}%)</span>
-            <span>Tax ({gstPct}%)</span>
+        <div style={{ margin: "16px 0 20px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
+            <span style={{ color: "#08805A" }}>Taxable ({taxPct}%)</span>
+            <span style={{ color: "#D97706" }}>Tax ({gstPct}%)</span>
           </div>
-          <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,0.06)", overflow: "hidden", display: "flex" }}>
+          <div style={{ height: 6, borderRadius: 999, background: "#F1F5F9", overflow: "hidden", display: "flex" }}>
             <div style={{ width: `${taxPct}%`, background: "#08805A", borderRadius: "999px 0 0 999px" }} />
             <div style={{ width: `${gstPct}%`, background: "#F59E0B", borderRadius: "0 999px 999px 0" }} />
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <InvoiceSummaryRow icon={Receipt} label="Taxable value" value={inr(Math.round(g.taxable))} />
-          <InvoiceSummaryRow icon={Landmark} label="CGST (2.5%)" value={inr(Math.round(g.cgst))} />
-          <InvoiceSummaryRow icon={MapPin} label="SGST (2.5%)" value={inr(Math.round(g.sgst))} />
-          <InvoiceSummaryRow icon={Wallet} label="Total invoice value" value={inr(Math.round(g.total))} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {gstRow(Receipt, "Taxable value", inr(Math.round(g.taxable)), "green")}
+          {gstRow(Landmark, "CGST (2.5%)", inr(Math.round(g.cgst)), "amber")}
+          {gstRow(MapPin, "SGST (2.5%)", inr(Math.round(g.sgst)), "amber")}
+
+          {/* Total — highlighted per the mockup, unlike the 3 plain rows above */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginTop: 6, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 14 }}>
+            <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "#08805A", color: "#FFFFFF", flexShrink: 0, boxShadow: "0 4px 10px rgba(8,128,90,0.2)" }}><Wallet size={16} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Total invoice value</div>
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "#08805A", whiteSpace: "nowrap", textAlign: "right" }}>{inr(Math.round(g.total))}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -1459,25 +1484,46 @@ export function AllCustomers() {
       referral: { icon: GitBranch, color: "#2A86D6", label: "Referral" },
       discount: { icon: Receipt, color: "#7D8A83", label: "Discount" },
     };
+    // Status-tinted styling for payment-type timeline entries (v2.29.402,
+    // per an explicit user-provided before/after mockup) — was one flat
+    // green color for every payment event regardless of status; now the
+    // node dot, card background/border, and the "Payment" badge all reflect
+    // pending (amber) vs paid (green) vs failed (red). Other event types
+    // (ticket/referral/discount) aren't part of this redesign and keep
+    // their existing single-color-per-type styling below unchanged.
+    const paymentTone = (status) => {
+      if (status === "pending") return { node: "#D97706", cardBg: "#FFFDF8", cardBorder: "rgba(217,119,6,0.2)", badgeBg: "#FEF3C7", badgeFg: "#B45309", badgeBorder: "rgba(217,119,6,0.15)" };
+      if (status === "failed") return { node: "#DC2626", cardBg: "#FEF2F2", cardBorder: "rgba(220,38,38,0.2)", badgeBg: "#FEF2F2", badgeFg: "#B91C1C", badgeBorder: "rgba(220,38,38,0.15)" };
+      return { node: "#08805A", cardBg: "#FAFCFA", cardBorder: "#E2E8F0", badgeBg: "#ECFDF5", badgeFg: "#047857", badgeBorder: "rgba(16,185,129,0.15)" };
+    };
     // Field severity for at-a-glance scanning — only amber (warning) / red (critical) stand out.
     const statusActive = String(sel.status || "").toLowerCase() === "active";
     const sevColor = (sev) => sev === "red" ? "#DC4141" : sev === "amber" ? "#a86e00" : "var(--f)";
     // Render a field value, highlighted amber/red when concerning (plain otherwise).
     const cell = (text, sev) => <span style={{ color: sevColor(sev), fontWeight: sev ? 800 : undefined }}>{text}</span>;
-    const tabBtn = (k, label, count) => (
-      <button key={k} onClick={() => setSubtab(k)} style={{
-        padding: "8px 16px", fontSize: 13, fontWeight: 700, border: "none",
-        background: subtab === k ? "#08805A" : "rgba(0,0,0,0.05)",
-        color: subtab === k ? "#ffffff" : "#86868B",
-        borderRadius: 999, transition: "all .15s ease", cursor: "pointer",
-        display: "inline-flex", alignItems: "center", gap: 6,
-      }}>
-        {label}
-        {count != null && count > 0 && (
-          <span style={{ fontSize: 10.5, fontWeight: 800, padding: "1px 7px", borderRadius: 999, background: subtab === k ? "rgba(255,255,255,0.25)" : "rgba(8,128,90,0.12)", color: subtab === k ? "#fff" : "#08805A" }}>{count}</span>
-        )}
-      </button>
-    );
+    // Restyled v2.29.402, per an explicit user-provided before/after mockup:
+    // active tab now gets a gradient fill + a green glow shadow instead of a
+    // flat solid fill, inactive tabs get a subtle transparent border (was
+    // truly borderless) and a touch less padding/bolder-but-lighter weight.
+    const tabBtn = (k, label, count) => {
+      const active = subtab === k;
+      return (
+        <button key={k} type="button" onClick={() => setSubtab(k)} style={{
+          padding: "7px 16px", fontSize: 13, fontWeight: active ? 700 : 600,
+          border: active ? "1px solid rgba(8,128,90,0.2)" : "1px solid transparent",
+          background: active ? "linear-gradient(135deg, #08805A 0%, #066848 100%)" : "rgba(0,0,0,0.04)",
+          color: active ? "#ffffff" : "#64748B",
+          boxShadow: active ? "0 4px 12px rgba(8,128,90,0.25)" : "none",
+          borderRadius: 999, transition: "all .15s ease", cursor: "pointer",
+          display: "inline-flex", alignItems: "center", gap: active ? 7 : 6,
+        }}>
+          {label}
+          {count != null && count > 0 && (
+            <span style={{ fontSize: 11, fontWeight: 800, padding: "1px 7px", borderRadius: 999, background: active ? "rgba(255,255,255,0.22)" : "rgba(8,128,90,0.12)", color: active ? "#fff" : "#08805A", lineHeight: 1.3 }}>{count}</span>
+          )}
+        </button>
+      );
+    };
 
     // Score card with conditional colour formatting (green ≥4, amber ≥2.5, red < 2.5, grey = no data).
     const scoreCard = (label, score, Icon, hint) => {
@@ -1528,7 +1574,7 @@ export function AllCustomers() {
         </div>
 
         {/* Sub-page Navigation Bar (Segmented Controls) */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap", alignItems: "center", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
           {tabBtn("timeline", "Timeline")}
           {tabBtn("profile", "Profile")}
           {tabBtn("transactions", "Transactions", sel.isDpCustomer ? (dpTxns || []).length : txns.length)}
@@ -1540,32 +1586,42 @@ export function AllCustomers() {
 
         {/* ── Subtab 1: Timeline ─────────────────────────────────────────── */}
         {subtab === "timeline" && (
-          <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22 }}>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 700, fontSize: 17, color: "#1D1D1F" }}>Customer Activity Timeline</div>
-              <div style={{ fontSize: 12.5, color: "#86868B", marginTop: 2 }}>Complete chronological interaction history</div>
+          <div style={{ background: "#FFFFFF", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px -10px rgba(0,0,0,0.04), 0 2px 6px -2px rgba(0,0,0,0.02)", padding: 22, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0F172A", letterSpacing: "-0.01em" }}>Customer Activity Timeline</div>
+              <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Complete chronological interaction history</div>
             </div>
             {timelineEvents.length === 0 && <Empty msg="No activity recorded for this customer yet." />}
-            <div style={{ position: "relative", borderLeft: "2px solid rgba(8,128,90,0.15)", marginLeft: 16, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ position: "relative", borderLeft: "2px solid #E2E8F0", marginLeft: 14, paddingLeft: 22, display: "flex", flexDirection: "column", gap: 14 }}>
               {timelineEvents.map((e, i) => {
                 const cfg = timelineCfg[e.type];
                 const Icon = cfg.icon;
+                const tone = e.type === "payment" ? paymentTone(e.status) : null;
+                const nodeColor = tone ? tone.node : cfg.color;
+                const cardBg = tone ? tone.cardBg : "rgba(255,255,255,0.85)";
+                const cardBorder = tone ? tone.cardBorder : "rgba(0,0,0,0.06)";
+                const badgeBg = tone ? tone.badgeBg : `${cfg.color}15`;
+                const badgeFg = tone ? tone.badgeFg : cfg.color;
+                const badgeBorder = tone ? `1px solid ${tone.badgeBorder}` : "none";
                 return (
                   <div key={i} style={{ position: "relative" }}>
-                    <span style={{ position: "absolute", left: -27, top: 2, width: 12, height: 12, borderRadius: 999, background: cfg.color, border: "2px solid #fff", boxShadow: "0 0 0 2px rgba(0,0,0,0.06)" }} />
-                    <div style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 14, padding: "12px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+                    <span style={{ position: "absolute", left: -28, top: 14, width: 10, height: 10, borderRadius: 999, background: nodeColor, border: "2.5px solid #FFFFFF", boxShadow: `0 0 0 2px ${nodeColor}33` }} />
+                    <div style={{ background: cardBg, border: `1px solid ${cardBorder}`, borderRadius: 14, padding: "12px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "baseline" }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: "#1D1D1F" }}>{e.title}</span>
-                        <span style={{ fontSize: 12, color: "#86868B", whiteSpace: "nowrap" }}>{fmtDate(new Date(e.date))}</span>
+                        <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A" }}>{e.title}</span>
+                        <span style={{ fontSize: 12, color: "#64748B", whiteSpace: "nowrap" }}>{fmtDate(new Date(e.date))}</span>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, background: `${cfg.color}15`, padding: "2px 8px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <Icon size={12} />
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: tone ? 11 : 11, fontWeight: 700, color: badgeFg, background: badgeBg, padding: "2px 8px", borderRadius: 999, display: "inline-flex", alignItems: "center", gap: 4, border: badgeBorder }}>
+                          <Icon size={tone ? 11 : 12} strokeWidth={tone ? 2.2 : 2} />
                           {cfg.label}
                         </span>
-                        {e.sub && <span style={{ fontSize: 12, color: "#86868B" }}>{e.sub}</span>}
-                        {e.amount != null && <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>· {inr(e.amount)}</span>}
-                        {e.status && <span style={{ fontSize: 11.5, color: "#86868B" }}>· {e.status}</span>}
+                        {e.sub && <span style={{ fontSize: 12, color: "#64748B" }}>{e.sub}</span>}
+                        {e.amount != null && <span style={{ fontSize: tone ? 12.5 : 12, fontWeight: 700, color: tone ? "#0F172A" : "#08805A" }}>· {inr(e.amount)}</span>}
+                        {e.status && (tone
+                          ? <span style={{ fontSize: 11, fontWeight: 700, color: tone.badgeFg, textTransform: "uppercase", letterSpacing: "0.04em" }}>· {e.status}</span>
+                          : <span style={{ fontSize: 11.5, color: "#64748B" }}>· {e.status}</span>
+                        )}
                       </div>
                     </div>
                   </div>
