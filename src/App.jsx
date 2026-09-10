@@ -1526,7 +1526,16 @@ const doRefresh = async () => {
             <p className="eyebrow">{moduleMeta.label} · {tabIsAdmin ? "Admin access" : "View access"}</p>
             <h2 style={{ fontSize: 22, lineHeight: 1 }}>{moduleMeta.built ? (nav.find(n => n.id === tab)?.label || moduleMeta.label) : moduleMeta.label}</h2>
           </div>
-          {moduleMeta.built && tabIsAdmin && <button onClick={doRefresh} disabled={refreshing} title="Refresh data"
+          {/* Refresh appends `?refresh=true` to every API call to bust that
+              backend's own server-side cache (see customerApi.getCustomers,
+              v2.29.395) — restricted to the account's global `role`, not
+              per-module `tabIsAdmin` access (v2.29.407, per explicit user
+              request: "this refresh option i dont want it to be with
+              anyone. It will be only with Admin account only") — a
+              supervisor/manager granted "admin" access to just one module
+              could previously see and click Refresh there too; now only a
+              real `role === "admin"` account can, in every module. */}
+          {moduleMeta.built && user.role === "admin" && <button onClick={doRefresh} disabled={refreshing} title="Refresh data"
             style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 14px", borderRadius: 10, border: "1.5px solid var(--border)", background: "#fff", color: "var(--teal)", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: refreshing ? .6 : 1 }}>
             <RefreshCw size={15} style={{ animation: refreshing ? "pw-spin .8s linear infinite" : "none" }} /> Refresh
           </button>}
