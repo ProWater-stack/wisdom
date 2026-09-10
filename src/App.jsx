@@ -1332,7 +1332,6 @@ const doRefresh = async () => {
       ...(isModuleAdmin ? [{ id: "plan_admin", label: "Modify Tasks", icon: PencilLine }] : []),
     ],
     analytics: [
-      // { id: "an_overview", label: "Overview", icon: LayoutGrid },
       { id: "an_overview_v2", label: "Overview V2", icon: Sparkles },
       { id: "analytics", label: "Referral", icon: BarChart3 },
       { id: "an_earned", label: "Earned Revenue", icon: Scale },
@@ -1561,7 +1560,6 @@ const doRefresh = async () => {
             {tab === "referees" && <Referees key={refreshKey} />}
             {tab === "credits" && <Credits key={refreshKey} />}
             {tab === "tracker" && <Tracker key={refreshKey} />}
-            {tab === "an_overview" && <AnalyticsOverview key={refreshKey} isAdmin={tabIsAdmin} combined={false} />}
             {tab === "an_overview_v2" && <AnalyticsOverview key={refreshKey} isAdmin={tabIsAdmin} combined={true} />}
             {tab === "analytics" && <ReferralAnalyticsTab key={refreshKey} />}
             {tab === "an_earned" && <EarnedRevenue key={refreshKey} />}

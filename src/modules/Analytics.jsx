@@ -222,7 +222,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const { customers, subs, invs, referrers, tickets, apartments, dpRows } = data;
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
   const now = new Date();
-  const prev = prevRange(sel.preset, range);                   // like-for-like comparison window
+  // MTD-aware previous-period window (v2.29.389) — boss ask: "This Month"
+  // was comparing month-to-date collections (there's no future data yet, so
+  // the "current month" total is really just MTD) against the FULL previous
+  // month — e.g. on 10 Sep that's "1–10 Sep" vs all of "1–31 Aug", which
+  // unfairly makes the current month look worse purely because it's being
+  // measured against more days than it has actually had a chance to collect
+  // in. When "This Month" is the selected preset, cap the previous month's
+  // comparison window at the same day-of-month as today, so every KPI
+  // card's delta on this page is a true MTD-vs-MTD comparison (1–10 Sep vs
+  // 1–10 Aug) instead of MTD-vs-full-month. Every other preset (Previous
+  // Month, This Quarter, custom ranges, etc.) is untouched — `prev` is
+  // exactly `prevRange(sel.preset, range)`, same as before this change.
+  const prevFull = prevRange(sel.preset, range);
+  const prev = sel.preset !== "this_month" ? prevFull : {
+    from: prevFull.from,
+    to: new Date(prevFull.from.getFullYear(), prevFull.from.getMonth(),
+      Math.min(now.getDate(), new Date(prevFull.from.getFullYear(), prevFull.from.getMonth() + 1, 0).getDate()),
+      23, 59, 59, 999),
+  };                                                            // like-for-like comparison window
   const inR = (s, r) => { if (!s) return false; const d = new Date(s); return !isNaN(d) && d >= r.from && d <= r.to; };
   const monthShort = (y, m) => new Date(y, m, 1).toLocaleDateString("en-IN", { month: "short" });
   const monthYr = (y, m) => new Date(y, m, 1).toLocaleDateString("en-IN", { month: "short", year: "2-digit" });
@@ -410,7 +428,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const penSpark = m7.map(x => penCumAt(monthEndTs(x.y, x.m)));
 
   // ---- KPI tiles -------------------------------------------------------------
-  const vsPrev = "vs " + (PRESET_UNIT[sel.preset] === "month" ? monthYr(prev.from.getFullYear(), prev.from.getMonth()) : "prev period");
+  // "This Month" now compares MTD-vs-MTD (see `prev` above) — the label spells
+  // that out as "vs 10 Aug" (the as-of date the previous month is capped at),
+  // rather than the old "vs Aug" (which read as a full-month comparison and
+  // is no longer what's being computed).
+  const vsPrev = "vs " + (
+    sel.preset === "this_month" ? `${now.getDate()} ${monthShort(prev.from.getFullYear(), prev.from.getMonth())}`
+    : PRESET_UNIT[sel.preset] === "month" ? monthYr(prev.from.getFullYear(), prev.from.getMonth())
+    : "prev period"
+  );
   // Average ARPU (v2.29.382) — collections this period ÷ active customers as
   // of the period end, per explicit user request ("add Average ARPU in the
   // KPI card... on Overview V2, not Billing"). Same formula the pre-existing
@@ -984,7 +1010,9 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <div style={{ fontSize: 12.5, color: "#475569" }}>
-                  Deposit: <strong style={{ color: "#475569" }}>{inr(Math.round(totDep))}</strong> · Recharge: <strong style={{ color: "#08805A" }}>{inr(Math.round(totRech))}</strong> · Total: <strong style={{ color: "#1D1D1F", fontSize: 14 }}>{inr(Math.round(totAll))}</strong>
+                  {/* Transaction count — per explicit user request ("show the
+                      count also") — alongside the existing ₹ totals. */}
+                  <strong style={{ color: "#1D1D1F" }}>{filtered.length.toLocaleString("en-IN")}</strong> transaction{filtered.length === 1 ? "" : "s"} · Deposit: <strong style={{ color: "#475569" }}>{inr(Math.round(totDep))}</strong> · Recharge: <strong style={{ color: "#08805A" }}>{inr(Math.round(totRech))}</strong> · Total: <strong style={{ color: "#1D1D1F", fontSize: 14 }}>{inr(Math.round(totAll))}</strong>
                 </div>
                 <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
                   <Download size={13} /> Export CSV
@@ -1527,6 +1555,11 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
                 />
               </div>
+              {/* Apartment count — per explicit user request ("show the count
+                  also") — this drilldown had none before. */}
+              <div style={{ fontSize: 12.5, color: "#475569" }}>
+                <strong style={{ color: "#1D1D1F" }}>{filtered.length.toLocaleString("en-IN")}</strong> apartment{filtered.length === 1 ? "" : "s"}
+              </div>
               <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
                 <Download size={13} /> Export CSV
               </button>
@@ -1866,343 +1899,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         </div>
       </div>
 
-      {!combined && (
-        <>
-          {/* ── Executive Business Health & Briefing Banner ─────────────────────── */}
-          <div style={{
-        background: "linear-gradient(135deg, #1E9E4F 0%, #C4E538 100%)",
-        borderRadius: 20, padding: "18px 24px", color: "#fff", marginBottom: 18,
-        boxShadow: "0 12px 30px rgba(8,128,90,0.25)", display: "flex", alignItems: "center",
-        justifyContent: "space-between", flexWrap: "wrap", gap: 16
-      }}>
-        <div style={{ flex: 1, minWidth: 260 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".08em", color: "#A7F3D0" }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981", boxShadow: "0 0 10px #10B981" }} />
-            Executive Business Health · Live Briefing
-          </div>
-          <div className="serif" style={{ fontSize: 20, fontWeight: 700, marginTop: 4, letterSpacing: "-.02em" }}>
-            Collection Efficiency at {collEfficiencyPct}% · ARR Pace {inr(arrVal)}
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(10px)", padding: "8px 14px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-            <span style={{ color: "#F59E0B", fontWeight: 700 }}>Top Society:</span> {topSocs[0]?.name || "Sunrise Apt"} ({topSocs[0]?.share || "24%"} share)
-          </div>
-          <div style={{ background: "rgba(255,255,255,0.12)", backdropFilter: "blur(10px)", padding: "8px 14px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-            <span style={{ color: "#10B981", fontWeight: 700 }}>Status:</span> Health 99.8% · 0 Anomalies
-          </div>
-        </div>
-      </div>
-
-      {/* ── NEW: ARR & Unit Economics Macro Strip ──────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14, marginBottom: 16, background: "rgba(243,248,236,.6)", padding: "14px 18px", borderRadius: 18, border: "1px solid rgba(8,128,90,0.15)" }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>ARR Run Rate</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{inr(arrVal)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>ARPU (Per Customer)</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#1D1D1F", marginTop: 2 }}>{inr(arpuVal)}</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Collection Efficiency</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{collEfficiencyPct}%</div>
-        </div>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Active MRR</div>
-          <div className="serif" style={{ fontSize: 22, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{inr(mrrTotal)}</div>
-        </div>
-      </div>
-
-      {/* ── KPI row ────────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 16, marginBottom: 16 }}>
-        {/* v2.29.274: `hero` no longer renders a gradient card — per explicit
-            user request ("make all the hero cards in same color with white
-            background like other normal cards, it becomes easy to check the
-            percentages going up or down"). Every card, hero or not, now
-            renders identically to what the non-hero branch already used, so
-            the delta badge is just OvDelta's plain green/red/invert-aware
-            text — no more separate hero-only color logic needed. */}
-        {kpis.map((k, i) => (
-          <div key={k.label} style={{
-            background: "rgba(255,255,255,0.85)",
-            color: "#1D1D1F",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(0,0,0,0.08)",
-            borderRadius: 20,
-            padding: 18,
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
-            display: "flex", flexDirection: "column", gap: 6
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: "#86868B", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em" }}>{k.label}</span>
-              <span style={iconBox()}><k.icon size={17} /></span>
-            </div>
-            <div className="serif" style={{ fontSize: 26, color: "#1D1D1F", fontWeight: 700, lineHeight: 1.1 }}>{k.value}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <OvDelta delta={k.delta} suffix={k.delta != null ? vsPrev : ""} invert={k.invert} />
-              {k.delta == null && <span style={{ fontSize: 12, color: "#86868B" }}>{vsPrev}</span>}
-            </div>
-            <div style={{ height: 40, margin: "4px -4px -2px" }}><OvSpark data={k.spark} color="#08805A" gid={`ovspark-${i}`} /></div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Revenue Overview (full width) ──────────────────────────────────── */}
-      <div style={{ ...softShadow, padding: 22, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-          <div>
-            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Revenue Overview</h3>
-            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#08805A" }} /> Current Period</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#c5c5c7" }} /> Previous Period</span>
-            </div>
-          </div>
-          <span style={{ fontSize: 12, color: "#86868B" }}>{rangeLabel(range)}</span>
-        </div>
-        <div style={{ height: 300 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={revData} margin={{ top: 22, right: 12, left: -6, bottom: 0 }}>
-              <defs>
-                <linearGradient id="ovRevArea" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#08805A" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#08805A" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} interval={revTick} />
-              <YAxis domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-              <Tooltip formatter={(v, n) => [inr(v), n === "cur" ? "Current" : "Previous"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
-              <Area type="monotone" dataKey="cur" name="cur" stroke="#08805A" strokeWidth={2.5} fill="url(#ovRevArea)" isAnimationActive={false} dot={revData.length <= 31 ? { r: 3, fill: "#08805A" } : false}>
-                <LabelList dataKey="cur" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: revData.length > 14 ? 8.5 : 10, fontWeight: 700, fill: "#08805A" }} />
-              </Area>
-              <Line type="monotone" dataKey="prev" name="prev" stroke="#c5c5c7" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* ── 2-Column: Penetration Leaders + Forecast vs Actual ────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(320px,1fr))", gap: 16, marginBottom: 16 }}>
-        {/* Top 5 Highest Penetration Societies Ranking */}
-        <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-            <div>
-              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Penetration Leaders</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Top 5 societies by flat conversion %</div>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>Top 5</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {topVelocitySocieties.map((s, idx) => (
-              <div key={s.society} style={{ background: "rgba(243,248,236,.4)", borderRadius: 12, padding: "10px 14px", border: "1px solid rgba(8,128,90,0.12)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "#1D1D1F" }}>{idx + 1}. {s.society}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>{s.penetration != null ? `${s.penetration}%` : "—"}</span>
-                </div>
-                <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,0.06)", overflow: "hidden" }}>
-                  <div style={{ height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #08805A 0%, #065B3C 100%)", width: `${Math.min(100, s.penetration || 0)}%` }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#86868B", marginTop: 4 }}>
-                  <span>{s.onboarded} / {s.totalFlats || "—"} flats</span>
-                  <span>Recharge: {inr(s.revCurr)}</span>
-                </div>
-              </div>
-            ))}
-            {topVelocitySocieties.length === 0 && <Empty msg="No society data available." />}
-          </div>
-        </div>
-
-        {/* Forecast vs Actual */}
-        <div style={{ ...softShadow, padding: 22, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Forecast vs Actual</h3>
-                <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Linear projection model</div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 14, margin: "12px 0 6px", flexWrap: "wrap" }}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#08805A" }} /> Actual</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#c5c5c7" }} /> Forecast</span>
-              {/* ARPU (v2.29.382), per explicit user request ("Total revenue
-                  versus expected revenue... add Average ARPU"). */}
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#2A86D6" }} /> ARPU</span>
-            </div>
-            <div style={{ height: 190 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={faData} margin={{ top: 18, right: 30, left: -6, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
-                  <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-                  {/* Secondary axis for ARPU (v2.29.382) — a per-customer average
-                      doesn't share a scale with total revenue, so it gets its own
-                      right-hand axis rather than distorting Actual/Forecast. */}
-                  <YAxis yAxisId="arpu" orientation="right" domain={["auto", "auto"]} tick={{ fill: "#2A86D6", fontSize: 12 }} axisLine={false} tickLine={false} width={50}
-                    tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
-                  <Tooltip formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Actual" : n === "forecast" ? "Forecast" : "ARPU"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
-                  <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#08805A" strokeWidth={2.5} isAnimationActive={false} dot={{ r: 3.5, fill: "#08805A" }} connectNulls={false}>
-                    <LabelList dataKey="actual" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#08805A" }} />
-                  </Line>
-                  <Line yAxisId="rev" type="monotone" dataKey="forecast" stroke="#86868B" strokeWidth={2} strokeDasharray="5 4" isAnimationActive={false} dot={{ r: 3, fill: "#86868B" }}>
-                    <LabelList dataKey="forecast" position="bottom" offset={10} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#6E6E73" }} />
-                  </Line>
-                  <Line yAxisId="arpu" type="monotone" dataKey="arpu" stroke="#2A86D6" strokeWidth={2} strokeDasharray="3 3" isAnimationActive={false} dot={{ r: 3, fill: "#2A86D6" }} connectNulls={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* KPI Summary Strip */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8, marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
-            <div style={{ background: "rgba(8,128,90,0.06)", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(8,128,90,0.12)" }}>
-              <div style={{ fontSize: 10.5, color: "#86868B" }}>{faData[faData.length - 1]?.label || "Next"} Projection</div>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#08805A", marginTop: 2 }}>{faData[faData.length - 1] ? inr(faData[faData.length - 1].forecast) : "—"}</div>
-            </div>
-            <div style={{ background: "rgba(243,248,236,0.6)", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(8,128,90,0.12)" }}>
-              <div style={{ fontSize: 10.5, color: "#86868B" }}>Model Fit</div>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#1D1D1F", marginTop: 2 }}>Linear Trend</div>
-            </div>
-            <div style={{ background: "rgba(243,248,236,0.6)", padding: "8px 10px", borderRadius: 10, border: "1px solid rgba(8,128,90,0.12)" }}>
-              <div style={{ fontSize: 10.5, color: "#86868B" }}>Actual vs Trend</div>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: (faData[faData.length - 2]?.actual >= faData[faData.length - 2]?.forecast) ? "#08805A" : "#D97706", marginTop: 2 }}>
-                {faData[faData.length - 2] && faData[faData.length - 2].forecast ? `${Math.round(((faData[faData.length - 2].actual - faData[faData.length - 2].forecast) / faData[faData.length - 2].forecast) * 100)}%` : "On Track"}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Penetration Tracker ────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 16 }}>
-        <PenetrationTracker subsData={subs} custsData={customers} societyFilter={selSoc} stackFilter={selStack} asOf={anchor} embedded />
-      </div>
-
-      {/* ── Month-on-Month (MoM) Revenue Growth ────────────────────────────── */}
-      <div style={{ ...softShadow, padding: 22, marginBottom: 16, minWidth: 0 }}>
-        <div style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 8 }}>
-          <div>
-            <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Month-on-Month (MoM) Revenue Growth</h3>
-            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Recharge &amp; Collections · trailing 7 months</div>
-          </div>
-          {/* ARPU (v2.29.382), per explicit user request ("MoM Growth Trend...
-              add Average ARPU"). */}
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 9, background: "#2A86D6" }} /> ARPU</span>
-        </div>
-        <div style={{ height: 270 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={momData}
-              margin={{ left: 8, right: 30, top: 26, bottom: 0 }}
-              style={{ cursor: "pointer" }}
-              onClick={(state) => {
-                if (state && state.activePayload && state.activePayload.length) {
-                  const p = state.activePayload[0].payload;
-                  if (p.y != null && p.m != null) {
-                    const fromDate = new Date(p.y, p.m, 1);
-                    const toDate = new Date(p.y, p.m + 1, 0);
-                    setSel({
-                      preset: "custom",
-                      from: isoDay(fromDate),
-                      to: isoDay(toDate)
-                    });
-                  }
-                }
-              }}
-            >
-              <defs>
-                <linearGradient id="momBarGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#08805A" />
-                  <stop offset="100%" stopColor="#044D34" />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-              <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="rev" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-              {/* Secondary axis for ARPU (v2.29.382) — same reasoning as
-                  Forecast vs Actual above. */}
-              <YAxis yAxisId="arpu" orientation="right" tick={{ fill: "#2A86D6", fontSize: 12 }} axisLine={false} tickLine={false} width={50}
-                tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
-              <Tooltip formatter={(v, n) => [inr(v), n]} cursor={{ fill: "rgba(8,128,90,.06)" }} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", fontSize: 13 }} />
-              <Bar yAxisId="rev" dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="url(#momBarGrad)" maxBarSize={36} isAnimationActive={false}>
-                <LabelList dataKey="collected" position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 10, fill: "#08805A", fontWeight: 700 }} />
-              </Bar>
-              <Line yAxisId="rev" type="monotone" dataKey="collected" name="Trend" stroke="#F59E0B" strokeWidth={3} dot={{ r: 4, fill: "#F59E0B", stroke: "#ffffff", strokeWidth: 1.5 }} activeDot={{ r: 6 }} isAnimationActive={false} />
-              <Line yAxisId="arpu" type="monotone" dataKey="arpu" name="ARPU" stroke="#2A86D6" strokeWidth={2} strokeDasharray="3 3" dot={{ r: 3, fill: "#2A86D6" }} isAnimationActive={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* ── Top Performing Societies (full width) ──────────────────────────── */}
-      <div style={{ ...softShadow, padding: 0, marginBottom: 16, minWidth: 0, overflow: "hidden" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "18px 20px 12px" }}>
-          <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>Top Performing Societies</h3>
-          <span style={{ fontSize: 12, color: "#86868B" }}>Flats · penetration · active customers · recharge collected{isAdmin ? " · Total Flats is editable" : ""}</span>
-        </div>
-        <div className="scroll-thin" style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-                {[
-                  { h: "Apartment Name", a: "center" }, { h: "Total Flats", a: "center" }, { h: "Onboarded Flats", a: "center" },
-                  { h: "Penetration %", a: "center" }, { h: "Active Customers", a: "center" }, { h: "Total Months", a: "center" },
-                  { h: `Revenue (${prevMonLabel})`, a: "center" }, { h: `Revenue (${currMonLabel})`, a: "center" },
-                ].map((c, i) => (
-                  <th key={i} style={{ padding: "14px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#0a805a", fontWeight: 700, textAlign: c.a, whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{c.h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {societies.map(s => {
-                const isSelected = selSoc && selSoc.includes(s.society);
-                return (
-                  <tr
-                    key={s.society}
-                    onClick={() => setSelSoc(isSelected ? null : [s.society])}
-                    style={{
-                      borderBottom: "1px solid rgba(0,0,0,.04)",
-                      cursor: "pointer",
-                      background: isSelected ? "rgba(8,128,90,0.06)" : "transparent",
-                      transition: "background .15s ease"
-                    }}
-                  >
-                    <td style={{ padding: "14px 18px", fontSize: 13.5, fontWeight: 600, color: "#0d2119", whiteSpace: "nowrap", textAlign: "center" }}>{s.society}</td>
-                    <td style={socTd} onClick={e => e.stopPropagation()}>{isAdmin
-                      ? <GsTextCell value={s.totalFlats || ""} editable type="number" width={78} placeholder="0" onCommit={v => { setFlatsOverride(s.society, v); setFlatsTick(t => t + 1); }} />
-                      : (s.totalFlats || "—")}</td>
-                    <td style={socTd}>{s.onboarded}</td>
-                    <td style={socTd}>{s.penetration == null ? <span style={{ color: "#86868B" }}>—</span> : `${s.penetration}%`}</td>
-                    <td style={socTd}>{s.active}</td>
-                    <td style={socTd}>{s.months == null ? "—" : s.months}</td>
-                    <td style={{ ...socTd, textAlign: "center" }}>{inr(s.revPrev)}</td>
-                    <td style={{ ...socTd, textAlign: "center", fontWeight: 700, color: "#08805A" }}>{inr(s.revCurr)}</td>
-                  </tr>
-                );
-              })}
-              {societies.length > 0 && (
-                <tr style={{ background: "rgba(243,248,236,.5)" }}>
-                  <td style={{ ...socFt, textAlign: "center" }}>Total ({societies.length})</td>
-                  <td style={socFt}>{socTot.totalFlats || "—"}</td>
-                  <td style={socFt}>{socTot.onboarded}</td>
-                  <td style={socFt}>{socTotPen == null ? "—" : `${socTotPen}%`}</td>
-                  <td style={socFt}>{socTot.active}</td>
-                  <td style={socFt}>{socTot.months}</td>
-                  <td style={{ ...socFt, textAlign: "center" }}>{inr(socTot.revPrev)}</td>
-                  <td style={{ ...socFt, textAlign: "center" }}>{inr(socTot.revCurr)}</td>
-                </tr>
-              )}
-              {!societies.length && <tr><td colSpan={8}><Empty msg="No society data yet." /></td></tr>}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  )}
-
-
       {combined && (
         <>
           {/* ══════════════════════════════════════════════════════════════════════
@@ -2228,30 +1924,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           {/* ── Combined Revenue KPI strip ───────────────────────────────────── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
             {[
-              // Order per explicit user request (v2.29.383): Total Collection,
-              // Combined Recharge, Combined Deposit, Zoho Collection, Zoho
-              // Recharge, Zoho Deposit, DP Total Collected, DP Recharge, DP
-              // Deposit, Average ARPU, Active Customers, New CX.
-              { label: "Total Collection",         value: inr(Math.round(combinedRevCur)),      delta: pct(combinedRevCur, combinedRevPrv),                  color: "#08805A", hero: true, modalType: "payments", modalFilter: "all", modalTitle: "Total Collection Transactions", modalSub: `All Zoho & DrinkPrime paid transactions in ${rangeLabel(range)}` },
-              { label: "Combined Recharge",        value: inr(Math.round(combinedRechargeCur)), delta: pct(combinedRechargeCur, netPrev + dpRechargePrv),   color: "#08805A", modalType: "payments", modalFilter: "recharge", modalTitle: "Combined Recharge Transactions", modalSub: `All Zoho & DrinkPrime recharge payments in ${rangeLabel(range)}` },
-              { label: "Combined Deposit",         value: inr(Math.round(combinedDepositCur)),  delta: pct(combinedDepositCur, depositPrev + dpDepositPrv), color: "#5B21B6", modalType: "payments", modalFilter: "deposit", modalTitle: "Combined Deposit Transactions", modalSub: `All Zoho & DrinkPrime deposit payments in ${rangeLabel(range)}` },
-              // Zoho Collection (v2.29.383) — Zoho-only counterpart to "DP
-              // Total Collected" below (`collections` already equals
-              // netRevenue + depositCollected by construction, same relation
-              // as dpTotalCur = dpRechargeCur + dpDepositCur).
-              { label: "Zoho Collection",          value: inr(Math.round(collections)),         delta: pct(collections, collectionsPrev),                    color: "#08805A", modalType: "payments", modalFilter: "zoho_all", modalTitle: "Zoho Collection Transactions", modalSub: `All Zoho paid invoices in ${rangeLabel(range)}` },
-              { label: "Zoho Recharge",            value: inr(Math.round(netRevenue)),          delta: pct(netRevenue, netPrev),                             color: "#08805A", modalType: "payments", modalFilter: "zoho_recharge", modalTitle: "Zoho Recharge Transactions", modalSub: `All Zoho recharge payments in ${rangeLabel(range)}` },
-              { label: "Zoho Deposit",             value: inr(Math.round(depositCollected)),     delta: pct(depositCollected, depositPrev),                   color: "#08805A", modalType: "payments", modalFilter: "zoho_deposit", modalTitle: "Zoho Deposit Transactions", modalSub: `All Zoho deposit payments in ${rangeLabel(range)}` },
-              { label: "DP Total Collected",       value: inr(Math.round(dpTotalCur)),          delta: pct(dpTotalCur, dpTotalPrv),                          color: "#1E9E4F", modalType: "payments", modalFilter: "dp_all", modalTitle: "DrinkPrime Total Collections", modalSub: `All DrinkPrime transaction records in ${rangeLabel(range)}` },
-              { label: "DP Recharge",              value: inr(Math.round(dpRechargeCur)),       delta: pct(dpRechargeCur, dpRechargePrv),                    color: "#1E9E4F", modalType: "payments", modalFilter: "dp_recharge", modalTitle: "DrinkPrime Recharge Collections", modalSub: `All DrinkPrime recharge records in ${rangeLabel(range)}` },
-              { label: "DP Deposit",               value: inr(Math.round(dpDepositCur)),        delta: pct(dpDepositCur, dpDepositPrv),                      color: "#1E9E4F", modalType: "payments", modalFilter: "dp_deposit", modalTitle: "DrinkPrime Deposit Collections", modalSub: `All DrinkPrime deposit records in ${rangeLabel(range)}` },
+              // Trimmed to 6 cards (v2.29.389, per explicit user request — "i
+              // dont need 2 rows of KPI cards"): Total Collection, Total
+              // Recharges, Total Deposit, Average ARPU, Active Customers, New
+              // CX. The Zoho-only/DP-only breakdown cards (Zoho Collection/
+              // Recharge/Deposit, DP Total Collected/Recharge/Deposit) that
+              // used to sit between Combined Deposit and Average ARPU are
+              // removed from this row — their figures are still computed
+              // above and still drive the "Combined"/hero card's own click-
+              // through modal, just no longer surfaced as separate tiles.
+              { label: "Total Collection",         value: inr(Math.round(combinedRevCur)),      delta: pct(combinedRevCur, combinedRevPrv),                  prevValue: inr(Math.round(combinedRevPrv)),                  color: "#08805A", hero: true, modalType: "payments", modalFilter: "all", modalTitle: "Total Collection Transactions", modalSub: `All Zoho & DrinkPrime paid transactions in ${rangeLabel(range)}` },
+              { label: "Total Recharges",          value: inr(Math.round(combinedRechargeCur)), delta: pct(combinedRechargeCur, netPrev + dpRechargePrv),   prevValue: inr(Math.round(netPrev + dpRechargePrv)),         color: "#08805A", modalType: "payments", modalFilter: "recharge", modalTitle: "Total Recharge Transactions", modalSub: `All Zoho & DrinkPrime recharge payments in ${rangeLabel(range)}` },
+              { label: "Total Deposit",            value: inr(Math.round(combinedDepositCur)),  delta: pct(combinedDepositCur, depositPrev + dpDepositPrv), prevValue: inr(Math.round(depositPrev + dpDepositPrv)),      color: "#5B21B6", modalType: "payments", modalFilter: "deposit", modalTitle: "Total Deposit Transactions", modalSub: `All Zoho & DrinkPrime deposit payments in ${rangeLabel(range)}` },
               // Average ARPU (v2.29.382, moved here v2.29.383 per explicit
               // user request). `arpu` (combined recharge ÷ total active
               // customers, Zoho + DP) was already computed below for the LTV
               // estimate but never actually surfaced until v2.29.382.
               { label: "Average ARPU",             value: inr(Math.round(arpu)),                 sub: `Combined recharge ÷ ${totalActiveCustomers.toLocaleString("en-IN")} active`, color: "#2A86D6", modalType: "arpu", modalTitle: "Average ARPU & Unit Economics", modalSub: `Average Revenue Per User and apartment breakdown in ${rangeLabel(range)}` },
               { label: "Active Customers",         value: totalActiveCustomers.toLocaleString("en-IN"), sub: `Zoho: ${activeCustomers.toLocaleString("en-IN")} · DP: ${dpActiveCustomers.toLocaleString("en-IN")}`, color: "#2A86D6", modalType: "active_customers", modalTitle: "Active Customers Directory", modalSub: `All active customer subscriptions across Zoho & DrinkPrime` },
-              { label: "New CX",                   value: newThisMonth.toLocaleString("en-IN"), delta: pct(newThisMonth, newPrev), sub: `Zoho: ${zohoNewCur.toLocaleString("en-IN")} · DP: ${dpNewCur.toLocaleString("en-IN")}`, color: "#08805A", isNewCustCard: true, modalType: "new_cx", modalTitle: "New Customer Additions", modalSub: `All customer signups and onboarding in ${rangeLabel(range)}` },
+              { label: "New CX",                   value: newThisMonth.toLocaleString("en-IN"), delta: pct(newThisMonth, newPrev), prevValue: newPrev.toLocaleString("en-IN"), sub: `Zoho: ${zohoNewCur.toLocaleString("en-IN")} · DP: ${dpNewCur.toLocaleString("en-IN")}`, color: "#08805A", isNewCustCard: true, modalType: "new_cx", modalTitle: "New Customer Additions", modalSub: `All customer signups and onboarding in ${rangeLabel(range)}` },
             ].map((k, i) => (
               // v2.29.274: `hero` no longer renders a gradient card — per
               // explicit user request to make all hero cards the same white
@@ -2289,6 +1980,10 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   {k.delta != null && (
                     <span style={{ fontSize: 11.5, fontWeight: 700, color: k.delta >= 0 ? "#08805A" : "#DC4141" }}>
                       {k.delta >= 0 ? "▲" : "▼"} {Math.abs(k.delta)}% {vsPrev}
+                      {/* Real previous-period number alongside the % — per explicit
+                          user request ("show the real numbers also in the bracket"),
+                          so the delta is checkable at a glance, not just a bare %. */}
+                      {k.prevValue != null && <span style={{ color: "#86868B", fontWeight: 600 }}> ({k.prevValue})</span>}
                     </span>
                   )}
                   {k.sub && (
@@ -2511,14 +2206,14 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               ) : <Empty msg="No revenue data for this period." />}
             </div>
 
-            {/* 7-month Zoho + DP stacked bar */}
-            <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Combined Monthly Collection</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 14 }}>Zoho + DP stacked · trailing 7 months (Click month bar to filter)</div>
-              <div style={{ display: "flex", gap: 14, marginBottom: 10 }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: "#08805A" }} /> Zoho</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "#86868B" }}><span style={{ width: 9, height: 9, borderRadius: 3, background: "#C4E538" }} /> DP</span>
-              </div>
+            {/* 7-month combined collection bar (v2.29.391: single-color total
+                bar, per explicit user request — the Zoho/DP stack + legend +
+                subtitle were "not needed"; renamed from "Combined Monthly
+                Collection" to "Monthly Collection", still shows the same
+                `total` value per month it always did, just as one bar
+                instead of a two-color stack). */}
+            <div style={{ ...softShadow, padding: 22, minWidth: 0, background: "rgba(255,255,255,0.9)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 12px 32px rgba(8,128,90,0.05), 0 2px 6px rgba(0,0,0,0.02)" }}>
+              <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: "0 0 14px", letterSpacing: "-0.01em" }}>Monthly Collection</h3>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -2541,17 +2236,22 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       }
                     }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "#86868B", fontSize: 12 }} axisLine={false} tickLine={false} width={54}
+                    <defs>
+                      <linearGradient id="monthlyCollectionBarGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#10B981" />
+                        <stop offset="100%" stopColor="#046A4A" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 11.5, fontWeight: 500 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: "#86868B", fontSize: 11.5, fontWeight: 500 }} axisLine={false} tickLine={false} width={54}
                       tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
                     <Tooltip
-                      formatter={(v, n) => [inr(v), n === "zoho" ? "Zoho" : "DP"]}
+                      formatter={(v) => [inr(v), "Collected"]}
                       contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }}
                     />
-                    <Bar dataKey="zoho" name="zoho" stackId="a" fill="#08805A" radius={[0, 0, 0, 0]} maxBarSize={38} isAnimationActive={false} />
-                    <Bar dataKey="dp"   name="dp"   stackId="a" fill="#C4E538" radius={[6, 6, 0, 0]} maxBarSize={38} isAnimationActive={false}>
-                      <LabelList dataKey="total" position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#08805A" }} />
+                    <Bar dataKey="total" name="total" fill="url(#monthlyCollectionBarGradient)" radius={[6, 6, 0, 0]} maxBarSize={38} isAnimationActive={false}>
+                      <LabelList dataKey="total" position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 10, fontWeight: 700, fill: "#046A4A", letterSpacing: "-0.01em" }} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -2565,8 +2265,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             <div style={{ background: "#FFFFFF", border: "1px solid rgba(0, 0, 0, 0.07)", borderRadius: 20, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.02)", padding: 22, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
                 <div>
-                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: "0px 0px 4px", letterSpacing: "-0.01em" }}>Total Revenue vs Expected Revenue</h3>
-                  <div style={{ fontSize: 12, color: "#86868B" }}>Linear projection model (Click month bar to filter)</div>
+                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Total Revenue vs Expected Revenue</h3>
                 </div>
                 
                 {/* Legend */}
@@ -2616,12 +2315,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
                     <YAxis yAxisId="arpu" orientation="right" domain={["auto", "auto"]} tick={{ fill: "#609A32", fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={50}
                       tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
-                    <Tooltip formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Total (Actual)" : n === "forecast" ? "Expected (Forecast)" : "ARPU"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }} cursor={{ fill: "rgba(10,110,70,0.04)" }} />
+                    <Tooltip
+                      formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Total (Actual)" : n === "forecast" ? "Expected (Forecast)" : "ARPU"]}
+                      contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }}
+                      labelStyle={{ color: "#1D1D1F", fontWeight: 700, marginBottom: 4 }}
+                      itemStyle={{ color: "#1D1D1F", fontWeight: 600 }}
+                      cursor={{ fill: "rgba(10,110,70,0.04)" }}
+                    />
+                    {/* Forecast bar's own value label only shown for the future
+                        ("Target") month — per explicit user report ("some
+                        values are overlapping each other"), printing this
+                        label on every past month too collided with the Actual
+                        line's own label sitting at nearly the same height;
+                        the Actual line already carries the real number for
+                        every month that has one. */}
                     <Bar yAxisId="rev" dataKey="forecast" fill="#EEF2E8" radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false}>
                       {faData.map((entry, idx) => (
                         <Cell key={`cell-fc-${idx}`} fill={entry.actual == null ? "#DDE5D4" : "#EEF2E8"} />
                       ))}
-                      <LabelList dataKey="forecast" position="top" offset={8} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : (v ? inr(v) : "")} style={{ fontSize: 9.5, fontWeight: 600, fill: "#697D61" }} />
+                      <LabelList dataKey="forecast" position="top" offset={8} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 600, fill: "#697D61" }} />
                     </Bar>
                     <Area yAxisId="rev" type="monotone" dataKey="actual" fill="url(#warmThemeGrad)" stroke="none" isAnimationActive={false} />
                     <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false} dot={{ r: 4, fill: "#FFFFFF", stroke: "#0A6E46", strokeWidth: 2.5 }} connectNulls={false}>
@@ -2637,8 +2349,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             <div style={{ background: "#FFFFFF", border: "1px solid rgba(0, 0, 0, 0.07)", borderRadius: 20, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.02)", padding: 22, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
                 <div>
-                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: "0px 0px 4px", letterSpacing: "-0.01em" }}>MoM Growth Trend</h3>
-                  <div style={{ fontSize: 12, color: "#86868B" }}>Recharge &amp; Collections · trailing 7 months (Click month bar to filter)</div>
+                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>MoM Growth Trend</h3>
                 </div>
                 <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
@@ -2675,7 +2386,13 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.04)" vertical={false} />
                     <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.08)" }} tickLine={false} />
                     <YAxis tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-                    <Tooltip formatter={(v, n) => [inr(v), n]} cursor={{ fill: "rgba(10,110,70,0.04)" }} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }} />
+                    <Tooltip
+                      formatter={(v, n) => [inr(v), n]}
+                      cursor={{ fill: "rgba(10,110,70,0.04)" }}
+                      contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }}
+                      labelStyle={{ color: "#1D1D1F", fontWeight: 700, marginBottom: 4 }}
+                      itemStyle={{ color: "#1D1D1F", fontWeight: 600 }}
+                    />
                     <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="#EEF2E8" maxBarSize={32} isAnimationActive={false}>
                       {momData.map((entry, idx) => (
                         <Cell key={`mom-cell-${idx}`} fill={idx === momData.length - 1 ? "#DDE5D4" : "#EEF2E8"} />
@@ -3101,21 +2818,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         </>
       )}
 
-      {/* ── bottom KPI strip ───────────────────────────────────────────────── */}
-      {!combined && (
-        <div style={{ ...softShadow, padding: "6px 6px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 0 }}>
-          {bottom.map((b, i) => (
-            <div key={b.label} style={{ padding: "14px 16px", borderLeft: i === 0 ? "none" : "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 3 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--muted)" }}><b.icon size={14} /><span style={{ fontSize: 11.5, fontWeight: 600 }}>{b.label}</span></div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
-                <span className="serif" style={{ fontSize: 20, color: "var(--f)" }}>{b.value}</span>
-                {b.sub && <span style={{ fontSize: 11.5, color: "var(--muted)" }}>{b.sub}</span>}
-                <OvDelta delta={b.delta} invert={b.invert} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
       {renderKpiDrilldownModal()}
       {renderAptDetailsModal()}
       {toast && (
@@ -5783,6 +5485,8 @@ export function DPTransactions() {
   const [sort, setSort] = useState({ key: "paid", dir: "desc" }); // table sort — Paid date / Start Date / End Date
   const toggleSort = (key) => setSort(s => s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" });
   const [page, setPage] = useState(1);                      // table pagination — this feed can run to thousands of rows
+  const [kpiModal, setKpiModal] = useState(null);           // universal drill-down modal
+  const [modalQ, setModalQ] = useState("");                 // drill-down search query
   const DP_PER_PAGE = 50;
   const isAdmin = user.role === "admin";                    // Upload JSON / Run API is admin-only
   const [uploadFile, setUploadFile] = useState(null);       // File selected via the hidden input, once it passes JSON validation
@@ -5973,10 +5677,10 @@ export function DPTransactions() {
   const totalPrevEarned = prevEnriched.reduce((s, r) => s + r.earnedRevenue, 0);
 
   const stats = [
-    { label: "Total Collected", value: inr(Math.round(totalCollected)), icon: Wallet, sub: rangeLabel(range), hero: true, delta: momPct(totalCollected, totalPrev) },
-    { label: "Earned Revenue", value: inr(Math.round(totalEarnedRevenue)), icon: Scale, sub: `recognised · ${rangeLabel(range)}`, delta: momPct(totalEarnedRevenue, totalPrevEarned) },
-    { label: "Recharge Collected", value: inr(Math.round(rechargeCollected)), icon: Repeat, sub: `${rechargeSplitPct}% of collections`, delta: momPct(rechargeCollected, rechargePrev) },
-    { label: "Deposit Collected", value: inr(Math.round(depositCollected)), icon: Landmark, sub: `${depositSplitPct}% of collections`, delta: momPct(depositCollected, depositPrev) },
+    { label: "Total Collected", value: inr(Math.round(totalCollected)), icon: Wallet, sub: rangeLabel(range), hero: true, delta: momPct(totalCollected, totalPrev), modalType: "dp_payments", modalFilter: "all", modalTitle: "Total DP Collections", modalSub: `All collected payments (Recharges & Deposits) in ${rangeLabel(range)}` },
+    { label: "Earned Revenue", value: inr(Math.round(totalEarnedRevenue)), icon: Scale, sub: `recognised · ${rangeLabel(range)}`, delta: momPct(totalEarnedRevenue, totalPrevEarned), modalType: "dp_earned", modalFilter: "all", modalTitle: "DP Earned Revenue Recognition", modalSub: `Per-transaction revenue recognised in ${rangeLabel(range)} based on payment date & validity tenure` },
+    { label: "Recharge Collected", value: inr(Math.round(rechargeCollected)), icon: Repeat, sub: `${rechargeSplitPct}% of collections`, delta: momPct(rechargeCollected, rechargePrev), modalType: "dp_payments", modalFilter: "recharge", modalTitle: "DP Recharge Collections", modalSub: `All recharge collection transactions in ${rangeLabel(range)}` },
+    { label: "Deposit Collected", value: inr(Math.round(depositCollected)), icon: Landmark, sub: `${depositSplitPct}% of collections`, delta: momPct(depositCollected, depositPrev), modalType: "dp_payments", modalFilter: "deposit", modalTitle: "DP Deposit Collections", modalSub: `All security deposit collection transactions in ${rangeLabel(range)}` },
   ];
 
   const sortField = { paid: "Paid_Date", start: "t.validity_start_date", end: "t.validity_end_date" }[sort.key];
@@ -5999,24 +5703,17 @@ export function DPTransactions() {
   const grandEarnedRevenue = tableRows.reduce((s, r) => s + (r.earnedRevenue || 0), 0);
   const grandRemainingEarned = tableRows.reduce((s, r) => s + (r.remainingDaysEarned || 0), 0);
 
-  // Per-apartment performance — same date/apt/type filters as the aggregate
-  // KPI cards above, just broken out by partner_name so you can compare
-  // apartments at a glance instead of only seeing the fleet-wide total.
-  // Shows EVERY known apartment (all of `aptOptions`), not just the ones with
-  // activity in the current filters — an apartment with zero transactions
-  // this period still gets a ₹0 card instead of silently disappearing, so
-  // the card count always matches the Apartment filter's option count.
+  // Per-apartment performance — stable fleet-wide ranking sequence for the date period
+  const aptPeriodRows = rows.filter(r => isRealSociety(r.partner_name) && paidOk(r) && rowTypeOk(r) && txnTypeOk(r));
   const aptStats = aptOptions.map(name => {
-    const aptRows = inRange.filter(r => r.partner_name === name);
+    const aptRows = aptPeriodRows.filter(r => r.partner_name === name);
     const dep = aptRows.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
     const rev = aptRows.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
     const tot = dep + rev;
-    // Dynamic per-apartment split — recomputed from this apartment's own
-    // dep/rev in the current filters, never a fixed/hardcoded ratio.
     const depPct = tot > 0 ? Math.round((dep / tot) * 100) : 0;
     const revPct = tot > 0 ? 100 - depPct : 0;
     return { name, dep, rev, tot, depPct, revPct, count: aptRows.length };
-  }).sort((a, b) => b.rev - a.rev);
+  }).sort((a, b) => (b.tot - a.tot) || (b.rev - a.rev) || a.name.localeCompare(b.name));
   const aptActiveCount = aptStats.filter(a => a.count > 0).length;
 
   // Pagination — this feed can run into the thousands of rows; the Grand
@@ -6057,6 +5754,308 @@ export function DPTransactions() {
     </button>
   );
 
+  const renderKpiModal = () => {
+    if (!kpiModal) return null;
+    const { modalType, modalFilter, modalTitle, modalSub } = kpiModal;
+    const mq = modalQ.toLowerCase().trim();
+
+    if (modalType === "dp_payments") {
+      let list = enrichedInRange;
+      if (modalFilter === "recharge") {
+        list = list.filter(r => (Number(r.revenue_amount) || 0) > 0);
+      } else if (modalFilter === "deposit") {
+        list = list.filter(r => (Number(r.deposit_amount) || 0) > 0);
+      }
+
+      const filtered = mq
+        ? list.filter(r =>
+            (r.phone || "").toLowerCase().includes(mq) ||
+            (r.current_device || "").toLowerCase().includes(mq) ||
+            (r.partner_name || "").toLowerCase().includes(mq) ||
+            (r.CustomerName || "").toLowerCase().includes(mq) ||
+            (r.transaction_key || "").toLowerCase().includes(mq) ||
+            (r.Plan || "").toLowerCase().includes(mq)
+          )
+        : list;
+
+      const totDep = filtered.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
+      const totRech = filtered.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+      const totAll = filtered.reduce((s, r) => s + (Number(r.transaction_amount) || ((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0))), 0);
+
+      const exportModalCsv = () => exportToCsv(`prowater-dp-${modalFilter || "all"}-collections-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
+        { label: "Paid Date", get: r => r.Paid_Date || "" },
+        { label: "Apartment", get: r => r.partner_name || "" },
+        { label: "Customer Name", get: r => r.CustomerName || "" },
+        { label: "Phone", get: r => r.phone || "" },
+        { label: "Device ID", get: r => r.current_device || "" },
+        { label: "Transaction Key", get: r => r.transaction_key || "" },
+        { label: "Row Type", get: r => r.row_type || "" },
+        { label: "Plan", get: r => r.Plan || "" },
+        { label: "Deposit Amount", get: r => r.deposit_amount ?? "" },
+        { label: "Recharge Amount", get: r => r.revenue_amount ?? "" },
+        { label: "Total Paid", get: r => r.transaction_amount ?? ((r.deposit_amount != null || r.revenue_amount != null) ? ((Number(r.deposit_amount) || 0) + (Number(r.revenue_amount) || 0)) : "") },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={{
+          position: "fixed", inset: 0, background: "rgba(10,26,18,0.5)",
+          backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20, zIndex: 1000,
+        }}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={{
+            width: "min(1150px, 96%)", background: "#fff", borderRadius: 20,
+            padding: 24, boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+            maxHeight: "calc(100vh - 40px)", display: "flex", flexDirection: "column",
+            overflow: "hidden",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>DP Transactions Drill-Down · {rangeLabel(range)}</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{modalTitle}</h2>
+                {modalSub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{modalSub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={{
+                width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.05)",
+                display: "grid", placeItems: "center", cursor: "pointer", border: "none",
+              }}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search customer, phone, device, key, apartment…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 12.5, color: "#475569" }}>
+                  Deposit: <strong style={{ color: "#475569" }}>{inr(Math.round(totDep))}</strong> · Recharge: <strong style={{ color: "#08805A" }}>{inr(Math.round(totRech))}</strong> · Total: <strong style={{ color: "#1D1D1F", fontSize: 14 }}>{inr(Math.round(totAll))}</strong>
+                </div>
+                <button onClick={exportModalCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Paid Date</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Apartment</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Customer Name</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Phone</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Device</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Transaction Key</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Plan</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right" }}>Deposit</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right" }}>Recharge</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right" }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item, idx) => (
+                      <tr key={item.id ? `${item.id}-${idx}` : idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", whiteSpace: "nowrap", color: "#64748B" }}>{item.Paid_Date ? fmtDate(new Date(item.Paid_Date)) : "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#1D1D1F", fontWeight: 600 }}>{item.partner_name || "—"}</td>
+                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{item.CustomerName || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{item.phone || "—"}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>
+                          {item.current_device ? (
+                            <span style={{ display: "inline-block", fontFamily: "monospace", fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)" }}>
+                              {item.current_device}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", fontSize: 11, color: "#64748B" }}>{item.transaction_key || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B" }}>{item.Plan || "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 600, color: "#475569" }}>{item.deposit_amount != null ? inr(item.deposit_amount) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 600, color: "var(--teal-d)" }}>{item.revenue_amount != null ? inr(item.revenue_amount) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 700, color: "#08805A" }}>
+                          {item.transaction_amount != null ? inr(item.transaction_amount) : ((item.deposit_amount != null || item.revenue_amount != null) ? inr((Number(item.deposit_amount) || 0) + (Number(item.revenue_amount) || 0)) : "—")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "rgba(243,248,236,.6)", fontWeight: 700, borderTop: "2px solid rgba(0,0,0,0.08)" }}>
+                      <td colSpan={7} style={{ padding: "12px 14px", textAlign: "left", color: "#1D1D1F" }}>Grand Total ({filtered.length} records)</td>
+                      <td style={{ padding: "12px 14px", textAlign: "right", color: "#475569" }}>{inr(Math.round(totDep))}</td>
+                      <td style={{ padding: "12px 14px", textAlign: "right", color: "var(--teal-d)" }}>{inr(Math.round(totRech))}</td>
+                      <td style={{ padding: "12px 14px", textAlign: "right", color: "#08805A", fontSize: 14 }}>{inr(Math.round(totAll))}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              ) : (
+                <div style={{ padding: 40, textAlign: "center", color: "#64748B" }}>No transaction records found matching the query.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (modalType === "dp_earned") {
+      let list = enrichedInRange.filter(r => (r.earnedRevenue || 0) > 0 || (r.recharge || 0) > 0);
+      const filtered = mq
+        ? list.filter(r =>
+            (r.phone || "").toLowerCase().includes(mq) ||
+            (r.current_device || "").toLowerCase().includes(mq) ||
+            (r.partner_name || "").toLowerCase().includes(mq) ||
+            (r.CustomerName || "").toLowerCase().includes(mq) ||
+            (r.transaction_key || "").toLowerCase().includes(mq) ||
+            (r.Plan || "").toLowerCase().includes(mq)
+          )
+        : list;
+
+      const totPaid = filtered.reduce((s, r) => s + (r.totalPaid || 0), 0);
+      const totRech = filtered.reduce((s, r) => s + (r.recharge || 0), 0);
+      const totEarned = filtered.reduce((s, r) => s + (r.earnedRevenue || 0), 0);
+      const totFuture = filtered.reduce((s, r) => s + (r.remainingDaysEarned || 0), 0);
+
+      const exportEarnedModalCsv = () => exportToCsv(`prowater-dp-earned-revenue-${isoDay(range.from)}_to_${isoDay(range.to)}.csv`, [
+        { label: "Paid Date", get: r => r.Paid_Date || "" },
+        { label: "Start Date", get: r => r["t.validity_start_date"] || "" },
+        { label: "End Date", get: r => r["t.validity_end_date"] || "" },
+        { label: "Apartment", get: r => r.partner_name || "" },
+        { label: "Customer Name", get: r => r.CustomerName || "" },
+        { label: "Phone", get: r => r.phone || "" },
+        { label: "Device ID", get: r => r.current_device || "" },
+        { label: "Plan", get: r => r.Plan || "" },
+        { label: "Total Paid", get: r => r.totalPaid ?? "" },
+        { label: "Recharge", get: r => r.recharge ?? "" },
+        { label: "Tenure (Days)", get: r => r.tenureDays ?? "" },
+        { label: "Days in Month", get: r => r.daysInPaidMonth ?? "" },
+        { label: "Earned Revenue", get: r => Math.round(r.earnedRevenue || 0) },
+        { label: "Future Revenue", get: r => Math.round(r.remainingDaysEarned || 0) },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={{
+          position: "fixed", inset: 0, background: "rgba(10,26,18,0.5)",
+          backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20, zIndex: 1000,
+        }}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={{
+            width: "min(1200px, 96%)", background: "#fff", borderRadius: 20,
+            padding: 24, boxShadow: "0 20px 50px rgba(0,0,0,0.15)",
+            maxHeight: "calc(100vh - 40px)", display: "flex", flexDirection: "column",
+            overflow: "hidden",
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>DP Transactions Drill-Down · {rangeLabel(range)}</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{modalTitle}</h2>
+                {modalSub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{modalSub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={{
+                width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.05)",
+                display: "grid", placeItems: "center", cursor: "pointer", border: "none",
+              }}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search customer, phone, device, apartment, plan…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 12.5, color: "#475569" }}>
+                  Earned Revenue: <strong style={{ color: "#08805A", fontSize: 14 }}>{inr(Math.round(totEarned))}</strong> · Future: <strong style={{ color: "#D97706" }}>{inr(Math.round(totFuture))}</strong> · Total Paid: <strong style={{ color: "#1D1D1F" }}>{inr(Math.round(totPaid))}</strong>
+                </div>
+                <button onClick={exportEarnedModalCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Paid Date</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Start Date</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>End Date</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Apartment</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Customer Name</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Phone</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Device</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em" }}>Plan</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right" }}>Total Paid</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right" }}>Recharge</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "center" }}>Tenure</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "center" }}>Days</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right" }}>Earned Revenue</th>
+                      <th style={{ padding: "10px 14px", fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", textAlign: "right" }}>Future Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item, idx) => (
+                      <tr key={item.id ? `modal-earned-${item.id}-${idx}` : `modal-earned-${idx}`} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", whiteSpace: "nowrap", color: "#64748B" }}>{item.Paid_Date ? fmtDate(new Date(item.Paid_Date)) : "—"}</td>
+                        <td style={{ padding: "11px 14px", whiteSpace: "nowrap", color: "#64748B" }}>{item.startDate ? fmtDate(item.startDate) : "—"}</td>
+                        <td style={{ padding: "11px 14px", whiteSpace: "nowrap", color: "#64748B" }}>{item.endDate ? fmtDate(item.endDate) : "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#1D1D1F", fontWeight: 600 }}>{item.partner_name || "—"}</td>
+                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{item.CustomerName || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{item.phone || "—"}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>
+                          {item.current_device ? (
+                            <span style={{ display: "inline-block", fontFamily: "monospace", fontSize: 11, fontWeight: 600, padding: "2px 7px", borderRadius: 6, background: "var(--mint)", color: "var(--slate)" }}>
+                              {item.current_device}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td style={{ padding: "11px 14px", color: "#64748B" }}>{item.Plan || "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 600 }}>{item.totalPaid ? inr(item.totalPaid) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", fontWeight: 600 }}>{item.recharge ? inr(item.recharge) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center", color: "#64748B" }}>{item.tenureDays ? `${item.tenureDays}d` : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center", color: "#64748B" }}>{item.daysInPaidMonth ? `${item.daysInPaidMonth}d` : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", color: "#08805A", fontWeight: 700 }}>{inr(Math.round(item.earnedRevenue || 0))}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "right", color: "#D97706", fontWeight: 600 }}>{item.remainingDaysEarned > 0 ? inr(Math.round(item.remainingDaysEarned)) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "rgba(243,248,236,.6)", fontWeight: 700, borderTop: "2px solid rgba(0,0,0,0.08)" }}>
+                      <td colSpan={8} style={{ padding: "12px 14px", textAlign: "left", color: "#1D1D1F" }}>Grand Total ({filtered.length} records)</td>
+                      <td style={{ padding: "12px 14px", textAlign: "right" }}>{inr(Math.round(totPaid))}</td>
+                      <td style={{ padding: "12px 14px", textAlign: "right" }}>{inr(Math.round(totRech))}</td>
+                      <td colSpan={2} style={{ padding: "12px 14px", textAlign: "center" }}>—</td>
+                      <td style={{ padding: "12px 14px", textAlign: "right", color: "#08805A", fontSize: 14 }}>{inr(Math.round(totEarned))}</td>
+                      <td style={{ padding: "12px 14px", textAlign: "right", color: "#D97706", fontSize: 14 }}>{inr(Math.round(totFuture))}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              ) : (
+                <div style={{ padding: 40, textAlign: "center", color: "#64748B" }}>No revenue recognition records found matching the query.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   const dpPeriodLabel = rangeLabel(range);
 
   return (
@@ -6096,27 +6095,31 @@ export function DPTransactions() {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
-        {/* v2.29.274: after two rounds of chasing a legible trend-badge color
-            against this card's gradient (v2.29.270, v2.29.271), the user
-            asked for the simpler fix that actually addresses the root cause
-            — hero cards no longer render a gradient at all, so the delta
-            text below is just plain color on white, same as every non-hero
-            card already had. */}
         {stats.map((s, i) => (
-          <div key={i} style={{
-            background: "rgba(255, 255, 255, 0.85)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            border: "1px solid rgba(0,0,0,0.08)",
-            borderRadius: 20,
-            padding: "20px 22px",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
-            color: "#1D1D1F",
-            display: "flex", flexDirection: "column", justifyContent: "space-between"
-          }}>
+          <div key={i}
+            onClick={() => { setKpiModal(s); setModalQ(""); }}
+            style={{
+              background: "rgba(255, 255, 255, 0.85)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              border: "1px solid rgba(0,0,0,0.08)",
+              borderRadius: 20,
+              padding: "20px 22px",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
+              color: "#1D1D1F",
+              display: "flex", flexDirection: "column", justifyContent: "space-between",
+              cursor: "pointer",
+              transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "#08805A"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(8, 128, 90, 0.08)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(0,0,0,0.08)"; e.currentTarget.style.boxShadow = "0 10px 30px rgba(0, 0, 0, 0.03)"; }}
+          >
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>{s.label}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  {s.label}
+                  <ExternalLink size={11} style={{ opacity: 0.6 }} />
+                </span>
                 {s.icon && <s.icon size={18} style={{ color: "#08805A" }} />}
               </div>
               <div style={{ fontSize: 25, fontWeight: 700, color: "#1D1D1F", letterSpacing: "-.02em" }}>{s.value}</div>
@@ -6136,7 +6139,7 @@ export function DPTransactions() {
       {/* Apartment performance */}
       {aptStats.length > 0 && (
         <div style={{ marginTop: 18 }}>
-          <Card>
+          <Card hover={false}>
             <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16, color: "#1D1D1F" }}>Apartment performance</div>
@@ -6149,7 +6152,13 @@ export function DPTransactions() {
                 const pct = Math.round((a.tot / maxAmt) * 100);
                 const inactive = a.tot === 0;
                 return (
-                  <div key={a.name} style={{ border: "1px solid var(--border)", borderRadius: 14, padding: 14, background: inactive ? "var(--mint)" : "#fff" }}>
+                  <div key={a.name} style={{
+                    border: "1px solid var(--border)",
+                    borderRadius: 14,
+                    padding: 14,
+                    background: inactive ? "var(--mint)" : "#fff",
+                    transform: "none",
+                  }}>
                     <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                       <div style={{ minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -6341,6 +6350,7 @@ export function DPTransactions() {
           </div>
         </div>
       </div>
+      {renderKpiModal()}
       {apiResult && (
         <Modal onClose={() => setApiResult(null)}
           title={apiResult.ok ? "API response" : "API error"}

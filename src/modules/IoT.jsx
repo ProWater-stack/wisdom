@@ -372,7 +372,7 @@ export function iotWqClass(k, v) {
   if (k === "ph")       return (v < 6.0 || v > 9.0) ? "red" : (v < 6.5 || v > 8.5) ? "amber" : "green";
   if (k === "tds")      return (v < 50 || v > 500)  ? "red" : (v > 300)            ? "amber" : "green";
   if (k === "temp")     return (v < 10 || v > 32)   ? "red" : (v < 15 || v > 25)   ? "amber" : "green";
-  if (k === "pressure" || k === "flowMLPM") return "green";
+  if (k === "pressure" || k === "flowMLPM" || k === "flowMLPM2") return "green";
   return "na";
 }
 // Worst band touched by a min–max range (endpoints suffice for contiguous bands).
@@ -775,11 +775,18 @@ export function IoTJunctionBoxPanel({ device, channels }) {
 // Reused for both the potability card (pH/TDS/temp) and the RO-unit sensors
 // card (pressure/flow) via the `keys`/`title`/`noun` props — same generic
 // range/band scaffolding (IOT_WQ_META/IDEAL + iotWqClass), different metric set.
-export function IoTWaterQualityCard({ range, keys = ["ph", "tds", "temp"], title = "Water Quality", subtitle = "Live sensor readings", noun = "Water quality", extra, style = {} }) {
+export function IoTWaterQualityCard({ range, yesterdayRange, keys = ["ph", "tds", "temp"], title = "Water Quality", subtitle = "Live sensor readings", noun = "Water quality", extra, style = {} }) {
   const fmt = (v, dp) => (v == null ? "—" : Number(v).toFixed(dp));
   const rows = keys.map((k) => {
     const band = iotWqBand(range[k], k);
-    return { k, meta: IOT_WQ_META[k], r: range[k], ideal: IOT_WQ_IDEAL[k], band, rag: IOT_RAG[band] || IOT_RAG.na };
+    const currVal = (k === "ph" || k === "tds") ? (range[k]?.movingAvg ?? range[k]?.latest) : range[k]?.latest;
+    const yestVal = (k === "ph" || k === "tds") ? (yesterdayRange?.[k]?.movingAvg ?? yesterdayRange?.[k]?.latest) : yesterdayRange?.[k]?.latest;
+    let diff = null, pct = null;
+    if (currVal != null && yestVal != null) {
+      diff = currVal - yestVal;
+      pct = yestVal !== 0 ? ((diff / yestVal) * 100) : null;
+    }
+    return { k, meta: IOT_WQ_META[k], r: range[k], ideal: IOT_WQ_IDEAL[k], band, rag: IOT_RAG[band] || IOT_RAG.na, currVal, yestVal, diff, pct };
   });
   return (
     <div style={{ ...IOT_CARD, padding: "18px 20px", display: "flex", flexDirection: "column", ...style }}>
@@ -788,17 +795,29 @@ export function IoTWaterQualityCard({ range, keys = ["ph", "tds", "temp"], title
         <div style={{ fontSize: 12, color: "#8b9a95", marginTop: 3 }}>{subtitle}</div>
       </div>
       <div style={{ marginTop: 6 }}>
-        {rows.map(({ k, meta, r, ideal, rag }, i) => (
-          <div key={k} style={{ display: "grid", gridTemplateColumns: "8px 30px minmax(70px,1fr) auto auto", gap: 11, alignItems: "center", minHeight: 60, borderTop: i ? "1px solid #edf1ef" : "none" }}>
+        {rows.map(({ k, meta, r, ideal, rag, currVal, yestVal, diff, pct }, i) => (
+          <div key={k} style={{ display: "grid", gridTemplateColumns: "8px 30px minmax(70px,1fr) auto auto", gap: 11, alignItems: "center", minHeight: 62, borderTop: i ? "1px solid #edf1ef" : "none", padding: "6px 0" }}>
             <span style={{ width: 8, height: 8, borderRadius: 999, background: rag.color }} />
             <span style={{ display: "grid", placeItems: "center", width: 28, height: 28, color: "#007d59" }}><meta.icon size={19} /></span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--f)" }}>{meta.label}</div>
-              <div style={{ fontSize: 10.5, color: "#8b9a95", marginTop: 3 }}>
+              <div style={{ fontSize: 10.5, color: "#8b9a95", marginTop: 2 }}>
                 {(k === "pressure" || k === "flowMLPM") ? "Pump off = 0, pump on = live reading — both normal"
                   : (k === "ph" || k === "tds") ? `Ideal: ${ideal[0]} – ${ideal[1]}${meta.unit ? ` ${meta.unit}` : ""} · avg of last ${r?.movingAvgN || 0}`
                   : `Ideal: ${ideal[0]} – ${ideal[1]}${meta.unit ? ` ${meta.unit}` : ""}`}
               </div>
+              {(k === "ph" || k === "tds") && yestVal != null && (
+                <div style={{ fontSize: 11, color: "#555558", marginTop: 3, fontWeight: 500 }}>
+                  vs yesterday: <strong style={{ color: "#1D1D1F" }}>{fmt(yestVal, meta.dp)}{meta.unit ? ` ${meta.unit}` : ""}</strong>
+                  {" "}
+                  <span style={{
+                    fontWeight: 700,
+                    color: diff === 0 ? "#86868B" : (k === "tds" ? (diff < 0 ? "#08805A" : "#DC2626") : (diff > 0 ? "#08805A" : "#DC2626"))
+                  }}>
+                    ({diff >= 0 ? "+" : ""}{fmt(diff, meta.dp)}{meta.unit ? ` ${meta.unit}` : ""}, {pct != null ? `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%` : "0%"})
+                  </span>
+                </div>
+              )}
             </div>
             <div style={{ textAlign: "right", fontSize: 13.5, fontWeight: 750, color: "var(--f)", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
               {(k === "ph" || k === "tds")
@@ -922,18 +941,34 @@ export const IOT_GAUGE = {
   pressure: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("pressure", v), zones: [[0, 6, "green"]], ticks: [0, 2, 4, 6] },
   flowMLPM: { min: 0, max: 6, dp: 2, band: (v) => iotWqClass("flowMLPM", v), zones: [[0, 6, "green"]], ticks: [0, 1.5, 3, 4.5, 6] },
 };
-export function IoTMetricGauge({ metricKey, label, unit, value, active, onClick }) {
+export function IoTMetricGauge({ metricKey, label, unit, value, yesterdayValue, active, onClick }) {
   const g = IOT_GAUGE[metricKey];
   const band = value == null ? "na" : g.band(value);
   const numCol = band === "red" ? "#DC4141" : band === "amber" ? "#a86e00" : band === "green" ? "#0A7D53" : "#6b8577";
   const span = (g.max - g.min) || 1;
   const pct = value == null ? null : Math.max(0, Math.min(100, ((value - g.min) / span) * 100));
+  let diff = null, yestPct = null;
+  if ((metricKey === "ph" || metricKey === "tds") && value != null && yesterdayValue != null) {
+    diff = value - yesterdayValue;
+    yestPct = yesterdayValue !== 0 ? ((diff / yesterdayValue) * 100) : null;
+  }
   return (
     <div onClick={onClick} title={onClick ? `Show ${label} trend` : undefined} style={{ background: "#fff", border: "1px solid " + (active ? "var(--brand)" : "var(--border)"), boxShadow: active ? "0 0 0 2px rgba(30, 158, 79,.18), 0 6px 16px rgba(16,40,28,.08)" : "0 1px 2px rgba(16,40,28,.04), 0 6px 16px rgba(16,40,28,.06)", borderRadius: 14, padding: "12px 14px", cursor: onClick ? "pointer" : "default", transition: "box-shadow .15s ease, border-color .15s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 6 }}>
         <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase", color: active ? "var(--forest)" : "#6b8577" }}>{label}</span>
         <span style={{ fontSize: 30, fontWeight: 800, color: numCol, fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{value == null ? "—" : value.toFixed(g.dp)}<span style={{ fontSize: 12.5, color: "#8aa398", fontWeight: 600 }}>{unit ? " " + unit : ""}</span></span>
       </div>
+      {(metricKey === "ph" || metricKey === "tds") && yesterdayValue != null && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 10.5, color: "#6b8577", marginTop: 4 }}>
+          <span>vs yesterday: <strong style={{ color: "#1D1D1F" }}>{yesterdayValue.toFixed(g.dp)}{unit ? ` ${unit}` : ""}</strong></span>
+          <span style={{
+            fontWeight: 700,
+            color: diff === 0 ? "#86868B" : (metricKey === "tds" ? (diff < 0 ? "#08805A" : "#DC2626") : (diff > 0 ? "#08805A" : "#DC2626"))
+          }}>
+            ({diff >= 0 ? "+" : ""}{diff.toFixed(g.dp)}{unit ? ` ${unit}` : ""}, {yestPct != null ? `${yestPct >= 0 ? "+" : ""}${yestPct.toFixed(1)}%` : "0%"})
+          </span>
+        </div>
+      )}
       <div style={{ position: "relative", marginTop: 12 }}>
         <div style={{ display: "flex", height: 10, borderRadius: 6, overflow: "hidden", border: "1px solid rgba(16,40,28,.06)" }}>
           {g.zones.map((z, i) => <div key={i} style={{ width: ((z[1] - z[0]) / span * 100) + "%", background: g.fill ? "#eef2f0" : IOT_ZONE_COL[z[2]] }} />)}
@@ -973,6 +1008,12 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const latestReading = chrono.length ? chrono[chrono.length - 1] : null;
   const metrics = iotTrendMetrics();
   const gaugeVal = Object.fromEntries(metrics.map((m) => [m.k, latestReading ? m.get(latestReading) : null]));
+  const yesterdayItems = useMemo(() => iotFilterByRange(all, "yesterday"), [all]);
+  const yesterdayWq = useMemo(() => iotWqRange(yesterdayItems), [yesterdayItems]);
+  const yesterdayVals = {
+    ph: yesterdayWq.ph?.movingAvg ?? yesterdayWq.ph?.latest,
+    tds: yesterdayWq.tds?.movingAvg ?? yesterdayWq.tds?.latest,
+  };
   const M = metrics.find((m) => m.k === metric) || metrics[0];
   const scan = useMemo(() => iotAnomalyScan(chrono), [chrono]);
   const health = useMemo(() => iotSensorHealth(chrono), [chrono]);
@@ -1038,13 +1079,15 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const rows = sorted.slice((cur - 1) * PER, cur * PER);
   const exportReadings = () => exportToCsv(`prowater-iot-readings-${range}.csv`, [
     { label: "Time", get: (it) => iotStamp(it.timestamp) },
+    { label: "Input → RO Membrane", get: (it) => { const v = iotWqNum(it.waterQuality?.totalDispensed2); return v == null ? "" : v.toFixed(2); } },
     { label: "Tank %", get: (it) => iotTank(it.tankLevel).pct },
     { label: "pH", get: (it) => { const v = iotWqNum(it.waterQuality?.ph); return v == null ? "" : v.toFixed(1); } },
     { label: "TDS (ppm)", get: (it) => { const v = iotWqNum(it.waterQuality?.tds); return v == null ? "" : Math.round(v); } },
     { label: "Temp (°C)", get: (it) => { const v = iotWqNum(it.waterQuality?.temp); return v == null ? "" : v.toFixed(1); } },
     { label: "Pressure (bar)", get: (it) => { const v = iotWqNum(it.waterQuality?.pressure); return v == null ? "" : v.toFixed(2); } },
-    { label: "Flow rate (L/min)", get: (it) => { const v = iotWqNum(it.waterQuality?.flowMLPM); return v == null ? "" : v.toFixed(2); } },
-    { label: "Total dispensed (L)", get: (it) => { const v = iotWqNum(it.waterQuality?.totalDispensed); return v == null ? "" : v.toFixed(2); } },
+    { label: "Input Flow", get: (it) => { const v = iotWqNum(it.waterQuality?.flowMLPM2); return v == null ? "" : v.toFixed(2); } },
+    { label: "Output Flow", get: (it) => { const v = iotWqNum(it.waterQuality?.flowMLPM); return v == null ? "" : v.toFixed(2); } },
+    { label: "Dispensed (L)", get: (it) => { const v = iotWqNum(it.waterQuality?.totalDispensed); return v == null ? "" : v.toFixed(2); } },
   ], sorted);
   const btn = (disabled) => ({ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 9, border: "1px solid " + (disabled ? "var(--border)" : "var(--brand)"), background: disabled ? "#fff" : "var(--brand)", color: disabled ? "var(--faint)" : "#fff", cursor: disabled ? "not-allowed" : "pointer" });
   const syncHead = (
@@ -1068,7 +1111,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const wxDot = (s) => (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const bad = payload[s.oorKey]; return <circle key={index} cx={cx} cy={cy} r={bad ? 3.6 : 0} fill={bad ? "#e0453f" : s.color} stroke="#fff" strokeWidth={bad ? 1.2 : 0} />; };
   const bigTT = (props) => {
     const { active, payload } = props; if (!active || !payload || !payload.length) return null; const d = payload[0].payload;
-    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "ppm" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}{bad ? " · out of range" : ""}</div>;
+    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "ppm" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}</div>;
     return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#1E9E4F")}{row("TDS", d.tds, "ppm", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}{row("Tank", d.tank, "%", d.oorTank, "#986315")}</div>);
   };
   // Flashing red ring at timestamps where taste is likely affected (temp+TDS+pH).
@@ -1099,8 +1142,8 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
 
       {all.length > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 10, padding: "12px 18px 6px" }}>
-          <IoTMetricGauge metricKey="ph" label="pH" unit="" value={gaugeVal.ph} active={metric === "ph"} onClick={() => setMetric("ph")} />
-          <IoTMetricGauge metricKey="tds" label="TDS" unit="ppm" value={gaugeVal.tds} active={metric === "tds"} onClick={() => setMetric("tds")} />
+          <IoTMetricGauge metricKey="ph" label="pH" unit="" value={gaugeVal.ph} yesterdayValue={yesterdayVals.ph} active={metric === "ph"} onClick={() => setMetric("ph")} />
+          <IoTMetricGauge metricKey="tds" label="TDS" unit="ppm" value={gaugeVal.tds} yesterdayValue={yesterdayVals.tds} active={metric === "tds"} onClick={() => setMetric("tds")} />
           <IoTMetricGauge metricKey="temp" label="Temp" unit="°C" value={gaugeVal.temp} active={metric === "temp"} onClick={() => setMetric("temp")} />
           <IoTMetricGauge metricKey="tank" label="Tank" unit="%" value={gaugeVal.tank} active={metric === "tank"} onClick={() => setMetric("tank")} />
         </div>
@@ -1267,7 +1310,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-              {[syncHead, "Tank", "pH", "TDS (ppm)", "Temp (°C)", "Pressure (bar)", "Flow (L/min)", "Dispensed (L)"].map((h, idx) => (
+              {[syncHead, "Input → RO Membrane", "Tank", "pH", "TDS (ppm)", "Temp (°C)", "Pressure (bar)", "Input Flow", "Output Flow", "Dispensed (L)"].map((h, idx) => (
                 <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
               ))}
             </tr>
@@ -1276,22 +1319,25 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
             {rows.map((it, i) => {
               const t = iotTank(it.tankLevel);
               const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp);
-              const pr = iotWqNum(it.waterQuality?.pressure), fl = iotWqNum(it.waterQuality?.flowMLPM), disp = iotWqNum(it.waterQuality?.totalDispensed);
+              const pr = iotWqNum(it.waterQuality?.pressure), inputFl = iotWqNum(it.waterQuality?.flowMLPM2), outputFl = iotWqNum(it.waterQuality?.flowMLPM);
+              const inputRo = iotWqNum(it.waterQuality?.totalDispensed2), disp = iotWqNum(it.waterQuality?.totalDispensed);
               const cellTd = { padding: "12px 18px", fontVariantNumeric: "tabular-nums", textAlign: "center" };
               return (
                 <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", transition: ".12s" }}>
                   <td style={{ padding: "12px 18px", fontFamily: "-apple-system,SF Mono,monospace", fontSize: 12, color: "#86868B", whiteSpace: "nowrap", textAlign: "center" }}>{iotStamp(it.timestamp)}</td>
+                  <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{inputRo == null ? "—" : inputRo.toFixed(2)}</td>
                   <td style={{ ...cellTd, fontWeight: 700, ...iotBandText(iotTankBand(t.pct)) }}>{t.pct}%</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("tds", tds)) }}>{tds == null ? "—" : Math.round(tds)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("temp", tp)) }}>{tp == null ? "—" : tp.toFixed(1)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("pressure", pr)) }}>{pr == null ? "—" : pr.toFixed(2)}</td>
-                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM", fl)) }}>{fl == null ? "—" : fl.toFixed(2)}</td>
+                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM2", inputFl)) }}>{inputFl == null ? "—" : inputFl.toFixed(2)}</td>
+                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM", outputFl)) }}>{outputFl == null ? "—" : outputFl.toFixed(2)}</td>
                   <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{disp == null ? "—" : disp.toFixed(2)}</td>
                 </tr>
               );
             })}
-            {sorted.length === 0 && <tr><td colSpan={8} style={{ padding: 0 }}><Empty msg={all.length ? "No readings match this filter." : "No readings yet."} /></td></tr>}
+            {sorted.length === 0 && <tr><td colSpan={10} style={{ padding: 0 }}><Empty msg={all.length ? "No readings match this filter." : "No readings yet."} /></td></tr>}
           </tbody>
         </table>
       </div>
@@ -1947,6 +1993,8 @@ export function IoTDevices() {
   const wqItems = historyByDevice[selected] ?? [];
   const tank = iotTank(device?.tankLevel ?? wqItems[0]?.tankLevel);
   const wqRange = useMemo(() => iotWqRange(wqItems), [wqItems]);
+  const yesterdayItems = useMemo(() => iotFilterByRange(histRangeByDevice[selected] ?? wqItems, "yesterday"), [histRangeByDevice, selected, wqItems]);
+  const yesterdayWqRange = useMemo(() => iotWqRange(yesterdayItems), [yesterdayItems]);
   // Total Dispensed is scoped to the shared date-range filter (falls back to the
   // short live window if the ~62-day fetch hasn't landed yet).
   const dispensedItems = useMemo(() => iotFilterByRange(histRangeByDevice[selected] ?? wqItems, range), [histRangeByDevice, selected, wqItems, range]);
@@ -2170,7 +2218,7 @@ export function IoTDevices() {
 
             <div style={{ ...IOT_CARD, padding: "18px 20px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
               {isTank ? (
-                <IoTWaterQualityCard range={wqRange} title="Water Quality & Potability" subtitle="Live tank sensors" extra={dispensedExtra} style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
+                <IoTWaterQualityCard range={wqRange} yesterdayRange={yesterdayWqRange} title="Water Quality & Potability" subtitle="Live tank sensors" extra={dispensedExtra} style={{ background: "transparent", border: "none", boxShadow: "none", padding: 0 }} />
               ) : (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>

@@ -924,11 +924,14 @@ Each module is registered in `MODULES` (id/label/icon/desc/color) and documented
 - Local-first: does **not** flag "Server Down".
 
 ### Analytics (`analytics`)
-Cross-module reporting. Sub-tabs: **Overview**, Referral, Earned Revenue, **Reconciliation**, **DP
+Cross-module reporting. Sub-tabs: **Overview V2**, Referral, Earned Revenue, **Reconciliation**, **DP
 Transaction**, AOP (admin/devops), Apartment Performance, **Renewal & Churn Risk**, Billing, Revenue (Net
 Revenue), **Penetration Tracker**, Credits, App Logs. (The old "Live Dashboard" tab was removed in 2.26.0.
 The **Sales Insights** tab, `an_sales` — a leads funnel read that duplicated ground the Sales module's own
-Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
+Trend Analysis/Leads screens already covered — was removed in v2.29.141. The original plain **Overview**
+tab, `an_overview` — superseded by Overview V2, and already hidden from the sidebar for some time — had
+its dead component code, nav entry, tab-switch render, and `TAB_SOURCES`/`MODULE_SECTIONS` entries fully
+deleted in v2.29.388.)
 
 - **Renewal & Churn Risk (`ChurnRiskRadar`, `an_churn`, v2.29.82)** — flags customers at risk of churn by
   joining three already-live signals onto one customer-level table: **subscription renewing within 30
@@ -947,17 +950,28 @@ Trend Analysis/Leads screens already covered — was removed in v2.29.141.)
   High with all three reasons listed, then the test data was removed.
 
 - **Overview V2 (`AnalyticsOverview`, `an_overview_v2`)** — a unified, filtered command dashboard for Zoho Billing + DrinkPrime. Loads customers, subscriptions, invoices, leads, **referrers**, tickets, apartments, and DrinkPrime transaction logs. Three filters scope the page: a **date-range picker** (This Month/Quarter/Year/Custom, compared vs the previous equal period), a **Society multi-select**, and (combined/Overview V2 only) a **Customer Stack multi-select** (v2.29.387, per explicit user request — DP / Zoho, same convention as Customer.jsx's own Customer Stack picker). Every chart honours all three filters. The Stack filter gates the four base populations everything else is built from: `fInvs`/`fSubs` (Zoho-only — invoices/subscriptions don't exist on DP) go empty when Zoho is excluded, `dpTxns` (DP-only) goes empty when DP is excluded, `fCustomers` (mixed) is filtered per-row by its `isDpCustomer` flag — so the KPI strip and every chart built on those populations are automatically scoped with no further plumbing. **Bug fixed v2.29.386:** every DP-derived figure on this page (Combined Recharge/Deposit/Total Collection's DP half, DP Total Collected/Recharge/Deposit, Revenue by Source's DP slices, Combined Monthly Collection's DP contribution) silently ignored the Society filter — only the Zoho half of each combined figure was ever actually scoped. Root cause: `dpTxns` (the base of every DP figure) only filtered on `row_type`, never on society. Fixed by filtering it with `socOk(cleanAptName(r.partner_name))`, the same `socOk` check every other society-scoped set on this page already uses — `cleanAptName` already normalizes DP's raw `partner_name` into the same canonical-society space (it calls `canonicalSociety` internally).
-  - **KPI row:** Displays 12 cards in this exact order (v2.29.383, per explicit user request): Total
-    Collection, Combined Recharge, Combined Deposit, **Zoho Collection (v2.29.383)** — Zoho-only
-    counterpart to DP Total Collected, reusing `collections` (= `netRevenue + depositCollected` by
-    construction) — Zoho Recharge, Zoho Deposit, DP Total Collected, DP Recharge, DP Deposit,
-    **Average ARPU (v2.29.382)** — combined Zoho+DP recharge ÷ total active customers, an `arpu`
-    figure this file already computed for an internal LTV estimate but never actually surfaced until
-    v2.29.382 — Active Customers, and New CX (Zoho + DP active split reconciled).
+  - **KPI row (trimmed to 6 cards at v2.29.389, per explicit user request — "i dont need 2 rows of
+    KPI cards"):** Total Collection, **Total Recharges** (renamed from "Combined Recharge"), **Total
+    Deposit** (renamed from "Combined Deposit"), **Average ARPU (v2.29.382)** — combined Zoho+DP
+    recharge ÷ total active customers, an `arpu` figure this file already computed for an internal LTV
+    estimate but never actually surfaced until v2.29.382 — Active Customers, and New CX (Zoho + DP
+    active split reconciled). The Zoho-only/DP-only breakdown cards this row showed from v2.29.383
+    through v2.29.388 (Zoho Collection, Zoho Recharge, Zoho Deposit, DP Total Collected, DP Recharge,
+    DP Deposit) were dropped at v2.29.389 to fit the row on one line — their figures are unchanged and
+    still back the kept cards' drilldown modals, just no longer shown as separate tiles. **MTD comparison
+    (v2.29.388):** when the date-range preset is "This Month", every card's delta compares month-to-date
+    vs month-to-date — the previous month is capped at the same day-of-month as today, not its full
+    span — labeled "vs 10 Aug" (an as-of date, not a "1–10 Aug" range) with the real previous-period
+    number alongside the % in brackets, e.g. "▼ 60.2% vs 10 Aug (₹15,803)". Every other preset compares
+    full equal periods as before.
   - **Revenue by Source:** Pie Chart with percentage data labels showing Zoho Recharge, Zoho Deposit, DP Recharge, and DP Deposit shares.
-  - **Combined Monthly Collection:** stacked Zoho + DP collection trends bar chart (trailing 7 months).
+  - **Monthly Collection (renamed from "Combined Monthly Collection" at v2.29.391):** single-color
+    total collection trends bar chart (trailing 7 months) — was a two-color Zoho+DP stacked bar with a
+    subtitle and legend; per explicit user request ("this are not needed... just show in one color
+    bars and show the total value") it's now one green bar per month showing the same total figure,
+    no subtitle, no legend. Same click-a-bar-to-filter-the-page-to-that-month behavior as before.
   - **Total Revenue vs Expected Revenue / MoM Growth Trend (v2.29.382):** two charts added per explicit
-    user request, right after Combined Monthly Collection. "Total Revenue vs Expected Revenue" is a
+    user request, right after Monthly Collection. "Total Revenue vs Expected Revenue" is a
     linear-projection Actual-vs-Forecast composed chart — Expected (Forecast) renders as a **Bar**
     (v2.29.384, per explicit user request; was a dashed line at launch), colored **light olive/
     yellow-green** (`#A9BA5A`, v2.29.387 — a rose color from v2.29.385 was called out as "pink" and
