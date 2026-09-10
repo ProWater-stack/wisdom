@@ -52,7 +52,17 @@ export function DateRangePicker({ value, onChange }) {
     </>
   );
 }
-export function MultiSelectFilter({ label, options, value, onChange, plural: pluralProp, width = 240 }) {
+// `buttonStyle`/`iconSize` (v2.29.404) let one call site restyle just its own
+// toggle button (e.g. All Customers' compact/glassmorphic toolbar) without
+// touching every other page's filters — both default to the original look,
+// so every existing call site is unaffected. `displayPlural` similarly lets
+// a call site show a SHORTER word on the button face (e.g. "stacks") while
+// `title` (the hover tooltip) still reads the full, descriptive summary
+// (e.g. "All customer stacks (2)") — per an explicit user-provided mockup
+// that keeps the two different on purpose. Falls back to `plural`/`pluralProp`
+// when not given, so every existing call site's tooltip and button text stay
+// identical (as they already were).
+export function MultiSelectFilter({ label, options, value, onChange, plural: pluralProp, displayPlural, width = 240, buttonStyle, iconSize = 14 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   // Dropdown position (v2.29.308) — this panel is now portalled to
@@ -92,18 +102,20 @@ export function MultiSelectFilter({ label, options, value, onChange, plural: plu
     onChange(next.length === options.length ? null : next); // back to "all" → null
   };
   const out = options.filter(o => !has(o));
-  const summary = all ? `All ${plural} (${options.length})`
+  const buildSummary = (p) => all ? `All ${p} (${options.length})`
     : sel.length === 0 ? `No ${label.toLowerCase()} selected`
     : out.length <= 2 ? `Excluding ${out.join(", ")}`
-    : `${sel.length} of ${options.length} ${plural}`;
+    : `${sel.length} of ${options.length} ${p}`;
+  const summary = buildSummary(plural);
+  const displaySummary = displayPlural ? buildSummary(displayPlural) : summary;
   const shown = options.filter(o => o.toLowerCase().includes(q.toLowerCase()));
 
   return (
     <div ref={box} style={{ position: "relative" }}>
       <button onClick={toggleOpen} title={summary}
-        style={{ ...selectStyle, display: "inline-flex", alignItems: "center", gap: 7, maxWidth: width, textAlign: "left", fontWeight: 500 }}>
-        <Filter size={14} style={{ flexShrink: 0, color: all ? "var(--muted)" : "var(--teal)" }} />
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+        style={{ ...selectStyle, display: "inline-flex", alignItems: "center", gap: 7, maxWidth: width, textAlign: "left", fontWeight: 500, ...buttonStyle }}>
+        <Filter size={iconSize} style={{ flexShrink: 0, color: all ? "var(--muted)" : "var(--teal)" }} />
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displaySummary}</span>
       </button>
       {open && pos && createPortal(
         // Portalled to document.body (v2.29.308) — this panel used to be
@@ -829,16 +841,24 @@ export function Table({ head, children, maxHeight }) {
     </div>
   );
 }
-export function Toolbar({ q, setQ, placeholder, count, right }) {
+// `inputStyle`/`countStyle`/`iconSize`/`wrapStyle` (v2.29.404) let one call
+// site restyle its own search box/count text/wrapper (e.g. All Customers'
+// compact toolbar) without touching every other page — all default to
+// the original look, so every existing call site renders unchanged. The
+// search icon is now vertically centered via top:50%/translateY instead of
+// a fixed top offset — a plain correctness fix (the old fixed value only
+// ever centered for one specific input height) with no visual change at
+// the original input height, so it's unconditional, not gated by a prop.
+export function Toolbar({ q, setQ, placeholder, count, right, inputStyle, countStyle, iconSize = 16, wrapStyle }) {
   return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center", ...wrapStyle }}>
       <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
-        <Search size={16} style={{ position: "absolute", left: 12, top: 11, color: "var(--muted)" }} />
+        <Search size={iconSize} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
         <input value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder}
-          style={{ ...inp, paddingLeft: 36, margin: 0 }} />
+          style={{ ...inp, paddingLeft: 36, margin: 0, ...inputStyle }} />
       </div>
       {right}
-      {count != null && <span style={{ fontSize: 12.5, color: "var(--muted)", marginLeft: "auto" }}>{count} result{count !== 1 ? "s" : ""}</span>}
+      {count != null && <span style={{ fontSize: 12.5, color: "var(--muted)", marginLeft: "auto", ...countStyle }}>{count} result{count !== 1 ? "s" : ""}</span>}
     </div>
   );
 }

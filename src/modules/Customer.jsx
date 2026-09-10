@@ -2342,25 +2342,57 @@ export function AllCustomers() {
       </div>
 
 
+      {/* Restyled v2.29.404, per an explicit user-provided before/after
+          mockup: a tighter, glassmorphic (translucent + blurred) look for
+          the search box, filter buttons and Export — was the app's plain
+          shared `inp`/`selectStyle`/`btnPrimary` look. `Toolbar` and
+          `MultiSelectFilter` (shared/ui.jsx) both gained optional style-
+          override props for this (buttonStyle/iconSize/displayPlural on the
+          filter, inputStyle/countStyle/iconSize/wrapStyle on the toolbar),
+          defaulting to their original look — so every OTHER page using
+          either component is completely unaffected. */}
+      {(() => {
+        const filterBtnStyle = { padding: "6px 10px", border: "1px solid rgba(0,0,0,0.07)", borderRadius: 9, fontSize: 12, color: "#1D1D1F", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", boxShadow: "0 1px 2px rgba(0,0,0,0.02)", gap: 5 };
+        return (
       <Toolbar q={q} setQ={setQ} placeholder="Search by Purifier ID, phone, name or email…" count={results.length}
+        iconSize={14}
+        wrapStyle={{ gap: 8, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif", WebkitFontSmoothing: "antialiased" }}
+        inputStyle={{ boxSizing: "border-box", padding: "7px 12px 7px 32px", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 10, fontSize: 13, color: "#1D1D1F", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}
+        countStyle={{ fontSize: 12, fontWeight: 500, paddingRight: 4 }}
         right={
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <MultiSelectFilter label="Society" options={societyOptions} value={societyFilter} onChange={setSocietyFilter} />
-            <MultiSelectFilter label="Status" options={statusOptions} value={statusFilter} onChange={setStatusFilter} />
-            <MultiSelectFilter label="Customer Stack" options={stackOptions} value={stackFilter} onChange={setStackFilter} />
-            <MultiSelectFilter label="Device Type" options={deviceTypeOptions} value={deviceTypeFilter} onChange={setDeviceTypeFilter} />
-            <MultiSelectFilter label="Filter Type" options={filterTypeOptions} value={filterTypeFilter} onChange={setFilterTypeFilter} />
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <MultiSelectFilter label="Society" options={societyOptions} value={societyFilter} onChange={setSocietyFilter} buttonStyle={filterBtnStyle} iconSize={12} />
+            <MultiSelectFilter label="Status" options={statusOptions} value={statusFilter} onChange={setStatusFilter} buttonStyle={filterBtnStyle} iconSize={12} />
+            <MultiSelectFilter label="Customer Stack" displayPlural="stacks" options={stackOptions} value={stackFilter} onChange={setStackFilter} buttonStyle={filterBtnStyle} iconSize={12} />
+            <MultiSelectFilter label="Device Type" displayPlural="devices" options={deviceTypeOptions} value={deviceTypeFilter} onChange={setDeviceTypeFilter} buttonStyle={filterBtnStyle} iconSize={12} />
+            <MultiSelectFilter label="Filter Type" displayPlural="filters" options={filterTypeOptions} value={filterTypeFilter} onChange={setFilterTypeFilter} buttonStyle={filterBtnStyle} iconSize={12} />
             {hasActiveFilters && (
               <button onClick={handleResetFilters} title="Reset all filters and search"
-                style={{ ...btnGhost, color: "var(--danger)", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, padding: "5px 11px", borderRadius: 8, background: "rgba(220,65,65,0.08)" }}>
-                <RotateCcw size={13} /> Reset Filters
+                style={{ ...btnGhost, color: "var(--danger)", display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, padding: "5px 10px", borderRadius: 9, background: "rgba(220,65,65,0.08)" }}>
+                <RotateCcw size={12} /> Reset Filters
               </button>
             )}
-            <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "7px 16px" }}><Download size={15} /> Export</button>
+            <button onClick={exportCsv} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 9, background: "#08805A", color: "#fff", fontWeight: 600, fontSize: 12.5, border: "none", cursor: "pointer", boxShadow: "0 2px 8px rgba(8,128,90,0.25)" }}><Download size={13} strokeWidth={2.2} /> Export</button>
           </div>
         } />
+        );
+      })()}
       <Card pad={false} hover={false}>
+        {/* Smaller, tighter cell style scoped to just this table (v2.29.404,
+            per explicit user report — "reduce the size of the texts inside
+            the table looks very bad") — the shared `td`/`ftd` (13.5px,
+            "12px 16px" padding) are used by many other tables across the
+            app, so they're overridden locally here rather than changed at
+            the source, which would have shrunk every other table's text too.
+            Purifier ID also gets `whiteSpace:"nowrap"` (same fix already
+            applied to Phone/Stack below) — the shared `td`'s wordBreak
+            convention was splitting IDs like "OWND000002" across two lines
+            once the column got narrow. */}
         <Table head={["Purifier ID", "Customer", "Phone", "Society", "Plan", "Device Type", "Stack", "Status", ""]} maxHeight="calc(100vh - 260px)">
+          {(() => {
+            const rowTd = { ...td, fontSize: 12, padding: "9px 14px" };
+            const rowFtd = { ...ftd, fontSize: 12, padding: "9px 14px" };
+            return <>
           {results.map(c => {
             const pm = planMeta(c);
             const dtStyle = pm?.deviceType && DEVICE_TYPE_STYLE[pm.deviceType === "Normal" ? "Normal Device" : pm.deviceType];
@@ -2368,8 +2400,8 @@ export function AllCustomers() {
             const isDup = dupCount > 1;
             return (
             <tr key={c.id} style={{ ...trStyle, ...rowTint(c) }} onClick={() => openCustomer(c)}>
-              <td style={{ ...td, fontWeight: 700, color: "var(--brand)" }}>{c.purifier_id}</td>
-              <td style={td}>
+              <td style={{ ...rowTd, fontWeight: 700, color: "var(--brand)", whiteSpace: "nowrap" }}>{c.purifier_id}</td>
+              <td style={rowTd}>
                 {c.name || "—"}
                 {isDup && (
                   <span
@@ -2385,12 +2417,12 @@ export function AllCustomers() {
                   </span>
                 )}
               </td>
-              <td style={{ ...td, whiteSpace: "nowrap" }}>{fmtPhone(c.phone)}</td>
-              <td style={td}>{c.society || "—"}</td>
-              <td style={td}>{c.plan || "—"}</td>
-              <td style={td}>
+              <td style={{ ...rowTd, whiteSpace: "nowrap" }}>{fmtPhone(c.phone)}</td>
+              <td style={rowTd}>{c.society || "—"}</td>
+              <td style={rowTd}>{c.plan || "—"}</td>
+              <td style={rowTd}>
                 {pm?.deviceType ? (
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap", color: (dtStyle || ["#475569", "#F1F5F9"])[0], background: (dtStyle || ["#475569", "#F1F5F9"])[1] }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 8px", borderRadius: 999, whiteSpace: "nowrap", color: (dtStyle || ["#475569", "#F1F5F9"])[0], background: (dtStyle || ["#475569", "#F1F5F9"])[1] }}>
                     {pm.deviceType}
                   </span>
                 ) : <DeviceTypeBadge purifierId={c.purifier_id} />}
@@ -2403,15 +2435,15 @@ export function AllCustomers() {
                   (e.g. after the Filter Type column was removed and widths
                   redistributed). Scoped to just this badge, not the shared td
                   style, since other cells still need break-word for long text. */}
-              <td style={td}>
+              <td style={rowTd}>
                 <span style={{
-                  fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
+                  fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap",
                   background: c.isDpCustomer ? "#E5F0FA" : "var(--mint)",
                   color: c.isDpCustomer ? "#2A86D6" : "var(--brand)",
                 }}>{stackOf(c)}</span>
               </td>
-              <td style={{ ...td, textTransform: "capitalize" }}>{c.status || "—"}</td>
-              <td style={{ ...td, textAlign: "center" }}><ChevronRight size={16} color="var(--muted)" /></td>
+              <td style={{ ...rowTd, textTransform: "capitalize" }}>{c.status || "—"}</td>
+              <td style={{ ...rowTd, textAlign: "center" }}><ChevronRight size={15} color="var(--muted)" /></td>
             </tr>
             );
           })}
@@ -2424,10 +2456,12 @@ export function AllCustomers() {
               filters/search are active. */}
           {results.length > 0 && (
             <tr>
-              <td style={{ ...ftd, textAlign: "center" }} colSpan={2}>Total Purifier Count</td>
-              <td style={{ ...ftd, textAlign: "center" }} colSpan={7}>{results.length.toLocaleString("en-IN")}</td>
+              <td style={{ ...rowFtd, textAlign: "center" }} colSpan={2}>Total Purifier Count</td>
+              <td style={{ ...rowFtd, textAlign: "center" }} colSpan={7}>{results.length.toLocaleString("en-IN")}</td>
             </tr>
           )}
+            </>;
+          })()}
         </Table>
         {results.length === 0 && <Empty msg={ql || societyFilter || statusFilter || stackFilter || deviceTypeFilter || filterTypeFilter || dateSel.preset !== "all" ? "No customer matches these filters." : "No customers with a Purifier ID."} />}
       </Card>
