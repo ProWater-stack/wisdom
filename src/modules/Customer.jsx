@@ -1253,14 +1253,21 @@ export function AllCustomers() {
     (filterTypeFilter === null || filterTypeFilter.includes(filterTypeOf(c))) &&
     (connFilter === null ? true : (c.isDpCustomer && (connFilter === "connected" ? normSt(c.deviceStatus) === "active" : normSt(c.deviceStatus) !== "active"))) &&
     (!ql || matchesQ(c)));
-  // isActive per row — a customer is "active" if their device is NOT
-  // Un-Installed/Uninstalled (`isDeviceUninstalled`, v2.29.373 — purely
-  // device_status-based, per explicit user request), not a customer
-  // subscription-status check. (v2.29.372 briefly used the broader
-  // `isHiddenByDefault`, which also treated a customer status of "inactive"
-  // as reason to count someone inactive; that mixed two different signals
-  // and, before that, an even earlier Zoho-status-only check caused the
-  // same active+inactive-both-at-once bug this line exists to avoid.)
+  // isActive per row — now the SAME rule the table itself uses to decide
+  // what's visible by default (`isHiddenByDefault`: device Un-Installed/
+  // Uninstalled OR customer status exactly "inactive"), per explicit user
+  // request (v2.29.406) after a real report that the "Customers" KPI (125),
+  // the table's own default-view count (123), and this same card's
+  // "Inactive" isolate-toggle (4 rows) never added up to each other or to
+  // one another — three different populations under three numbers that all
+  // claimed to describe "active"/"inactive". (v2.29.373 had deliberately
+  // narrowed this to device-status-only, to stop it from double-counting a
+  // customer's account status as a second "inactive" signal — a real, valid
+  // concern in isolation, but it's exactly what produced today's mismatch:
+  // a customer with a working device but an "inactive" account status was
+  // active here and hidden everywhere else. Given the choice between the
+  // two, matching the table won — every number on this page must now sum to
+  // the same total, which is worth more than the narrower distinction.)
   // Active and Inactive are strict complements of the exact same
   // population/identity space, so they always sum to the total.
   //
@@ -1274,7 +1281,7 @@ export function AllCustomers() {
   // table, but this KPI card no longer dedupes at all: it always counts
   // rows, matching every sibling card everywhere, filtered or not.
   const uniqueTotalCount = allPop.length;
-  const activeRows = allPop.filter(c => !isDeviceUninstalled(c));
+  const activeRows = allPop.filter(c => !isHiddenByDefault(c));
   const uniqueActiveCount = activeRows.length;
   const uniqueInactiveCount = uniqueTotalCount - uniqueActiveCount;
   // DP/Zoho split of the ACTIVE population only (v2.29.370) — per explicit
