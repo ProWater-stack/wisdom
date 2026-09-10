@@ -2398,8 +2398,15 @@ export function AllCustomers() {
             const dtStyle = pm?.deviceType && DEVICE_TYPE_STYLE[pm.deviceType === "Normal" ? "Normal Device" : pm.deviceType];
             const dupCount = custKeyCounts[custKey(c)];
             const isDup = dupCount > 1;
+            // Row itself no longer opens the customer sub-page on click
+            // (v2.29.405, per explicit user request — "if i click once on
+            // any row the sub page opens. I dont want like that... once
+            // clicked on view then only open the sub page") — only the
+            // "View" button in the last column does now. `cursor` overridden
+            // to "default" (the shared `trStyle` defaults to "pointer", a
+            // whole-row-clickable cue that's no longer true here).
             return (
-            <tr key={c.id} style={{ ...trStyle, ...rowTint(c) }} onClick={() => openCustomer(c)}>
+            <tr key={c.id} style={{ ...trStyle, ...rowTint(c), cursor: "default" }}>
               <td style={{ ...rowTd, fontWeight: 700, color: "var(--brand)", whiteSpace: "nowrap" }}>{c.purifier_id}</td>
               <td style={rowTd}>
                 {c.name || "—"}
@@ -2443,7 +2450,20 @@ export function AllCustomers() {
                 }}>{stackOf(c)}</span>
               </td>
               <td style={{ ...rowTd, textTransform: "capitalize" }}>{c.status || "—"}</td>
-              <td style={{ ...rowTd, textAlign: "center" }}><ChevronRight size={15} color="var(--muted)" /></td>
+              <td style={{ ...rowTd, textAlign: "center" }}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); openCustomer(c); }}
+                  title={`Open ${c.name || c.purifier_id}'s full profile`}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    fontSize: 11, fontWeight: 700, color: "#08805A",
+                    background: "rgba(8,128,90,0.1)", border: "1px solid rgba(8,128,90,0.15)",
+                    borderRadius: 999, padding: "4px 10px", cursor: "pointer",
+                  }}
+                >
+                  View <ChevronRight size={12} />
+                </button>
+              </td>
             </tr>
             );
           })}
