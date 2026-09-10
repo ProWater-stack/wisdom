@@ -580,7 +580,6 @@ export function InvoiceSummaryRow({ icon: Icon, label, value, sub }) {
 export function GstBreakupCard({ recharge, deposit = 0, months = 1 }) {
   if (!(recharge > 0)) return null;
   const g = gstBreakup(recharge, months);
-  const totalCollection = (Number(deposit) || 0) + g.recharge;
   const taxPct = Math.round((g.taxable / g.totalRevenue) * 1000) / 10;
   const gstPct = Math.round((100 - taxPct) * 10) / 10;
 
@@ -616,18 +615,18 @@ export function GstBreakupCard({ recharge, deposit = 0, months = 1 }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>GST Breakup</h3>
-            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Total collection: <strong style={{ color: "#0F172A" }}>{inr(Math.round(totalCollection))}</strong></div>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Recharge: <strong style={{ color: "#0F172A" }}>{inr(Math.round(g.recharge))}</strong></div>
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.1)", color: "#08805A", border: "1px solid rgba(8,128,90,0.15)", letterSpacing: "0.02em" }}>5% GST Standard</span>
         </div>
 
-        {/* Deposit / Recharge / Total collection — GST never touches Deposit,
-            shown here purely for context so the reader can see where the
-            taxable base (below) actually comes from. */}
+        {/* Deposit / Recharge — GST never touches Deposit, shown here purely
+            for context so the reader can see where the taxable base (below)
+            actually comes from. "Total collection" removed per explicit user
+            request (v2.29.413). */}
         <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 12 }}>
           {deposit > 0 && gstRow(Landmark, "Deposit", inr(Math.round(deposit)), "green")}
           {gstRow(RefreshCw, "Recharge", inr(Math.round(g.recharge)), "green")}
-          {gstRow(Wallet, "Total collection", inr(Math.round(totalCollection)), "green")}
         </div>
 
         {/* Visual Ratio Bar — Taxable vs Tax, as a % of the GST-inclusive
@@ -662,7 +661,6 @@ export function InvoiceBreakdownCard({ inv, recharge }) {
   const pd = new Date(inv.paidDate || inv.date);
   const b = (dd && !isNaN(dd.getTime())) ? invoiceMonthlyBreakdown(dd, pd, recharge) : null;
   if (!b) return null;
-  const totalEarned = b.earned.reduce((s, r) => s + r.amount, 0);
   const totalCollected = b.collected.reduce((s, r) => s + r.amount, 0);
   const totalOutstanding = b.outstanding.reduce((s, r) => s + r.amount, 0);
 
@@ -700,7 +698,9 @@ export function InvoiceBreakdownCard({ inv, recharge }) {
           <InvoiceSummaryRow icon={CalendarDays} label="Due date" value={fmtDate(dd)} />
           <InvoiceSummaryRow icon={CalendarClock} label="Payment date" value={fmtDate(pd)} />
           <InvoiceSummaryRow icon={CalendarRange} label="Recharge tenure" value={`${b.tenureDays} days`} sub={`${fmtDate(b.validityStart)} – ${fmtDate(b.validityEnd)}`} />
-          <InvoiceSummaryRow icon={TrendingUp} label="Earned revenue" value={inr(Math.round(totalEarned))} />
+          {/* "Earned revenue" summary row removed per explicit user request
+              (v2.29.413) — the detailed month-by-month Earned breakdown is
+              still available below, behind "Show calculation". */}
           <InvoiceSummaryRow icon={Wallet} label="Collected Revenue" value={inr(Math.round(totalCollected))}
             sub={totalOutstanding > 0 ? `${inr(Math.round(totalOutstanding))} still outstanding` : "Fully collected"} />
         </div>
