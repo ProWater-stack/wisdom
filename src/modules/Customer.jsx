@@ -475,6 +475,25 @@ export function CustSparesAnalysis({ tickets }) {
 // table only shows an invoice's own paid-month slice). Collected/Outstanding
 // stop being tracked once the invoice is actually paid (nothing left to
 // resolve after that), while Earned keeps going into any spillover month.
+//
+// v2.29.411 fix — per explicit user report with real numbers: for an invoice
+// due 15 Aug 2026, paid 19 Aug 2026 (both the SAME calendar month), the
+// Earned rows read "19 Aug–31 Aug → ₹189" + "1 Sept–14 Sept → ₹203" = ₹392,
+// not the full ₹450 recharge. Root cause: a "late-payment clip" used to move
+// the paid month's overlapStart from the due date up to the payment date
+// whenever payment landed later in the same month — silently dropping every
+// day between due date and actual payment (here, 15–18 Aug, ~₹58) from
+// Earned entirely. Earned is accrual-basis (tied to the service/validity
+// period, exactly like Collected Revenue is cash-basis, tied to payment) —
+// it should recognise the WHOLE tenure from the due date through validity
+// end regardless of when the customer actually paid; a late payment doesn't
+// shrink the service period being recognised, it just delays when the cash
+// (Collected Revenue, tracked separately) came in. The clip was only ever
+// exercised when due date and payment date share a calendar month — the
+// reference sheet above (due Jul, paid Aug) never touched it, which is why
+// removing it reproduces that reference exactly AND fixes the reported case
+// (verified via a standalone script: both examples now sum Earned rows to
+// the invoice's own full recharge amount, 350 and 450 respectively).
 export function invoiceMonthlyBreakdown(dueDate, paidDate, recharge) {
   const dd = dueDate instanceof Date ? dueDate : new Date(dueDate);
   const pd = paidDate instanceof Date ? paidDate : new Date(paidDate);
@@ -494,8 +513,7 @@ export function invoiceMonthlyBreakdown(dueDate, paidDate, recharge) {
     const mEnd = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
     const isPaidMonth = cursor.getTime() === paidMonthStart.getTime();
 
-    let overlapStart = dd > mStart ? dd : mStart;
-    if (isPaidMonth && pd > overlapStart) overlapStart = pd; // late-payment clip, same as Earned Revenue
+    const overlapStart = dd > mStart ? dd : mStart;
     const overlapEnd = nb < mEnd ? nb : mEnd;
     const days = overlapEnd >= overlapStart ? Math.round((overlapEnd - overlapStart) / 86400000) + 1 : 0;
     // Label the paid month's row with the actual payment date — but only when
@@ -1941,11 +1959,24 @@ export function AllCustomers() {
                         const da = new Date(a), db = new Date(b);
                         return !isNaN(da.getTime()) && !isNaN(db.getTime()) && da.toDateString() === db.toDateString();
                       };
+                      // v2.29.411 fix — per explicit user report: this table's own
+                      // rows disagreed with each other. The current invoice (a real
+                      // `subMatch` term, e.g. 15 Aug 2026 → 15 Sept 2026) and every
+                      // historical/approximated invoice (e.g. 15 Jul 2026 → 14 Aug
+                      // 2026) were rendered with DIFFERENT End Date conventions in
+                      // the exact same column — the real feed's own `termEnd` is
+                      // always exactly one calendar month after `termStart` (no -1
+                      // day; confirmed live in v2.29.136/v2.29.400, e.g. a real term
+                      // of 19 Aug 2026 → 19 Sept 2026), while this approximation used
+                      // to subtract a day, making every APPROXIMATED row read one day
+                      // short of what a REAL term for the identical dates would show.
+                      // Dropped the "-1 day" so the approximation matches the real
+                      // data's own convention — every row in this table (real or
+                      // approximated) now reads consistently.
                       if ((!endDate || sameCalendarDay(endDate, startDate)) && startDate) {
                         const dt = new Date(startDate);
                         if (!isNaN(dt.getTime())) {
                           dt.setMonth(dt.getMonth() + 1);
-                          dt.setDate(dt.getDate() - 1);
                           endDate = dt;
                         }
                       }
