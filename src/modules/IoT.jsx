@@ -1563,6 +1563,24 @@ export function iotAnomalyEvents(devices, histByDevice) {
       if (tp != null && (tp < 10 || tp > 32)) events.push(mk(d.deviceId, "TEMP_OOR", "Temperature out of range", "high", ts, `${tp.toFixed(1)} °C`, "Water temperature beyond 10–32 °C.", "Inspect heat source / ambient exposure.", "Heat-exchanger fault, solar heating, or cold influx."));
       if (prev) { const gapMin = (ts - prev.ts) / 60000; if (gapMin > 0 && gapMin <= 15) {
         if (ph != null && prev.ph != null && Math.abs(ph - prev.ph) > 0.8) events.push(mk(d.deviceId, "PH_DRIFT", "pH rapid drift", "high", ts, `Δ${(ph - prev.ph).toFixed(1)} in ${Math.round(gapMin)}m`, "pH moved > 0.8 within minutes (BR-PH-02).", "Flag chemical-dosing failure; inspect feed pumps.", "Dosing-pump failure."));
+        // TDS fluctuation, >±10% between two consecutive readings (v2.29.396,
+        // per explicit user request — "if there is a fluctuation more than
+        // 10% TDS variation in the device monitor... we need to create a
+        // detection"). A relative-swing rule, distinct from the existing
+        // absolute-threshold TDS rules above (TDS_SPIKE/TDS_OOR/TDS_DROP) —
+        // this fires on a big RELATIVE jump even when both readings are
+        // individually within the safe 30–500 ppm band, which those three
+        // wouldn't catch. Percent change is signed so a swing either
+        // direction (+ or -) triggers it, matching the request exactly.
+        // Medium severity: per this module's own documented caveat (see the
+        // "Understanding Anomaly Signals" footer below), TDS drifts with
+        // temperature at roughly 2%/°C, so a swing this size is common
+        // enough on a hot afternoon to be worth watching rather than an
+        // automatic high/critical dispatch.
+        if (tds != null && prev.tds != null && prev.tds > 0) {
+          const tdsPctChange = ((tds - prev.tds) / prev.tds) * 100;
+          if (Math.abs(tdsPctChange) > 10) events.push(mk(d.deviceId, "TDS_FLUCTUATION", "TDS fluctuation", "medium", ts, `${tdsPctChange > 0 ? "+" : ""}${tdsPctChange.toFixed(1)}% (${Math.round(prev.tds)}→${Math.round(tds)} ppm)`, `TDS moved ${Math.abs(tdsPctChange).toFixed(1)}% in ${Math.round(gapMin)}m — beyond the ±10% swing this rule watches for.`, "Check the outdoor-temperature trend first — a ~2%/°C thermal drift is expected and benign; investigate filtration/source water only if the swing is larger than that.", "Thermal drift (benign, if it tracks temperature), or a real shift in source water / filtration."));
+        }
         if (ph != null && prev.ph != null && tds != null && prev.tds != null && (ph - prev.ph) < -0.5 && (tds - prev.tds) > 150) events.push(mk(d.deviceId, "COR_ACID", "Acid / industrial intrusion", "critical", ts, `pH ↓${(prev.ph - ph).toFixed(1)}, TDS ↑${Math.round(tds - prev.tds)}`, "pH crashed while TDS surged — the classic contaminant signature (BR-COR-01).", "Auto-shutdown intake; emergency site inspection.", "Acid or industrial contaminant intrusion."));
         if (tank != null && prev.tank != null && (prev.tank - tank) >= 25 && gapMin <= 60) events.push(mk(d.deviceId, "TANK_DROP", "Tank level dropped drastically", "high", ts, `${prev.tank}%→${tank}% in ${Math.round(gapMin)}m`, "Tank fell ≥ 25% in a short span.", "Check for a leak/burst or stuck valve; verify the pump.", "Leak/burst, valve failure, or abnormal draw."));
       } }
@@ -1772,6 +1790,7 @@ export function IoTAlertsPage() {
         {showSignals && (
           <div style={{ fontSize: 12, color: "var(--slate)", lineHeight: 1.55, display: "grid", gap: 4, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
             <div>• <b>TDS drifts with temperature</b> (~2%/°C) — a warm-afternoon TDS rise can be thermal, not contamination.</div>
+            <div>• <b>TDS fluctuation:</b> a swing of more than ±10% between two readings taken within 15 minutes of each other is flagged (Medium) — check the temperature trend before dispatching, since thermal drift alone can account for a chunk of it.</div>
             <div>• <b>Acid intrusion signature:</b> pH crashing while TDS surges together is treated as Critical.</div>
             <div>• <b>Low-TDS water has no buffer:</b> pH volatility on low-TDS lines is often benign.</div>
             <div>• A <b>flatline</b> (zero variance) usually means a frozen sensor, worth a reboot/recalibration.</div>
