@@ -411,7 +411,12 @@ export function CustTicketMonths({ tickets, ops }) {
         <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total {noun}</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{tickets.length}</div></div>
         <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Months with activity</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{buckets.length}</div></div>
       </div>
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Click a month to expand its issue-type (Issue Category) breakdown.</div>
+      {/* Labeled "Type of Issue" here (v2.29.408, per explicit user request)
+          — the underlying field is still `issueCategory` (the API's own
+          "Issue Category" custom field, there's no separate field to switch
+          to), just displayed under the name this business actually uses for
+          it, in this one sub-page. */}
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Click a month to expand its Type of Issue breakdown.</div>
       <Card pad={false} hover={false}>
         <Table head={["Month", ops ? "Ops jobs" : "Tickets"]} maxHeight="calc(100vh - 360px)">
           {buckets.map(b => {
