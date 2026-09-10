@@ -17,7 +17,7 @@ import {
   depositForCustomer, CUSTOMER_FIELDS,
   API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate,
   exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety, canonicalStatus,
-  parsePartsUsed, jobDurationMin, zdIsClosed, gstBreakup,
+  parsePartsUsed, jobDurationMin, zdIsClosed, zdStatusColor, gstBreakup,
 } from "../shared/core";
 import { parseLocation, syncPath } from "../shared/router";
 import {
@@ -374,89 +374,53 @@ export function CustomerSocieties() {
 // customer view with two sub-screens (tabs): Profile and Transactions. Joins
 // customers ↔ subscriptions ↔ invoices by any shared key (customer no. / zoho
 // customer id / email). Installed date = the subscription start (activated) date.
-// Group tickets into month buckets by created date, each carrying its tickets,
-// oldest to newest. Undated tickets fall into an "Unknown" bucket at the end.
-export function ticketMonthBuckets(tks) {
-  const map = {};
-  (tks || []).forEach(t => {
-    const d = new Date(t.created);
-    const key = isNaN(d.getTime()) ? "__unknown" : `${d.getFullYear()}-${String(d.getMonth()).padStart(2, "0")}`;
-    (map[key] = map[key] || []).push(t);
-  });
-  const rows = Object.keys(map).filter(k => k !== "__unknown").sort().map(k => {
-    const [y, m] = k.split("-").map(Number);
-    return { key: k, label: `${new Date(y, m, 1).toLocaleDateString("en-US", { month: "short" })}'${String(y).slice(-2)}`, tickets: map[k] };
-  });
-  if (map.__unknown) rows.push({ key: "__unknown", label: "Unknown", tickets: map.__unknown });
-  return rows;
+// Month label for a single ticket's created date ("Jan'26"), or "Unknown"
+// for anything undated/unparseable.
+function ticketMonthLabel(t) {
+  const d = parseFlexDate(t.created);
+  return d ? `${d.toLocaleDateString("en-US", { month: "short" })}'${String(d.getFullYear()).slice(-2)}` : "Unknown";
 }
 
-// Break tickets down by the API "Type of Issue" field, most-common first
-// (v2.29.409, per explicit user report — confirmed against a real
-// /tickets/formattedforwisdom response that "Type of Issue" is a genuinely
-// separate, more specific field from "Issue Category": one real ticket had
-// Issue Category "Complaint" and Type of Issue "Account Related" at the same
-// time). Was grouping by `issueCategory`, which this sub-page's own caption
-// already called "Type of Issue" — a real mapping gap, not just a label
-// mismatch: `typeOfIssue` wasn't even being read from the API before this.
-// Falls back to `issueCategory` for any ticket where `typeOfIssue` is
-// missing (older cached tickets, or the Zoho-Desk-shape mapper if that
-// backend doesn't carry the field), so nothing silently disappears.
-export function ticketsByIssue(tks) {
-  const m = {};
-  (tks || []).forEach(t => { const k = String(t.typeOfIssue || t.issueCategory || "").trim() || "Uncategorised"; m[k] = (m[k] || 0) + 1; });
-  return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([label, count]) => ({ label, count }));
-}
-
-// Month-wise ticket count for a single customer; each month row expands to its
-// Issue-Category (issue type) breakdown. Used by the Tickets + Ops sub-screens.
+// Per-customer ticket list for the Tickets + Ops sub-screens (v2.29.410, per
+// explicit user request to add Status and Description). Previously this
+// drilled down Month → Type-of-Issue with only aggregate counts per group;
+// Status and Description are per-TICKET fields (a group can mix several
+// statuses/descriptions), so they can't be shown against an aggregated row.
+// Replaced with a flat table of every individual ticket — Month, Type of
+// Issue, Status, Description — sorted most-recent-first, per the user's
+// explicit choice over keeping the grouped view with a 3rd drill-down level.
 export function CustTicketMonths({ tickets, ops }) {
-  const [open, setOpen] = useState({});
-  const buckets = ticketMonthBuckets(tickets);
   const noun = ops ? "ops jobs" : "tickets";
-  const toggle = (k) => setOpen(o => ({ ...o, [k]: !o[k] }));
+  const sorted = [...(tickets || [])].sort((a, b) => {
+    const da = parseFlexDate(a.created)?.getTime();
+    const db = parseFlexDate(b.created)?.getTime();
+    if (da == null && db == null) return 0;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return db - da;
+  });
   return (
     <>
       <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
         <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Total {noun}</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{tickets.length}</div></div>
-        <div><div style={{ fontSize: 12, color: "var(--muted)" }}>Months with activity</div><div style={{ fontSize: 20, fontWeight: 800, color: "var(--f)" }}>{buckets.length}</div></div>
       </div>
-      {/* Labeled "Type of Issue" here (v2.29.408, per explicit user request)
-          — the underlying field is still `issueCategory` (the API's own
-          "Issue Category" custom field, there's no separate field to switch
-          to), just displayed under the name this business actually uses for
-          it, in this one sub-page. */}
-      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Click a month to expand its Type of Issue breakdown.</div>
+      <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>Every {ops ? "ops job" : "ticket"} for this Purifier ID, most recent first.</div>
       <Card pad={false} hover={false}>
-        <Table head={["Month", ops ? "Ops jobs" : "Tickets"]} maxHeight="calc(100vh - 360px)">
-          {buckets.map(b => {
-            const isOpen = !!open[b.key];
-            return (
-              <React.Fragment key={b.key}>
-                <tr onClick={() => toggle(b.key)} style={{ borderBottom: "1px solid var(--border)", cursor: "pointer" }}>
-                  <td style={td}>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-                      <ChevronRight size={14} color="var(--muted)" style={{ transform: isOpen ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-                      <span style={{ fontWeight: 600, color: "var(--f)" }}>{b.label}</span>
-                    </span>
-                  </td>
-                  <td style={{ ...td, fontWeight: 700, color: "var(--f)", fontVariantNumeric: "tabular-nums" }}>{b.tickets.length}</td>
-                </tr>
-                {isOpen && ticketsByIssue(b.tickets).map(iss => (
-                  <tr key={b.key + "|" + iss.label} style={{ borderBottom: "1px solid var(--border)", background: "var(--mint)" }}>
-                    <td style={{ ...td, paddingLeft: 40, color: "var(--slate)" }}>{iss.label}</td>
-                    <td style={{ ...td, color: "var(--slate)", fontVariantNumeric: "tabular-nums" }}>{iss.count}</td>
-                  </tr>
-                ))}
-              </React.Fragment>
-            );
-          })}
-          {buckets.length > 0 && (
-            <tr style={{ borderTop: "2px solid var(--border)", background: "var(--mint-2)" }}>
-              <td style={{ ...td, fontWeight: 700 }}>Total</td>
-              <td style={{ ...td, fontWeight: 800, color: "var(--forest)", fontVariantNumeric: "tabular-nums" }}>{tickets.length}</td>
+        <Table head={["Month", "Type of Issue", "Status", "Description"]} maxHeight="calc(100vh - 360px)">
+          {sorted.map(t => (
+            <tr key={t.id} style={{ borderBottom: "1px solid var(--border)" }}>
+              <td style={{ ...td, whiteSpace: "nowrap", color: "var(--f)" }}>{ticketMonthLabel(t)}</td>
+              <td style={{ ...td, color: "var(--f)" }}>{t.typeOfIssue || t.issueCategory || "Uncategorised"}</td>
+              <td style={td}>
+                <span style={{ fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 999, color: "#fff", background: zdStatusColor(t.status), whiteSpace: "nowrap" }}>
+                  {t.status || "—"}
+                </span>
+              </td>
+              <td style={{ ...td, color: "var(--slate)", maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={t.description || t.note || ""}>
+                {t.description || t.note || "—"}
+              </td>
             </tr>
-          )}
+          ))}
         </Table>
         {tickets.length === 0 && <Empty msg={`No ${noun} found for this Purifier ID.`} />}
       </Card>
