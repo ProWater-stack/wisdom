@@ -1637,19 +1637,27 @@ export function IoTAlertsPage() {
   const [expandedId, setExpandedId] = useState(null);
   const [showSignals, setShowSignals] = useState(false);
 
-  const ALERTS_PER_PAGE = 6;
+  // Per explicit user request ("instead of 6 show atleast 15 entries") — was 6.
+  const ALERTS_PER_PAGE = 15;
 
   useEffect(() => {
     api.logView(user.username, "Viewed IoT Alerts");
     let alive = true;
     const load = async () => {
       try {
-        const res = await fetch(`${IOT_API_BASE}/devices/status`);
+        // `cache: "no-store"` on both requests (v2.29.399, per explicit user
+        // request — "on every refresh sync history log the anomalies") — the
+        // status/history URLs are identical on every poll and every Refresh
+        // click (remounting this page via `key={refreshKey}` re-runs this
+        // same effect), so without this the browser's own HTTP cache could
+        // hand back a stale response instead of a genuinely fresh sync, the
+        // same class of staleness already fixed for the customers API.
+        const res = await fetch(`${IOT_API_BASE}/devices/status`, { cache: "no-store" });
         const data = await res.json();
         const list = Array.isArray(data) ? data : [];
         const ids = Array.from(new Set([...list.map((d) => d.deviceId), ...IOT_KNOWN_TANK_DEVICES]));
         if (alive) setRoster(list.length ? list : ids.map((id) => ({ deviceId: id, deviceType: "RO Tank" })));
-        const results = await Promise.all(ids.map(async (id) => { try { const r = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${id}`); const j = await r.json(); return [id, Array.isArray(j) ? j : (j?.items ?? [])]; } catch { return [id, []]; } }));
+        const results = await Promise.all(ids.map(async (id) => { try { const r = await fetch(`${IOT_API_BASE}/devices/history?deviceId=${id}`, { cache: "no-store" }); const j = await r.json(); return [id, Array.isArray(j) ? j : (j?.items ?? [])]; } catch { return [id, []]; } }));
         if (alive) setHist((prev) => { const n = { ...prev }; results.forEach(([id, arr]) => { if (arr && arr.length) n[id] = arr; }); return n; });
       } catch { /* keep prior */ }
     };
