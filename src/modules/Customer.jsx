@@ -1795,18 +1795,41 @@ export function AllCustomers() {
                 </div>
               </div>
 
-              {/* Transactions Table Container */}
-              <div style={{ background: "#fff", borderRadius: 20, border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", overflow: "hidden", marginBottom: 18 }}>
-                <div style={{ padding: "16px 20px", borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.4)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              {/* Transactions Table Container (restyled v2.29.401, per explicit
+                  user-provided before/after mockup): a hand-built table
+                  replaces the shared <Table> component here — that component
+                  hardcodes one uniform centered/uppercase header style with
+                  no per-column alignment, which can't produce the new
+                  left/right/center column alignment, the merged "Billing
+                  Period" column, or the dot-badge status pills the mockup
+                  asks for. Scoped to just this section — <Table> itself is
+                  unchanged, so every other screen using it is unaffected. */}
+              <div style={{ background: "#ffffff", borderRadius: 18, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px -10px rgba(0,0,0,0.04), 0 2px 6px -2px rgba(0,0,0,0.02)", overflow: "hidden", marginBottom: 18, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+                <div style={{ padding: "16px 22px", borderBottom: "1px solid rgba(0,0,0,0.06)", background: "linear-gradient(180deg, #FAFCFA 0%, #F4F8F5 100%)", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: "#0d2119" }}>Payment &amp; Invoice History</div>
-                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>All billed transactions and payment statuses</div>
+                    <div style={{ fontWeight: 700, fontSize: 15.5, color: "#0F172A", letterSpacing: "-0.01em" }}>Payment &amp; Invoice History</div>
+                    <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>All billed transactions and payment statuses</div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.1)", color: "#08805A", border: "1px solid rgba(8,128,90,0.15)", letterSpacing: "0.02em" }}>
                     {txns.length} Invoices
                   </span>
                 </div>
-                <Table head={["Date", "Invoice", "Amount", "Start Date", "End Date", "Status"]} maxHeight="calc(100vh - 340px)">
+                <div className="scroll-thin" style={{ overflowX: "auto", maxHeight: "calc(100vh - 340px)" }}>
+                  <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 620 }}>
+                    <thead>
+                      <tr style={{ background: "#F8FAFC" }}>
+                        {[
+                          { label: "Date", align: "left" },
+                          { label: "Invoice", align: "left" },
+                          { label: "Amount", align: "right" },
+                          { label: "Billing Period", align: "center" },
+                          { label: "Status", align: "right" },
+                        ].map(col => (
+                          <th key={col.label} style={{ textAlign: col.align, padding: "12px 18px", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#475569", fontWeight: 700, borderBottom: "1px solid #E2E8F0", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 2, background: "#F8FAFC" }}>{col.label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
                   {(() => {
                     // Start/End Date come from get-all-submodules (v2.29.136,
                     // per explicit request) — current_term_starts_at/
@@ -1831,7 +1854,28 @@ export function AllCustomers() {
                       return acc;
                     }, {});
 
-                    return txns.map(t => {
+                    // Dot-badge status pill matching the new mockup — paid/failed/
+                    // other(pending, etc.), same 3-way logic the old shared
+                    // `stChip` used, just with the new colors/dot and a
+                    // generic capitalized label (not hardcoded "Paid"/
+                    // "Pending" text) so any real status string still reads
+                    // correctly.
+                    const payBadge = (st) => {
+                      const paid = st === "paid";
+                      const failed = st === "failed";
+                      const bg = paid ? "#ECFDF5" : failed ? "#FEF2F2" : "#FEF3C7";
+                      const fg = paid ? "#047857" : failed ? "#B91C1C" : "#B45309";
+                      const border = paid ? "rgba(16,185,129,0.2)" : failed ? "rgba(220,38,38,0.2)" : "rgba(217,119,6,0.2)";
+                      const dot = paid ? "#10B981" : failed ? "#DC2626" : "#D97706";
+                      return (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: bg, color: fg, border: `1px solid ${border}`, textTransform: "capitalize" }}>
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: dot }} />
+                          {st}
+                        </span>
+                      );
+                    };
+
+                    return txns.map((t, idx) => {
                       const invKey = String(t.number || "").trim().toLowerCase();
                       const txnKey = String(t.id || "").trim().toLowerCase();
                       const subMatch = submodulesByKey[invKey] || submodulesByKey[txnKey];
@@ -1863,19 +1907,23 @@ export function AllCustomers() {
                           endDate = dt;
                         }
                       }
+                      const isLast = idx === txns.length - 1;
+                      const rowBorder = isLast ? "none" : "1px solid #F1F5F9";
+                      const billingPeriod = startDate && endDate ? `${fmtDate(startDate)} – ${fmtDate(endDate)}` : "—";
                       return (
-                        <tr key={t.id} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
-                          <td style={td}>{fmtDate(t.date)}</td>
-                          <td style={td}>{t.number || t.id}</td>
-                          <td style={{ ...td, fontWeight: 700, color: "#1D1D1F" }}>{inr(t.total)}</td>
-                          <td style={td}>{startDate ? fmtDate(startDate) : "—"}</td>
-                          <td style={td}>{endDate ? fmtDate(endDate) : "—"}</td>
-                          <td style={td}>{stChip(t.status)}</td>
+                        <tr key={t.id} style={{ background: t.status === "pending" ? "#FFFDF8" : undefined, transition: "background 0.15s ease" }}>
+                          <td style={{ padding: "14px 18px", fontSize: 13, color: "#334155", borderBottom: rowBorder, whiteSpace: "nowrap", verticalAlign: "middle" }}>{fmtDate(t.date)}</td>
+                          <td style={{ padding: "14px 18px", fontSize: 12.5, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontWeight: 600, color: "#0F172A", borderBottom: rowBorder, whiteSpace: "nowrap", verticalAlign: "middle" }}>{t.number || t.id}</td>
+                          <td style={{ padding: "14px 18px", fontSize: 13.5, color: "#0F172A", fontWeight: 700, borderBottom: rowBorder, whiteSpace: "nowrap", textAlign: "right", verticalAlign: "middle" }}>{inr(t.total)}</td>
+                          <td style={{ padding: "14px 18px", fontSize: 12.5, color: "#64748B", borderBottom: rowBorder, whiteSpace: "nowrap", textAlign: "center", verticalAlign: "middle" }}>{billingPeriod}</td>
+                          <td style={{ padding: "14px 18px", borderBottom: rowBorder, whiteSpace: "nowrap", textAlign: "right", verticalAlign: "middle" }}>{payBadge(t.status)}</td>
                         </tr>
                       );
                     });
                   })()}
-                </Table>
+                    </tbody>
+                  </table>
+                </div>
                 {txns.length === 0 && <Empty msg="No transactions found for this customer." />}
               </div>
 
