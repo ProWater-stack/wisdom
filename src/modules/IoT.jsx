@@ -1102,24 +1102,31 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const wxCorr = useMemo(() => iotWeatherCorrelate(chrono, weather?.history), [chrono, weather]);
   const wxStory = useMemo(() => (wxCorr ? iotWeatherNarrative(wxCorr, weather, chrono) : null), [wxCorr, weather, chrono]);
   const WXLVL = { strong: "#0A7D53", moderate: "#a86e00", weak: "#6b8577", none: "#8aa398" };
+  // Colour palette restyled v2.29.415, per an explicit user-provided mockup
+  // ("Apple HIG" palette) — #1E9E4F→#34C759, #2A86D6→#007AFF, #7A5AF8→#AF52DE,
+  // #986315→#30B0C7 (now the dashed "subtle baseline" line, see the Line
+  // component below), outdoor #d1830a→#FF9500, out-of-range red #e0453f→
+  // #FF3B30. Scoped to this weather-correlation chart only — the separate
+  // per-metric mini chart earlier in this component (renderDot/M.label) and
+  // unrelated colours elsewhere in this file are untouched.
   const WX_SERIES = [
-    { key: "wtemp", oorKey: "oorTemp", label: "Water temp", unit: "°C", color: "#1E9E4F", dp: 1 },
-    { key: "tds", oorKey: "oorTds", label: "TDS", unit: "ppm", color: "#2A86D6", dp: 0 },
-    { key: "ph", oorKey: "oorPh", label: "pH", unit: "", color: "#7A5AF8", dp: 1 },
-    { key: "tank", oorKey: "oorTank", label: "Tank", unit: "%", color: "#986315", dp: 0 },
+    { key: "wtemp", oorKey: "oorTemp", label: "Water temp", unit: "°C", color: "#34C759", dp: 1 },
+    { key: "tds", oorKey: "oorTds", label: "TDS", unit: "ppm", color: "#007AFF", dp: 0 },
+    { key: "ph", oorKey: "oorPh", label: "pH", unit: "", color: "#AF52DE", dp: 1 },
+    { key: "tank", oorKey: "oorTank", label: "Tank", unit: "%", color: "#30B0C7", dp: 0 },
   ];
-  const wxDot = (s) => (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const bad = payload[s.oorKey]; return <circle key={index} cx={cx} cy={cy} r={bad ? 3.6 : 0} fill={bad ? "#e0453f" : s.color} stroke="#fff" strokeWidth={bad ? 1.2 : 0} />; };
+  const wxDot = (s) => (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const bad = payload[s.oorKey]; return <circle key={index} cx={cx} cy={cy} r={bad ? 3.2 : 0} fill={bad ? "#FF3B30" : s.color} stroke="#fff" strokeWidth={bad ? 1.5 : 0} style={bad ? { filter: "drop-shadow(0 1px 3px rgba(255,59,48,0.3))" } : undefined} />; };
   const bigTT = (props) => {
     const { active, payload } = props; if (!active || !payload || !payload.length) return null; const d = payload[0].payload;
-    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#e0453f" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "ppm" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}</div>;
-    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#d1830a")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#1E9E4F")}{row("TDS", d.tds, "ppm", d.oorTds, "#2A86D6")}{row("pH", d.ph, "", d.oorPh, "#7A5AF8")}{row("Tank", d.tank, "%", d.oorTank, "#986315")}</div>);
+    const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#FF3B30" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "ppm" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}</div>;
+    return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 11px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 3 }}>{iotStamp(d.t)}</div>{row("Outdoor", d.out, "°C", false, "#FF9500")}{row("Water temp", d.wtemp, "°C", d.oorTemp, "#34C759")}{row("TDS", d.tds, "ppm", d.oorTds, "#007AFF")}{row("pH", d.ph, "", d.oorPh, "#AF52DE")}{row("Tank", d.tank, "%", d.oorTank, "#30B0C7")}</div>);
   };
   // Flashing red ring at timestamps where taste is likely affected (temp+TDS+pH).
-  const tasteDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload || !payload.taste) return null; return (<g key={index}><circle cx={cx} cy={cy} r={5} fill="none" stroke="#e0453f" strokeWidth={2}><animate attributeName="r" values="5;9;5" dur="1.1s" repeatCount="indefinite" /><animate attributeName="opacity" values="1;0.15;1" dur="1.1s" repeatCount="indefinite" /></circle><circle cx={cx} cy={cy} r={2.6} fill="#e0453f"><animate attributeName="opacity" values="1;0.25;1" dur="1.1s" repeatCount="indefinite" /></circle></g>); };
+  const tasteDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload || !payload.taste) return null; return (<g key={index}><circle cx={cx} cy={cy} r={5} fill="none" stroke="#FF3B30" strokeWidth={2}><animate attributeName="r" values="5;9;5" dur="1.1s" repeatCount="indefinite" /><animate attributeName="opacity" values="1;0.15;1" dur="1.1s" repeatCount="indefinite" /></circle><circle cx={cx} cy={cy} r={2.6} fill="#FF3B30"><animate attributeName="opacity" values="1;0.25;1" dur="1.1s" repeatCount="indefinite" /></circle></g>); };
   const RCOL = { strong: "#0A7D53", mod: "#a86e00", weak: "#6b8577", none: "#6b8577", na: "#8aa398" };
   const rLabel = (r) => r == null ? "—" : (r >= 0 ? "+" : "") + r.toFixed(2);
   const rStrength = (r) => { if (r == null) return { t: "insufficient data", c: "na" }; const a = Math.abs(r), dir = r > 0 ? "positive" : "inverse"; if (a >= 0.7) return { t: `strong ${dir}`, c: "strong" }; if (a >= 0.4) return { t: `moderate ${dir}`, c: "mod" }; if (a >= 0.2) return { t: `weak ${dir}`, c: "weak" }; return { t: "little / no link", c: "none" }; };
-  const WxTT = ({ active, payload }) => { if (!active || !payload || !payload.length) return null; const d = payload[0].payload; return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "7px 10px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 2 }}>{iotStamp(d.t)}</div><div style={{ color: "#d1830a", fontWeight: 700 }}>Outdoor {d.out != null ? d.out.toFixed(1) : "—"} °C</div><div style={{ color: "#1E9E4F", fontWeight: 700 }}>Water {d.wtemp != null ? d.wtemp.toFixed(1) : "—"} °C</div></div>); };
+  const WxTT = ({ active, payload }) => { if (!active || !payload || !payload.length) return null; const d = payload[0].payload; return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "7px 10px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 2 }}>{iotStamp(d.t)}</div><div style={{ color: "#FF9500", fontWeight: 700 }}>Outdoor {d.out != null ? d.out.toFixed(1) : "—"} °C</div><div style={{ color: "#34C759", fontWeight: 700 }}>Water {d.wtemp != null ? d.wtemp.toFixed(1) : "—"} °C</div></div>); };
 
   return (
     <div style={{ ...IOT_CARD, marginTop: 16, overflow: "hidden" }}>
@@ -1190,7 +1197,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
             <div style={{ fontSize: 13, fontWeight: 800, color: "var(--f)" }}>Weather correlation</div>
             {weather.sample && <span style={{ fontSize: 10, fontWeight: 800, color: "#a86e00", background: "#FBF0DA", border: "1px solid #F0D9A8", borderRadius: 999, padding: "1px 8px" }}>SAMPLE</span>}
             <span style={{ fontSize: 11.5, color: "var(--muted)" }}>outdoor temp at {weather.location?.name || "site"} vs the water sensors</span>
-            <span className="iot-flow-dot" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "rgba(209,131,10,0.12)", color: "#d1830a", marginLeft: "auto" }}>
+            <span className="iot-flow-dot" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "rgba(255,149,0,0.12)", color: "#FF9500", marginLeft: "auto" }}>
               ☀️ Prabhavati Thermal Sync
             </span>
           </div>
@@ -1240,34 +1247,48 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
               </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Show</span>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#d1830a", display: "inline-flex", alignItems: "center", gap: 5 }} title="Outdoor temperature is always shown"><span style={{ width: 12, height: 3, background: "#d1830a", borderRadius: 2 }} />Outdoor temp</span>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#FF9500", display: "inline-flex", alignItems: "center", gap: 5 }} title="Outdoor temperature is always shown"><span style={{ width: 12, height: 3, background: "#FF9500", borderRadius: 2 }} />Outdoor temp</span>
                 {WX_SERIES.map((s) => { const on = wxShow[s.key]; return (
                   <button key={s.key} onClick={() => setWxShow((p) => ({ ...p, [s.key]: !p[s.key] }))} style={{ fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (on ? s.color : "var(--border)"), background: on ? s.color : "#fff", color: on ? "#fff" : "var(--muted)", transition: "all .2s ease" }}>{s.label}</button>
                 ); })}
               </div>
-              <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "8px 10px 4px" }}>
+              {/* Restyled v2.29.415, per an explicit user-provided mockup — frosted-glass
+                  card, an internal legend header ("Temperature & Sensor Telemetry" +
+                  4 colour-dot chips), dashed grid lines, and the Apple HIG palette
+                  above. The "Show" toggle row and the caption legend below the chart
+                  are unrelated siblings, outside the mockup's scope — left as-is. */}
+              <div style={{ background: "rgba(255,255,255,0.70)", WebkitBackdropFilter: "blur(28px) saturate(190%)", backdropFilter: "blur(28px) saturate(190%)", border: "0.5px solid rgba(255,255,255,0.90)", borderRadius: 20, padding: "16px 18px 10px", boxShadow: "0 16px 36px -10px rgba(15,23,42,0.05), 0 1px 3px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, padding: "0 6px", flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", letterSpacing: "-0.01em" }}>Temperature &amp; Sensor Telemetry</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#FF9500" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#FF9500" }} />Outdoor temp</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#34C759" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34C759" }} />Water temp</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#007AFF" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#007AFF" }} />TDS</span>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 600, color: "#AF52DE" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#AF52DE" }} />pH</span>
+                  </div>
+                </div>
                 <ResponsiveContainer width="100%" height={230}>
                   <ComposedChart data={wxCorr.joined} margin={{ top: 8, right: 10, bottom: 4, left: 4 }}>
-                    <CartesianGrid stroke="#1f6b47" strokeOpacity={0.08} vertical={false} />
-                    <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={hm} tick={{ fontSize: 11, fill: "#6b8577" }} minTickGap={64} axisLine={{ stroke: "var(--border)" }} tickLine={false} />
-                    <YAxis yAxisId="out" orientation="left" domain={["auto", "auto"]} tick={{ fontSize: 11, fill: "#d1830a" }} width={44} axisLine={false} tickLine={false} tickFormatter={(v) => Math.round(v) + "°C"} />
+                    <CartesianGrid stroke="rgba(0,0,0,0.04)" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={hm} tick={{ fontSize: 11, fontWeight: 500, fill: "#64748B" }} minTickGap={64} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} />
+                    <YAxis yAxisId="out" orientation="left" domain={["auto", "auto"]} tick={{ fontSize: 11, fontWeight: 700, fill: "#FF9500" }} width={44} axisLine={false} tickLine={false} tickFormatter={(v) => Math.round(v) + "°C"} />
                     <YAxis yAxisId="wtemp" hide domain={["auto", "auto"]} />
                     <YAxis yAxisId="tds" hide domain={["auto", "auto"]} />
                     <YAxis yAxisId="ph" hide domain={["auto", "auto"]} />
                     <YAxis yAxisId="tank" hide domain={["auto", "auto"]} />
                     <Tooltip content={bigTT} />
-                    <Line yAxisId="out" type="monotone" dataKey="out" stroke="#d1830a" strokeWidth={2} dot={false} isAnimationActive={true} animationDuration={1200} animationEasing="ease-in-out" connectNulls />
-                    {WX_SERIES.filter((s) => wxShow[s.key]).map((s) => <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={1.8} dot={wxDot(s)} activeDot={{ r: 4 }} isAnimationActive={true} animationDuration={1200} animationEasing="ease-in-out" connectNulls />)}
+                    <Line yAxisId="out" type="monotone" dataKey="out" stroke="#FF9500" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" dot={false} isAnimationActive={true} animationDuration={1200} animationEasing="ease-in-out" connectNulls />
+                    {WX_SERIES.filter((s) => wxShow[s.key]).map((s) => <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={s.key === "tank" ? 1.8 : 2} strokeDasharray={s.key === "tank" ? "4 4" : undefined} strokeLinecap="round" strokeLinejoin="round" dot={wxDot(s)} activeDot={{ r: 4 }} isAnimationActive={true} animationDuration={1200} animationEasing="ease-in-out" connectNulls />)}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap", padding: "6px 4px 0", fontSize: 11, color: "var(--muted)" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#d1830a", borderRadius: 2 }} /> outdoor temp</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#1E9E4F", borderRadius: 2 }} /> water temp</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#2A86D6", borderRadius: 2 }} /> TDS</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#7A5AF8", borderRadius: 2 }} /> pH</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#986315", borderRadius: 2 }} /> tank</span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#e0453f" }} /> out of range</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#FF9500", borderRadius: 2 }} /> outdoor temp</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#34C759", borderRadius: 2 }} /> water temp</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#007AFF", borderRadius: 2 }} /> TDS</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#AF52DE", borderRadius: 2 }} /> pH</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 14, height: 3, background: "#30B0C7", borderRadius: 2 }} /> tank</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 10, height: 10, borderRadius: 999, background: "#FF3B30" }} /> out of range</span>
                 <span>· {wxCorr.n} paired readings · lines auto-scaled to fit — hover for real values{weather.sample ? " · sample weather" : ""}</span>
               </div>
             </>
