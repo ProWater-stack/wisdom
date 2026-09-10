@@ -1579,7 +1579,12 @@ export function iotAnomalyEvents(devices, histByDevice) {
         // automatic high/critical dispatch.
         if (tds != null && prev.tds != null && prev.tds > 0) {
           const tdsPctChange = ((tds - prev.tds) / prev.tds) * 100;
-          if (Math.abs(tdsPctChange) > 10) events.push(mk(d.deviceId, "TDS_FLUCTUATION", "TDS fluctuation", "medium", ts, `${tdsPctChange > 0 ? "+" : ""}${tdsPctChange.toFixed(1)}% (${Math.round(prev.tds)}→${Math.round(tds)} ppm)`, `TDS moved ${Math.abs(tdsPctChange).toFixed(1)}% in ${Math.round(gapMin)}m — beyond the ±10% swing this rule watches for.`, "Check the outdoor-temperature trend first — a ~2%/°C thermal drift is expected and benign; investigate filtration/source water only if the swing is larger than that.", "Thermal drift (benign, if it tracks temperature), or a real shift in source water / filtration."));
+          // Detail/action/cause rewritten in plain, everyday language (v2.29.397,
+          // per explicit user request — "how can we show this in layman
+          // language") — no "swing"/"thermal drift"/"±10%" jargon. Still built
+          // from the real per-reading numbers (direction, %, ppm, minutes), so
+          // each alert reads naturally whether TDS rose or dropped.
+          if (Math.abs(tdsPctChange) > 10) events.push(mk(d.deviceId, "TDS_FLUCTUATION", "TDS fluctuation", "medium", ts, `${tdsPctChange > 0 ? "+" : ""}${tdsPctChange.toFixed(1)}% (${Math.round(prev.tds)}→${Math.round(tds)} ppm)`, `The water's purity reading (TDS) ${tdsPctChange > 0 ? "rose" : "dropped"} ${Math.abs(tdsPctChange).toFixed(1)}% in just ${Math.round(gapMin)} minutes — from ${Math.round(prev.tds)} to ${Math.round(tds)} ppm. That's a bigger, faster change than we'd normally expect.`, "Check if the weather's gotten hotter or cooler recently — TDS naturally rises and falls a bit with temperature, and that's normal. If temperature doesn't explain a change this big, send a technician to check the filter and the water source.", "Most likely: a normal change with the weather. Less likely: something changed with the filter or the water coming in."));
         }
         if (ph != null && prev.ph != null && tds != null && prev.tds != null && (ph - prev.ph) < -0.5 && (tds - prev.tds) > 150) events.push(mk(d.deviceId, "COR_ACID", "Acid / industrial intrusion", "critical", ts, `pH ↓${(prev.ph - ph).toFixed(1)}, TDS ↑${Math.round(tds - prev.tds)}`, "pH crashed while TDS surged — the classic contaminant signature (BR-COR-01).", "Auto-shutdown intake; emergency site inspection.", "Acid or industrial contaminant intrusion."));
         if (tank != null && prev.tank != null && (prev.tank - tank) >= 25 && gapMin <= 60) events.push(mk(d.deviceId, "TANK_DROP", "Tank level dropped drastically", "high", ts, `${prev.tank}%→${tank}% in ${Math.round(gapMin)}m`, "Tank fell ≥ 25% in a short span.", "Check for a leak/burst or stuck valve; verify the pump.", "Leak/burst, valve failure, or abnormal draw."));
@@ -1600,7 +1605,18 @@ export function iotLogAlerts(events) {
   let store = {};
   try { const o = JSON.parse(localStorage.getItem(IOT_ALERT_LOG_LS) || "{}"); if (o && typeof o === "object") store = o; } catch { store = {}; }
   const nowIso = new Date().toISOString();
-  (events || []).forEach((e) => { if (!e.key) return; if (store[e.key]) store[e.key].lastLoggedAt = nowIso; else store[e.key] = { ...e, firstLoggedAt: nowIso, lastLoggedAt: nowIso }; });
+  // On a re-detection of an already-logged event, refresh EVERY field from
+  // the freshly-computed `e` (name/sev/value/detail/action/cause) instead of
+  // only bumping `lastLoggedAt` — per explicit user report ("can we have
+  // multiple explanations" — the same rule showing both the old jargon-y
+  // wording and the new plain-language wording side by side). The old code
+  // only ever set fields on FIRST detection, so an alert logged before a
+  // copy change (like the v2.29.397 plain-language rewrite) stayed frozen
+  // with its original text forever after — every future poll just touched
+  // `lastLoggedAt` and left the stale `detail`/`action`/`cause` in place.
+  // `firstLoggedAt` is still preserved from the original entry so history
+  // stays accurate; only the DISPLAY fields now always reflect current code.
+  (events || []).forEach((e) => { if (!e.key) return; store[e.key] = store[e.key] ? { ...store[e.key], ...e, firstLoggedAt: store[e.key].firstLoggedAt, lastLoggedAt: nowIso } : { ...e, firstLoggedAt: nowIso, lastLoggedAt: nowIso }; });
   let arr = Object.values(store);
   const cutoff = Date.now() - 45 * 86400000;
   arr = arr.filter((a) => a.ts == null || a.ts >= cutoff).sort((a, b) => (b.ts || 0) - (a.ts || 0));
@@ -1790,7 +1806,7 @@ export function IoTAlertsPage() {
         {showSignals && (
           <div style={{ fontSize: 12, color: "var(--slate)", lineHeight: 1.55, display: "grid", gap: 4, marginTop: 8, paddingTop: 8, borderTop: "1px solid rgba(0,0,0,0.06)" }}>
             <div>• <b>TDS drifts with temperature</b> (~2%/°C) — a warm-afternoon TDS rise can be thermal, not contamination.</div>
-            <div>• <b>TDS fluctuation:</b> a swing of more than ±10% between two readings taken within 15 minutes of each other is flagged (Medium) — check the temperature trend before dispatching, since thermal drift alone can account for a chunk of it.</div>
+            <div>• <b>TDS fluctuation:</b> the purity reading changed by more than 10% between two readings just minutes apart (Medium) — check if the weather changed first, since that alone can explain part of it.</div>
             <div>• <b>Acid intrusion signature:</b> pH crashing while TDS surges together is treated as Critical.</div>
             <div>• <b>Low-TDS water has no buffer:</b> pH volatility on low-TDS lines is often benign.</div>
             <div>• A <b>flatline</b> (zero variance) usually means a frozen sensor, worth a reboot/recalibration.</div>
