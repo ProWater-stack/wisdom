@@ -2104,64 +2104,63 @@ export function AllCustomers() {
   return (
     <div className="fade-up ov-sans">
       <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,SF Pro Display,system-ui,sans-serif;letter-spacing:-.02em}`}</style>
-      {/* Dynamic KPI Cards Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(190px,1fr))", gap: 16, marginBottom: 16 }}>
-        {/* 1. Total Societies Card — DP/Zoho split moved beside the number
-            (v2.29.263), using the wide hero card's right-side space instead
+      {/* Dynamic KPI Cards Grid — restyled v2.29.403, per an explicit
+          user-provided before/after mockup: tighter icon badges (28px, was
+          34px), the number promoted to its own row (was inline with each
+          card's breakdown), and each card's breakdown redrawn as tinted
+          chips/bars instead of plain inline text. All underlying data,
+          click-to-filter handlers and tooltips are unchanged — only the
+          layout/visual treatment changed. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))", gap: 14, marginBottom: 16, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif" }}>
+        {/* 1. Total Societies Card ("Societies") — DP/Zoho split moved beside the
+            number (v2.29.263), using the wide hero card's right-side space instead
             of a small caption line underneath, per explicit user request
             ("show the split of it, on the right side of the KPI card there
-            is much space"). */}
-        {/* v2.29.274: converted from a gradient hero card to the same white
-            style as its siblings (Active Customers, DP Devices Conn, Device
-            Mix) — per explicit user request to make all hero cards the same
-            white style as normal cards, so any percentage/status text is
-            always plain colored text on white. */}
-        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)", position: "relative", overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Total Societies</span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-              <Boxes size={17} color="#08805A" />
+            is much space"). Restyled v2.29.403: split now sits BELOW the
+            number as two tinted chips instead of beside it. */}
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 18, padding: 16, boxShadow: "0 4px 16px rgba(0,0,0,0.03)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>Societies</span>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+              <Boxes size={15} color="#08805A" />
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
-            <div className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>
-              {totalSocietiesCount.toLocaleString("en-IN")}
+          <div className="serif" style={{ fontSize: 30, fontWeight: 800, color: "#1D1D1F", marginBottom: 12, lineHeight: 1 }}>
+            {totalSocietiesCount.toLocaleString("en-IN")}
+          </div>
+          {/* Clicking either chip filters the table below by Customer Stack
+              (the existing filter, reused) so the exact apartments are
+              right there in the Society column; the tooltip also lists
+              them directly — per explicit user request ("shows as 9 DP
+              and 4 Zoho, so which are those 9... show the apartment
+              names"). A society with both a DP and a Zoho customer counts
+              toward both sides — that overlap is real data, not a bug. */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            <div
+              onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "DP") ? null : ["DP"])}
+              title={dpSocietyNames.length ? `DP societies (click to filter the table):\n${dpSocietyNames.join("\n")}` : "No DP societies in the current view"}
+              style={{ background: "rgba(42,134,214,0.08)", padding: "6px 8px", borderRadius: 10, textAlign: "center", cursor: dpSocietyNames.length ? "pointer" : "default" }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#2A86D6" }}>{dpSocCount}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#86868B", textTransform: "uppercase" }}>DP</div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              {/* Clicking either stat filters the table below by Customer Stack
-                  (the existing filter, reused) so the exact apartments are
-                  right there in the Society column; the tooltip also lists
-                  them directly — per explicit user request ("shows as 9 DP
-                  and 4 Zoho, so which are those 9... show the apartment
-                  names"). A society with both a DP and a Zoho customer counts
-                  toward both sides — that overlap is real data, not a bug. */}
-              <div
-                onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "DP") ? null : ["DP"])}
-                title={dpSocietyNames.length ? `DP societies (click to filter the table):\n${dpSocietyNames.join("\n")}` : "No DP societies in the current view"}
-                style={{ textAlign: "center", cursor: dpSocietyNames.length ? "pointer" : "default" }}
-              >
-                <div className="serif" style={{ fontSize: 18, fontWeight: 700, color: "#2A86D6", lineHeight: 1 }}>{dpSocCount}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#86868B", marginTop: 3 }}>DP</div>
-              </div>
-              <div style={{ width: 1, height: 28, background: "rgba(0,0,0,0.1)" }} />
-              <div
-                onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "Zoho") ? null : ["Zoho"])}
-                title={zohoSocietyNames.length ? `Zoho societies (click to filter the table):\n${zohoSocietyNames.join("\n")}` : "No Zoho societies in the current view"}
-                style={{ textAlign: "center", cursor: zohoSocietyNames.length ? "pointer" : "default" }}
-              >
-                <div className="serif" style={{ fontSize: 18, fontWeight: 700, color: "#08805A", lineHeight: 1 }}>{zohoSocCount}</div>
-                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "#86868B", marginTop: 3 }}>Zoho</div>
-              </div>
+            <div
+              onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "Zoho") ? null : ["Zoho"])}
+              title={zohoSocietyNames.length ? `Zoho societies (click to filter the table):\n${zohoSocietyNames.join("\n")}` : "No Zoho societies in the current view"}
+              style={{ background: "rgba(8,128,90,0.08)", padding: "6px 8px", borderRadius: 10, textAlign: "center", cursor: zohoSocietyNames.length ? "pointer" : "default" }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 800, color: "#08805A" }}>{zohoSocCount}</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#86868B", textTransform: "uppercase" }}>Zoho</div>
             </div>
           </div>
         </div>
 
-        {/* 2. Active Customers Card */}
-        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Active Customers</span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-              <UserRound size={17} color="#08805A" />
+        {/* 2. Active Customers Card ("Customers") */}
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 18, padding: 16, boxShadow: "0 4px 16px rgba(0,0,0,0.03)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>Customers</span>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+              <UserRound size={15} color="#08805A" />
             </div>
           </div>
           {/* "of {total} unique customers" removed (v2.29.376) — per explicit
@@ -2170,35 +2169,29 @@ export function AllCustomers() {
               under similar-looking numbers). The headline is now just the
               active count on its own; `uniqueTotalCount` is unused here now
               but stays available for the DP/Zoho/Inactive line below. */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
-            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{uniqueActiveCount.toLocaleString("en-IN")}</span>
-          </div>
-          {/* Collapsed to one line (v2.29.268, explicit request: "show this in 1
-              line itself (140 DP · 96 Zoho | 22 Inactive customers)") — was two
-              separate lines before. */}
-          <div style={{ fontSize: 11.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {/* DP/Zoho now clickable (v2.29.377), per explicit user request
-                ("this should be clickable like inactive customers") —
-                mirrors the existing stackFilter toggle idiom (same pattern
-                as the DP Devices Conn card's Connected/Disconnected chips):
-                click to isolate the table to just that stack, click again
-                (or click the other one) to switch/clear. */}
-            <span
-              onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "DP") ? null : ["DP"])}
-              title={(stackFilter && stackFilter.length === 1 && stackFilter[0] === "DP") ? "Showing only DP customers — click to return to the default view" : "Click to show only DP customers"}
-              style={{ color: "#08805A", fontWeight: 600, cursor: "pointer", textDecoration: (stackFilter && stackFilter.length === 1 && stackFilter[0] === "DP") ? "underline" : "none" }}
-            >
-              {uniqueActiveDpCount.toLocaleString("en-IN")} DP
-            </span>
-            <span style={{ color: "#08805A", fontWeight: 600 }}> · </span>
-            <span
-              onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "Zoho") ? null : ["Zoho"])}
-              title={(stackFilter && stackFilter.length === 1 && stackFilter[0] === "Zoho") ? "Showing only Zoho customers — click to return to the default view" : "Click to show only Zoho customers"}
-              style={{ color: "#08805A", fontWeight: 600, cursor: "pointer", textDecoration: (stackFilter && stackFilter.length === 1 && stackFilter[0] === "Zoho") ? "underline" : "none" }}
-            >
-              {uniqueActiveZohoCount.toLocaleString("en-IN")} Zoho
-            </span>
-            <span style={{ color: "#C6C6CB" }}> | </span>
+          <div className="serif" style={{ fontSize: 30, fontWeight: 800, color: "#1D1D1F", marginBottom: 12, lineHeight: 1 }}>{uniqueActiveCount.toLocaleString("en-IN")}</div>
+          {/* Collapsed to one bar (was one text line, v2.29.268 — "show this in 1
+              line itself (140 DP · 96 Zoho | 22 Inactive customers)"). DP/Zoho
+              clickable (v2.29.377) same as the Inactive stat; both mirror the
+              existing stackFilter/showInactive toggle idiom. */}
+          <div style={{ background: "rgba(0,0,0,0.03)", borderRadius: 10, padding: "8px 10px", fontSize: 11, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+            <div>
+              <span
+                onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "DP") ? null : ["DP"])}
+                title={(stackFilter && stackFilter.length === 1 && stackFilter[0] === "DP") ? "Showing only DP customers — click to return to the default view" : "Click to show only DP customers"}
+                style={{ fontWeight: 700, color: "#08805A", cursor: "pointer", textDecoration: (stackFilter && stackFilter.length === 1 && stackFilter[0] === "DP") ? "underline" : "none" }}
+              >
+                {uniqueActiveDpCount.toLocaleString("en-IN")} DP
+              </span>
+              <span style={{ color: "#C6C6CB" }}> · </span>
+              <span
+                onClick={() => setStackFilter(f => (f && f.length === 1 && f[0] === "Zoho") ? null : ["Zoho"])}
+                title={(stackFilter && stackFilter.length === 1 && stackFilter[0] === "Zoho") ? "Showing only Zoho customers — click to return to the default view" : "Click to show only Zoho customers"}
+                style={{ fontWeight: 700, color: "#08805A", cursor: "pointer", textDecoration: (stackFilter && stackFilter.length === 1 && stackFilter[0] === "Zoho") ? "underline" : "none" }}
+              >
+                {uniqueActiveZohoCount.toLocaleString("en-IN")} Zoho
+              </span>
+            </div>
             {/* Uninstalled/Inactive customers are hidden from the table by
                 default (v2.29.331/335) — clicking this stat ISOLATES the
                 table to show only them (not added alongside the rest);
@@ -2206,29 +2199,29 @@ export function AllCustomers() {
             <span
               onClick={() => setShowInactive(v => !v)}
               title={showInactive ? "Showing only Uninstalled/Inactive customers — click to return to the default view" : "Uninstalled/Inactive customers are hidden from the table — click to show only them"}
-              style={{ color: "#DC4141", fontWeight: 600, cursor: "pointer", textDecoration: showInactive ? "underline" : "none" }}
+              style={{ fontWeight: 700, color: "#DC4141", cursor: "pointer", textDecoration: showInactive ? "underline" : "none" }}
             >
-              {uniqueInactiveCount.toLocaleString("en-IN")} Inactive customers{showInactive ? " (showing only)" : ""}
+              {uniqueInactiveCount.toLocaleString("en-IN")} Inactive{showInactive ? " (showing only)" : ""}
             </span>
           </div>
         </div>
 
         {/* 3. DP Devices Connection Card (only visible/calculated for DP stack) */}
-        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>DP Devices Conn</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 18, padding: 16, boxShadow: "0 4px 16px rgba(0,0,0,0.03)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>DP Devices Conn</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <button
                 onClick={() => (autoRefreshOn ? stopAutoRefresh() : resumeAutoRefresh())}
                 title={autoRefreshOn ? "Stop the 30-min auto-refresh (manual refresh still works)" : "Resume the 30-min auto-refresh"}
                 style={{
-                  width: 26, height: 26, borderRadius: 8, padding: 0,
+                  width: 24, height: 24, borderRadius: 7, padding: 0,
                   background: autoRefreshOn ? "rgba(220,65,65,0.08)" : "rgba(8,128,90,0.08)",
                   border: autoRefreshOn ? "1px solid rgba(220,65,65,0.15)" : "1px solid rgba(8,128,90,0.15)",
                   display: "grid", placeItems: "center", cursor: "pointer",
                 }}
               >
-                {autoRefreshOn ? <PauseCircle size={13} color="#DC4141" /> : <PlayCircle size={13} color="#08805A" />}
+                {autoRefreshOn ? <PauseCircle size={11} color="#DC4141" /> : <PlayCircle size={11} color="#08805A" />}
               </button>
               <button
                 onClick={runBulkConnCheck}
@@ -2241,105 +2234,64 @@ export function AllCustomers() {
                     : "Force-check all DP devices now"
                 }
                 style={{
-                  width: 26, height: 26, borderRadius: 8, padding: 0,
+                  width: 24, height: 24, borderRadius: 7, padding: 0,
                   background: "rgba(8,128,90,0.08)", border: "1px solid rgba(8,128,90,0.15)",
                   display: "grid", placeItems: "center",
                   cursor: liveConnChecking ? "not-allowed" : "pointer",
                 }}
               >
-                <RefreshCw size={13} color="#08805A" style={liveConnChecking ? { animation: "pw-spin 0.9s linear infinite" } : undefined} />
+                <RefreshCw size={11} color="#08805A" style={liveConnChecking ? { animation: "pw-spin 0.9s linear infinite" } : undefined} />
               </button>
-              <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-                <Wifi size={17} color="#08805A" />
+              <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+                <Wifi size={15} color="#08805A" />
               </div>
             </div>
           </div>
-          {/* v2.29.277: the BLE/WIFI/GSM connectivity-medium counts were on
-              their own row in v2.29.276, which grew this card taller than its
-              siblings (Total Societies/Active Customers/Device Mix all
-              stretch to match the tallest card in the grid row, per explicit
-              user feedback — "why did you expand the card, there was already
-              space, adjust in that"). Folded them into this existing
-              number+subtitle row instead, using the row's own already-unused
-              trailing width — net card height is back to what it was before
-              v2.29.276. */}
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px", flexWrap: "wrap" }}>
-            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>{dpConnected}</span>
-            <span style={{ fontSize: 12, color: "#86868B" }}>of {dpCustomers.length} online</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 7, marginLeft: "auto" }}>
-              <span title={`${dpBleCount} device${dpBleCount === 1 ? "" : "s"} on BLE`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: "#2A86D6" }}>
-                <Bluetooth size={11.5} color="#2A86D6" /> {dpBleCount}
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span className="serif" style={{ fontSize: 30, fontWeight: 800, color: "#1D1D1F", lineHeight: 1 }}>{dpConnected}</span>
+              <span style={{ fontSize: 11.5, color: "#86868B" }}>of {dpCustomers.length}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span title={`${dpBleCount} device${dpBleCount === 1 ? "" : "s"} on BLE`} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 10.5, fontWeight: 700, color: "#2A86D6" }}>
+                <Bluetooth size={11} color="#2A86D6" /> {dpBleCount}
               </span>
-              <span title={`${dpWifiCount} device${dpWifiCount === 1 ? "" : "s"} on WIFI`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: "#08805A" }}>
-                <Wifi size={11.5} color="#08805A" /> {dpWifiCount}
+              <span title={`${dpWifiCount} device${dpWifiCount === 1 ? "" : "s"} on WIFI`} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 10.5, fontWeight: 700, color: "#08805A" }}>
+                <Wifi size={11} color="#08805A" /> {dpWifiCount}
               </span>
-              <span title={`${dpGsmCount} device${dpGsmCount === 1 ? "" : "s"} on GSM — no WIFI/BLE connectivity to live-check`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: "#86868B" }}>
-                <Ban size={11.5} color="#86868B" /> {dpGsmCount}
+              <span title={`${dpGsmCount} device${dpGsmCount === 1 ? "" : "s"} on GSM — no WIFI/BLE connectivity to live-check`} style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: 10.5, fontWeight: 700, color: "#86868B" }}>
+                <Ban size={11} color="#86868B" /> {dpGsmCount}
               </span>
-            </span>
+            </div>
           </div>
-          {/* Collapsed to one line (v2.29.268, explicit request: "show this in
-              1 line itself (122 | 18 | Not yet force-checked · auto-refresh
-              stopped)") — the connected/disconnected chips and the status
-              caption used to be two separate lines. The caption is the part
-              most likely to overflow a narrow card, so it alone gets
-              min-width:0 + ellipsis inside the flex row rather than the whole
-              line wrapping. */}
-          <div style={{ fontSize: 11.5, color: "#86868B", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-            <span
-              onClick={() => setConnFilter(f => f === "connected" ? null : "connected")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                color: "#08805A",
-                fontWeight: 700,
-                cursor: "pointer",
-                background: connFilter === "connected" ? "rgba(8,128,90,0.12)" : "transparent",
-                padding: "2px 6px",
-                borderRadius: 6,
-                border: connFilter === "connected" ? "1px solid rgba(8,128,90,0.3)" : "1px solid transparent",
-                flex: "0 0 auto",
-              }}
-              title={`${dpConnected} connected — click to filter`}
-            >
-              <Wifi size={12.5} color="#08805A" /> {dpConnected}
-            </span>
-            <span style={{ color: "#C6C6CB", flex: "0 0 auto" }}>|</span>
-            <span
-              onClick={() => setConnFilter(f => f === "disconnected" ? null : "disconnected")}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 4,
-                color: "#DC4141",
-                fontWeight: 700,
-                cursor: "pointer",
-                background: connFilter === "disconnected" ? "rgba(220,65,65,0.12)" : "transparent",
-                padding: "2px 6px",
-                borderRadius: 6,
-                border: connFilter === "disconnected" ? "1px solid rgba(220,65,65,0.3)" : "1px solid transparent",
-                flex: "0 0 auto",
-              }}
-              title={`${dpDisconnected} disconnected — click to filter`}
-            >
-              <WifiOff size={12.5} color="#DC4141" /> {dpDisconnected}
-            </span>
-            <span style={{ color: "#C6C6CB", flex: "0 0 auto" }}>|</span>
-            <span style={{ fontSize: 10, color: "#B0B0B5", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {/* v2.29.275 replaced the vague "auto-refreshes every 30 min"
-                  with the actual computed next-check clock time (last run +
-                  30 min). v2.29.278 dropped the "auto-refresh stopped" suffix
-                  entirely — per explicit user request ("remove the text
-                  (auto-refresh stopped)") — the Stop/Resume button's own
-                  icon already communicates that state, so the caption now
-                  just quietly omits "next refresh" rather than announcing
-                  the stop a second time. */}
-              {liveConnChecking
+          {/* v2.29.275's "Live-checked HH:MM · next refresh at HH:MM" caption is
+              no longer shown as its own line (v2.29.403 mockup drops it to fit
+              the tighter bar) — kept discoverable as this bar's own tooltip
+              instead of losing the information outright; the Force-check
+              button's tooltip above also already surfaces the last-run time. */}
+          <div
+            style={{ background: "rgba(0,0,0,0.03)", borderRadius: 10, padding: "7px 10px", fontSize: 11, display: "flex", justifyContent: "space-between", alignItems: "center" }}
+            title={
+              liveConnChecking
                 ? `Force-checking… ${liveConnProgress?.done ?? 0}/${liveConnProgress?.total ?? 0}`
                 : liveConnLastRun
                 ? `Live-checked ${new Date(liveConnLastRun).toLocaleTimeString("en-IN")}${autoRefreshOn ? ` · next refresh at ${new Date(liveConnLastRun + 30 * 60 * 1000).toLocaleTimeString("en-IN")}` : ""}`
-                : "Not yet force-checked"}
+                : "Not yet force-checked"
+            }
+          >
+            <span
+              onClick={() => setConnFilter(f => f === "connected" ? null : "connected")}
+              style={{ fontWeight: 700, color: "#08805A", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+              title={`${dpConnected} connected — click to filter`}
+            >
+              <Wifi size={11} color="#08805A" strokeWidth={2.2} /> {dpConnected} Online
+            </span>
+            <span
+              onClick={() => setConnFilter(f => f === "disconnected" ? null : "disconnected")}
+              style={{ fontWeight: 700, color: "#DC4141", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}
+              title={`${dpDisconnected} disconnected — click to filter`}
+            >
+              <WifiOff size={11} color="#DC4141" strokeWidth={2.2} /> {dpDisconnected} Offline
             </span>
           </div>
         </div>
@@ -2347,15 +2299,15 @@ export function AllCustomers() {
         {/* 4. Device Mix Card — consolidated (v2.29.258): Own/Normal/Hot & Cold used
             to be 3 separate cards; folded into one so Total Societies, Active
             Customers and DP Devices Conn get more breathing room in the row. */}
-        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 18, padding: "18px 20px", boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>Device Mix</span>
-            <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
-              <Boxes size={17} color="#08805A" />
+        <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", border: "1px solid rgba(0,0,0,0.06)", borderRadius: 18, padding: 16, boxShadow: "0 4px 16px rgba(0,0,0,0.03)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>Device Mix</span>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(8,128,90,0.12)", display: "grid", placeItems: "center" }}>
+              <Boxes size={15} color="#08805A" />
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 4px" }}>
-            <span className="serif" style={{ fontWeight: 700, fontSize: 28, color: "#1D1D1F", lineHeight: 1.1 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginBottom: 12 }}>
+            <span className="serif" style={{ fontSize: 30, fontWeight: 800, color: "#1D1D1F", lineHeight: 1 }}>
               {(ownCount + normalCount + hotColdCount).toLocaleString("en-IN")}
             </span>
             {/* Relabeled (v2.29.375), per explicit user request — this count is
@@ -2369,21 +2321,21 @@ export function AllCustomers() {
                 The label now tracks whichever population `results` actually
                 holds at the moment (flips to "inactive devices" once the
                 isolate-toggle is active), instead of claiming to be a total. */}
-            <span style={{ fontSize: 12, color: "#86868B" }} title={showInactive ? "Devices belonging to Uninstalled/Inactive customers currently shown" : "Devices belonging to active customers only — inactive customers' devices are excluded"}>
+            <span style={{ fontSize: 11.5, color: "#86868B" }} title={showInactive ? "Devices belonging to Uninstalled/Inactive customers currently shown" : "Devices belonging to active customers only — inactive customers' devices are excluded"}>
               {showInactive ? "inactive devices" : "active devices"}
             </span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4 }}>
             {[
               { label: "Own Device", value: ownCount, img: imgWaterFilter },
               { label: "Normal", value: normalCount, img: imgTool },
               { label: "Hot & Cold Device", value: hotColdCount, img: imgTechnology },
             ].map((s, i) => (
-              <span key={i} title={`${s.value.toLocaleString("en-IN")} ${s.label}`}
-                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11.5, fontWeight: 700, color: "#475569" }}>
-                <img src={s.img} alt={s.label} style={{ width: 14, height: 14, objectFit: "contain" }} />
-                {s.value.toLocaleString("en-IN")}
-              </span>
+              <div key={i} title={`${s.value.toLocaleString("en-IN")} ${s.label}`}
+                style={{ background: "rgba(0,0,0,0.03)", padding: "6px 4px", borderRadius: 8, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                <img src={s.img} alt={s.label} style={{ width: 13, height: 13, objectFit: "contain" }} />
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#475569" }}>{s.value.toLocaleString("en-IN")}</span>
+              </div>
             ))}
           </div>
         </div>
