@@ -391,10 +391,20 @@ export function ticketMonthBuckets(tks) {
   return rows;
 }
 
-// Break tickets down by the API "Issue Category" (issue type) field, most-common first.
+// Break tickets down by the API "Type of Issue" field, most-common first
+// (v2.29.409, per explicit user report — confirmed against a real
+// /tickets/formattedforwisdom response that "Type of Issue" is a genuinely
+// separate, more specific field from "Issue Category": one real ticket had
+// Issue Category "Complaint" and Type of Issue "Account Related" at the same
+// time). Was grouping by `issueCategory`, which this sub-page's own caption
+// already called "Type of Issue" — a real mapping gap, not just a label
+// mismatch: `typeOfIssue` wasn't even being read from the API before this.
+// Falls back to `issueCategory` for any ticket where `typeOfIssue` is
+// missing (older cached tickets, or the Zoho-Desk-shape mapper if that
+// backend doesn't carry the field), so nothing silently disappears.
 export function ticketsByIssue(tks) {
   const m = {};
-  (tks || []).forEach(t => { const k = String(t.issueCategory || "").trim() || "Uncategorised"; m[k] = (m[k] || 0) + 1; });
+  (tks || []).forEach(t => { const k = String(t.typeOfIssue || t.issueCategory || "").trim() || "Uncategorised"; m[k] = (m[k] || 0) + 1; });
   return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([label, count]) => ({ label, count }));
 }
 
