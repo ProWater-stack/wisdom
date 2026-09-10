@@ -1839,7 +1839,23 @@ export function AllCustomers() {
                       const startDate = subMatch?.termStart || t.date;
                       let endDate = subMatch?.termEnd || t.dueDate;
 
-                      if (!endDate && startDate) {
+                      // get-all-submodules only ever carries each customer's CURRENT
+                      // active subscription term, so `subMatch` only ever matches the
+                      // one invoice that's currently open — every PAST/paid invoice
+                      // falls back to `t.dueDate`, which for an already-paid invoice
+                      // is a payment-due-date field that equals the invoice's own
+                      // `date`, not a real term end. That produced Start = End = Date
+                      // on every historical invoice (real user report, with a live
+                      // example: 4 of 5 invoices on one customer all showed this).
+                      // The pre-existing "missing entirely" fallback below never
+                      // caught it because `endDate` (from `dueDate`) was truthy, just
+                      // wrong — so a same-calendar-day end now triggers the identical
+                      // one-billing-cycle approximation as a genuinely missing one.
+                      const sameCalendarDay = (a, b) => {
+                        const da = new Date(a), db = new Date(b);
+                        return !isNaN(da.getTime()) && !isNaN(db.getTime()) && da.toDateString() === db.toDateString();
+                      };
+                      if ((!endDate || sameCalendarDay(endDate, startDate)) && startDate) {
                         const dt = new Date(startDate);
                         if (!isNaN(dt.getTime())) {
                           dt.setMonth(dt.getMonth() + 1);
