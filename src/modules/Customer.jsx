@@ -17,7 +17,7 @@ import {
   depositForCustomer, CUSTOMER_FIELDS,
   API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate,
   exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety, canonicalStatus,
-  parsePartsUsed, jobDurationMin, zdIsClosed, zdStatusColor, gstBreakup,
+  parsePartsUsed, jobDurationMin, zdIsClosed, zdStatusColor, gstBreakup, termMonths,
 } from "../shared/core";
 import { parseLocation, syncPath } from "../shared/router";
 import {
@@ -562,25 +562,35 @@ export function InvoiceSummaryRow({ icon: Icon, label, value, sub }) {
   );
 }
 
-// GST is not a field the API returns anywhere on the invoice — this backs it
-// out of the paid total assuming the standard flat 5% split (2.5% CGST +
-// 2.5% SGST) confirmed against the user's own reference breakup sheet
-// (₹409 total → ₹390 taxable + ₹10 CGST + ₹10 SGST). Independently-rounded
-// components can be ±₹1 off the rounded total — same minor rounding gap
-// present in that reference sheet itself, not something to chase away.
-export function GstBreakupCard({ total }) {
-  if (!(total > 0)) return null;
-  const g = gstBreakup(total);
-  const taxPct = Math.round((g.taxable / g.total) * 1000) / 10;
+// GST is not a field the API returns anywhere on the invoice — this backs
+// it out algorithmically. Rebuilt v2.29.412 per the user's own reference
+// spreadsheet (3 worked examples) — the previous version taxed the WHOLE
+// paid total including Deposit, which the sheet proved wrong (a ₹2000
+// deposit + ₹399 recharge invoice must show the exact same GST breakup as
+// a ₹0 deposit + ₹399 recharge one). GST now applies only to (Recharge +
+// a ₹10-per-month "Water purchase charge") — see gstBreakup() in
+// shared/core.js for the full worked math. Card rows now mirror the
+// reference sheet directly: Deposit / Recharge / Total collection, then
+// Taxable Revenue / CGST / SGST / Total Revenue (incl. GST), then Less:
+// Water purchase charges / Net payable from Customer (which is always
+// algebraically equal to Recharge — kept as its own line since that's how
+// the sheet presents the reconciliation). Independently-rounded components
+// can be ±₹1 off the rounded total, same minor rounding gap present in the
+// reference sheet itself, not something to chase away.
+export function GstBreakupCard({ recharge, deposit = 0, months = 1 }) {
+  if (!(recharge > 0)) return null;
+  const g = gstBreakup(recharge, months);
+  const totalCollection = (Number(deposit) || 0) + g.recharge;
+  const taxPct = Math.round((g.taxable / g.totalRevenue) * 1000) / 10;
   const gstPct = Math.round((100 - taxPct) * 10) / 10;
 
   // Restyled v2.29.402, per an explicit user-provided before/after mockup.
-  // The 4 rows now use per-item icon tinting (green for the taxable value,
-  // amber for the two GST lines) and the Total row gets its own highlighted
-  // treatment (solid icon, bordered background, bigger bold value) — none of
-  // which the shared `InvoiceSummaryRow` (still used unchanged elsewhere on
-  // this page, e.g. Due date/Payment date) supports, so these 4 rows are
-  // inlined here instead of reusing it.
+  // Rows use per-item icon tinting (green for value-only rows, amber for the
+  // two GST lines) and the highlighted rows get their own treatment (solid
+  // icon, bordered background, bigger bold value) — none of which the shared
+  // `InvoiceSummaryRow` (still used unchanged elsewhere on this page, e.g.
+  // Due date/Payment date) supports, so these rows are inlined here instead
+  // of reusing it.
   const gstRow = (Icon, label, value, tone) => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 12, transition: "background 0.15s ease" }}>
       <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: tone === "amber" ? "#FFFBEB" : "#F4F8F5", color: tone === "amber" ? "#B45309" : "#08805A", flexShrink: 0, border: `1px solid ${tone === "amber" ? "rgba(217,119,6,0.12)" : "rgba(8,128,90,0.1)"}` }}><Icon size={16} /></span>
@@ -590,6 +600,15 @@ export function GstBreakupCard({ total }) {
       <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", textAlign: "right" }}>{value}</div>
     </div>
   );
+  const highlightRow = (Icon, label, value, key) => (
+    <div key={key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginTop: 6, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 14 }}>
+      <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "#08805A", color: "#FFFFFF", flexShrink: 0, boxShadow: "0 4px 10px rgba(8,128,90,0.2)" }}><Icon size={16} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{label}</div>
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 800, color: "#08805A", whiteSpace: "nowrap", textAlign: "right" }}>{value}</div>
+    </div>
+  );
 
   return (
     <div style={{ background: "#FFFFFF", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px -10px rgba(0,0,0,0.04), 0 2px 6px -2px rgba(0,0,0,0.02)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", boxSizing: "border-box" }}>
@@ -597,13 +616,23 @@ export function GstBreakupCard({ total }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
             <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>GST Breakup</h3>
-            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Paid amount: <strong style={{ color: "#0F172A" }}>{inr(Math.round(g.total))}</strong></div>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Total collection: <strong style={{ color: "#0F172A" }}>{inr(Math.round(totalCollection))}</strong></div>
           </div>
           <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.1)", color: "#08805A", border: "1px solid rgba(8,128,90,0.15)", letterSpacing: "0.02em" }}>5% GST Standard</span>
         </div>
 
-        {/* Visual Ratio Bar */}
-        <div style={{ margin: "16px 0 20px" }}>
+        {/* Deposit / Recharge / Total collection — GST never touches Deposit,
+            shown here purely for context so the reader can see where the
+            taxable base (below) actually comes from. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 12 }}>
+          {deposit > 0 && gstRow(Landmark, "Deposit", inr(Math.round(deposit)), "green")}
+          {gstRow(RefreshCw, "Recharge", inr(Math.round(g.recharge)), "green")}
+          {gstRow(Wallet, "Total collection", inr(Math.round(totalCollection)), "green")}
+        </div>
+
+        {/* Visual Ratio Bar — Taxable vs Tax, as a % of the GST-inclusive
+            (Recharge + Water purchase charge) base, not the total collection. */}
+        <div style={{ margin: "4px 0 20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
             <span style={{ color: "#08805A" }}>Taxable ({taxPct}%)</span>
             <span style={{ color: "#D97706" }}>Tax ({gstPct}%)</span>
@@ -615,18 +644,12 @@ export function GstBreakupCard({ total }) {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {gstRow(Receipt, "Taxable value", inr(Math.round(g.taxable)), "green")}
+          {gstRow(Receipt, "Taxable Revenue", inr(Math.round(g.taxable)), "green")}
           {gstRow(Landmark, "CGST (2.5%)", inr(Math.round(g.cgst)), "amber")}
           {gstRow(MapPin, "SGST (2.5%)", inr(Math.round(g.sgst)), "amber")}
-
-          {/* Total — highlighted per the mockup, unlike the 3 plain rows above */}
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginTop: 6, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 14 }}>
-            <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "#08805A", color: "#FFFFFF", flexShrink: 0, boxShadow: "0 4px 10px rgba(8,128,90,0.2)" }}><Wallet size={16} /></span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Total invoice value</div>
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#08805A", whiteSpace: "nowrap", textAlign: "right" }}>{inr(Math.round(g.total))}</div>
-          </div>
+          {highlightRow(TrendingUp, "Total Revenue (incl. GST)", inr(Math.round(g.totalRevenue)), "totrev")}
+          {gstRow(Droplets, "Less: Water purchase charges", `− ${inr(Math.round(g.waterCharge))}`, "amber")}
+          {highlightRow(CheckCircle2, "Net payable from Customer", inr(Math.round(g.netPayable)), "net")}
         </div>
       </div>
     </div>
@@ -1402,7 +1425,13 @@ export function AllCustomers() {
     // already sorted newest-first) — feeds the revenue-recognition breakdown
     // card at the top of the Transactions sub-screen.
     const currentPaid = txns.find(t => t.status === "paid" && (t.total || 0) > 0 && t.dueDate);
-    const currentPaidRecharge = currentPaid ? Math.max(0, (currentPaid.total || 0) - depositForCustomer(sel, currentPaid.plan || planName, currentPaid.total || 0, currentPaid.planCode)) : 0;
+    const currentPaidDeposit = currentPaid ? depositForCustomer(sel, currentPaid.plan || planName, currentPaid.total || 0, currentPaid.planCode) : 0;
+    const currentPaidRecharge = currentPaid ? Math.max(0, (currentPaid.total || 0) - currentPaidDeposit) : 0;
+    // How many months this invoice's recharge covers — feeds GstBreakupCard's
+    // "Water purchase charge" (v2.29.412, ₹10 × months, per the user's own
+    // reference sheet), the same `termMonths()` Analytics > Earned Revenue
+    // already uses for this exact purpose.
+    const currentPaidMonths = currentPaid ? termMonths(currentPaid) : 1;
     // Ticket lookup by Purifier ID. Ops = the same filter the Ticketing > Ops tab uses (Issue Category ≠ Complaint).
     const purl = String(sel.purifier_id || "").trim().toLowerCase();
     const custTickets = purl ? tickets.filter(t => String(t.purifierId || "").trim().toLowerCase() === purl) : [];
@@ -2003,7 +2032,7 @@ export function AllCustomers() {
               {/* 2-Column Grid: GST Breakup + Revenue Recognition */}
               {(currentPaid || (currentPaid && currentPaidRecharge > 0)) && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
-                  {currentPaid && <GstBreakupCard total={currentPaid.total} />}
+                  {currentPaid && <GstBreakupCard recharge={currentPaidRecharge} deposit={currentPaidDeposit} months={currentPaidMonths} />}
                   {currentPaid && currentPaidRecharge > 0 && <InvoiceBreakdownCard inv={currentPaid} recharge={currentPaidRecharge} />}
                 </div>
               )}
