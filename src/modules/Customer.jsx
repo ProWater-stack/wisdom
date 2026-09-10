@@ -7,9 +7,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   AlertCircle, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown, Award, Ban, Bluetooth, Boxes,
-  CalendarClock, CalendarDays, CalendarRange, CheckCircle2, ChevronDown,
-  ChevronLeft, ChevronRight, ChevronUp, Cpu, Download, Droplets, Gauge,
-  GitBranch, Info, Landmark, MapPin, PauseCircle, PencilLine, PlayCircle, Receipt,
+  Calendar, Check, CheckCircle2,
+  ChevronLeft, ChevronRight, Cpu, Download, Droplet, Gauge,
+  GitBranch, Info, PauseCircle, PencilLine, PlayCircle, Receipt,
   RefreshCw, RotateCcw, Sun, Ticket, TrendingUp, Upload, UserRound, Wallet, Wrench, X, Wifi, WifiOff,
 } from "lucide-react";
 import {
@@ -569,86 +569,102 @@ export function InvoiceSummaryRow({ icon: Icon, label, value, sub }) {
 // deposit + ₹399 recharge invoice must show the exact same GST breakup as
 // a ₹0 deposit + ₹399 recharge one). GST now applies only to (Recharge +
 // a ₹10-per-month "Water purchase charge") — see gstBreakup() in
-// shared/core.js for the full worked math. Card rows now mirror the
-// reference sheet directly: Deposit / Recharge / Total collection, then
-// Taxable Revenue / CGST / SGST / Total Revenue (incl. GST), then Less:
-// Water purchase charges / Net payable from Customer (which is always
-// algebraically equal to Recharge — kept as its own line since that's how
-// the sheet presents the reconciliation). Independently-rounded components
-// can be ±₹1 off the rounded total, same minor rounding gap present in the
-// reference sheet itself, not something to chase away.
-export function GstBreakupCard({ recharge, deposit = 0, months = 1 }) {
+// shared/core.js for the full worked math.
+// Restyled v2.29.414 per an explicit user-provided mockup ("GST & Revenue
+// Breakup") — frosted-glass card, a bordered "Segmented Allocation
+// Visualizer" wrapping the taxable/tax ratio bar, Taxable Base/Gross Total
+// as plain rows, CGST/SGST as a 2-up "₹"-badge grid, Water purchase as a
+// red-tinted deduction row, and a gradient "Net Settlement" capsule at the
+// bottom. The Deposit/Recharge rows (v2.29.412/413) are gone per the same
+// mockup — Recharge is still shown, just folded into the header subtitle
+// ("Recharge basis · ₹X") instead of its own row; Deposit isn't shown here
+// at all anymore (still passed in and used for `currentPaidRecharge`'s own
+// math upstream, just not surfaced on this specific card). Independently-
+// rounded components can be ±₹1 off the rounded total, same minor rounding
+// gap present in the reference sheet itself, not something to chase away.
+export function GstBreakupCard({ recharge, months = 1 }) {
   if (!(recharge > 0)) return null;
   const g = gstBreakup(recharge, months);
   const taxPct = Math.round((g.taxable / g.totalRevenue) * 1000) / 10;
   const gstPct = Math.round((100 - taxPct) * 10) / 10;
 
-  // Restyled v2.29.402, per an explicit user-provided before/after mockup.
-  // Rows use per-item icon tinting (green for value-only rows, amber for the
-  // two GST lines) and the highlighted rows get their own treatment (solid
-  // icon, bordered background, bigger bold value) — none of which the shared
-  // `InvoiceSummaryRow` (still used unchanged elsewhere on this page, e.g.
-  // Due date/Payment date) supports, so these rows are inlined here instead
-  // of reusing it.
-  const gstRow = (Icon, label, value, tone) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 12, transition: "background 0.15s ease" }}>
-      <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: tone === "amber" ? "#FFFBEB" : "#F4F8F5", color: tone === "amber" ? "#B45309" : "#08805A", flexShrink: 0, border: `1px solid ${tone === "amber" ? "rgba(217,119,6,0.12)" : "rgba(8,128,90,0.1)"}` }}><Icon size={16} /></span>
+  // Plain row (Taxable Base / Gross Total) — same neutral card background
+  // for both, only the icon badge's tint differs.
+  const plainRow = (Icon, label, sub, value, iconBg, iconFg, iconBorder) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 12, background: "rgba(255,255,255,0.4)", border: "1px solid rgba(0,0,0,0.02)" }}>
+      <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 9, background: iconBg, color: iconFg, flexShrink: 0, ...(iconBorder ? { border: `1px solid ${iconBorder}` } : {}) }}><Icon size={15} strokeWidth={2.2} /></span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{label}</div>
+        {sub && <div style={{ fontSize: 11, color: "#94A3B8" }}>{sub}</div>}
       </div>
       <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A", whiteSpace: "nowrap", textAlign: "right" }}>{value}</div>
     </div>
   );
-  const highlightRow = (Icon, label, value, key) => (
-    <div key={key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", marginTop: 6, background: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: 14 }}>
-      <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: "#08805A", color: "#FFFFFF", flexShrink: 0, boxShadow: "0 4px 10px rgba(8,128,90,0.2)" }}><Icon size={16} /></span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{label}</div>
+  // "₹" glyph badge cell — CGST/SGST, side by side in a 2-col grid.
+  const rupeeCell = (label, value, cellBg, cellBorder, iconBg, iconFg, labelColor) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", borderRadius: 12, background: cellBg, border: `1px solid ${cellBorder}` }}>
+      <span style={{ display: "grid", placeItems: "center", width: 26, height: 26, borderRadius: 7, background: iconBg, color: iconFg, flexShrink: 0, fontSize: 13, fontWeight: 800 }}>₹</span>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: labelColor }}>{label}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>{value}</div>
       </div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: "#08805A", whiteSpace: "nowrap", textAlign: "right" }}>{value}</div>
     </div>
   );
 
   return (
-    <div style={{ background: "#FFFFFF", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px -10px rgba(0,0,0,0.04), 0 2px 6px -2px rgba(0,0,0,0.02)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", boxSizing: "border-box" }}>
+    <div style={{ background: "rgba(255,255,255,0.65)", WebkitBackdropFilter: "blur(35px) saturate(200%)", backdropFilter: "blur(35px) saturate(200%)", border: "1px solid rgba(255,255,255,0.85)", borderRadius: 24, boxShadow: "0 16px 36px -12px rgba(15,23,42,0.06), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", boxSizing: "border-box", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased" }}>
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>GST Breakup</h3>
-            <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Recharge: <strong style={{ color: "#0F172A" }}>{inr(Math.round(g.recharge))}</strong></div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.02em" }}>GST &amp; Revenue Breakup</h3>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 3 }}>Recharge basis · <strong style={{ color: "#0F172A" }}>{inr(Math.round(g.recharge))}</strong></div>
           </div>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.1)", color: "#08805A", border: "1px solid rgba(8,128,90,0.15)", letterSpacing: "0.02em" }}>5% GST Standard</span>
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.08)", color: "#08805A", border: "1px solid rgba(8,128,90,0.16)", letterSpacing: "0.01em" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#08805A" }} />
+            5% GST Standard
+          </span>
         </div>
 
-        {/* Deposit / Recharge — GST never touches Deposit, shown here purely
-            for context so the reader can see where the taxable base (below)
-            actually comes from. "Total collection" removed per explicit user
-            request (v2.29.413). */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 12 }}>
-          {deposit > 0 && gstRow(Landmark, "Deposit", inr(Math.round(deposit)), "green")}
-          {gstRow(RefreshCw, "Recharge", inr(Math.round(g.recharge)), "green")}
-        </div>
-
-        {/* Visual Ratio Bar — Taxable vs Tax, as a % of the GST-inclusive
-            (Recharge + Water purchase charge) base, not the total collection. */}
-        <div style={{ margin: "4px 0 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 600, marginBottom: 6 }}>
-            <span style={{ color: "#08805A" }}>Taxable ({taxPct}%)</span>
-            <span style={{ color: "#D97706" }}>Tax ({gstPct}%)</span>
+        {/* Segmented Allocation Visualizer */}
+        <div style={{ background: "rgba(255,255,255,0.6)", border: "1px solid rgba(0,0,0,0.04)", borderRadius: 16, padding: "12px 14px", marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
+            <span style={{ color: "#08805A" }}>Taxable Share ({taxPct}%)</span>
+            <span style={{ color: "#D97706" }}>Tax Share ({gstPct}%)</span>
           </div>
-          <div style={{ height: 6, borderRadius: 999, background: "#F1F5F9", overflow: "hidden", display: "flex" }}>
-            <div style={{ width: `${taxPct}%`, background: "#08805A", borderRadius: "999px 0 0 999px" }} />
-            <div style={{ width: `${gstPct}%`, background: "#F59E0B", borderRadius: "0 999px 999px 0" }} />
+          <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,0.05)", overflow: "hidden", display: "flex", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.06)" }}>
+            <div style={{ width: `${taxPct}%`, background: "linear-gradient(90deg, #08805A, #10B981)", borderRadius: "999px 0 0 999px" }} />
+            <div style={{ width: `${gstPct}%`, background: "linear-gradient(90deg, #F59E0B, #D97706)", borderRadius: "0 999px 999px 0" }} />
           </div>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {gstRow(Receipt, "Taxable Revenue", inr(Math.round(g.taxable)), "green")}
-          {gstRow(Landmark, "CGST (2.5%)", inr(Math.round(g.cgst)), "amber")}
-          {gstRow(MapPin, "SGST (2.5%)", inr(Math.round(g.sgst)), "amber")}
-          {highlightRow(TrendingUp, "Total Revenue (incl. GST)", inr(Math.round(g.totalRevenue)), "totrev")}
-          {gstRow(Droplets, "Less: Water purchase charges", `− ${inr(Math.round(g.waterCharge))}`, "amber")}
-          {highlightRow(CheckCircle2, "Net payable from Customer", inr(Math.round(g.netPayable)), "net")}
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {plainRow(Receipt, "Taxable Base", "Excluding applicable tax", inr(Math.round(g.taxable)), "#ECFDF5", "#08805A", "rgba(16,185,129,0.2)")}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {rupeeCell("CGST (2.5%)", inr(Math.round(g.cgst)), "rgba(254,243,199,0.35)", "rgba(217,119,6,0.12)", "#FEF3C7", "#B45309", "#78350F")}
+            {rupeeCell("SGST (2.5%)", inr(Math.round(g.sgst)), "rgba(240,249,255,0.5)", "rgba(2,132,199,0.12)", "#E0F2FE", "#0284C7", "#0369A1")}
+          </div>
+
+          {plainRow(TrendingUp, "Gross Total (incl. GST)", null, inr(Math.round(g.totalRevenue)), "#F1F5F9", "#475569", null)}
+
+          {/* Less: Water purchase */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 10px", borderRadius: 12, background: "rgba(254,242,242,0.4)", border: "1px solid rgba(220,38,38,0.08)" }}>
+            <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 9, background: "#FEE2E2", color: "#DC2626", flexShrink: 0 }}><Droplet size={15} strokeWidth={2.2} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#991B1B" }}>Less: Water purchase</div>
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: "#DC2626", whiteSpace: "nowrap", textAlign: "right" }}>− {inr(Math.round(g.waterCharge))}</div>
+          </div>
+
+          {/* Net Settlement — gradient highlight capsule */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", marginTop: 4, background: "linear-gradient(135deg, rgba(8,128,90,0.12), rgba(16,185,129,0.06))", border: "1px solid rgba(8,128,90,0.25)", borderRadius: 16 }}>
+            <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 9, background: "#08805A", color: "#FFFFFF", flexShrink: 0, boxShadow: "0 4px 10px rgba(8,128,90,0.25)" }}><Check size={16} strokeWidth={2.5} /></span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Net Settlement</div>
+              <div style={{ fontSize: 11, color: "#08805A", fontWeight: 600 }}>Due from Customer</div>
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: "#08805A", whiteSpace: "nowrap", textAlign: "right" }}>{inr(Math.round(g.netPayable))}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -683,32 +699,64 @@ export function InvoiceBreakdownCard({ inv, recharge }) {
       <div style={{ width: AMT_W, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: "var(--f)", textAlign: "right" }}>{value}</div>
     </div>
   );
+  // Restyled v2.29.414 per an explicit user-provided mockup ("Settled Billing
+  // Cycle") — frosted-glass card, each summary line as its own bordered
+  // "info row" with a status tag on the right (Billed/Success), a combined
+  // "Active Access Window" block for the recharge tenure, a bigger "Total
+  // Collected" tile, and a plain (non-green) toggle button. The hidden
+  // "Show calculation" detail table below is unchanged — not part of the
+  // mockup, still the same calcSection/calcRow/calcRowRange rendering.
+  const infoRow = (Icon, label, value, iconBg, iconFg, iconBorder, tagLabel, tagBg, tagFg) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 14, background: "rgba(255,255,255,0.55)", border: "1px solid rgba(0,0,0,0.04)" }}>
+      <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 10, background: iconBg, color: iconFg, flexShrink: 0, border: `1px solid ${iconBorder}` }}><Icon size={16} strokeWidth={2.2} /></span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 11.5, color: "#64748B", fontWeight: 500 }}>{label}</div>
+        <div style={{ fontSize: 13.5, fontWeight: 700, color: "#0F172A", marginTop: 1 }}>{value}</div>
+      </div>
+      <span style={{ fontSize: 11, fontWeight: tagFg === "#64748B" ? 600 : 700, color: tagFg, background: tagBg, padding: "3px 8px", borderRadius: 6 }}>{tagLabel}</span>
+    </div>
+  );
   return (
-    <div style={{ background: "rgba(255, 255, 255, 0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", borderRadius: 20, border: "1px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 30px rgba(0,0,0,0.03)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+    <div style={{ background: "rgba(255,255,255,0.65)", WebkitBackdropFilter: "blur(35px) saturate(200%)", backdropFilter: "blur(35px) saturate(200%)", border: "1px solid rgba(255,255,255,0.85)", borderRadius: 24, boxShadow: "0 16px 36px -12px rgba(15,23,42,0.06), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", padding: 22, height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", boxSizing: "border-box" }}>
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F", margin: 0 }}>Current Paid Transaction</h3>
-            <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Revenue recognition · Invoice {inv.number || inv.id}</div>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.02em" }}>Settled Billing Cycle</h3>
+            <div style={{ fontSize: 12, color: "#64748B", marginTop: 3 }}>Invoice · <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontWeight: 700, color: "#0F172A", background: "rgba(0,0,0,0.04)", padding: "1px 6px", borderRadius: 4 }}>{inv.number || inv.id}</span></div>
           </div>
-          <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: "rgba(8,128,90,0.12)", color: "#08805A" }}>{b.tenureDays} Days Tenure</span>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(8,128,90,0.08)", color: "#08805A", border: "1px solid rgba(8,128,90,0.16)", letterSpacing: "0.01em" }}>{b.tenureDays} Days Period</span>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          <InvoiceSummaryRow icon={CalendarDays} label="Due date" value={fmtDate(dd)} />
-          <InvoiceSummaryRow icon={CalendarClock} label="Payment date" value={fmtDate(pd)} />
-          <InvoiceSummaryRow icon={CalendarRange} label="Recharge tenure" value={`${b.tenureDays} days`} sub={`${fmtDate(b.validityStart)} – ${fmtDate(b.validityEnd)}`} />
-          {/* "Earned revenue" summary row removed per explicit user request
-              (v2.29.413) — the detailed month-by-month Earned breakdown is
-              still available below, behind "Show calculation". */}
-          <InvoiceSummaryRow icon={Wallet} label="Collected Revenue" value={inr(Math.round(totalCollected))}
-            sub={totalOutstanding > 0 ? `${inr(Math.round(totalOutstanding))} still outstanding` : "Fully collected"} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {infoRow(Calendar, "Invoice Due Date", fmtDate(dd), "#F8FAFC", "#475569", "rgba(0,0,0,0.06)", "Billed", "rgba(0,0,0,0.04)", "#64748B")}
+          {infoRow(Check, "Settlement Cleared", fmtDate(pd), "#ECFDF5", "#08805A", "rgba(16,185,129,0.2)", "Success", "rgba(8,128,90,0.09)", "#08805A")}
+
+          {/* Active Access Window — replaces the old "Recharge tenure" info row */}
+          <div style={{ padding: "12px 14px", borderRadius: 14, background: "rgba(255,255,255,0.55)", border: "1px solid rgba(0,0,0,0.04)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#334155" }}>Active Access Window</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#08805A" }}>{b.tenureDays} Days Plan</span>
+            </div>
+            <div style={{ fontSize: 11.5, color: "#64748B", fontFamily: "ui-monospace, monospace" }}>{fmtDate(b.validityStart)} → {fmtDate(b.validityEnd)}</div>
+          </div>
+
+          {/* Total Collected */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", borderRadius: 16, background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.04)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 9, background: "#08805A", color: "#FFFFFF", flexShrink: 0, fontSize: 17, fontWeight: 800 }}>₹</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Total Collected</div>
+                <div style={{ fontSize: 11, color: "#08805A", fontWeight: 600 }}>{totalOutstanding > 0 ? `${inr(Math.round(totalOutstanding))} outstanding` : "100% Reconciled"}</div>
+              </div>
+            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{inr(Math.round(totalCollected))}</div>
+          </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 14 }}>
-        <button onClick={() => setOpen(o => !o)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 18px", background: "rgba(8,128,90,0.08)", borderRadius: 12, border: "1px solid rgba(8,128,90,0.15)", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "#08805A" }}>
-          {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />} {open ? "Hide calculation" : "Show calculation"}
+      <div style={{ marginTop: 16 }}>
+        <button onClick={() => setOpen(o => !o)} style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 16px", background: "rgba(255,255,255,0.8)", borderRadius: 12, border: "1px solid rgba(0,0,0,0.08)", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: "#0F172A", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", fontFamily: "inherit" }}>
+          <Info size={14} /> {open ? "Hide Calculation Audit" : "View Calculation Audit"}
         </button>
         {open && (
           <div style={{ marginTop: 10, background: "rgba(243,248,236,0.5)", borderRadius: 14, border: "1px solid rgba(8,128,90,0.12)", paddingBottom: 6, maxHeight: 280, overflowY: "auto" }}>
@@ -2032,7 +2080,7 @@ export function AllCustomers() {
               {/* 2-Column Grid: GST Breakup + Revenue Recognition */}
               {(currentPaid || (currentPaid && currentPaidRecharge > 0)) && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
-                  {currentPaid && <GstBreakupCard recharge={currentPaidRecharge} deposit={currentPaidDeposit} months={currentPaidMonths} />}
+                  {currentPaid && <GstBreakupCard recharge={currentPaidRecharge} months={currentPaidMonths} />}
                   {currentPaid && currentPaidRecharge > 0 && <InvoiceBreakdownCard inv={currentPaid} recharge={currentPaidRecharge} />}
                 </div>
               )}
