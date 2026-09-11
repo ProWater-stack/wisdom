@@ -795,12 +795,38 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     }
   });
 
+  // DP recharge-amount lookup (v2.29.416) — per explicit user instruction:
+  // the DP customer record's own `plan_name`/`plan` text rarely carries a
+  // parseable amount (that's why over half of DP customers were falling
+  // into the generic "DrinkPrime Purifier" bucket below instead of a real
+  // ₹-tier), but the dp-transactions feed's COLLECTION_SUMMARY rows DO carry
+  // a real recharge amount per device (`Recharge_received`), keyed by
+  // `current_device` — the same device identifier as a customer's own
+  // `device_code` (added to the customer mapper in shared/core.js for this
+  // exact join). Multiple collection events can exist for one device (a
+  // recharge history), so this keeps the most-recent one by `Paid_Date` as
+  // the device's CURRENT plan tier.
+  const dpDeviceRecharge = {};
+  (dpRows || []).forEach(r => {
+    if (r.row_type !== "COLLECTION_SUMMARY" || !r.current_device) return;
+    const amt = Number(r.Recharge_received) || 0;
+    if (!(amt > 0)) return;
+    const paidAt = parseFlexDate(r.Paid_Date)?.getTime() || 0;
+    const existing = dpDeviceRecharge[r.current_device];
+    if (!existing || paidAt >= existing.paidAt) dpDeviceRecharge[r.current_device] = { amt, paidAt };
+  });
+
   const dpActiveCusts = fCustomers.filter(c => c.isDpCustomer && ["active", "in-active", "dunning"].includes(String(c.status || "").toLowerCase()));
   if (dpActiveCusts.length > 0) {
     dpActiveCusts.forEach(c => {
-      let amt = 0;
-      const m = String(c.plan_name || c.plan || "").match(/\b(\d{3,4})\b/) || String(c.plan_name || c.plan || "").match(/_(\d{3,4})/);
-      if (m) amt = Number(m[1]);
+      // Real recharge amount first (device_code -> current_device join);
+      // falls back to the old plan_name/plan regex guess, then finally the
+      // generic bucket, only when neither source resolves a real amount.
+      let amt = dpDeviceRecharge[c.device_code]?.amt || dpDeviceRecharge[c.purifier_id]?.amt || 0;
+      if (!amt) {
+        const m = String(c.plan_name || c.plan || "").match(/\b(\d{3,4})\b/) || String(c.plan_name || c.plan || "").match(/_(\d{3,4})/);
+        if (m) amt = Number(m[1]);
+      }
       const label = amt > 0 ? inr(amt) : "DrinkPrime Purifier";
       planCounts[label] = (planCounts[label] || 0) + 1;
     });
