@@ -522,7 +522,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       m: x.m,
       collected: Math.round(x.collected),
       pct: pctChange,
-      arpu: x.arpu
+      arpu: x.arpu,
+      newC: x.newC, // new customer signups this month — surfaced as a data label below (v2.29.418)
     };
   });
 
@@ -868,6 +869,13 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const underPenetratedApts = penetrationRisk
     .sort((a, b) => a.pct - b.pct)
     .slice(0, 5);
+  // Average penetration across ALL apartments with real flat counts (not just
+  // the bottom-5 "under-penetrated" slice above) — added as a benchmark so the
+  // reader can see how far below-average the flagged buildings really are,
+  // per explicit user request ("show average penetration also").
+  const avgPenetrationPct = penetrationRisk.length > 0
+    ? Math.round(penetrationRisk.reduce((s, a) => s + a.pct, 0) / penetrationRisk.length)
+    : null;
 
   // Revenue by Source donut (for current period). Colors (v2.29.388, per
   // explicit user-provided redesign) — cyan for Zoho Recharge, green for
@@ -2342,7 +2350,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <YAxis yAxisId="arpu" orientation="right" domain={["auto", "auto"]} tick={{ fill: "#609A32", fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={50}
                       tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
                     <Tooltip
-                      formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Total (Actual)" : n === "forecast" ? "Expected (Forecast)" : "ARPU"]}
+                      formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Total (Actual)" : "Expected (Forecast)"]}
                       contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }}
                       labelStyle={{ color: "#1D1D1F", fontWeight: 700, marginBottom: 4 }}
                       itemStyle={{ color: "#1D1D1F", fontWeight: 600 }}
@@ -2361,11 +2369,20 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       ))}
                       <LabelList dataKey="forecast" position="top" offset={8} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 600, fill: "#697D61" }} />
                     </Bar>
-                    <Area yAxisId="rev" type="monotone" dataKey="actual" fill="url(#warmThemeGrad)" stroke="none" isAnimationActive={false} />
+                    {/* tooltipType="none" (v2.29.418, per explicit user report — the
+                        hover showed "Total (Actual)" twice) — this Area only exists
+                        for the gradient fill under the Actual line below, which
+                        shares the same "actual" dataKey and already has its own
+                        tooltip row; without this the default Tooltip renders one
+                        row per graphical item on a dataKey, so both showed up. */}
+                    <Area yAxisId="rev" type="monotone" dataKey="actual" fill="url(#warmThemeGrad)" stroke="none" isAnimationActive={false} tooltipType="none" />
                     <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false} dot={{ r: 4, fill: "#FFFFFF", stroke: "#0A6E46", strokeWidth: 2.5 }} connectNulls={false}>
                       <LabelList dataKey="actual" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#0A6E46" }} />
                     </Line>
-                    <Line yAxisId="arpu" type="monotone" dataKey="arpu" stroke="#76C043" strokeWidth={2.2} strokeDasharray="4 4" isAnimationActive={false} dot={{ r: 3, fill: "#76C043" }} connectNulls={false} />
+                    {/* tooltipType="none" — ARPU removed from the hover per explicit
+                        user request; the line itself and its legend chip above are
+                        untouched, only its own tooltip row is gone. */}
+                    <Line yAxisId="arpu" type="monotone" dataKey="arpu" stroke="#76C043" strokeWidth={2.2} strokeDasharray="4 4" isAnimationActive={false} dot={{ r: 3, fill: "#76C043" }} connectNulls={false} tooltipType="none" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -2391,7 +2408,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={momData}
-                    margin={{ left: 8, right: 12, top: 26, bottom: 0 }}
+                    margin={{ left: 8, right: 12, top: 36, bottom: 0 }}
                     style={{ cursor: "pointer" }}
                     onClick={(state) => {
                       if (state && state.activePayload && state.activePayload.length) {
@@ -2426,20 +2443,31 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       <LabelList
                         dataKey="pct"
                         content={(props) => {
-                          const { x, y, width, value, index } = props;
-                          if (value == null) return null;
+                          const { x, y, width, index } = props;
+                          const value = momData[index]?.pct;
+                          const newC = momData[index]?.newC;
+                          // Per explicit user request ("add New CX also in the data
+                          // labels to understand") — a small "+N CX" line above the
+                          // existing %-change pill, so a month's growth can be read
+                          // alongside how many new customers actually joined it.
+                          // Gated on newC too (not just pct) since the FIRST month
+                          // in the 7-month window has no prior month to compare
+                          // against (pct is always null there) but still has a real
+                          // newC count worth showing on its own.
+                          if (value == null && newC == null) return null;
                           const isLast = index === momData.length - 1;
                           const positive = value > 0;
                           const bg = isLast ? "#0A6E46" : positive ? "rgba(10, 110, 70, 0.1)" : "rgba(220, 65, 65, 0.1)";
                           const fg = isLast ? "#FFFFFF" : positive ? "#0A6E46" : "#DC4141";
-                          const text = `${value > 0 ? "+" : ""}${value}%`;
-                          const bw = Math.max(34, text.length * 6.5 + 14);
+                          const text = value != null ? `${value > 0 ? "+" : ""}${value}%` : null;
+                          const bw = text ? Math.max(34, text.length * 6.5 + 14) : 0;
                           const cx = x + width / 2;
                           const cy = y - 12;
                           return (
                             <g key={`pct-${index}`} transform={`translate(${cx},${cy})`}>
-                              <rect x={-bw / 2} y={-12} width={bw} height={16} rx={4} fill={bg} />
-                              <text x={0} y={-1} fill={fg} fontSize={9} fontWeight={700} textAnchor="middle">{text}</text>
+                              {text && <rect x={-bw / 2} y={-12} width={bw} height={16} rx={4} fill={bg} />}
+                              {text && <text x={0} y={-1} fill={fg} fontSize={9} fontWeight={700} textAnchor="middle">{text}</text>}
+                              {newC != null && <text x={0} y={text ? -18 : -1} fill="#697D61" fontSize={8.5} fontWeight={700} textAnchor="middle">+{newC} CX</text>}
                             </g>
                           );
                         }}
@@ -2552,9 +2580,19 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
             {/* Expansion Opportunities / Under-Penetrated Buildings */}
             <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Under-Penetrated Buildings</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Low active density apartments (SLA target opportunity)</div>
-              
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, flexWrap: "wrap" }}>
+                <div>
+                  <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Under-Penetrated Buildings</h3>
+                  <div style={{ fontSize: 12, color: "#86868B" }}>Low active density apartments (SLA target opportunity)</div>
+                </div>
+                {avgPenetrationPct != null && (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(30,158,79,0.1)", color: "#1E9E4F", whiteSpace: "nowrap" }}>
+                    Avg. penetration: {avgPenetrationPct}%
+                  </span>
+                )}
+              </div>
+              <div style={{ height: 12 }} />
+
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {underPenetratedApts.map(apt => (
                   <div key={apt.name} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
