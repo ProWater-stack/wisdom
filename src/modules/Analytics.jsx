@@ -513,6 +513,19 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)), arpu: null });
 
   // ---- Month-on-Month (MoM) collected (trailing 7 months) -----------------
+  // Per-month New CX count for the MoM chart's data labels (v2.29.419) — was
+  // `x.newC`, built from `fCustomers` alone (customer PROFILE `since` dates
+  // only). Fixed per explicit user report with real numbers: Sept showed
+  // "+1 CX" here while the New CX KPI card (same page, same month) correctly
+  // showed 30. Root cause: the New CX KPI's own count (`allSignups`, above)
+  // merges TWO sources — Zoho subscription createdAt/activatedAt dates AND
+  // customer-profile `since` dates, deduplicated per customer — while
+  // `x.newC` only ever looked at the customer-profile side, so it silently
+  // missed every Zoho customer whose subscription date was the only real
+  // signal (the large majority, evidently). Rebuilt from the exact same
+  // `allSignups` array the KPI card itself counts from, bucketed by month —
+  // guarantees this can never again disagree with the KPI card.
+  const momNewCByIdx = m7.map(x => allSignups.filter(s => s.since.getFullYear() === x.y && s.since.getMonth() === x.m).length);
   const momData = m7.map((x, idx) => {
     const p = idx > 0 ? m7[idx - 1].collected : 0;
     const pctChange = p > 0 ? Math.round(((x.collected - p) / p) * 1000) / 10 : null;
@@ -523,7 +536,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       collected: Math.round(x.collected),
       pct: pctChange,
       arpu: x.arpu,
-      newC: x.newC, // new customer signups this month — surfaced as a data label below (v2.29.418)
+      newC: momNewCByIdx[idx],
     };
   });
 
@@ -866,12 +879,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       });
     }
   });
+  // Now ALL societies with a real flat count, worst (lowest active-density)
+  // first — was `.slice(0, 5)`; per explicit user request ("add all the
+  // societies... make it scrollable within the same size of the card") the
+  // card itself stays a fixed height with its own scroll area (see the
+  // render side) rather than only ever showing the bottom 5.
   const underPenetratedApts = penetrationRisk
-    .sort((a, b) => a.pct - b.pct)
-    .slice(0, 5);
-  // Average penetration across ALL apartments with real flat counts (not just
-  // the bottom-5 "under-penetrated" slice above) — added as a benchmark so the
-  // reader can see how far below-average the flagged buildings really are,
+    .sort((a, b) => a.pct - b.pct);
+  // Average penetration across ALL these apartments — a benchmark so the
+  // reader can see how far below-average the worst buildings really are,
   // per explicit user request ("show average penetration also").
   const avgPenetrationPct = penetrationRisk.length > 0
     ? Math.round(penetrationRisk.reduce((s, a) => s + a.pct, 0) / penetrationRisk.length)
@@ -2310,9 +2326,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
                     <span style={{ width: 8, height: 8, borderRadius: 2, background: "#E3EADE" }} /> Expected (Forecast)
                   </span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
-                    <span style={{ width: 14, height: 0, borderTop: "2px dashed #76C043" }} /> ARPU
-                  </span>
                 </div>
               </div>
 
@@ -2347,8 +2360,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.04)" vertical={false} />
                     <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.08)" }} tickLine={false} />
                     <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-                    <YAxis yAxisId="arpu" orientation="right" domain={["auto", "auto"]} tick={{ fill: "#609A32", fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={50}
-                      tickFormatter={v => v >= 1000 ? `₹${(v / 1000).toFixed(1)}k` : `₹${v}`} />
                     <Tooltip
                       formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Total (Actual)" : "Expected (Forecast)"]}
                       contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }}
@@ -2379,10 +2390,11 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false} dot={{ r: 4, fill: "#FFFFFF", stroke: "#0A6E46", strokeWidth: 2.5 }} connectNulls={false}>
                       <LabelList dataKey="actual" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#0A6E46" }} />
                     </Line>
-                    {/* tooltipType="none" — ARPU removed from the hover per explicit
-                        user request; the line itself and its legend chip above are
-                        untouched, only its own tooltip row is gone. */}
-                    <Line yAxisId="arpu" type="monotone" dataKey="arpu" stroke="#76C043" strokeWidth={2.2} strokeDasharray="4 4" isAnimationActive={false} dot={{ r: 3, fill: "#76C043" }} connectNulls={false} tooltipType="none" />
+                    {/* ARPU line removed entirely per explicit user request (v2.29.419)
+                        — was already dropped from the hover tooltip in v2.29.418; now
+                        gone from the chart/legend/axis too. `faData`'s own `arpu`
+                        field is left in place (harmless, just unused here) since
+                        nothing else reads it. */}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -2587,13 +2599,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 </div>
                 {avgPenetrationPct != null && (
                   <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 999, background: "rgba(30,158,79,0.1)", color: "#1E9E4F", whiteSpace: "nowrap" }}>
-                    Avg. penetration: {avgPenetrationPct}%
+                    Avg. Penetration Level: {avgPenetrationPct}%
                   </span>
                 )}
               </div>
               <div style={{ height: 12 }} />
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {/* Fixed-height scroll area (v2.29.419, per explicit user request)
+                  so listing EVERY society (not just the bottom 5) doesn't grow
+                  the card — matches the card's own previous ~5-row height. */}
+              <div className="scroll-thin" style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 230, overflowY: "auto", paddingRight: 4 }}>
                 {underPenetratedApts.map(apt => (
                   <div key={apt.name} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
