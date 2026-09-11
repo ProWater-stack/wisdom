@@ -1077,17 +1077,25 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const totalPages = Math.max(1, Math.ceil(sorted.length / PER));
   const cur = Math.min(page, totalPages);
   const rows = sorted.slice((cur - 1) * PER, cur * PER);
+  // Field names + column order updated v2.29.421 to match the live
+  // /devices/history feed's real waterQuality shape, per explicit user
+  // instruction — the old names (flowMLPM2/flowMLPM/totalDispensed2/
+  // totalDispensed) don't exist on the real payload at all anymore (checked
+  // live against a real device: rawWaterFlow/roWaterFlow/
+  // totalRawWaterDispensed/totalRoWaterDispensed/roRejectedWater are the
+  // actual keys); ph/tds/temp/pressure kept their names, unchanged.
   const exportReadings = () => exportToCsv(`prowater-iot-readings-${range}.csv`, [
     { label: "Time", get: (it) => iotStamp(it.timestamp) },
-    { label: "Input → RO Membrane", get: (it) => { const v = iotWqNum(it.waterQuality?.totalDispensed2); return v == null ? "" : v.toFixed(2); } },
+    { label: "Raw Water Dispensed (L)", get: (it) => { const v = iotWqNum(it.waterQuality?.totalRawWaterDispensed); return v == null ? "" : v.toFixed(2); } },
+    { label: "Raw Water Pressure (L/min)", get: (it) => { const v = iotWqNum(it.waterQuality?.rawWaterFlow); return v == null ? "" : v.toFixed(2); } },
     { label: "Tank %", get: (it) => iotTank(it.tankLevel).pct },
-    { label: "pH", get: (it) => { const v = iotWqNum(it.waterQuality?.ph); return v == null ? "" : v.toFixed(1); } },
     { label: "TDS (ppm)", get: (it) => { const v = iotWqNum(it.waterQuality?.tds); return v == null ? "" : Math.round(v); } },
+    { label: "pH", get: (it) => { const v = iotWqNum(it.waterQuality?.ph); return v == null ? "" : v.toFixed(1); } },
     { label: "Temp (°C)", get: (it) => { const v = iotWqNum(it.waterQuality?.temp); return v == null ? "" : v.toFixed(1); } },
-    { label: "Pressure (bar)", get: (it) => { const v = iotWqNum(it.waterQuality?.pressure); return v == null ? "" : v.toFixed(2); } },
-    { label: "Input Flow", get: (it) => { const v = iotWqNum(it.waterQuality?.flowMLPM2); return v == null ? "" : v.toFixed(2); } },
-    { label: "Output Flow", get: (it) => { const v = iotWqNum(it.waterQuality?.flowMLPM); return v == null ? "" : v.toFixed(2); } },
-    { label: "Dispensed (L)", get: (it) => { const v = iotWqNum(it.waterQuality?.totalDispensed); return v == null ? "" : v.toFixed(2); } },
+    { label: "RO Water Dispensed (L)", get: (it) => { const v = iotWqNum(it.waterQuality?.totalRoWaterDispensed); return v == null ? "" : v.toFixed(2); } },
+    { label: "RO Water Pressure (L/min)", get: (it) => { const v = iotWqNum(it.waterQuality?.roWaterFlow); return v == null ? "" : v.toFixed(2); } },
+    { label: "Pump Pressure (bar)", get: (it) => { const v = iotWqNum(it.waterQuality?.pressure); return v == null ? "" : v.toFixed(2); } },
+    { label: "Reject Water (L)", get: (it) => { const v = iotWqNum(it.waterQuality?.roRejectedWater); return v == null ? "" : v.toFixed(2); } },
   ], sorted);
   const btn = (disabled) => ({ fontSize: 12.5, fontWeight: 700, padding: "6px 14px", borderRadius: 9, border: "1px solid " + (disabled ? "var(--border)" : "var(--brand)"), background: disabled ? "#fff" : "var(--brand)", color: disabled ? "var(--faint)" : "#fff", cursor: disabled ? "not-allowed" : "pointer" });
   const syncHead = (
@@ -1331,7 +1339,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
           <thead>
             <tr style={{ borderBottom: "1px solid rgba(0,0,0,.06)", background: "rgba(243,248,236,.92)" }}>
-              {[syncHead, "Input → RO Membrane", "Tank", "pH", "TDS (ppm)", "Temp (°C)", "Pressure (bar)", "Input Flow", "Output Flow", "Dispensed (L)"].map((h, idx) => (
+              {[syncHead, "Raw Water Dispensed (L)", "Raw Water Pressure (L/min)", "Tank", "TDS (ppm)", "pH", "Temp (°C)", "RO Water Dispensed (L)", "RO Water Pressure (L/min)", "Pump Pressure (bar)", "Reject Water (L)"].map((h, idx) => (
                 <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", textAlign: "center", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
               ))}
             </tr>
@@ -1339,26 +1347,28 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
           <tbody>
             {rows.map((it, i) => {
               const t = iotTank(it.tankLevel);
-              const ph = iotWqNum(it.waterQuality?.ph), tds = iotWqNum(it.waterQuality?.tds), tp = iotWqNum(it.waterQuality?.temp);
-              const pr = iotWqNum(it.waterQuality?.pressure), inputFl = iotWqNum(it.waterQuality?.flowMLPM2), outputFl = iotWqNum(it.waterQuality?.flowMLPM);
-              const inputRo = iotWqNum(it.waterQuality?.totalDispensed2), disp = iotWqNum(it.waterQuality?.totalDispensed);
+              const rawDisp = iotWqNum(it.waterQuality?.totalRawWaterDispensed), rawFlow = iotWqNum(it.waterQuality?.rawWaterFlow);
+              const tds = iotWqNum(it.waterQuality?.tds), ph = iotWqNum(it.waterQuality?.ph), tp = iotWqNum(it.waterQuality?.temp);
+              const roDisp = iotWqNum(it.waterQuality?.totalRoWaterDispensed), roFlow = iotWqNum(it.waterQuality?.roWaterFlow);
+              const pr = iotWqNum(it.waterQuality?.pressure), rejectWater = iotWqNum(it.waterQuality?.roRejectedWater);
               const cellTd = { padding: "12px 18px", fontVariantNumeric: "tabular-nums", textAlign: "center" };
               return (
                 <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", transition: ".12s" }}>
                   <td style={{ padding: "12px 18px", fontFamily: "-apple-system,SF Mono,monospace", fontSize: 12, color: "#86868B", whiteSpace: "nowrap", textAlign: "center" }}>{iotStamp(it.timestamp)}</td>
-                  <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{inputRo == null ? "—" : inputRo.toFixed(2)}</td>
+                  <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{rawDisp == null ? "—" : rawDisp.toFixed(2)}</td>
+                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM", rawFlow)) }}>{rawFlow == null ? "—" : rawFlow.toFixed(2)}</td>
                   <td style={{ ...cellTd, fontWeight: 700, ...iotBandText(iotTankBand(t.pct)) }}>{t.pct}%</td>
-                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("tds", tds)) }}>{tds == null ? "—" : Math.round(tds)}</td>
+                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("ph", ph)) }}>{ph == null ? "—" : ph.toFixed(1)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("temp", tp)) }}>{tp == null ? "—" : tp.toFixed(1)}</td>
+                  <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{roDisp == null ? "—" : roDisp.toFixed(2)}</td>
+                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM", roFlow)) }}>{roFlow == null ? "—" : roFlow.toFixed(2)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("pressure", pr)) }}>{pr == null ? "—" : pr.toFixed(2)}</td>
-                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM2", inputFl)) }}>{inputFl == null ? "—" : inputFl.toFixed(2)}</td>
-                  <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM", outputFl)) }}>{outputFl == null ? "—" : outputFl.toFixed(2)}</td>
-                  <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{disp == null ? "—" : disp.toFixed(2)}</td>
+                  <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{rejectWater == null ? "—" : rejectWater.toFixed(2)}</td>
                 </tr>
               );
             })}
-            {sorted.length === 0 && <tr><td colSpan={10} style={{ padding: 0 }}><Empty msg={all.length ? "No readings match this filter." : "No readings yet."} /></td></tr>}
+            {sorted.length === 0 && <tr><td colSpan={11} style={{ padding: 0 }}><Empty msg={all.length ? "No readings match this filter." : "No readings yet."} /></td></tr>}
           </tbody>
         </table>
       </div>
