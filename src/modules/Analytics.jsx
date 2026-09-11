@@ -860,7 +860,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     pct: planCountsTotal > 0 ? Math.round((value / planCountsTotal) * 1000) / 10 : 0,
   })).sort((a, b) => b.value - a.value);
 
-  // Under-penetrated apartments calculation (Connection Density)
+  // Under-penetrated apartments calculation (Connection Density). Every
+  // apartment in `combinedAptAgg` is included now (v2.29.420) — the
+  // previous `if (flats > 0)` gate silently dropped any apartment with no
+  // matching Zoho `societies` record carrying a real `totalFlats` (in
+  // practice, most/all DP-only apartments, which have no Zoho society
+  // record at all), so "all societies" per the v2.29.419 fix still wasn't
+  // actually all of them. `pct`/`flats` are now `null` (not 0) when the
+  // flat count is genuinely unknown, so an apartment with no data reads as
+  // "no data" rather than a misleading "0% active".
   const penetrationRisk = [];
   Object.values(combinedAptAgg).forEach(apt => {
     const zSoc = societies.find(s => cleanAptName(s.society).toLowerCase() === apt.name.toLowerCase());
@@ -868,29 +876,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     const activeDp = apt.devices || 0;
     const activeZoho = zSoc ? (zSoc.active || 0) : 0;
     const totalActive = activeZoho + activeDp;
-    const pctVal = flats > 0 ? Math.round((totalActive / flats) * 100) : 0;
-    
-    if (flats > 0) {
-      penetrationRisk.push({
-        name: apt.name,
-        flats,
-        active: totalActive,
-        pct: pctVal
-      });
-    }
+    const pctVal = flats > 0 ? Math.round((totalActive / flats) * 100) : null;
+
+    penetrationRisk.push({
+      name: apt.name,
+      flats: flats > 0 ? flats : null,
+      active: totalActive,
+      pct: pctVal
+    });
   });
-  // Now ALL societies with a real flat count, worst (lowest active-density)
-  // first — was `.slice(0, 5)`; per explicit user request ("add all the
-  // societies... make it scrollable within the same size of the card") the
-  // card itself stays a fixed height with its own scroll area (see the
-  // render side) rather than only ever showing the bottom 5.
+  // Worst (lowest active-density) first; apartments with no known flat
+  // count sort last — they aren't confirmed under-penetrated, just unmeasured.
   const underPenetratedApts = penetrationRisk
-    .sort((a, b) => a.pct - b.pct);
-  // Average penetration across ALL these apartments — a benchmark so the
+    .sort((a, b) => (a.pct ?? Infinity) - (b.pct ?? Infinity));
+  // Average penetration across apartments with a KNOWN pct only — a
   // reader can see how far below-average the worst buildings really are,
   // per explicit user request ("show average penetration also").
-  const avgPenetrationPct = penetrationRisk.length > 0
-    ? Math.round(penetrationRisk.reduce((s, a) => s + a.pct, 0) / penetrationRisk.length)
+  const penetrationKnown = penetrationRisk.filter(a => a.pct != null);
+  const avgPenetrationPct = penetrationKnown.length > 0
+    ? Math.round(penetrationKnown.reduce((s, a) => s + a.pct, 0) / penetrationKnown.length)
     : null;
 
   // Revenue by Source donut (for current period). Colors (v2.29.388, per
@@ -2609,19 +2613,28 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   so listing EVERY society (not just the bottom 5) doesn't grow
                   the card — matches the card's own previous ~5-row height. */}
               <div className="scroll-thin" style={{ display: "flex", flexDirection: "column", gap: 12, maxHeight: 230, overflowY: "auto", paddingRight: 4 }}>
-                {underPenetratedApts.map(apt => (
-                  <div key={apt.name} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: "#0d2119" }}>{apt.name}</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "#DC4141" }}>{apt.pct}% active ({apt.active}/{apt.flats} flats)</span>
+                {underPenetratedApts.map(apt => {
+                  // An apartment with no matching Zoho `societies` record (no
+                  // known flat count — typically a DP-only building) shows a
+                  // muted "no data" row instead of being dropped or shown as
+                  // a misleading 0% (v2.29.420).
+                  const known = apt.pct != null;
+                  return (
+                    <div key={apt.name} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#0d2119" }}>{apt.name}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: known ? "#DC4141" : "#86868B" }}>
+                          {known ? `${apt.pct}% active (${apt.active}/${apt.flats} flats)` : `${apt.active} active (flat count unknown)`}
+                        </span>
+                      </div>
+                      <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
+                        {known && <div style={{ width: `${apt.pct}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #DC4141, #F59E0B)" }} />}
+                      </div>
                     </div>
-                    <div style={{ height: 6, borderRadius: 999, background: "rgba(0,0,0,.06)", overflow: "hidden" }}>
-                      <div style={{ width: `${apt.pct}%`, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #DC4141, #F59E0B)" }} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {underPenetratedApts.length === 0 && (
-                  <div style={{ padding: "40px 0", textAlign: "center", color: "#86868B", fontSize: 13 }}>No flat metrics found for active apartments.</div>
+                  <div style={{ padding: "40px 0", textAlign: "center", color: "#86868B", fontSize: 13 }}>No apartments found for the current filters.</div>
                 )}
               </div>
             </div>
