@@ -189,6 +189,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const [selectedAptDetails, setSelectedAptDetails] = useState(null);
   const [showNewCustPopup, setShowNewCustPopup] = useState(false);
   const [kpiModal, setKpiModal] = useState(null);              // universal KPI / chart drilldown modal
+  const [newCxSortDir, setNewCxSortDir] = useState("asc");     // New CX modal's Onboarding Date sort — default old→new, per explicit user request
   const [modalQ, setModalQ] = useState("");
   const [toast, setToast] = useState("");
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2400); };
@@ -1238,9 +1239,12 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     // 3. New CX drilldown
     if (type === "new_cx") {
       const signupsInPeriod = allSignups.filter(x => x.since >= range.from && x.since <= range.to);
-      const filtered = mq
+      const searched = mq
         ? signupsInPeriod.filter(x => `${x.name || ""} ${x.society} ${x.phone || ""} ${x.purifierId || ""} ${x.isDp ? "DrinkPrime DP" : "Zoho"}`.toLowerCase().includes(mq))
         : signupsInPeriod;
+      // Onboarding Date sort — default old→new (ascending), per explicit
+      // user request; the header below toggles `newCxSortDir`.
+      const filtered = [...searched].sort((a, b) => newCxSortDir === "asc" ? a.since - b.since : b.since - a.since);
 
       const exportCsv = () => exportToCsv("prowater-new-cx.csv", [
         { label: "Customer Name", get: x => x.name || "—" },
@@ -1310,7 +1314,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       <th style={modalTh}>Phone</th>
                       <th style={modalTh}>Purifier ID</th>
                       <th style={{ ...modalTh, textAlign: "center" }}>Stack</th>
-                      <th style={{ ...modalTh, textAlign: "center" }}>Onboarding Date</th>
+                      <th
+                        onClick={() => setNewCxSortDir(d => d === "asc" ? "desc" : "asc")}
+                        style={{ ...modalTh, textAlign: "center", cursor: "pointer", userSelect: "none" }}
+                        title={`Sort ${newCxSortDir === "asc" ? "newest first" : "oldest first"}`}
+                      >
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          Onboarding Date {newCxSortDir === "asc" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                        </span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
