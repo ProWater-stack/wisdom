@@ -1293,33 +1293,85 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               ))}
             </div>
 
-            {/* Daily Trend — per explicit user request, a small chart showing
-                daily installation counts across the whole period. */}
-            {dailyTrendData.length > 0 && (
-              <div style={{ marginBottom: 14, background: "rgba(243,248,236,0.4)", border: "1px solid rgba(8,128,90,0.1)", borderRadius: 12, padding: "10px 14px" }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#1D1D1F", marginBottom: 4 }}>Daily Trend</div>
-                <div style={{ height: 90 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={dailyTrendData} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="newCxDailyGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#08805A" stopOpacity={0.25} />
-                          <stop offset="100%" stopColor="#08805A" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <XAxis dataKey="shortLabel" tick={{ fontSize: 9.5, fill: "#94A3B8" }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={36} />
-                      <YAxis hide domain={[0, "auto"]} allowDecimals={false} />
-                      <Tooltip
-                        formatter={(v) => [v, "Installations"]}
-                        labelFormatter={(_, payload) => payload && payload[0] ? payload[0].payload.fullLabel : ""}
-                        contentStyle={{ borderRadius: 8, border: "1px solid rgba(0,0,0,.08)", fontSize: 11.5, padding: "6px 10px" }}
-                      />
-                      <Area type="monotone" dataKey="count" stroke="#08805A" strokeWidth={2} fill="url(#newCxDailyGrad)" isAnimationActive={false} dot={dailyTrendData.length <= 31 ? { r: 2.5, fill: "#08805A" } : false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+            {/* Daily Trend — per explicit user request, restyled to a
+                gradient bar + overlaid "running" trend line, with data
+                labels and a pulsing highlight on the most recent day that
+                actually had an installation (v2.29.424). */}
+            {dailyTrendData.length > 0 && (() => {
+              const lastIdx = dailyTrendData.length - 1;
+              // Pulsing "live" ring on the last bar's point — same animated-
+              // ring technique as IoT.jsx's tasteDot, marking "today"/the
+              // day of the most recent installation; every other point is a
+              // plain solid dot.
+              const dailyDot = (props) => {
+                const { cx, cy, index } = props;
+                if (cx == null || cy == null) return null;
+                if (index === lastIdx) {
+                  return (
+                    <g key={`dtd-${index}`}>
+                      <circle cx={cx} cy={cy} r={5} fill="none" stroke="#08805A" strokeWidth={2}>
+                        <animate attributeName="r" values="5;9;5" dur="1.4s" repeatCount="indefinite" />
+                        <animate attributeName="opacity" values="1;0.15;1" dur="1.4s" repeatCount="indefinite" />
+                      </circle>
+                      <circle cx={cx} cy={cy} r={3} fill="#08805A" />
+                    </g>
+                  );
+                }
+                return <circle key={`dtd-${index}`} cx={cx} cy={cy} r={2.5} fill="#fff" stroke="#08805A" strokeWidth={1.6} />;
+              };
+              return (
+                <div style={{ marginBottom: 14, background: "rgba(243,248,236,0.4)", border: "1px solid rgba(8,128,90,0.1)", borderRadius: 12, padding: "10px 14px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "#1D1D1F" }}>Daily Trend</div>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 700, color: "#08805A" }}>
+                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#08805A", display: "inline-block" }} />
+                      Last install: {dailyTrendData[lastIdx].fullLabel}
+                    </span>
+                  </div>
+                  <div style={{ height: 140 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={dailyTrendData} margin={{ top: 20, right: 8, left: -22, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="newCxBarGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#1E9E4F" stopOpacity={0.85} />
+                            <stop offset="100%" stopColor="#1E9E4F" stopOpacity={0.12} />
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="shortLabel" tick={{ fontSize: 9.5, fill: "#94A3B8" }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={36} />
+                        <YAxis hide domain={[0, (max) => Math.max(1, max) + 1]} allowDecimals={false} />
+                        <Tooltip
+                          formatter={(v) => [v, "Installations"]}
+                          labelFormatter={(_, payload) => payload && payload[0] ? payload[0].payload.fullLabel : ""}
+                          contentStyle={{ borderRadius: 8, border: "1px solid rgba(0,0,0,.08)", fontSize: 11.5, padding: "6px 10px" }}
+                          cursor={{ fill: "rgba(8,128,90,0.06)" }}
+                        />
+                        {/* isAnimationActive=false on purpose — Recharts has a known bug
+                            where a <Bar> with per-index <Cell> children (needed for the
+                            gradient/last-bar-highlight below) gets stuck invisible
+                            ("recharts-inactive-bar", never promoted to active) when bar
+                            animation is also enabled. Same reason the other Cell-based
+                            bars elsewhere on this page (Total Revenue, MoM Growth Trend)
+                            are also isAnimationActive=false — the "running" motion the
+                            user asked for lives on the Line below instead, which animates
+                            safely. */}
+                        <Bar dataKey="count" fill="url(#newCxBarGrad)" radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={false}>
+                          {dailyTrendData.map((_, idx) => (
+                            <Cell key={`dtb-${idx}`} fill={idx === lastIdx ? "#08805A" : "url(#newCxBarGrad)"} />
+                          ))}
+                          <LabelList dataKey="count" position="top" offset={6} formatter={v => v > 0 ? v : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#0A6E46" }} />
+                        </Bar>
+                        {/* tooltipType="none" — the Bar above already carries this
+                            dataKey's own tooltip row; without this the Line (same
+                            "count" dataKey, purely a visual trend overlay) would add
+                            a second, duplicate "Installations: N" row (same bug/fix
+                            as the Total Revenue chart's Area, v2.29.418). */}
+                        <Line type="monotone" dataKey="count" stroke="#0A6E46" strokeWidth={2} dot={dailyDot} isAnimationActive={true} animationDuration={900} animationEasing="ease-out" tooltipType="none" />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
               <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
