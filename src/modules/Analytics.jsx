@@ -1246,6 +1246,17 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       // user request; the header below toggles `newCxSortDir`.
       const filtered = [...searched].sort((a, b) => newCxSortDir === "asc" ? a.since - b.since : b.since - a.since);
 
+      // Daily Trend — how many installations happened each calendar day
+      // across the FULL period (not affected by the search box, same as the
+      // society summary cards above), per explicit user request ("a small
+      // timeline graph... daily how many total installations happening").
+      const dailyTrendMap = {};
+      signupsInPeriod.forEach(x => { const k = isoDay(x.since); dailyTrendMap[k] = (dailyTrendMap[k] || 0) + 1; });
+      const dailyTrendData = Object.keys(dailyTrendMap).sort().map(day => {
+        const d = new Date(day);
+        return { day, shortLabel: d.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }), fullLabel: fmtDate(d), count: dailyTrendMap[day] };
+      });
+
       const exportCsv = () => exportToCsv("prowater-new-cx.csv", [
         { label: "Customer Name", get: x => x.name || "—" },
         { label: "Society Name", get: x => x.society },
@@ -1281,6 +1292,34 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 </div>
               ))}
             </div>
+
+            {/* Daily Trend — per explicit user request, a small chart showing
+                daily installation counts across the whole period. */}
+            {dailyTrendData.length > 0 && (
+              <div style={{ marginBottom: 14, background: "rgba(243,248,236,0.4)", border: "1px solid rgba(8,128,90,0.1)", borderRadius: 12, padding: "10px 14px" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: "#1D1D1F", marginBottom: 4 }}>Daily Trend</div>
+                <div style={{ height: 90 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyTrendData} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="newCxDailyGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#08805A" stopOpacity={0.25} />
+                          <stop offset="100%" stopColor="#08805A" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="shortLabel" tick={{ fontSize: 9.5, fill: "#94A3B8" }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={36} />
+                      <YAxis hide domain={[0, "auto"]} allowDecimals={false} />
+                      <Tooltip
+                        formatter={(v) => [v, "Installations"]}
+                        labelFormatter={(_, payload) => payload && payload[0] ? payload[0].payload.fullLabel : ""}
+                        contentStyle={{ borderRadius: 8, border: "1px solid rgba(0,0,0,.08)", fontSize: 11.5, padding: "6px 10px" }}
+                      />
+                      <Area type="monotone" dataKey="count" stroke="#08805A" strokeWidth={2} fill="url(#newCxDailyGrad)" isAnimationActive={false} dot={dailyTrendData.length <= 31 ? { r: 2.5, fill: "#08805A" } : false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
               <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
