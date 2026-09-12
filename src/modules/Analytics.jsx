@@ -1364,8 +1364,21 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                             dataKey's own tooltip row; without this the Line (same
                             "count" dataKey, purely a visual trend overlay) would add
                             a second, duplicate "Installations: N" row (same bug/fix
-                            as the Total Revenue chart's Area, v2.29.418). */}
-                        <Line type="monotone" dataKey="count" stroke="#0A6E46" strokeWidth={2} dot={dailyDot} isAnimationActive={true} animationDuration={900} animationEasing="ease-out" tooltipType="none" />
+                            as the Total Revenue chart's Area, v2.29.418).
+                            isAnimationActive=false (v2.29.425, per explicit user
+                            report — "data labels should be constant and not
+                            flashing"): this whole modal sits inside Shell's
+                            per-second session-timer tick (`setNow`/`setElapsed` in
+                            App.jsx), so ANY component here re-renders once a
+                            second — an entrance animation on the Line replayed on
+                            every one of those ticks, reading as a constant flash
+                            (of the line and, by association, the bar labels above
+                            it). The "running" motion now lives entirely in the
+                            pulsing ring on the last point (dailyDot below), a
+                            native SVG <animate> that runs continuously on its own,
+                            independent of React re-renders — it doesn't need a
+                            replaying entrance animation to look alive. */}
+                        <Line type="monotone" dataKey="count" stroke="#0A6E46" strokeWidth={2} dot={dailyDot} isAnimationActive={false} tooltipType="none" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
