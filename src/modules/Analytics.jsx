@@ -1293,56 +1293,82 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               ))}
             </div>
 
-            {/* Daily Trend — per explicit user request, restyled to a
-                gradient bar + overlaid "running" trend line, with data
-                labels and a pulsing highlight on the most recent day that
-                actually had an installation (v2.29.424). */}
+            {/* Daily Trend — restyled to "Installation Trend" per an explicit
+                user-provided mockup: frosted-glass card, a "Live Activity"
+                pill (CSS ping-dot), gradient bars with the most recent day
+                highlighted in blue (was solid green) instead of just a
+                darker green, matching dot/label/axis-tick colors, and
+                drop-shadow glows on the line dots. Underlying data/behavior
+                (isAnimationActive settings, tooltipType dedup, etc. — see
+                v2.29.424/425's own notes, still applicable) is unchanged. */}
             {dailyTrendData.length > 0 && (() => {
               const lastIdx = dailyTrendData.length - 1;
+              const GREEN = "#08805A", BLUE = "#007AFF";
               // Pulsing "live" ring on the last bar's point — same animated-
               // ring technique as IoT.jsx's tasteDot, marking "today"/the
               // day of the most recent installation; every other point is a
-              // plain solid dot.
+              // plain solid dot with a soft drop-shadow glow, per the mockup.
               const dailyDot = (props) => {
                 const { cx, cy, index } = props;
                 if (cx == null || cy == null) return null;
                 if (index === lastIdx) {
                   return (
                     <g key={`dtd-${index}`}>
-                      <circle cx={cx} cy={cy} r={5} fill="none" stroke="#08805A" strokeWidth={2}>
-                        <animate attributeName="r" values="5;9;5" dur="1.4s" repeatCount="indefinite" />
-                        <animate attributeName="opacity" values="1;0.15;1" dur="1.4s" repeatCount="indefinite" />
+                      <circle cx={cx} cy={cy} r={6} fill="none" stroke={BLUE} strokeWidth={2}>
+                        <animate attributeName="r" values="6;12;6" dur="2s" repeatCount="indefinite" />
+                        <animate attributeName="opacity" values="1;0;1" dur="2s" repeatCount="indefinite" />
                       </circle>
-                      <circle cx={cx} cy={cy} r={3} fill="#08805A" />
+                      <circle cx={cx} cy={cy} r={4.5} fill={BLUE} stroke="#fff" strokeWidth={2} style={{ filter: "drop-shadow(0 2px 6px rgba(0,122,255,0.4))" }} />
                     </g>
                   );
                 }
-                return <circle key={`dtd-${index}`} cx={cx} cy={cy} r={2.5} fill="#fff" stroke="#08805A" strokeWidth={1.6} />;
+                return <circle key={`dtd-${index}`} cx={cx} cy={cy} r={3.5} fill="#fff" stroke={GREEN} strokeWidth={2} style={{ filter: "drop-shadow(0 2px 4px rgba(16,185,129,0.3))" }} />;
               };
               return (
-                <div style={{ marginBottom: 14, background: "rgba(243,248,236,0.4)", border: "1px solid rgba(8,128,90,0.1)", borderRadius: 12, padding: "10px 14px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "#1D1D1F" }}>Daily Trend</div>
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9.5, fontWeight: 700, color: "#08805A" }}>
-                      <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#08805A", display: "inline-block" }} />
-                      Last install: {dailyTrendData[lastIdx].fullLabel}
-                    </span>
+                <div style={{ marginBottom: 14, background: "rgba(255,255,255,0.70)", WebkitBackdropFilter: "blur(28px) saturate(190%)", backdropFilter: "blur(28px) saturate(190%)", border: "0.5px solid rgba(255,255,255,0.90)", borderRadius: 20, boxShadow: "0 16px 36px -10px rgba(15,23,42,0.05), 0 1px 3px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", padding: "18px 20px", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", boxSizing: "border-box" }}>
+                  <style>{"@keyframes newCxLivePing{75%,100%{transform:scale(2.2);opacity:0}}"}</style>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16, fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>Installation Trend</h3>
+                      <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Daily rolling volume</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: "rgba(52,199,89,0.08)", border: "0.5px solid rgba(52,199,89,0.2)", fontSize: 11, fontWeight: 600, color: GREEN }}>
+                        <span style={{ position: "relative", display: "flex", width: 6, height: 6 }}>
+                          <span style={{ position: "absolute", width: "100%", height: "100%", background: "#34C759", borderRadius: "50%", opacity: 0.6, animation: "newCxLivePing 2s cubic-bezier(0,0,0.2,1) infinite" }} />
+                          <span style={{ position: "relative", width: 6, height: 6, background: "#34C759", borderRadius: "50%" }} />
+                        </span>
+                        Live Activity
+                      </span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: "#94A3B8" }}>Last: {dailyTrendData[lastIdx].shortLabel}</span>
+                    </div>
                   </div>
-                  <div style={{ height: 140 }}>
+                  <div style={{ height: 160 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart data={dailyTrendData} margin={{ top: 20, right: 8, left: -22, bottom: 0 }}>
                         <defs>
                           <linearGradient id="newCxBarGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#1E9E4F" stopOpacity={0.85} />
-                            <stop offset="100%" stopColor="#1E9E4F" stopOpacity={0.12} />
+                            <stop offset="0%" stopColor="#34C759" stopOpacity={0.8} />
+                            <stop offset="100%" stopColor="#34C759" stopOpacity={0.05} />
+                          </linearGradient>
+                          <linearGradient id="newCxBarGradHi" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={BLUE} stopOpacity={0.9} />
+                            <stop offset="100%" stopColor={BLUE} stopOpacity={0.1} />
                           </linearGradient>
                         </defs>
-                        <XAxis dataKey="shortLabel" tick={{ fontSize: 9.5, fill: "#94A3B8" }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={36} />
+                        <XAxis
+                          dataKey="shortLabel"
+                          tick={(p) => {
+                            const isLast = p.index === lastIdx;
+                            return <text x={p.x} y={p.y + 9} textAnchor="middle" fontSize={11} fontWeight={isLast ? 700 : 500} fill={isLast ? BLUE : "#94A3B8"}>{p.payload.value}</text>;
+                          }}
+                          axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={36}
+                        />
                         <YAxis hide domain={[0, (max) => Math.max(1, max) + 1]} allowDecimals={false} />
                         <Tooltip
                           formatter={(v) => [v, "Installations"]}
                           labelFormatter={(_, payload) => payload && payload[0] ? payload[0].payload.fullLabel : ""}
-                          contentStyle={{ borderRadius: 8, border: "1px solid rgba(0,0,0,.08)", fontSize: 11.5, padding: "6px 10px" }}
+                          contentStyle={{ borderRadius: 12, border: "0.5px solid rgba(0,0,0,.08)", background: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", fontSize: 11.5, padding: "8px 12px" }}
                           cursor={{ fill: "rgba(8,128,90,0.06)" }}
                         />
                         {/* isAnimationActive=false on purpose — Recharts has a known bug
@@ -1354,11 +1380,18 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                             are also isAnimationActive=false — the "running" motion the
                             user asked for lives on the Line below instead, which animates
                             safely. */}
-                        <Bar dataKey="count" fill="url(#newCxBarGrad)" radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={false}>
+                        <Bar dataKey="count" fill="url(#newCxBarGrad)" radius={[6, 6, 0, 0]} maxBarSize={30} isAnimationActive={false}>
                           {dailyTrendData.map((_, idx) => (
-                            <Cell key={`dtb-${idx}`} fill={idx === lastIdx ? "#08805A" : "url(#newCxBarGrad)"} />
+                            <Cell key={`dtb-${idx}`} fill={idx === lastIdx ? "url(#newCxBarGradHi)" : "url(#newCxBarGrad)"} />
                           ))}
-                          <LabelList dataKey="count" position="top" offset={6} formatter={v => v > 0 ? v : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#0A6E46" }} />
+                          <LabelList
+                            dataKey="count"
+                            content={(p) => {
+                              if (p.value == null || p.value === 0) return null;
+                              const isLast = p.index === lastIdx;
+                              return <text x={p.x + p.width / 2} y={p.y - 6} textAnchor="middle" fontSize={isLast ? 12 : 11} fontWeight={isLast ? 800 : 700} fill={isLast ? BLUE : GREEN}>{p.value}</text>;
+                            }}
+                          />
                         </Bar>
                         {/* tooltipType="none" — the Bar above already carries this
                             dataKey's own tooltip row; without this the Line (same
@@ -1378,7 +1411,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                             native SVG <animate> that runs continuously on its own,
                             independent of React re-renders — it doesn't need a
                             replaying entrance animation to look alive. */}
-                        <Line type="monotone" dataKey="count" stroke="#0A6E46" strokeWidth={2} dot={dailyDot} isAnimationActive={false} tooltipType="none" />
+                        <Line type="monotone" dataKey="count" stroke="#10B981" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" dot={dailyDot} isAnimationActive={false} tooltipType="none" />
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
