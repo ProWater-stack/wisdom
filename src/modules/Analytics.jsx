@@ -3178,247 +3178,221 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             const allAptTotalDpRech   = displayedAptRows.reduce((s, r) => s + r.dpRecharge, 0);
             const allAptTotalCollected = displayedAptRows.reduce((s, r) => s + r.totalCollected, 0);
 
+            // Shared glass-footer-cell style (v2.29.430, per an explicit
+            // user-provided mockup) — every footer <td> shares an opaque
+            // "raised" white glass surface + shadow; only the first/last
+            // cell round their outer corners so the row reads as one
+            // continuous pill, matching the mockup's approach exactly.
+            const footerCellBase = { padding: "18px 18px", background: "rgba(255,255,255,0.9)", boxShadow: "0 4px 16px rgba(0,0,0,0.04), inset 0 1px 1px #FFF", position: "relative" };
+            const dashColor = "rgba(0,0,0,0.2)";
+
             return (
-              <div style={{ ...softShadow, padding: 0, marginBottom: 16, overflow: "hidden" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "18px 20px 12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-                  <div>
-                    <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: 0 }}>All Apartment Performance</h3>
-                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Combined Zoho &amp; DrinkPrime metrics · {rangeLabel(range)}{selSource ? ` · Filtered: ${selSource}` : ""}</div>
+              <div style={{ position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", marginBottom: 16, zIndex: 1 }}>
+                {/* Ambient light-bleed glows behind the glass card, per the mockup */}
+                <div style={{ position: "absolute", top: "-10%", left: "-5%", width: "50%", height: "120%", background: "radial-gradient(ellipse at center, rgba(8,128,90,0.15) 0%, transparent 60%)", filter: "blur(50px)", zIndex: -1, pointerEvents: "none" }} />
+                <div style={{ position: "absolute", bottom: "-20%", right: "-10%", width: "60%", height: "100%", background: "radial-gradient(ellipse at center, rgba(0,122,255,0.08) 0%, transparent 60%)", filter: "blur(60px)", zIndex: -1, pointerEvents: "none" }} />
+
+                <div style={{ background: "rgba(255,255,255,0.65)", WebkitBackdropFilter: "blur(40px) saturate(180%)", backdropFilter: "blur(40px) saturate(180%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 28, boxShadow: "0 24px 48px -12px rgba(15,23,42,0.08), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,1)", padding: 24, overflow: "hidden" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
+                    <div>
+                      <h3 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.02em", background: "linear-gradient(135deg, #0F172A 0%, #334155 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>All Apartment Performance</h3>
+                      <div style={{ fontSize: 13, color: "#64748B", fontWeight: 500 }}>Combined Zoho &amp; DrinkPrime metrics · {rangeLabel(range)}{selSource ? ` · Filtered: ${selSource}` : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {selSource && (
+                        <button
+                          onClick={() => setSelSource(null)}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, padding: "6px 12px", borderRadius: 999, background: "rgba(255,255,255,0.8)", color: "#08805A", border: "0.5px solid rgba(8,128,90,0.2)", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", cursor: "pointer" }}
+                        >
+                          Showing {selSource} (Clear) <X size={11} />
+                        </button>
+                      )}
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 999, background: "rgba(255,255,255,0.8)", color: "#08805A", border: "0.5px solid rgba(8,128,90,0.15)", boxShadow: "0 2px 8px rgba(0,0,0,0.04), inset 0 1px 1px #FFF" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#08805A", boxShadow: "0 1px 3px rgba(8,128,90,0.4)" }} />
+                        {displayedAptRows.length} Apartments
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    {selSource && (
-                      <button
-                        onClick={() => setSelSource(null)}
-                        style={{ ...btnGhost, fontSize: 11, padding: "3px 8px", color: "#08805A", borderColor: "rgba(8,128,90,0.2)" }}
-                      >
-                        Showing {selSource} (Clear) <X size={11} />
-                      </button>
-                    )}
-                    <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: "rgba(30,158,79,0.1)", color: "#1E9E4F" }}>
-                      {displayedAptRows.length} apartments
-                    </span>
-                  </div>
-                </div>
-                {displayedAptRows.length > 0 ? (
-                  <div className="scroll-thin" style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
-                      <thead>
-                        <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
-                          <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "left", verticalAlign: "middle" }}>Apartment Name</th>
-                          <th rowSpan={2} style={{ padding: "13px 14px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Total Customer</th>
-                          <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>Zoho</th>
-                          <th colSpan={2} style={{ padding: "8px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "1px solid rgba(8,128,90,0.12)" }}>DrinkPrime</th>
-                          <th rowSpan={2} style={{ padding: "13px 18px", fontSize: 11, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", verticalAlign: "middle" }}>Total</th>
-                        </tr>
-                        <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
-                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Deposit</th>
-                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Recharge</th>
-                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Deposit</th>
-                          <th style={{ padding: "6px 18px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 700, textAlign: "center" }}>Recharge</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {displayedAptRows.map((r, i) => {
-                          const isSelected = selSoc && selSoc.includes(r.name);
-                          return (
-                            <tr
-                              key={r.name}
-                              onClick={() => setSelSoc(isSelected ? null : [r.name])}
-                              style={{
-                                borderBottom: "1px solid rgba(0,0,0,0.04)",
-                                cursor: "pointer",
-                                background: isSelected
-                                  ? "rgba(8,128,90,0.06)"
-                                  : (i % 2 === 0 ? "transparent" : "rgba(243,248,236,.3)"),
-                                transition: "background .15s ease"
-                              }}
+
+                  {displayedAptRows.length > 0 ? (
+                    <div className="scroll-thin" style={{ overflowX: "auto", background: "rgba(255,255,255,0.4)", borderRadius: 20, border: "0.5px solid rgba(0,0,0,0.04)", boxShadow: "inset 0 1px 2px rgba(255,255,255,0.6)" }}>
+                      <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, minWidth: 960 }}>
+                        <thead>
+                          <tr>
+                            <th rowSpan={2} style={{ padding: "16px 24px", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#64748B", fontWeight: 600, textAlign: "left", verticalAlign: "middle", borderBottom: "0.5px solid rgba(0,0,0,0.04)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "rgba(248,250,252,0.4)" }}>Apartment Name</th>
+                            <th rowSpan={2} style={{ padding: "16px 16px", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#64748B", fontWeight: 600, textAlign: "center", verticalAlign: "middle", borderBottom: "0.5px solid rgba(0,0,0,0.04)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "rgba(248,250,252,0.4)" }}>Total Customer</th>
+                            <th colSpan={2} style={{ padding: "12px 24px 8px", fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#007AFF", fontWeight: 700, textAlign: "center", borderBottom: "0.5px solid rgba(0,122,255,0.1)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "linear-gradient(180deg, rgba(0,122,255,0.02) 0%, rgba(0,122,255,0.05) 100%)" }}>Zoho</th>
+                            <th colSpan={2} style={{ padding: "12px 24px 8px", fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "0.5px solid rgba(8,128,90,0.1)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "linear-gradient(180deg, rgba(8,128,90,0.02) 0%, rgba(8,128,90,0.05) 100%)" }}>DrinkPrime</th>
+                            <th rowSpan={2} style={{ padding: "16px 24px", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#0F172A", fontWeight: 700, textAlign: "right", verticalAlign: "middle", borderBottom: "0.5px solid rgba(0,0,0,0.04)", background: "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.02) 100%)" }}>Total</th>
+                          </tr>
+                          <tr>
+                            <th style={{ padding: "8px 24px 12px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 600, textAlign: "right", borderBottom: "0.5px solid rgba(0,0,0,0.04)", background: "rgba(0,122,255,0.02)" }}>Deposit</th>
+                            <th style={{ padding: "8px 24px 12px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#007AFF", fontWeight: 700, textAlign: "right", borderBottom: "0.5px solid rgba(0,0,0,0.04)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "rgba(0,122,255,0.02)" }}>Recharge</th>
+                            <th style={{ padding: "8px 24px 12px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#64748B", fontWeight: 600, textAlign: "right", borderBottom: "0.5px solid rgba(0,0,0,0.04)", background: "rgba(8,128,90,0.02)" }}>Deposit</th>
+                            <th style={{ padding: "8px 24px 12px", fontSize: 10, letterSpacing: ".05em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "right", borderBottom: "0.5px solid rgba(0,0,0,0.04)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "rgba(8,128,90,0.02)" }}>Recharge</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {displayedAptRows.map((r, i) => {
+                            const isSelected = selSoc && selSoc.includes(r.name);
+                            const isLastRow = i === displayedAptRows.length - 1;
+                            const rowBorder = isLastRow ? "none" : "0.5px solid rgba(0,0,0,0.03)";
+                            return (
+                              <tr
+                                key={r.name}
+                                onClick={() => setSelSoc(isSelected ? null : [r.name])}
+                                style={{
+                                  cursor: "pointer",
+                                  background: isSelected
+                                    ? "rgba(8,128,90,0.08)"
+                                    : (i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.3)"),
+                                  transition: "background-color .2s ease"
+                                }}
+                              >
+                                <td
+                                  onClick={(e) => { e.stopPropagation(); setSelectedAptDetails(r.name); }}
+                                  style={{ padding: "16px 24px", fontSize: 13.5, fontWeight: 600, color: "#08805A", whiteSpace: "nowrap", textAlign: "left", borderBottom: rowBorder, borderRight: "0.5px solid rgba(0,0,0,0.02)", cursor: "pointer" }}
+                                  title="Click to view apartment details & recharge customers"
+                                >
+                                  <span style={{ borderBottom: "1px solid rgba(8,128,90,0.2)", paddingBottom: 1 }}>{r.name}</span>
+                                </td>
+                                <td
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setKpiModal({
+                                      type: "active_customers",
+                                      aptFilter: r.name,
+                                      title: `${r.name} · Active Customers`,
+                                      sub: `${r.totalCustomers || 0} active customers in ${r.name}`
+                                    });
+                                  }}
+                                  style={{ padding: "16px 16px", textAlign: "center", fontSize: 13, fontWeight: 600, color: "#08805A", borderBottom: rowBorder, borderRight: "0.5px solid rgba(0,0,0,0.02)", fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
+                                  title="Click to view active customer directory for this apartment"
+                                >
+                                  <span style={{ display: "inline-flex", justifyContent: "center", alignItems: "center", background: "rgba(255,255,255,0.8)", border: "0.5px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 2px rgba(0,0,0,0.03)", borderRadius: 6, padding: "2px 10px" }}>{r.totalCustomers || 0}</span>
+                                </td>
+                                <td
+                                  onClick={(e) => {
+                                    if (r.zohoDeposit > 0) {
+                                      e.stopPropagation();
+                                      setKpiModal({ type: "payments", aptFilter: r.name, filter: "zoho_deposit", title: `${r.name} · Zoho Deposit`, sub: `Zoho deposit payments in ${rangeLabel(range)}` });
+                                    }
+                                  }}
+                                  style={{ padding: "16px 24px", textAlign: "right", fontSize: 13.5, color: r.zohoDeposit > 0 ? "#64748B" : dashColor, borderBottom: rowBorder, fontVariantNumeric: "tabular-nums", cursor: r.zohoDeposit > 0 ? "pointer" : "default" }}
+                                  title={r.zohoDeposit > 0 ? "Click to view Zoho deposit payments" : ""}
+                                >
+                                  {r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}
+                                </td>
+                                <td
+                                  onClick={(e) => {
+                                    if (r.zohoRecharge > 0) {
+                                      e.stopPropagation();
+                                      setKpiModal({ type: "payments", aptFilter: r.name, filter: "zoho_recharge", title: `${r.name} · Zoho Recharge`, sub: `Zoho recharge payments in ${rangeLabel(range)}` });
+                                    }
+                                  }}
+                                  style={{ padding: "16px 24px", textAlign: "right", fontSize: 14, color: r.zohoRecharge > 0 ? "#007AFF" : dashColor, fontWeight: r.zohoRecharge > 0 ? 600 : 400, borderBottom: rowBorder, borderRight: "0.5px solid rgba(0,0,0,0.02)", fontVariantNumeric: "tabular-nums", cursor: r.zohoRecharge > 0 ? "pointer" : "default" }}
+                                  title={r.zohoRecharge > 0 ? "Click to view Zoho recharge payments" : ""}
+                                >
+                                  {r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}
+                                </td>
+                                <td
+                                  onClick={(e) => {
+                                    if (r.dpDeposit > 0) {
+                                      e.stopPropagation();
+                                      setKpiModal({ type: "payments", aptFilter: r.name, filter: "dp_deposit", title: `${r.name} · DrinkPrime Deposit`, sub: `DrinkPrime deposit records in ${rangeLabel(range)}` });
+                                    }
+                                  }}
+                                  style={{ padding: "16px 24px", textAlign: "right", fontSize: 13.5, color: r.dpDeposit > 0 ? "#64748B" : dashColor, borderBottom: rowBorder, fontVariantNumeric: "tabular-nums", cursor: r.dpDeposit > 0 ? "pointer" : "default" }}
+                                  title={r.dpDeposit > 0 ? "Click to view DrinkPrime deposit records" : ""}
+                                >
+                                  {r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}
+                                </td>
+                                <td
+                                  onClick={(e) => {
+                                    if (r.dpRecharge > 0) {
+                                      e.stopPropagation();
+                                      setKpiModal({ type: "payments", aptFilter: r.name, filter: "dp_recharge", title: `${r.name} · DrinkPrime Recharge`, sub: `DrinkPrime recharge records in ${rangeLabel(range)}` });
+                                    }
+                                  }}
+                                  style={{ padding: "16px 24px", textAlign: "right", fontSize: 14, color: r.dpRecharge > 0 ? "#08805A" : dashColor, fontWeight: r.dpRecharge > 0 ? 600 : 400, borderBottom: rowBorder, borderRight: "0.5px solid rgba(0,0,0,0.02)", fontVariantNumeric: "tabular-nums", cursor: r.dpRecharge > 0 ? "pointer" : "default" }}
+                                  title={r.dpRecharge > 0 ? "Click to view DrinkPrime recharge records" : ""}
+                                >
+                                  {r.dpRecharge > 0 ? inr(Math.round(r.dpRecharge)) : "—"}
+                                </td>
+                                <td
+                                  onClick={(e) => {
+                                    if (r.totalCollected > 0) {
+                                      e.stopPropagation();
+                                      setKpiModal({ type: "payments", aptFilter: r.name, filter: "all", title: `${r.name} · All Payments`, sub: `All payments in ${rangeLabel(range)}` });
+                                    }
+                                  }}
+                                  style={{ padding: "16px 24px", textAlign: "right", fontSize: 14.5, fontWeight: 700, color: "#0F172A", borderBottom: rowBorder, fontVariantNumeric: "tabular-nums", background: "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.01) 100%)", cursor: r.totalCollected > 0 ? "pointer" : "default" }}
+                                  title="Click to view all payments for this apartment"
+                                >
+                                  {inr(Math.round(r.totalCollected))}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {/* Spacer row so the "raised" glass footer visually
+                              separates from the last data row, per the mockup. */}
+                          <tr><td colSpan={7} style={{ height: 8 }} /></tr>
+                          <tr>
+                            <td style={{ ...footerCellBase, fontSize: 14, fontWeight: 800, color: "#0F172A", textAlign: "left", borderRadius: "16px 0 0 16px", overflow: "hidden" }}>
+                              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(8,128,90,0.05) 0%, transparent 100%)", pointerEvents: "none" }} />
+                              <span style={{ position: "relative" }}>Total ({displayedAptRows.length})</span>
+                            </td>
+                            <td
+                              onClick={() => setKpiModal({ type: "active_customers", title: "Active Customers Directory", sub: "All active customer subscriptions across Zoho & DrinkPrime" })}
+                              style={{ ...footerCellBase, textAlign: "center", fontSize: 14, fontWeight: 800, color: "#08805A", textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: "rgba(8,128,90,0.3)", fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
+                              title="Click to view all active customers"
                             >
-                              <td
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedAptDetails(r.name);
-                                }}
-                                style={{
-                                  padding: "13px 18px",
-                                  fontSize: 13.5,
-                                  fontWeight: 700,
-                                  color: "#08805A",
-                                  textDecoration: "underline",
-                                  whiteSpace: "nowrap",
-                                  textAlign: "left",
-                                  cursor: "pointer"
-                                }}
-                                title="Click to view apartment details & recharge customers"
-                              >
-                                {r.name}
-                              </td>
-                              <td
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setKpiModal({
-                                    type: "active_customers",
-                                    aptFilter: r.name,
-                                    title: `${r.name} · Active Customers`,
-                                    sub: `${r.totalCustomers || 0} active customers in ${r.name}`
-                                  });
-                                }}
-                                style={{
-                                  padding: "13px 14px",
-                                  textAlign: "center",
-                                  fontSize: 13,
-                                  fontWeight: 700,
-                                  color: "#08805A",
-                                  textDecoration: "underline",
-                                  cursor: "pointer"
-                                }}
-                                title="Click to view active customer directory for this apartment"
-                              >
-                                {r.totalCustomers || 0}
-                              </td>
-                              <td
-                                onClick={(e) => {
-                                  if (r.zohoDeposit > 0) {
-                                    e.stopPropagation();
-                                    setKpiModal({
-                                      type: "payments",
-                                      aptFilter: r.name,
-                                      filter: "zoho_deposit",
-                                      title: `${r.name} · Zoho Deposit`,
-                                      sub: `Zoho deposit payments in ${rangeLabel(range)}`
-                                    });
-                                  }
-                                }}
-                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569", cursor: r.zohoDeposit > 0 ? "pointer" : "default" }}
-                                title={r.zohoDeposit > 0 ? "Click to view Zoho deposit payments" : ""}
-                              >
-                                {r.zohoDeposit > 0 ? inr(Math.round(r.zohoDeposit)) : "—"}
-                              </td>
-                              <td
-                                onClick={(e) => {
-                                  if (r.zohoRecharge > 0) {
-                                    e.stopPropagation();
-                                    setKpiModal({
-                                      type: "payments",
-                                      aptFilter: r.name,
-                                      filter: "zoho_recharge",
-                                      title: `${r.name} · Zoho Recharge`,
-                                      sub: `Zoho recharge payments in ${rangeLabel(range)}`
-                                    });
-                                  }
-                                }}
-                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600, cursor: r.zohoRecharge > 0 ? "pointer" : "default" }}
-                                title={r.zohoRecharge > 0 ? "Click to view Zoho recharge payments" : ""}
-                              >
-                                {r.zohoRecharge > 0 ? inr(Math.round(r.zohoRecharge)) : "—"}
-                              </td>
-                              <td
-                                onClick={(e) => {
-                                  if (r.dpDeposit > 0) {
-                                    e.stopPropagation();
-                                    setKpiModal({
-                                      type: "payments",
-                                      aptFilter: r.name,
-                                      filter: "dp_deposit",
-                                      title: `${r.name} · DrinkPrime Deposit`,
-                                      sub: `DrinkPrime deposit records in ${rangeLabel(range)}`
-                                    });
-                                  }
-                                }}
-                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#475569", cursor: r.dpDeposit > 0 ? "pointer" : "default" }}
-                                title={r.dpDeposit > 0 ? "Click to view DrinkPrime deposit records" : ""}
-                              >
-                                {r.dpDeposit > 0 ? inr(Math.round(r.dpDeposit)) : "—"}
-                              </td>
-                              <td
-                                onClick={(e) => {
-                                  if (r.dpRecharge > 0) {
-                                    e.stopPropagation();
-                                    setKpiModal({
-                                      type: "payments",
-                                      aptFilter: r.name,
-                                      filter: "dp_recharge",
-                                      title: `${r.name} · DrinkPrime Recharge`,
-                                      sub: `DrinkPrime recharge records in ${rangeLabel(range)}`
-                                    });
-                                  }
-                                }}
-                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, color: "#08805A", fontWeight: 600, cursor: r.dpRecharge > 0 ? "pointer" : "default" }}
-                                title={r.dpRecharge > 0 ? "Click to view DrinkPrime recharge records" : ""}
-                              >
-                                {r.dpRecharge > 0 ? inr(Math.round(r.dpRecharge)) : "—"}
-                              </td>
-                              <td
-                                onClick={(e) => {
-                                  if (r.totalCollected > 0) {
-                                    e.stopPropagation();
-                                    setKpiModal({
-                                      type: "payments",
-                                      aptFilter: r.name,
-                                      filter: "all",
-                                      title: `${r.name} · All Payments`,
-                                      sub: `All payments in ${rangeLabel(range)}`
-                                    });
-                                  }
-                                }}
-                                style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F", cursor: r.totalCollected > 0 ? "pointer" : "default" }}
-                                title="Click to view all payments for this apartment"
-                              >
-                                {inr(Math.round(r.totalCollected))}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(8,128,90,.15)" }}>
-                          <td style={{ padding: "13px 18px", fontSize: 13, fontWeight: 800, color: "#0d2119", textAlign: "left" }}>Total ({displayedAptRows.length})</td>
-                          <td
-                            onClick={() => setKpiModal({ type: "active_customers", title: "Active Customers Directory", sub: "All active customer subscriptions across Zoho & DrinkPrime" })}
-                            style={{ padding: "13px 14px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A", textDecoration: "underline", cursor: "pointer" }}
-                            title="Click to view all active customers"
-                          >
-                            {allAptTotalCusts}
-                          </td>
-                          <td
-                            onClick={() => setKpiModal({ type: "payments", filter: "zoho_deposit", title: "All Zoho Deposits", sub: `All Zoho deposit payments in ${rangeLabel(range)}` })}
-                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-                            title="Click to view all Zoho deposit payments"
-                          >
-                            {allAptTotalZohoDep > 0 ? inr(Math.round(allAptTotalZohoDep)) : "—"}
-                          </td>
-                          <td
-                            onClick={() => setKpiModal({ type: "payments", filter: "zoho_recharge", title: "All Zoho Recharges", sub: `All Zoho recharge payments in ${rangeLabel(range)}` })}
-                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A", cursor: "pointer" }}
-                            title="Click to view all Zoho recharge payments"
-                          >
-                            {allAptTotalZohoRech > 0 ? inr(Math.round(allAptTotalZohoRech)) : "—"}
-                          </td>
-                          <td
-                            onClick={() => setKpiModal({ type: "payments", filter: "dp_deposit", title: "All DrinkPrime Deposits", sub: `All DrinkPrime deposit records in ${rangeLabel(range)}` })}
-                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-                            title="Click to view all DrinkPrime deposit records"
-                          >
-                            {allAptTotalDpDep > 0 ? inr(Math.round(allAptTotalDpDep)) : "—"}
-                          </td>
-                          <td
-                            onClick={() => setKpiModal({ type: "payments", filter: "dp_recharge", title: "All DrinkPrime Recharges", sub: `All DrinkPrime recharge records in ${rangeLabel(range)}` })}
-                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13, fontWeight: 800, color: "#08805A", cursor: "pointer" }}
-                            title="Click to view all DrinkPrime recharge records"
-                          >
-                            {allAptTotalDpRech > 0 ? inr(Math.round(allAptTotalDpRech)) : "—"}
-                          </td>
-                          <td
-                            onClick={() => setKpiModal({ type: "payments", filter: "all", title: "Total Collection Transactions", sub: `All Zoho & DrinkPrime paid transactions in ${rangeLabel(range)}` })}
-                            style={{ padding: "13px 18px", textAlign: "center", fontSize: 13.5, fontWeight: 800, color: "#1D1D1F", cursor: "pointer" }}
-                            title="Click to view all transactions"
-                          >
-                            {inr(Math.round(allAptTotalCollected))}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div style={{ padding: "28px 0" }}><Empty msg="No society data in this period." /></div>
-                )}
+                              {allAptTotalCusts}
+                            </td>
+                            <td
+                              onClick={() => setKpiModal({ type: "payments", filter: "zoho_deposit", title: "All Zoho Deposits", sub: `All Zoho deposit payments in ${rangeLabel(range)}` })}
+                              style={{ ...footerCellBase, textAlign: "right", fontSize: 14.5, fontWeight: 800, color: "#0F172A", fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
+                              title="Click to view all Zoho deposit payments"
+                            >
+                              {allAptTotalZohoDep > 0 ? inr(Math.round(allAptTotalZohoDep)) : "—"}
+                            </td>
+                            <td
+                              onClick={() => setKpiModal({ type: "payments", filter: "zoho_recharge", title: "All Zoho Recharges", sub: `All Zoho recharge payments in ${rangeLabel(range)}` })}
+                              style={{ ...footerCellBase, textAlign: "right", fontSize: 15, fontWeight: 800, color: "#007AFF", fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
+                              title="Click to view all Zoho recharge payments"
+                            >
+                              {allAptTotalZohoRech > 0 ? inr(Math.round(allAptTotalZohoRech)) : "—"}
+                            </td>
+                            <td
+                              onClick={() => setKpiModal({ type: "payments", filter: "dp_deposit", title: "All DrinkPrime Deposits", sub: `All DrinkPrime deposit records in ${rangeLabel(range)}` })}
+                              style={{ ...footerCellBase, textAlign: "right", fontSize: 14.5, fontWeight: 700, color: allAptTotalDpDep > 0 ? "#0F172A" : dashColor, fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
+                              title="Click to view all DrinkPrime deposit records"
+                            >
+                              {allAptTotalDpDep > 0 ? inr(Math.round(allAptTotalDpDep)) : "—"}
+                            </td>
+                            <td
+                              onClick={() => setKpiModal({ type: "payments", filter: "dp_recharge", title: "All DrinkPrime Recharges", sub: `All DrinkPrime recharge records in ${rangeLabel(range)}` })}
+                              style={{ ...footerCellBase, textAlign: "right", fontSize: 15, fontWeight: 800, color: "#08805A", fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
+                              title="Click to view all DrinkPrime recharge records"
+                            >
+                              {allAptTotalDpRech > 0 ? inr(Math.round(allAptTotalDpRech)) : "—"}
+                            </td>
+                            <td
+                              onClick={() => setKpiModal({ type: "payments", filter: "all", title: "Total Collection Transactions", sub: `All Zoho & DrinkPrime paid transactions in ${rangeLabel(range)}` })}
+                              style={{ ...footerCellBase, textAlign: "right", fontSize: 18, fontWeight: 800, borderRadius: "0 16px 16px 0", fontVariantNumeric: "tabular-nums", overflow: "hidden", cursor: "pointer" }}
+                              title="Click to view all transactions"
+                            >
+                              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(270deg, rgba(8,128,90,0.05) 0%, transparent 100%)", pointerEvents: "none" }} />
+                              <span style={{ position: "relative", background: "linear-gradient(135deg, #0F172A 0%, #007AFF 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>{inr(Math.round(allAptTotalCollected))}</span>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "28px 0" }}><Empty msg="No society data in this period." /></div>
+                  )}
+                </div>
               </div>
             );
           })()}
