@@ -925,27 +925,18 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     pct: planCountsTotal > 0 ? Math.round((value / planCountsTotal) * 1000) / 10 : 0,
   })).sort((a, b) => b.value - a.value);
 
-  // Top-5-plus-Other rollup for the chart (v2.29.429, per an explicit
-  // user-provided mockup) — `planDistributionData` itself is left as the
-  // full, ungrouped list (still exactly what it was before, in case
-  // anything else ever needs it), and this derived view only combines
-  // whatever's left over past the top 5 into a single "Other (N)" bar so
-  // a long tail of single-subscription plan amounts doesn't turn the chart
-  // into dozens of barely-visible slivers. `isOther` marks that rollup row
-  // so the render can skip its (non-sensical) drill-down click and give it
-  // the muted, non-blue styling the mockup uses.
-  const PLAN_TIER_TOP_N = 5;
-  const planDistributionTop = planDistributionData.length <= PLAN_TIER_TOP_N ? planDistributionData : (() => {
-    const top = planDistributionData.slice(0, PLAN_TIER_TOP_N);
-    const rest = planDistributionData.slice(PLAN_TIER_TOP_N);
-    const otherValue = rest.reduce((s, r) => s + r.value, 0);
-    return [...top, {
-      name: `Other (${rest.length})`,
-      value: otherValue,
-      pct: planCountsTotal > 0 ? Math.round((otherValue / planCountsTotal) * 1000) / 10 : 0,
-      isOther: true,
-    }];
-  })();
+  // v2.29.429 briefly rolled anything past the top 5 tiers into a single
+  // "Other (N)" bar so a long tail wouldn't turn into dozens of slivers —
+  // reverted per explicit user feedback ("I want you to show the correct
+  // plans"): every real plan tier's own name/amount should always be
+  // visible, never hidden behind a generic "Other" bucket. `planDistributionTop`
+  // is now just an alias for the full, ungrouped `planDistributionData` —
+  // kept so the render code below (and its `isOther` guards, now always
+  // false) didn't need to be rewritten. The chart card itself scrolls
+  // vertically instead (per the same feedback: "if the card is running
+  // short then make it scrollable") when there are more tiers than fit
+  // in its default height — see the fixed-height scroll wrapper below.
+  const planDistributionTop = planDistributionData;
 
   // Under-penetrated apartments calculation (Connection Density). Every
   // apartment in `combinedAptAgg` is included now (v2.29.420) — the
@@ -2967,147 +2958,148 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           {/* ── SaaS Analytics: Plan Distribution & Expansion Opportunities ──── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, marginBottom: 16 }}>
 
-            {/* Plan Tier Distribution — restyled per an explicit
-                user-provided mockup (frosted-glass card, "glass" gradient
-                bars over a full-width track, top-5-plus-Other rollup so a
-                long tail of single-subscription plan amounts doesn't turn
-                into dozens of barely-visible slivers). Drill-down behavior
-                unchanged for the 5 real named tiers; the rolled-up "Other"
-                bar isn't clickable since it isn't one real plan to filter
-                subscriptions by. */}
+            {/* Plan Tier Distribution — frosted-glass card, "glass" gradient
+                bars over a full-width track. v2.29.431, per explicit user
+                feedback on the previous top-5-plus-"Other" rollup ("I want
+                you to show the correct plans... if the card is running
+                short then make it scrollable"): every real plan tier is
+                shown by its own name/amount again — nothing gets folded
+                into a generic "Other" bucket — and the chart's own height
+                now grows with the number of tiers (`PLAN_ROW_H` per row)
+                inside a fixed-height scrolling wrapper, so a long tail of
+                20+ plan amounts scrolls in place instead of either hiding
+                tiers or squashing every bar into illegibility. */}
             <div style={{ background: "rgba(255,255,255,0.72)", WebkitBackdropFilter: "blur(30px) saturate(190%)", backdropFilter: "blur(30px) saturate(190%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 24, boxShadow: "0 16px 36px -12px rgba(15,23,42,0.06), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", padding: 24, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
                 <div>
                   <h3 style={{ fontSize: 17, color: "#0F172A", fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.02em" }}>Plan Tier Distribution</h3>
-                  <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>Active subscriptions by plan (Top 5 + Others)</div>
+                  <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>Active subscriptions by plan amount{planDistributionTop.length > 6 ? " · scroll for all " + planDistributionTop.length + " tiers" : ""}</div>
                 </div>
                 <div title="Sorted by active subscriptions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: "rgba(0,122,255,0.08)", border: "0.5px solid rgba(0,122,255,0.15)", color: "#007AFF", flexShrink: 0 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
                 </div>
               </div>
-              <div style={{ height: 220 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={planDistributionTop}
-                    layout="vertical"
-                    margin={{ top: 10, right: 44, left: 10, bottom: 5 }}
-                    style={{ cursor: "pointer" }}
-                    onClick={(state) => {
-                      if (state && state.activePayload && state.activePayload.length) {
-                        const p = state.activePayload[0].payload;
-                        if (p && p.name && !p.isOther) {
-                          setKpiModal({
-                            type: "plan_tier",
-                            tierName: p.name,
-                            title: `Plan Tier: ${p.name}`,
-                            sub: `${p.value} active subscriptions (${p.pct}% of active tiers)`
-                          });
-                        }
-                      }
-                    }}
-                  >
-                    <defs>
-                      {/* iOS-blue "glass" gradient for the 5 real named tiers,
-                          and a muted slate gradient for the rolled-up "Other"
-                          bar — same visual language as the mockup. */}
-                      <linearGradient id="planBlueGlass" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#007AFF" stopOpacity={0.9} />
-                        <stop offset="100%" stopColor="#34AADC" stopOpacity={0.7} />
-                      </linearGradient>
-                      <linearGradient id="planSlateGlass" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#94A3B8" stopOpacity={0.5} />
-                        <stop offset="100%" stopColor="#CBD5E1" stopOpacity={0.3} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(0,0,0,0.04)" horizontal={false} />
-                    <XAxis type="number" hide />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      axisLine={false}
-                      tickLine={false}
-                      width={92}
-                      tick={(props) => {
-                        const { x, y, payload, index } = props;
-                        const entry = planDistributionTop[index];
-                        const isTop = index === 0;
-                        const label = payload.value === "DrinkPrime Purifier" ? "DP Purifier" : payload.value;
-                        const fill = entry?.isOther ? "#94A3B8" : isTop ? "#0F172A" : "#475569";
-                        return <text x={x} y={y} dy={4} textAnchor="end" fontSize={12} fontWeight={600} fill={fill}>{label}</text>;
-                      }}
-                    />
-                    {/* Custom content (v2.29.429) — frosted-glass tooltip
-                        matching the rest of this restyle wave; the rolled-up
-                        "Other" bar gets a plain count instead of the "Click
-                        to view" hint since it isn't drillable. */}
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload || !payload.length) return null;
-                        const row = payload[0].payload;
-                        return (
-                          <div style={{ borderRadius: 14, border: "0.5px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 24px -6px rgba(0,0,0,0.12), 0 4px 10px -2px rgba(0,0,0,0.04)", fontSize: 12.5, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", padding: "12px 16px", minWidth: 160 }}>
-                            <div style={{ color: "#0F172A", fontWeight: 700, marginBottom: 4, fontSize: 13.5 }}>{row.name}</div>
-                            <div style={{ color: "#475569", fontWeight: 500 }}>{row.pct}% · {row.value} subscription{row.value === 1 ? "" : "s"}</div>
-                            {!row.isOther && <div style={{ marginTop: 4, color: "#007AFF", fontWeight: 600, fontSize: 11.5 }}>Click to view →</div>}
-                          </div>
-                        );
-                      }}
-                      cursor={{ fill: "rgba(0,122,255,0.04)" }}
-                    />
-                    {/* `background` (v2.29.429) — Recharts' own built-in prop
-                        for exactly this "value bar over a full-width track"
-                        look, spanning the axis's own 0→auto-max domain
-                        behind every row, instead of a hand-rolled 2nd Bar. */}
-                    <Bar
-                      dataKey="value"
-                      name="Active Tiers"
-                      fill="url(#planBlueGlass)"
-                      background={{ fill: "rgba(0,0,0,0.02)", radius: 6 }}
-                      radius={[0, 6, 6, 0]}
-                      maxBarSize={12}
-                      isAnimationActive={false}
-                      onClick={(entry) => {
-                        const target = entry && (entry.payload || entry);
-                        if (target && target.name && !target.isOther) {
-                          setKpiModal({
-                            type: "plan_tier",
-                            tierName: target.name,
-                            title: `Plan Tier: ${target.name}`,
-                            sub: `${target.value} active subscriptions (${target.pct}% of active tiers)`
-                          });
-                        }
-                      }}
-                    >
-                      {planDistributionTop.map((entry, index) => (
-                        <Cell
-                          key={`tier-cell-${index}`}
-                          cursor={entry.isOther ? "default" : "pointer"}
-                          fill={entry.isOther ? "url(#planSlateGlass)" : "url(#planBlueGlass)"}
-                          style={!entry.isOther ? { filter: "drop-shadow(0 4px 6px rgba(0,122,255,0.2))" } : undefined}
-                          onClick={() => {
-                            if (entry.isOther) return;
-                            setKpiModal({
-                              type: "plan_tier",
-                              tierName: entry.name,
-                              title: `Plan Tier: ${entry.name}`,
-                              sub: `${entry.value} active subscriptions (${entry.pct}% of active tiers)`
-                            });
+              {(() => {
+                const PLAN_VISIBLE_H = 220;
+                const PLAN_ROW_H = 34;
+                const chartH = Math.max(PLAN_VISIBLE_H, planDistributionTop.length * PLAN_ROW_H + 20);
+                return (
+                  <div className="scroll-thin" style={{ height: PLAN_VISIBLE_H, overflowY: chartH > PLAN_VISIBLE_H ? "auto" : "hidden", paddingRight: chartH > PLAN_VISIBLE_H ? 4 : 0 }}>
+                    <div style={{ height: chartH }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={planDistributionTop}
+                          layout="vertical"
+                          margin={{ top: 10, right: 44, left: 10, bottom: 5 }}
+                          style={{ cursor: "pointer" }}
+                          onClick={(state) => {
+                            if (state && state.activePayload && state.activePayload.length) {
+                              const p = state.activePayload[0].payload;
+                              if (p && p.name) {
+                                setKpiModal({
+                                  type: "plan_tier",
+                                  tierName: p.name,
+                                  title: `Plan Tier: ${p.name}`,
+                                  sub: `${p.value} active subscriptions (${p.pct}% of active tiers)`
+                                });
+                              }
+                            }
                           }}
-                        />
-                      ))}
-                      <LabelList
-                        dataKey="pct"
-                        content={(props) => {
-                          const { x, y, width, value, index } = props;
-                          const entry = planDistributionTop[index];
-                          const fill = entry?.isOther ? "#64748B" : "#007AFF";
-                          return <text x={x + width + 6} y={y} dy={9} fontSize={11.5} fontWeight={700} fill={fill} textAnchor="start">{value}%</text>;
-                        }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+                        >
+                          <defs>
+                            {/* iOS-blue "glass" gradient, same visual language as the mockup. */}
+                            <linearGradient id="planBlueGlass" x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor="#007AFF" stopOpacity={0.9} />
+                              <stop offset="100%" stopColor="#34AADC" stopOpacity={0.7} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="4 4" stroke="rgba(0,0,0,0.04)" horizontal={false} />
+                          <XAxis type="number" hide />
+                          <YAxis
+                            type="category"
+                            dataKey="name"
+                            axisLine={false}
+                            tickLine={false}
+                            width={92}
+                            interval={0}
+                            tick={(props) => {
+                              const { x, y, payload, index } = props;
+                              const isTop = index === 0;
+                              const label = payload.value === "DrinkPrime Purifier" ? "DP Purifier" : payload.value;
+                              const fill = isTop ? "#0F172A" : "#475569";
+                              return <text x={x} y={y} dy={4} textAnchor="end" fontSize={12} fontWeight={600} fill={fill}>{label}</text>;
+                            }}
+                          />
+                          {/* Custom content (v2.29.429) — frosted-glass tooltip
+                              matching the rest of this restyle wave. */}
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload || !payload.length) return null;
+                              const row = payload[0].payload;
+                              return (
+                                <div style={{ borderRadius: 14, border: "0.5px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 24px -6px rgba(0,0,0,0.12), 0 4px 10px -2px rgba(0,0,0,0.04)", fontSize: 12.5, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", padding: "12px 16px", minWidth: 160 }}>
+                                  <div style={{ color: "#0F172A", fontWeight: 700, marginBottom: 4, fontSize: 13.5 }}>{row.name}</div>
+                                  <div style={{ color: "#475569", fontWeight: 500 }}>{row.pct}% · {row.value} subscription{row.value === 1 ? "" : "s"}</div>
+                                  <div style={{ marginTop: 4, color: "#007AFF", fontWeight: 600, fontSize: 11.5 }}>Click to view →</div>
+                                </div>
+                              );
+                            }}
+                            cursor={{ fill: "rgba(0,122,255,0.04)" }}
+                          />
+                          {/* `background` (v2.29.429) — Recharts' own built-in prop
+                              for exactly this "value bar over a full-width track"
+                              look, spanning the axis's own 0→auto-max domain
+                              behind every row, instead of a hand-rolled 2nd Bar. */}
+                          <Bar
+                            dataKey="value"
+                            name="Active Tiers"
+                            fill="url(#planBlueGlass)"
+                            background={{ fill: "rgba(0,0,0,0.02)", radius: 6 }}
+                            radius={[0, 6, 6, 0]}
+                            maxBarSize={12}
+                            isAnimationActive={false}
+                            onClick={(entry) => {
+                              const target = entry && (entry.payload || entry);
+                              if (target && target.name) {
+                                setKpiModal({
+                                  type: "plan_tier",
+                                  tierName: target.name,
+                                  title: `Plan Tier: ${target.name}`,
+                                  sub: `${target.value} active subscriptions (${target.pct}% of active tiers)`
+                                });
+                              }
+                            }}
+                          >
+                            {planDistributionTop.map((entry, index) => (
+                              <Cell
+                                key={`tier-cell-${index}`}
+                                cursor="pointer"
+                                fill="url(#planBlueGlass)"
+                                style={{ filter: "drop-shadow(0 4px 6px rgba(0,122,255,0.2))" }}
+                                onClick={() => {
+                                  setKpiModal({
+                                    type: "plan_tier",
+                                    tierName: entry.name,
+                                    title: `Plan Tier: ${entry.name}`,
+                                    sub: `${entry.value} active subscriptions (${entry.pct}% of active tiers)`
+                                  });
+                                }}
+                              />
+                            ))}
+                            <LabelList
+                              dataKey="pct"
+                              content={(props) => {
+                                const { x, y, width, value } = props;
+                                return <text x={x + width + 6} y={y} dy={9} fontSize={11.5} fontWeight={700} fill="#007AFF" textAnchor="start">{value}%</text>;
+                              }}
+                            />
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Expansion Opportunities / Under-Penetrated Buildings */}
