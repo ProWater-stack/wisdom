@@ -578,6 +578,33 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     };
   });
 
+  // Dynamic green/red gradient stops for the MoM Growth Trend line/bars, per
+  // an explicit user-provided mockup — same generic technique as the Total
+  // Revenue chart's `faLineStops` above: a hard (not blended) color switch
+  // exactly at the month where `pct`'s sign flips, computed from the real
+  // data rather than hardcoded. Unlike `faData`, every `momData` point has a
+  // real `collected` value (never null), so the Line is drawn across ALL 7
+  // points — the first month (idx 0) has no prior month to compare against
+  // (`pct` is always null there) and is treated as green/neutral by default,
+  // since it isn't actually "behind" anything.
+  const momStopColor = (pct) => (pct == null || pct >= 0) ? "#08805A" : "#FF3B30";
+  const momLineStops = [];
+  {
+    const n2 = momData.length;
+    const EPS = 0.015;
+    momLineStops.push({ offset: 0, color: momStopColor(momData[0].pct) });
+    for (let k = 1; k < n2; k++) {
+      const f = k / (n2 - 1 || 1);
+      const prevColor = momStopColor(momData[k - 1].pct);
+      const curColor = momStopColor(momData[k].pct);
+      if (prevColor !== curColor) {
+        momLineStops.push({ offset: Math.max(0, f - EPS), color: prevColor });
+        momLineStops.push({ offset: f, color: curColor });
+      }
+    }
+    momLineStops.push({ offset: 1, color: momStopColor(momData[n2 - 1].pct) });
+  }
+
   // ---- Top performing societies ---------------------------------------------
   const normSoc = (s) => String(s || "").toLowerCase().replace(/\bapartments?\b/g, "").replace(/[^a-z0-9]/g, "");
   const flatsBySoc = {};
@@ -897,6 +924,28 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     value,
     pct: planCountsTotal > 0 ? Math.round((value / planCountsTotal) * 1000) / 10 : 0,
   })).sort((a, b) => b.value - a.value);
+
+  // Top-5-plus-Other rollup for the chart (v2.29.429, per an explicit
+  // user-provided mockup) — `planDistributionData` itself is left as the
+  // full, ungrouped list (still exactly what it was before, in case
+  // anything else ever needs it), and this derived view only combines
+  // whatever's left over past the top 5 into a single "Other (N)" bar so
+  // a long tail of single-subscription plan amounts doesn't turn the chart
+  // into dozens of barely-visible slivers. `isOther` marks that rollup row
+  // so the render can skip its (non-sensical) drill-down click and give it
+  // the muted, non-blue styling the mockup uses.
+  const PLAN_TIER_TOP_N = 5;
+  const planDistributionTop = planDistributionData.length <= PLAN_TIER_TOP_N ? planDistributionData : (() => {
+    const top = planDistributionData.slice(0, PLAN_TIER_TOP_N);
+    const rest = planDistributionData.slice(PLAN_TIER_TOP_N);
+    const otherValue = rest.reduce((s, r) => s + r.value, 0);
+    return [...top, {
+      name: `Other (${rest.length})`,
+      value: otherValue,
+      pct: planCountsTotal > 0 ? Math.round((otherValue / planCountsTotal) * 1000) / 10 : 0,
+      isOther: true,
+    }];
+  })();
 
   // Under-penetrated apartments calculation (Connection Density). Every
   // apartment in `combinedAptAgg` is included now (v2.29.420) — the
@@ -2610,7 +2659,30 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         line's own label sitting at nearly the same height;
                         the Actual line already carries the real number for
                         every month that has one. */}
-                    <Bar yAxisId="rev" dataKey="forecast" fill="rgba(8,128,90,0.06)" radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                    {/* minPointSize (v2.29.429) — root-caused a real bug found
+                        while investigating why only 4 of this chart's 6
+                        monthly bars ever rendered in this sandbox: Recharts'
+                        own <Rectangle> renderer silently omits a bar's DOM
+                        node entirely (not just a 0-height one) whenever its
+                        computed value is exactly 0 — confirmed live via DOM
+                        inspection (`.recharts-bar-rectangles` had exactly 4
+                        child groups, not 6, for a `faData` where 2 of the 6
+                        months' `forecast` happened to compute to exactly 0
+                        after the `Math.max(0, ...)` floor on the linear
+                        regression). This isn't a sample-data-only artifact —
+                        any real portfolio with a sharply declining 5-month
+                        collection trend (or a newly-onboarded one with too
+                        little history) can drive the regression's projected
+                        value to/below zero for the most recent or "Target"
+                        month, hitting this exact same Recharts quirk in
+                        production. `minPointSize` is Recharts' own documented
+                        fix for this — it guarantees every bar a minimum
+                        pixel size so a real (possibly legitimately-zero)
+                        value still renders instead of vanishing, without
+                        changing the actual `forecast` number shown in its
+                        labels/tooltip. Verified live: all 6 bars (and their
+                        Cells/LabelLists) now present in the DOM. */}
+                    <Bar yAxisId="rev" dataKey="forecast" fill="rgba(8,128,90,0.06)" radius={[6, 6, 0, 0]} maxBarSize={34} minPointSize={2} isAnimationActive={false}>
                       {/* Bar tint now reflects that month's own result (v2.29.428, per
                           the mockup) — a soft red wash when the month came in behind
                           forecast, the same soft green wash as before otherwise
@@ -2697,23 +2769,26 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               </div>
             </div>
 
-            {/* MoM Growth Trend */}
-            <div style={{ background: "#FFFFFF", border: "1px solid rgba(0, 0, 0, 0.07)", borderRadius: 20, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.02)", padding: 22, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+            {/* MoM Growth Trend — restyled per an explicit user-provided
+                mockup (frosted-glass card matching the sibling Total Revenue
+                chart, dynamic green/red gradient line + color-coded bars).
+                The underlying data (`momData`/`pct`/`newC`) is unchanged. */}
+            <div style={{ background: "rgba(255,255,255,0.72)", WebkitBackdropFilter: "blur(30px) saturate(190%)", backdropFilter: "blur(30px) saturate(190%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 24, boxShadow: "0 16px 36px -12px rgba(15,23,42,0.06), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", padding: 24, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>MoM Growth Trend</h3>
+                  <h3 style={{ fontSize: 17, color: "#0F172A", fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>MoM Growth Trend</h3>
                 </div>
-                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: "#EEF2E8" }} /> Collections
+                <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#475569", fontWeight: 600 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(8,128,90,0.08)", border: "0.5px solid rgba(8,128,90,0.15)" }} /> Collections
                   </span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
-                    <span style={{ width: 14, height: 0, borderTop: "2.5px solid #0A6E46" }} /> Growth Trend
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#475569", fontWeight: 600 }}>
+                    <span style={{ width: 14, height: 0, borderTop: "2.5px solid #08805A" }} /> Growth Trend
                   </span>
                 </div>
               </div>
 
-              <div style={{ height: 230 }}>
+              <div style={{ height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={momData}
@@ -2735,19 +2810,75 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       }
                     }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.04)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.08)" }} tickLine={false} />
-                    <YAxis tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
-                    <Tooltip
-                      formatter={(v, n) => [inr(v), n]}
-                      cursor={{ fill: "rgba(10,110,70,0.04)" }}
-                      contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }}
-                      labelStyle={{ color: "#1D1D1F", fontWeight: 700, marginBottom: 4 }}
-                      itemStyle={{ color: "#1D1D1F", fontWeight: 600 }}
+                    <defs>
+                      {/* Dynamic green/red horizontal gradient (v2.29.429, per the
+                          mockup) — same generic hard-transition technique as the
+                          Total Revenue chart's own `faLineGrad`, but built from
+                          `momLineStops` (computed above from real `pct` signs). */}
+                      <linearGradient id="momLineGrad" x1="0" y1="0" x2="1" y2="0">
+                        {momLineStops.map((s, i) => <stop key={i} offset={`${(s.offset * 100).toFixed(2)}%`} stopColor={s.color} />)}
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(0, 0, 0, 0.05)" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={{ stroke: "rgba(0, 0, 0, 0.1)" }}
+                      tick={(props) => {
+                        const { x, y, payload, index } = props;
+                        const isLast = index === momData.length - 1;
+                        return (
+                          <text x={x} y={y + 8} textAnchor="middle" fontSize={11.5} fontWeight={isLast ? 700 : 600} fill={isLast ? "#0F172A" : "#64748B"}>{payload.value}</text>
+                        );
+                      }}
                     />
-                    <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="#EEF2E8" maxBarSize={32} isAnimationActive={false}>
+                    <YAxis tick={{ fill: "#94A3B8", fontSize: 10.5, fontWeight: 600 }} axisLine={false} tickLine={false} width={56} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                    {/* Custom content (v2.29.429) — matches the frosted-glass
+                        Tooltip style now used throughout this restyle wave;
+                        reads straight off the row's own data object since
+                        the Bar/Line here share the same "collected" dataKey. */}
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload || !payload.length) return null;
+                        const row = payload[0].payload;
+                        const pct = row.pct;
+                        return (
+                          <div style={{ borderRadius: 14, border: "0.5px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 24px -6px rgba(0,0,0,0.12), 0 4px 10px -2px rgba(0,0,0,0.04)", fontSize: 12.5, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", padding: "14px 16px", minWidth: 170 }}>
+                            <div style={{ color: "#0F172A", fontWeight: 700, marginBottom: 8, fontSize: 14, letterSpacing: "-0.01em" }}>{label}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                <span style={{ color: "#475569", fontWeight: 500 }}>Collected:</span>
+                                <span style={{ color: "#0F172A", fontWeight: 700 }}>{inr(row.collected)}</span>
+                              </div>
+                              {row.newC != null && (
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                  <span style={{ color: "#475569", fontWeight: 500 }}>New CX:</span>
+                                  <span style={{ color: "#0F172A", fontWeight: 700 }}>+{row.newC}</span>
+                                </div>
+                              )}
+                              {pct != null && (
+                                <div style={{ marginTop: 4, paddingTop: 6, borderTop: "0.5px solid rgba(0,0,0,0.06)", fontWeight: 700, color: pct >= 0 ? "#08805A" : "#FF3B30" }}>
+                                  {pct > 0 ? "+" : ""}{pct}% MoM
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }}
+                      cursor={{ stroke: "rgba(0,0,0,0.1)", strokeWidth: 1.5 }}
+                    />
+                    {/* Bar tint now reflects that month's own growth sign
+                        (v2.29.429, per the mockup) — the same soft red/green
+                        wash convention as the Total Revenue chart's forecast
+                        bars, replacing the old flat grey fill. The first
+                        month (no prior month to compare against) defaults to
+                        the green tint, matching `momStopColor`'s own
+                        neutral-first-point rule above. minPointSize (same
+                        fix as the Total Revenue chart, v2.29.429) guards
+                        against a real ₹0 month vanishing from the DOM. */}
+                    <Bar dataKey="collected" name="Collected" radius={[6, 6, 0, 0]} fill="rgba(8,128,90,0.06)" maxBarSize={32} minPointSize={2} isAnimationActive={false}>
                       {momData.map((entry, idx) => (
-                        <Cell key={`mom-cell-${idx}`} fill={idx === momData.length - 1 ? "#DDE5D4" : "#EEF2E8"} />
+                        <Cell key={`mom-cell-${idx}`} fill={entry.pct != null && entry.pct < 0 ? "rgba(255,59,48,0.12)" : "rgba(8,128,90,0.06)"} />
                       ))}
                       <LabelList
                         dataKey="pct"
@@ -2765,9 +2896,9 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                           // newC count worth showing on its own.
                           if (value == null && newC == null) return null;
                           const isLast = index === momData.length - 1;
-                          const positive = value > 0;
-                          const bg = isLast ? "#0A6E46" : positive ? "rgba(10, 110, 70, 0.1)" : "rgba(220, 65, 65, 0.1)";
-                          const fg = isLast ? "#FFFFFF" : positive ? "#0A6E46" : "#DC4141";
+                          const positive = value == null || value >= 0;
+                          const bg = isLast ? (positive ? "#08805A" : "#FF3B30") : positive ? "rgba(52,199,89,0.12)" : "rgba(255,59,48,0.12)";
+                          const fg = isLast ? "#FFFFFF" : positive ? "#08805A" : "#FF3B30";
                           const text = value != null ? `${value > 0 ? "+" : ""}${value}%` : null;
                           const bw = text ? Math.max(34, text.length * 6.5 + 14) : 0;
                           const cx = x + width / 2;
@@ -2776,18 +2907,37 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                             <g key={`pct-${index}`} transform={`translate(${cx},${cy})`}>
                               {text && <rect x={-bw / 2} y={-12} width={bw} height={16} rx={4} fill={bg} />}
                               {text && <text x={0} y={-1} fill={fg} fontSize={9} fontWeight={700} textAnchor="middle">{text}</text>}
-                              {newC != null && <text x={0} y={text ? -18 : -1} fill="#697D61" fontSize={8.5} fontWeight={700} textAnchor="middle">+{newC} CX</text>}
+                              {newC != null && <text x={0} y={text ? -18 : -1} fill="#64748B" fontSize={8.5} fontWeight={700} textAnchor="middle">+{newC} CX</text>}
                             </g>
                           );
                         }}
                       />
                     </Bar>
                     <Line
-                      type="monotone" dataKey="collected" name="Trend" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false}
+                      type="monotone" dataKey="collected" name="Trend" stroke="url(#momLineGrad)" strokeWidth={2.8} isAnimationActive={false}
                       dot={(props) => {
                         const { cx, cy, index } = props;
                         const isLast = index === momData.length - 1;
-                        return <circle key={`dot-${index}`} cx={cx} cy={cy} r={isLast ? 4 : 3.5} fill={isLast ? "#0A6E46" : "#ffffff"} stroke="#0A6E46" strokeWidth={2.5} />;
+                        const pct = momData[index]?.pct;
+                        const color = pct == null || pct >= 0 ? "#08805A" : "#FF3B30";
+                        if (isLast) {
+                          // Pulsing "live" ring on the most recent month, colored to
+                          // match its own growth sign — same native SVG <animate>
+                          // technique used on the New CX modal's Installation Trend
+                          // chart, so it stays alive without a replaying React
+                          // entrance animation (which would flash on Shell's
+                          // per-second re-render tick, v2.29.425's fix).
+                          return (
+                            <g key={`dot-${index}`}>
+                              <circle cx={cx} cy={cy} r={8} fill="none" stroke={color} strokeWidth={2.5}>
+                                <animate attributeName="r" values="6;12;6" dur="2s" repeatCount="indefinite" />
+                                <animate attributeName="opacity" values="1;0;1" dur="2s" repeatCount="indefinite" />
+                              </circle>
+                              <circle cx={cx} cy={cy} r={5} fill={color} stroke="#fff" strokeWidth={2.5} style={{ filter: `drop-shadow(0 2px 4px ${pct == null || pct >= 0 ? "rgba(8,128,90,0.4)" : "rgba(255,59,48,0.4)"})` }} />
+                            </g>
+                          );
+                        }
+                        return <circle key={`dot-${index}`} cx={cx} cy={cy} r={4.5} fill="#fff" stroke={color} strokeWidth={2.5} style={{ filter: `drop-shadow(0 2px 4px ${pct == null || pct >= 0 ? "rgba(8,128,90,0.3)" : "rgba(255,59,48,0.3)"})` }} />;
                       }}
                     />
                   </ComposedChart>
@@ -2800,11 +2950,11 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   if (momData[i].pct != null && momData[i].pct > 0) momStreak++; else break;
                 }
                 return (
-                  <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 12, background: "#FAFBF9", border: "1px solid rgba(0, 0, 0, 0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, flexWrap: "wrap", gap: 6 }}>
-                    <span style={{ color: "#86868B" }}>Trailing 7M Peak: <strong style={{ color: "#1D1D1F" }}>{momPeak ? `${momPeak.label} (${inr(momPeak.collected)})` : "—"}</strong></span>
+                  <div style={{ marginTop: 18, padding: "12px 16px", borderRadius: 14, background: "rgba(0,0,0,0.03)", border: "0.5px solid rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, flexWrap: "wrap", gap: 8 }}>
+                    <span style={{ color: "#64748B", fontWeight: 500 }}>Trailing 7M Peak: <strong style={{ color: "#0F172A", fontWeight: 700 }}>{momPeak ? `${momPeak.label} (${inr(momPeak.collected)})` : "—"}</strong></span>
                     {momStreak >= 2 && (
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontWeight: 600, color: "#0A6E46" }}>
-                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#0A6E46" }} />
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 700, color: "#08805A" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#08805A", boxShadow: "0 1px 3px rgba(8,128,90,0.3)" }} />
                         {momStreak}-Month Consecutive Growth
                       </span>
                     )}
@@ -2817,21 +2967,35 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           {/* ── SaaS Analytics: Plan Distribution & Expansion Opportunities ──── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, marginBottom: 16 }}>
 
-            {/* Plan Tier Distribution */}
-            <div style={{ ...softShadow, padding: 22, minWidth: 0 }}>
-              <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Plan Tier Distribution</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginBottom: 16 }}>Active subscription counts by plan amount (Click bar to drill down)</div>
+            {/* Plan Tier Distribution — restyled per an explicit
+                user-provided mockup (frosted-glass card, "glass" gradient
+                bars over a full-width track, top-5-plus-Other rollup so a
+                long tail of single-subscription plan amounts doesn't turn
+                into dozens of barely-visible slivers). Drill-down behavior
+                unchanged for the 5 real named tiers; the rolled-up "Other"
+                bar isn't clickable since it isn't one real plan to filter
+                subscriptions by. */}
+            <div style={{ background: "rgba(255,255,255,0.72)", WebkitBackdropFilter: "blur(30px) saturate(190%)", backdropFilter: "blur(30px) saturate(190%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 24, boxShadow: "0 16px 36px -12px rgba(15,23,42,0.06), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", padding: 24, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+                <div>
+                  <h3 style={{ fontSize: 17, color: "#0F172A", fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.02em" }}>Plan Tier Distribution</h3>
+                  <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>Active subscriptions by plan (Top 5 + Others)</div>
+                </div>
+                <div title="Sorted by active subscriptions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: "rgba(0,122,255,0.08)", border: "0.5px solid rgba(0,122,255,0.15)", color: "#007AFF", flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
+                </div>
+              </div>
               <div style={{ height: 220 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
-                    data={planDistributionData}
+                    data={planDistributionTop}
                     layout="vertical"
-                    margin={{ top: 10, right: 30, left: 10, bottom: 5 }}
+                    margin={{ top: 10, right: 44, left: 10, bottom: 5 }}
                     style={{ cursor: "pointer" }}
                     onClick={(state) => {
                       if (state && state.activePayload && state.activePayload.length) {
                         const p = state.activePayload[0].payload;
-                        if (p && p.name) {
+                        if (p && p.name && !p.isOther) {
                           setKpiModal({
                             type: "plan_tier",
                             tierName: p.name,
@@ -2842,20 +3006,69 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       }
                     }}
                   >
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
+                    <defs>
+                      {/* iOS-blue "glass" gradient for the 5 real named tiers,
+                          and a muted slate gradient for the rolled-up "Other"
+                          bar — same visual language as the mockup. */}
+                      <linearGradient id="planBlueGlass" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#007AFF" stopOpacity={0.9} />
+                        <stop offset="100%" stopColor="#34AADC" stopOpacity={0.7} />
+                      </linearGradient>
+                      <linearGradient id="planSlateGlass" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#94A3B8" stopOpacity={0.5} />
+                        <stop offset="100%" stopColor="#CBD5E1" stopOpacity={0.3} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(0,0,0,0.04)" horizontal={false} />
                     <XAxis type="number" hide />
-                    <YAxis type="category" dataKey="name" tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} width={80} />
-                    <Tooltip formatter={(v, n, entry) => [`${entry.payload.pct}% (${v} subscriptions) · Click to view`, "Active Subscriptions"]} contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }} />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      axisLine={false}
+                      tickLine={false}
+                      width={92}
+                      tick={(props) => {
+                        const { x, y, payload, index } = props;
+                        const entry = planDistributionTop[index];
+                        const isTop = index === 0;
+                        const label = payload.value === "DrinkPrime Purifier" ? "DP Purifier" : payload.value;
+                        const fill = entry?.isOther ? "#94A3B8" : isTop ? "#0F172A" : "#475569";
+                        return <text x={x} y={y} dy={4} textAnchor="end" fontSize={12} fontWeight={600} fill={fill}>{label}</text>;
+                      }}
+                    />
+                    {/* Custom content (v2.29.429) — frosted-glass tooltip
+                        matching the rest of this restyle wave; the rolled-up
+                        "Other" bar gets a plain count instead of the "Click
+                        to view" hint since it isn't drillable. */}
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload || !payload.length) return null;
+                        const row = payload[0].payload;
+                        return (
+                          <div style={{ borderRadius: 14, border: "0.5px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 24px -6px rgba(0,0,0,0.12), 0 4px 10px -2px rgba(0,0,0,0.04)", fontSize: 12.5, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", padding: "12px 16px", minWidth: 160 }}>
+                            <div style={{ color: "#0F172A", fontWeight: 700, marginBottom: 4, fontSize: 13.5 }}>{row.name}</div>
+                            <div style={{ color: "#475569", fontWeight: 500 }}>{row.pct}% · {row.value} subscription{row.value === 1 ? "" : "s"}</div>
+                            {!row.isOther && <div style={{ marginTop: 4, color: "#007AFF", fontWeight: 600, fontSize: 11.5 }}>Click to view →</div>}
+                          </div>
+                        );
+                      }}
+                      cursor={{ fill: "rgba(0,122,255,0.04)" }}
+                    />
+                    {/* `background` (v2.29.429) — Recharts' own built-in prop
+                        for exactly this "value bar over a full-width track"
+                        look, spanning the axis's own 0→auto-max domain
+                        behind every row, instead of a hand-rolled 2nd Bar. */}
                     <Bar
                       dataKey="value"
                       name="Active Tiers"
-                      fill="#2A86D6"
-                      radius={[0, 4, 4, 0]}
-                      maxBarSize={20}
+                      fill="url(#planBlueGlass)"
+                      background={{ fill: "rgba(0,0,0,0.02)", radius: 6 }}
+                      radius={[0, 6, 6, 0]}
+                      maxBarSize={12}
                       isAnimationActive={false}
                       onClick={(entry) => {
                         const target = entry && (entry.payload || entry);
-                        if (target && target.name) {
+                        if (target && target.name && !target.isOther) {
                           setKpiModal({
                             type: "plan_tier",
                             tierName: target.name,
@@ -2865,12 +3078,14 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         }
                       }}
                     >
-                      {planDistributionData.map((entry, index) => (
+                      {planDistributionTop.map((entry, index) => (
                         <Cell
                           key={`tier-cell-${index}`}
-                          cursor="pointer"
-                          fill="#2A86D6"
+                          cursor={entry.isOther ? "default" : "pointer"}
+                          fill={entry.isOther ? "url(#planSlateGlass)" : "url(#planBlueGlass)"}
+                          style={!entry.isOther ? { filter: "drop-shadow(0 4px 6px rgba(0,122,255,0.2))" } : undefined}
                           onClick={() => {
+                            if (entry.isOther) return;
                             setKpiModal({
                               type: "plan_tier",
                               tierName: entry.name,
@@ -2880,7 +3095,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                           }}
                         />
                       ))}
-                      <LabelList dataKey="pct" position="right" formatter={(v) => `${v}%`} style={{ fontSize: 11, fontWeight: 700, fill: "#2A86D6", cursor: "pointer" }} />
+                      <LabelList
+                        dataKey="pct"
+                        content={(props) => {
+                          const { x, y, width, value, index } = props;
+                          const entry = planDistributionTop[index];
+                          const fill = entry?.isOther ? "#64748B" : "#007AFF";
+                          return <text x={x + width + 6} y={y} dy={9} fontSize={11.5} fontWeight={700} fill={fill} textAnchor="start">{value}%</text>;
+                        }}
+                      />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
