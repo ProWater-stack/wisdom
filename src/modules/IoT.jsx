@@ -1387,7 +1387,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
       {rejectStats && rejectStory && (() => {
         const bc = REJECT_BAND_COLOR[rejectStats.band];
         return (
-          <div style={{ position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", margin: "12px auto", maxWidth: 780, zIndex: 1, padding: "0 20px" }}>
+          <div style={{ position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", zIndex: 1, padding: "12px 18px 4px" }}>
             <div style={{ background: "rgba(255,255,255,0.72)", WebkitBackdropFilter: "blur(40px) saturate(200%)", backdropFilter: "blur(40px) saturate(200%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 28, boxShadow: "0 24px 48px -12px rgba(15,23,42,0.08), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,1)", padding: 28, overflow: "hidden" }}>
 
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 24 }}>
