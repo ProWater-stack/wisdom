@@ -1377,74 +1377,83 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
           add a ratio... add a explanation through AI like how it is done in
           Weather correlation") and the explicit follow-up confirming a
           deterministic, no-API narrative ("i will go without API itself").
-          Restyled v2.29.434 per an explicit user-provided mockup — a
-          tighter, quieter glass card (was the v2.29.433 glossy version with
-          ambient glows and a wide progress bar) matching the rest of the
-          dashboard's own glass language; the causes/fixes list is trimmed
-          to 3 items max per side to fit the new 2-column layout. Sits
-          directly above Recent Readings since it's a read on 2 of that
-          table's own columns (Raw Water Dispensed / Reject Water). */}
+          Restyled v2.29.435 per an explicit user-provided mockup — an
+          "Apple Health"-style glossy glass card (was the v2.29.434 flatter
+          version): bigger radii, layered gradient/inset-highlight shadows
+          on both the metric tiles and the 2-column insight panels, and a
+          soft top-sheen overlay on each metric tile. Sits directly above
+          Recent Readings since it's a read on 2 of that table's own
+          columns (Raw Water Dispensed / Reject Water). */}
       {rejectStats && rejectStory && (() => {
         const bc = REJECT_BAND_COLOR[rejectStats.band];
         return (
           <div style={{ position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", margin: "12px auto", maxWidth: 780, zIndex: 1, padding: "0 20px" }}>
-            <div style={{ background: "rgba(255,255,255,0.75)", WebkitBackdropFilter: "blur(30px) saturate(180%)", backdropFilter: "blur(30px) saturate(180%)", border: "0.5px solid rgba(0,0,0,0.06)", borderRadius: 20, boxShadow: "0 10px 30px -10px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.02)", padding: "22px 24px", overflow: "hidden" }}>
+            <div style={{ background: "rgba(255,255,255,0.72)", WebkitBackdropFilter: "blur(40px) saturate(200%)", backdropFilter: "blur(40px) saturate(200%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 28, boxShadow: "0 24px 48px -12px rgba(15,23,42,0.08), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,1)", padding: 28, overflow: "hidden" }}>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 24 }}>
                 <div>
-                  <h2 style={{ margin: "0 0 3px", fontSize: 16, fontWeight: 750, color: "#1D1D1F", letterSpacing: "-0.01em" }}>RO Reject Water Analysis</h2>
-                  <div style={{ fontSize: 11.5, color: "#86868B", fontWeight: 500 }}>Diagnostic evaluation of system recovery vs. waste ratio</div>
+                  <h2 style={{ margin: "0 0 4px", fontSize: 19, fontWeight: 800, color: "#1D1D1F", letterSpacing: "-0.02em" }}>RO Reject Water Analysis</h2>
+                  <div style={{ fontSize: 12, color: "#86868B", fontWeight: 500 }}>Diagnostic evaluation of system recovery vs. waste ratio</div>
                 </div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "#86868B", background: "rgba(0,0,0,0.03)", padding: "4px 10px", borderRadius: 999, border: "0.5px solid rgba(0,0,0,0.04)", whiteSpace: "nowrap" }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: "#86868B", background: "rgba(0,0,0,0.03)", padding: "5px 12px", borderRadius: 999, border: "0.5px solid rgba(0,0,0,0.04)", boxShadow: "inset 0 1px 1px #FFF", whiteSpace: "nowrap" }}>
                   {rejectTimeLabel}
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 20 }}>
-                <div style={{ background: "rgba(255,255,255,0.85)", border: `0.5px solid ${bc}33`, borderRadius: 14, padding: "14px 16px", boxShadow: `0 2px 8px ${bc}08` }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: bc, marginBottom: 6 }}>Reject %</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: bc, fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{rejectStats.rejectPct}%</div>
-                  <div style={{ fontSize: 11, color: "#86868B", marginTop: 5, fontWeight: 500 }}>{rejectStory.targetNote}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 24 }}>
+                <div style={{ background: `linear-gradient(145deg, rgba(255,255,255,0.95) 0%, ${bc}0D 100%)`, border: `0.5px solid ${bc}40`, borderRadius: 20, padding: 18, boxShadow: `0 8px 20px ${bc}14, inset 0 1px 1.5px rgba(255,255,255,1), inset 0 -1px 1.5px rgba(255,255,255,0.4)`, position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "35%", background: "linear-gradient(180deg, rgba(255,255,255,0.6) 0%, transparent 100%)", pointerEvents: "none" }} />
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: bc, marginBottom: 8 }}>Reject %</div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: bc, fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.03em", textShadow: `0 1px 2px ${bc}26` }}>{rejectStats.rejectPct}%</div>
+                  <div style={{ fontSize: 11.5, color: "#86868B", marginTop: 6, fontWeight: 500 }}>{rejectStory.targetNote}</div>
                 </div>
 
-                <div style={{ background: "rgba(255,255,255,0.85)", border: "0.5px solid rgba(10,125,83,0.2)", borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(10,125,83,0.03)" }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0A7D53", marginBottom: 6 }}>RO Recovery</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#0A7D53", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{rejectStats.recoveryPct}%</div>
-                  <div style={{ fontSize: 11, color: "#86868B", marginTop: 5, fontWeight: 500 }}>Usable water yield</div>
+                <div style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(240,253,244,0.6) 100%)", border: "0.5px solid rgba(52,199,89,0.3)", borderRadius: 20, padding: 18, boxShadow: "0 8px 20px rgba(52,199,89,0.08), inset 0 1px 1.5px rgba(255,255,255,1), inset 0 -1px 1.5px rgba(255,255,255,0.4)", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "35%", background: "linear-gradient(180deg, rgba(255,255,255,0.6) 0%, transparent 100%)", pointerEvents: "none" }} />
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#34C759", marginBottom: 8 }}>RO Recovery</div>
+                  <div style={{ fontSize: 26, fontWeight: 800, color: "#248A3D", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.03em", textShadow: "0 1px 2px rgba(52,199,89,0.15)" }}>{rejectStats.recoveryPct}%</div>
+                  <div style={{ fontSize: 11.5, color: "#86868B", marginTop: 6, fontWeight: 500 }}>Usable water yield</div>
                 </div>
 
-                <div style={{ background: "rgba(255,255,255,0.85)", border: "0.5px solid rgba(0,0,0,0.06)", borderRadius: 14, padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#86868B", marginBottom: 6 }}>Ratio Split</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: "#1D1D1F", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{rejectStats.rejectPct} : {rejectStats.recoveryPct}</div>
-                  <div style={{ fontSize: 11, color: "#86868B", marginTop: 5, fontWeight: 500 }}>Reject : RO Output</div>
+                <div style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(241,245,249,0.6) 100%)", border: "0.5px solid rgba(0,0,0,0.08)", borderRadius: 20, padding: 18, boxShadow: "0 8px 20px rgba(0,0,0,0.04), inset 0 1px 1.5px rgba(255,255,255,1), inset 0 -1px 1.5px rgba(255,255,255,0.4)", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "35%", background: "linear-gradient(180deg, rgba(255,255,255,0.6) 0%, transparent 100%)", pointerEvents: "none" }} />
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#86868B", marginBottom: 8 }}>Ratio Split</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#1D1D1F", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.03em" }}>{rejectStats.rejectPct} : {rejectStats.recoveryPct}</div>
+                  <div style={{ fontSize: 11.5, color: "#86868B", marginTop: 6, fontWeight: 500 }}>Reject : RO Output</div>
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <div style={{ background: `${bc}0D`, border: `0.5px solid ${bc}26`, borderRadius: 16, padding: 16 }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: bc, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: bc }} /> What this means
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                <div style={{ background: `linear-gradient(145deg, rgba(255,255,255,0.85) 0%, ${bc}0D 100%)`, border: `0.5px solid ${bc}40`, borderRadius: 22, padding: 20, boxShadow: `0 8px 20px ${bc}0D, inset 0 1px 1px #FFF` }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: bc, marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: bc, boxShadow: `0 0 6px ${bc}99` }} /> What this means
                   </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 650, color: "#1D1D1F", lineHeight: 1.4, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 750, color: "#1D1D1F", lineHeight: 1.45, marginBottom: 12 }}>
                     Reject rate is <span style={{ color: bc, fontWeight: 800 }}>{rejectStats.rejectPct}%</span> ({rejectStory.verdict}).
                   </div>
-                  <div style={{ display: "grid", gap: 8, fontSize: 12, color: "#555558", lineHeight: 1.35 }}>
+                  <div style={{ display: "grid", gap: 10, fontSize: 12.5, color: "#555558", lineHeight: 1.4 }}>
                     {rejectStory.items.map((it, i) => (
-                      <div key={i}><strong style={{ color: "#1D1D1F" }}>{it.emoji} {it.label}:</strong> {it.text}</div>
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14 }}>{it.emoji}</span>
+                        <div><strong style={{ color: "#1D1D1F" }}>{it.label}:</strong> {it.text}</div>
+                      </div>
                     ))}
                   </div>
                 </div>
 
-                <div style={{ background: "rgba(243,248,236,0.8)", border: "0.5px solid rgba(10,125,83,0.15)", borderRadius: 16, padding: 16 }}>
-                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#0A7D53", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#0A7D53" }} /> How to fix
+                <div style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.85) 0%, rgba(240,253,244,0.6) 100%)", border: "0.5px solid rgba(52,199,89,0.3)", borderRadius: 22, padding: 20, boxShadow: "0 8px 20px rgba(52,199,89,0.05), inset 0 1px 1px #FFF" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#34C759", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#34C759", boxShadow: "0 0 6px rgba(52,199,89,0.6)" }} /> How to fix
                   </div>
-                  <div style={{ fontSize: 12.5, fontWeight: 650, color: "#1D1D1F", lineHeight: 1.4, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 750, color: "#1D1D1F", lineHeight: 1.4, marginBottom: 12 }}>
                     {rejectStory.fix.length > 0 ? "Recommended maintenance steps:" : "No action needed right now:"}
                   </div>
-                  <div style={{ display: "grid", gap: 8, fontSize: 12, color: "#555558", lineHeight: 1.35 }}>
+                  <div style={{ display: "grid", gap: 10, fontSize: 12.5, color: "#555558", lineHeight: 1.4 }}>
                     {rejectStory.fix.length > 0 ? rejectStory.fix.map((f, i) => (
-                      <div key={i}><strong style={{ color: "#1D1D1F" }}>{f.emoji} {f.label}:</strong> {f.text}</div>
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                        <span style={{ fontSize: 14 }}>{f.emoji}</span>
+                        <div><strong style={{ color: "#1D1D1F" }}>{f.label}:</strong> {f.text}</div>
+                      </div>
                     )) : (
                       <div>Recovery is within the healthy target — keep the current maintenance schedule.</div>
                     )}
