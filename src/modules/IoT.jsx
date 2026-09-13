@@ -211,7 +211,16 @@ export function iotRejectStats(chrono) {
       const rejectPct = Math.round((reject / raw) * 1000) / 10;
       const recoveryPct = Math.round((ro / raw) * 1000) / 10;
       const band = rejectPct > 35 ? "high" : rejectPct > 25 ? "fair" : "good";
-      return { raw, ro, reject, rejectPct, recoveryPct, band, timestamp: it.timestamp };
+      // `ratioText` (v2.29.437, per explicit user feedback — "40.9 : 59.1"
+      // read as hard to parse at a glance, wanted something closer to
+      // "1:2 or 1:3") — normalized to the smaller side = 1, the same
+      // convention RO reject ratios are usually quoted in (e.g. "1:3
+      // reject" means 1 L rejected per 3 L of usable product), rounded to
+      // 1 decimal so it stays a short, easy-to-read ratio regardless of
+      // the device's real numbers rather than 2 raw percentages.
+      const trimZero = (n) => n.toFixed(1).replace(/\.0$/, "");
+      const ratioText = rejectPct <= 0 ? "0 : 1" : recoveryPct <= 0 ? "1 : 0" : rejectPct <= recoveryPct ? `1 : ${trimZero(recoveryPct / rejectPct)}` : `${trimZero(rejectPct / recoveryPct)} : 1`;
+      return { raw, ro, reject, rejectPct, recoveryPct, ratioText, band, timestamp: it.timestamp };
     }
   }
   return null;
@@ -1418,7 +1427,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
                 <div style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.95) 0%, rgba(241,245,249,0.6) 100%)", border: "0.5px solid rgba(0,0,0,0.08)", borderRadius: 20, padding: 18, boxShadow: "0 8px 20px rgba(0,0,0,0.04), inset 0 1px 1.5px rgba(255,255,255,1), inset 0 -1px 1.5px rgba(255,255,255,0.4)", position: "relative", overflow: "hidden" }}>
                   <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "35%", background: "linear-gradient(180deg, rgba(255,255,255,0.6) 0%, transparent 100%)", pointerEvents: "none" }} />
                   <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#86868B", marginBottom: 8 }}>Ratio Split</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#1D1D1F", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.03em" }}>{rejectStats.rejectPct} : {rejectStats.recoveryPct}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: "#1D1D1F", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.03em" }}>{rejectStats.ratioText}</div>
                   <div style={{ fontSize: 11.5, color: "#86868B", marginTop: 6, fontWeight: 500 }}>Reject : RO Output</div>
                 </div>
               </div>
