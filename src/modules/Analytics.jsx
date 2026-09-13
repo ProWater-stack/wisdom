@@ -509,9 +509,18 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const sxy = xs.reduce((a, x, i) => a + x * ys[i], 0), sxx = xs.reduce((a, x) => a + x * x, 0);
   const slope = (n * sxx - sx * sx) ? (n * sxy - sx * sy) / (n * sxx - sx * sx) : 0;
   const intercept = (sy - slope * sx) / (n || 1);
-  const faData = fa.map((x, i) => ({ label: monthShort(x.y, x.m), actual: Math.round(x.collected), forecast: Math.max(0, Math.round(intercept + slope * i)), arpu: x.arpu }));
+  // pctVsForecast — how much more/less Actual came in vs Expected, per
+  // explicit user request ("how much percentage more or less we have
+  // received from the expected"); only meaningful for a month with a real
+  // Actual figure (null for the future/"Target" month, which has none yet).
+  const faData = fa.map((x, i) => {
+    const actual = Math.round(x.collected);
+    const forecast = Math.max(0, Math.round(intercept + slope * i));
+    const pctVsForecast = forecast > 0 ? Math.round(((actual - forecast) / forecast) * 1000) / 10 : null;
+    return { label: monthShort(x.y, x.m), actual, forecast, arpu: x.arpu, pctVsForecast };
+  });
   const nd = new Date(curY, curM + 1, 1);
-  faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)), arpu: null });
+  faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)), arpu: null, pctVsForecast: null });
 
   // ---- Month-on-Month (MoM) collected (trailing 7 months) -----------------
   // Per-month New CX count for the MoM chart's data labels (v2.29.419) — was
@@ -2486,7 +2495,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={faData}
-                    margin={{ top: 18, right: 30, left: -6, bottom: 0 }}
+                    margin={{ top: 34, right: 30, left: -6, bottom: 0 }}
                     style={{ cursor: "pointer" }}
                     onClick={(state) => {
                       if (state && state.activePayload && state.activePayload.length) {
@@ -2513,11 +2522,32 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.04)" vertical={false} />
                     <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.08)" }} tickLine={false} />
                     <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                    {/* Custom content (v2.29.427) — was a `formatter`, but that just
+                        iterates whatever's in `payload` (which is how the Actual
+                        line/Area used to double up before tooltipType="none",
+                        v2.29.418) and had no way to add a 3rd, computed-only line
+                        (% vs Expected, per explicit user request: "how much
+                        percentage more or less we have received from the
+                        expected"). Reading straight off `payload[0].payload` (the
+                        row's own data object) instead sidesteps that entirely. */}
                     <Tooltip
-                      formatter={(v, n) => v == null ? [null, null] : [inr(v), n === "actual" ? "Total (Actual)" : "Expected (Forecast)"]}
-                      contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13 }}
-                      labelStyle={{ color: "#1D1D1F", fontWeight: 700, marginBottom: 4 }}
-                      itemStyle={{ color: "#1D1D1F", fontWeight: 600 }}
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload || !payload.length) return null;
+                        const row = payload[0].payload;
+                        const pct = row.pctVsForecast;
+                        return (
+                          <div style={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13, background: "#fff", padding: "8px 12px" }}>
+                            <div style={{ color: "#1D1D1F", fontWeight: 700, marginBottom: 4 }}>{label}</div>
+                            {row.actual != null && <div style={{ color: "#1D1D1F", fontWeight: 600 }}>Total (Actual): {inr(row.actual)}</div>}
+                            <div style={{ color: "#1D1D1F", fontWeight: 600 }}>Expected (Forecast): {inr(row.forecast)}</div>
+                            {pct != null && (
+                              <div style={{ fontWeight: 700, color: pct >= 0 ? "#0A6E46" : "#DC4141", marginTop: 3 }}>
+                                {pct > 0 ? "+" : ""}{pct}% vs Expected
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }}
                       cursor={{ fill: "rgba(10,110,70,0.04)" }}
                     />
                     {/* Forecast bar's own value label only shown for the future
@@ -2532,6 +2562,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         <Cell key={`cell-fc-${idx}`} fill={entry.actual == null ? "#DDE5D4" : "#EEF2E8"} />
                       ))}
                       <LabelList dataKey="forecast" position="top" offset={8} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 600, fill: "#697D61" }} />
+                      {/* Expected Revenue value at the BOTTOM of every bar, per
+                          explicit user request ("show the expected revenue also
+                          at the bottom so that its easy to read") — the label
+                          above only ever shows for the future "Target" month (to
+                          avoid colliding with the Actual line's own label at the
+                          top, v2.29 note above); this one is always visible and
+                          sits inside the bar's base instead, so it never collides
+                          with anything regardless of month. */}
+                      <LabelList dataKey="forecast" position="insideBottom" offset={8} formatter={v => inr(v)} style={{ fontSize: 9, fontWeight: 700, fill: "#697D61" }} />
                     </Bar>
                     {/* tooltipType="none" (v2.29.418, per explicit user report — the
                         hover showed "Total (Actual)" twice) — this Area only exists
@@ -2541,7 +2580,38 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         row per graphical item on a dataKey, so both showed up. */}
                     <Area yAxisId="rev" type="monotone" dataKey="actual" fill="url(#warmThemeGrad)" stroke="none" isAnimationActive={false} tooltipType="none" />
                     <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false} dot={{ r: 4, fill: "#FFFFFF", stroke: "#0A6E46", strokeWidth: 2.5 }} connectNulls={false}>
-                      <LabelList dataKey="actual" position="top" offset={10} formatter={v => v ? inr(v) : ""} style={{ fontSize: 9.5, fontWeight: 700, fill: "#0A6E46" }} />
+                      {/* Custom content (v2.29.427) — stacks the existing ₹ value
+                          label with a new colored "+X%"/"-X%" pill just above it,
+                          showing how much more/less Actual came in vs Expected that
+                          month, per explicit user request. Same pill-badge visual
+                          convention as the MoM Growth Trend chart's own %-change
+                          label a few lines down. Only rendered for a month with a
+                          real Actual figure (pctVsForecast is null for the future
+                          "Target" month, which has none yet). */}
+                      <LabelList
+                        dataKey="actual"
+                        content={(props) => {
+                          const { x, y, value, index } = props;
+                          if (value == null) return null;
+                          const pct = faData[index]?.pctVsForecast;
+                          const positive = pct > 0;
+                          const bg = positive ? "rgba(10,110,70,0.1)" : "rgba(220,65,65,0.1)";
+                          const fg = positive ? "#0A6E46" : "#DC4141";
+                          const text = pct != null ? `${pct > 0 ? "+" : ""}${pct}%` : "";
+                          const bw = Math.max(30, text.length * 6.2 + 12);
+                          return (
+                            <g key={`fa-lbl-${index}`}>
+                              {pct != null && (
+                                <>
+                                  <rect x={x - bw / 2} y={y - 28} width={bw} height={15} rx={4} fill={bg} />
+                                  <text x={x} y={y - 17.5} fill={fg} fontSize={9} fontWeight={700} textAnchor="middle">{text}</text>
+                                </>
+                              )}
+                              <text x={x} y={y - 4} fill="#0A6E46" fontSize={9.5} fontWeight={700} textAnchor="middle">{inr(value)}</text>
+                            </g>
+                          );
+                        }}
+                      />
                     </Line>
                     {/* ARPU line removed entirely per explicit user request (v2.29.419)
                         — was already dropped from the hover tooltip in v2.29.418; now
