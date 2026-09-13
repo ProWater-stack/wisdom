@@ -522,6 +522,34 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const nd = new Date(curY, curM + 1, 1);
   faData.push({ label: monthShort(nd.getFullYear(), nd.getMonth()), actual: null, forecast: Math.max(0, Math.round(intercept + slope * n)), arpu: null, pctVsForecast: null });
 
+  // Dynamic green/red gradient stops for the Actual line/area, per an
+  // explicit user-provided mockup — the line reads green while a month is
+  // at/ahead of forecast and red while it's behind, with a hard (not
+  // blended) transition right at the month where the sign flips. Computed
+  // generically from `faData`'s real (non-null-actual) points, positioned
+  // by their fraction along the LINE's own horizontal span — that's what an
+  // SVG gradient's default objectBoundingBox units measure against, since
+  // the same gradient is applied as this Line/Area's own stroke/fill — so
+  // this stays correct regardless of how many months are in view.
+  const faRealPts = faData.map((d, i) => ({ i, pct: d.pctVsForecast })).filter(d => d.pct != null);
+  const faLineStops = [];
+  if (faRealPts.length > 0) {
+    const stopColor = (pct) => pct >= 0 ? "#08805A" : "#FF3B30";
+    const n2 = faRealPts.length;
+    const EPS = 0.015;
+    faLineStops.push({ offset: 0, color: stopColor(faRealPts[0].pct) });
+    for (let k = 1; k < n2; k++) {
+      const f = k / (n2 - 1 || 1);
+      const prevColor = stopColor(faRealPts[k - 1].pct);
+      const curColor = stopColor(faRealPts[k].pct);
+      if (prevColor !== curColor) {
+        faLineStops.push({ offset: Math.max(0, f - EPS), color: prevColor });
+        faLineStops.push({ offset: f, color: curColor });
+      }
+    }
+    faLineStops.push({ offset: 1, color: stopColor(faRealPts[n2 - 1].pct) });
+  }
+
   // ---- Month-on-Month (MoM) collected (trailing 7 months) -----------------
   // Per-month New CX count for the MoM chart's data labels (v2.29.419) — was
   // `x.newC`, built from `fCustomers` alone (customer PROFILE `since` dates
@@ -2473,25 +2501,27 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
           {/* ── Total Revenue vs Expected Revenue + MoM Growth Trend ───────────── */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16, marginBottom: 16 }}>
-            {/* Total Revenue vs Expected Revenue */}
-            <div style={{ background: "#FFFFFF", border: "1px solid rgba(0, 0, 0, 0.07)", borderRadius: 20, boxShadow: "0 4px 20px rgba(0, 0, 0, 0.02)", padding: 22, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+            {/* Total Revenue vs Expected Revenue — restyled per an explicit
+                user-provided mockup (frosted-glass card, dynamic green/red
+                line, red-tinted bars for behind-forecast months). */}
+            <div style={{ background: "rgba(255,255,255,0.72)", WebkitBackdropFilter: "blur(30px) saturate(190%)", backdropFilter: "blur(30px) saturate(190%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 24, boxShadow: "0 16px 36px -12px rgba(15,23,42,0.06), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,0.95)", padding: 24, minWidth: 0, fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
                 <div>
-                  <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Total Revenue vs Expected Revenue</h3>
+                  <h3 style={{ fontSize: 17, color: "#0F172A", fontWeight: 700, margin: 0, letterSpacing: "-0.02em" }}>Total Revenue vs Expected Revenue</h3>
                 </div>
-                
+
                 {/* Legend */}
-                <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#0A6E46" }} /> Total (Actual)
+                <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#475569", fontWeight: 600 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#08805A", boxShadow: "0 1px 3px rgba(8,128,90,0.3)" }} /> Total (Actual)
                   </span>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#555558", fontWeight: 500 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: "#E3EADE" }} /> Expected (Forecast)
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "#475569", fontWeight: 600 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(8,128,90,0.08)", border: "0.5px solid rgba(8,128,90,0.15)" }} /> Expected (Forecast)
                   </span>
                 </div>
               </div>
 
-              <div style={{ height: 230 }}>
+              <div style={{ height: 250 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={faData}
@@ -2514,14 +2544,27 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     }}
                   >
                     <defs>
-                      <linearGradient id="warmThemeGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#0A6E46" stopOpacity={0.14} />
-                        <stop offset="100%" stopColor="#0A6E46" stopOpacity={0.0} />
+                      {/* Dynamic green/red horizontal gradient (v2.29.428, per the
+                          mockup) — drives both the Line's stroke and, through the
+                          mask below, the Area's fill. Stops computed above from
+                          real faData, generically (not hardcoded to any specific
+                          month pattern). */}
+                      <linearGradient id="faLineGrad" x1="0" y1="0" x2="1" y2="0">
+                        {faLineStops.map((s, i) => <stop key={i} offset={`${(s.offset * 100).toFixed(2)}%`} stopColor={s.color} />)}
                       </linearGradient>
+                      {/* Vertical fade mask so the area still reads as a soft fill
+                          under the line rather than a flat block of color. */}
+                      <linearGradient id="faAreaFade" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.32} />
+                        <stop offset="100%" stopColor="#FFFFFF" stopOpacity={0} />
+                      </linearGradient>
+                      <mask id="faAreaMask">
+                        <rect x="0" y="0" width="100%" height="100%" fill="url(#faAreaFade)" />
+                      </mask>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0, 0, 0, 0.04)" vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: "#86868B", fontSize: 12, fontWeight: 500 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.08)" }} tickLine={false} />
-                    <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#86868B", fontSize: 11, fontWeight: 500 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
+                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(0, 0, 0, 0.05)" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: "#64748B", fontSize: 12, fontWeight: 600 }} axisLine={{ stroke: "rgba(0, 0, 0, 0.1)" }} tickLine={false} />
+                    <YAxis yAxisId="rev" domain={["auto", "auto"]} tick={{ fill: "#94A3B8", fontSize: 11, fontWeight: 600 }} axisLine={false} tickLine={false} width={54} tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
                     {/* Custom content (v2.29.427) — was a `formatter`, but that just
                         iterates whatever's in `payload` (which is how the Actual
                         line/Area used to double up before tooltipType="none",
@@ -2536,19 +2579,29 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         const row = payload[0].payload;
                         const pct = row.pctVsForecast;
                         return (
-                          <div style={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", fontSize: 13, background: "#fff", padding: "8px 12px" }}>
-                            <div style={{ color: "#1D1D1F", fontWeight: 700, marginBottom: 4 }}>{label}</div>
-                            {row.actual != null && <div style={{ color: "#1D1D1F", fontWeight: 600 }}>Total (Actual): {inr(row.actual)}</div>}
-                            <div style={{ color: "#1D1D1F", fontWeight: 600 }}>Expected (Forecast): {inr(row.forecast)}</div>
-                            {pct != null && (
-                              <div style={{ fontWeight: 700, color: pct >= 0 ? "#0A6E46" : "#DC4141", marginTop: 3 }}>
-                                {pct > 0 ? "+" : ""}{pct}% vs Expected
+                          <div style={{ borderRadius: 14, border: "0.5px solid rgba(0,0,0,0.08)", boxShadow: "0 10px 24px -6px rgba(0,0,0,0.12), 0 4px 10px -2px rgba(0,0,0,0.04)", fontSize: 12.5, background: "rgba(255,255,255,0.85)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", padding: "14px 16px", minWidth: 180 }}>
+                            <div style={{ color: "#0F172A", fontWeight: 700, marginBottom: 8, fontSize: 14, letterSpacing: "-0.01em" }}>{label}</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {row.actual != null && (
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                  <span style={{ color: "#475569", fontWeight: 500 }}>Total (Actual):</span>
+                                  <span style={{ color: "#0F172A", fontWeight: 700 }}>{inr(row.actual)}</span>
+                                </div>
+                              )}
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                                <span style={{ color: "#475569", fontWeight: 500 }}>Expected (Forecast):</span>
+                                <span style={{ color: "#0F172A", fontWeight: 700 }}>{inr(row.forecast)}</span>
                               </div>
-                            )}
+                              {pct != null && (
+                                <div style={{ marginTop: 4, paddingTop: 6, borderTop: "0.5px solid rgba(0,0,0,0.06)", fontWeight: 700, color: pct >= 0 ? "#08805A" : "#FF3B30" }}>
+                                  {pct > 0 ? "+" : ""}{pct}% vs Expected
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
                       }}
-                      cursor={{ fill: "rgba(10,110,70,0.04)" }}
+                      cursor={{ stroke: "rgba(0,0,0,0.1)", strokeWidth: 1.5 }}
                     />
                     {/* Forecast bar's own value label only shown for the future
                         ("Target") month — per explicit user report ("some
@@ -2557,11 +2610,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         line's own label sitting at nearly the same height;
                         the Actual line already carries the real number for
                         every month that has one. */}
-                    <Bar yAxisId="rev" dataKey="forecast" fill="#EEF2E8" radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                    <Bar yAxisId="rev" dataKey="forecast" fill="rgba(8,128,90,0.06)" radius={[6, 6, 0, 0]} maxBarSize={34} isAnimationActive={false}>
+                      {/* Bar tint now reflects that month's own result (v2.29.428, per
+                          the mockup) — a soft red wash when the month came in behind
+                          forecast, the same soft green wash as before otherwise
+                          (including the future "Target" month, which has no result
+                          yet to be behind on). */}
                       {faData.map((entry, idx) => (
-                        <Cell key={`cell-fc-${idx}`} fill={entry.actual == null ? "#DDE5D4" : "#EEF2E8"} />
+                        <Cell key={`cell-fc-${idx}`} fill={entry.actual != null && entry.pctVsForecast < 0 ? "rgba(255,59,48,0.12)" : "rgba(8,128,90,0.06)"} />
                       ))}
-                      <LabelList dataKey="forecast" position="top" offset={8} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 600, fill: "#697D61" }} />
+                      <LabelList dataKey="forecast" position="top" offset={8} formatter={(v, entry, idx) => (faData[idx] && faData[idx].actual == null) ? `Target: ${inr(v)}` : ""} style={{ fontSize: 9.5, fontWeight: 600, fill: "#64748B" }} />
                       {/* Expected Revenue value at the BOTTOM of every bar, per
                           explicit user request ("show the expected revenue also
                           at the bottom so that its easy to read") — the label
@@ -2570,33 +2628,49 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                           top, v2.29 note above); this one is always visible and
                           sits inside the bar's base instead, so it never collides
                           with anything regardless of month. */}
-                      <LabelList dataKey="forecast" position="insideBottom" offset={8} formatter={v => inr(v)} style={{ fontSize: 9, fontWeight: 700, fill: "#697D61" }} />
+                      <LabelList dataKey="forecast" position="insideBottom" offset={8} formatter={v => inr(v)} style={{ fontSize: 9.5, fontWeight: 700, fill: "#64748B" }} />
                     </Bar>
                     {/* tooltipType="none" (v2.29.418, per explicit user report — the
                         hover showed "Total (Actual)" twice) — this Area only exists
                         for the gradient fill under the Actual line below, which
                         shares the same "actual" dataKey and already has its own
                         tooltip row; without this the default Tooltip renders one
-                        row per graphical item on a dataKey, so both showed up. */}
-                    <Area yAxisId="rev" type="monotone" dataKey="actual" fill="url(#warmThemeGrad)" stroke="none" isAnimationActive={false} tooltipType="none" />
-                    <Line yAxisId="rev" type="monotone" dataKey="actual" stroke="#0A6E46" strokeWidth={2.8} isAnimationActive={false} dot={{ r: 4, fill: "#FFFFFF", stroke: "#0A6E46", strokeWidth: 2.5 }} connectNulls={false}>
-                      {/* Custom content (v2.29.427) — stacks the existing ₹ value
-                          label with a new colored "+X%"/"-X%" pill just above it,
-                          showing how much more/less Actual came in vs Expected that
-                          month, per explicit user request. Same pill-badge visual
-                          convention as the MoM Growth Trend chart's own %-change
-                          label a few lines down. Only rendered for a month with a
-                          real Actual figure (pctVsForecast is null for the future
-                          "Target" month, which has none yet). */}
+                        row per graphical item on a dataKey, so both showed up.
+                        fill/mask (v2.29.428) — same dynamic green/red horizontal
+                        gradient as the Line below, cropped to a soft vertical fade
+                        via `faAreaMask` so it still reads as a fill, not a flat block. */}
+                    <Area yAxisId="rev" type="monotone" dataKey="actual" fill="url(#faLineGrad)" mask="url(#faAreaMask)" stroke="none" isAnimationActive={false} tooltipType="none" />
+                    {/* stroke uses the same dynamic gradient (v2.29.428) — green
+                        while a month is at/ahead of forecast, red while behind. */}
+                    <Line
+                      yAxisId="rev" type="monotone" dataKey="actual" stroke="url(#faLineGrad)" strokeWidth={2.8} isAnimationActive={false} connectNulls={false}
+                      dot={(props) => {
+                        const { cx, cy, index, value } = props;
+                        if (value == null || cx == null) return null;
+                        const pct = faData[index]?.pctVsForecast;
+                        const color = pct >= 0 ? "#08805A" : "#FF3B30";
+                        return <circle key={`fa-dot-${index}`} cx={cx} cy={cy} r={4.5} fill="#fff" stroke={color} strokeWidth={2.5} style={{ filter: `drop-shadow(0 2px 4px ${pct >= 0 ? "rgba(8,128,90,0.3)" : "rgba(255,59,48,0.3)"})` }} />;
+                      }}
+                    >
+                      {/* Custom content (v2.29.427, recolored v2.29.428) — stacks the
+                          existing ₹ value label with a colored "+X%"/"-X%" pill just
+                          above it, showing how much more/less Actual came in vs
+                          Expected that month, per explicit user request. Same
+                          pill-badge visual convention as the MoM Growth Trend
+                          chart's own %-change label a few lines down. Only rendered
+                          for a month with a real Actual figure (pctVsForecast is
+                          null for the future "Target" month, which has none yet).
+                          Both the pill AND the ₹ value now share the same
+                          green/red coloring (was always green before) to match. */}
                       <LabelList
                         dataKey="actual"
                         content={(props) => {
                           const { x, y, value, index } = props;
                           if (value == null) return null;
                           const pct = faData[index]?.pctVsForecast;
-                          const positive = pct > 0;
-                          const bg = positive ? "rgba(10,110,70,0.1)" : "rgba(220,65,65,0.1)";
-                          const fg = positive ? "#0A6E46" : "#DC4141";
+                          const positive = pct >= 0;
+                          const bg = positive ? "rgba(52,199,89,0.12)" : "rgba(255,59,48,0.12)";
+                          const fg = positive ? "#08805A" : "#FF3B30";
                           const text = pct != null ? `${pct > 0 ? "+" : ""}${pct}%` : "";
                           const bw = Math.max(30, text.length * 6.2 + 12);
                           return (
@@ -2607,7 +2681,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                                   <text x={x} y={y - 17.5} fill={fg} fontSize={9} fontWeight={700} textAnchor="middle">{text}</text>
                                 </>
                               )}
-                              <text x={x} y={y - 4} fill="#0A6E46" fontSize={9.5} fontWeight={700} textAnchor="middle">{inr(value)}</text>
+                              <text x={x} y={y - 4} fill={pct != null ? fg : "#08805A"} fontSize={9.5} fontWeight={800} textAnchor="middle">{inr(value)}</text>
                             </g>
                           );
                         }}
