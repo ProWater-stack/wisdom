@@ -223,28 +223,30 @@ export function iotRejectStats(chrono) {
 // default; easy to retune once this has been seen across more devices.
 export function iotRejectNarrative(stats) {
   if (!stats) return null;
-  const { rejectPct, recoveryPct, band } = stats;
+  const { recoveryPct, band } = stats;
+  // `verdict` (not a full sentence, v2.29.433 restyle) — the card now builds
+  // its own headline in JSX so the reject % can render as a colored inline
+  // badge rather than plain text, per an explicit user-provided mockup.
   const verdict = band === "good" ? "within the healthy range" : band === "fair" ? "a little above the healthy range" : "well above the healthy range";
-  const headline = `This device is rejecting ${rejectPct}% of its raw water intake (${recoveryPct}% becomes usable RO output) — ${verdict} for a well-tuned RO system (target: under ~25%).`;
   const causes = [
-    { emoji: "💧", label: "Input pressure", show: band !== "good", text: "Low or unstable feed pressure forces the membrane to work harder per litre of product, pushing more raw water to reject instead of permeate." },
-    { emoji: "⚙️", label: "Reject flow restrictor", show: band !== "good", text: "If it's set too open — or was never tuned for this membrane — excess raw water bypasses straight to waste instead of being processed." },
-    { emoji: "🧪", label: "Membrane condition", show: band === "high", text: "Scaling or fouling on an aging membrane lowers its permeate efficiency, so the system compensates by rejecting more to protect water quality." },
-    { emoji: "🪨", label: "Source water hardness", show: band === "high", text: "Higher incoming TDS/hardness needs more flush water to keep the membrane from scaling, which structurally raises the reject ratio." },
+    { emoji: "💧", label: "Input pressure", show: band !== "good", text: "Low or unstable feed pressure forces the membrane to work harder, pushing more raw water to reject." },
+    { emoji: "⚙️", label: "Reject flow restrictor", show: band !== "good", text: "If set too open, excess raw water bypasses straight to waste instead of being processed." },
+    { emoji: "🧪", label: "Membrane condition", show: band === "high", text: "Scaling on an aging membrane lowers permeate efficiency, forcing the system to reject more to protect water quality." },
+    { emoji: "🪨", label: "Source water hardness", show: band === "high", text: "Higher incoming TDS requires more flush water to keep the membrane from scaling." },
   ];
   const items = band === "good"
     ? [{ emoji: "✅", label: "Recovery", text: `At ${recoveryPct}% recovery, the membrane and its reject-valve tuning both look healthy — no corrective action needed right now.` }]
     : causes.filter((c) => c.show);
   const fix = band === "good" ? [] : [
     { emoji: "🔧", text: "Check the reject flow restrictor / needle valve — re-tune it to the membrane's rated recovery ratio." },
-    { emoji: "📈", text: "Verify booster pump pressure against the membrane's spec sheet; a worn pump under-delivers pressure over time." },
+    { emoji: "📈", text: "Verify booster pump pressure against the spec sheet; a worn pump under-delivers pressure." },
     ...(band === "high" ? [
-      { emoji: "🧽", text: "Inspect / descale the membrane on its due schedule — a fouled membrane's recovery drops well before it fails outright." },
-      { emoji: "📋", text: "Re-baseline after any fix — confirm the ratio settles near target across a few days, not just one reading." },
+      { emoji: "🧽", text: "Inspect / descale the membrane on schedule — a fouled membrane's recovery drops well before it fails outright." },
+      { emoji: "📋", text: "Re-baseline after any fix — confirm the ratio settles near target across a few days." },
     ] : []),
   ];
-  const footer = "Rule-based read from this device's own live Raw / RO output / Reject numbers, in the same style as the Weather correlation card above — not a live AI/LLM call. The 25% / 35% thresholds are a starting default and can be tuned once this has been seen across more devices.";
-  return { headline, items, fix, footer, band };
+  const footer = "Rule-based evaluation from this device's live telemetry stream (not an AI/LLM call). The 25% / 35% thresholds are a starting default.";
+  return { verdict, items, fix, footer, band };
 }
 export const iotTimeAgo = (ts) => { if (!ts) return "Unknown"; const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s / 60)}m ago`; return `${Math.floor(s / 3600)}h ago`; };
 // Liveness window in seconds. junctionBox units heartbeat fast (120s); RO-tank
@@ -1165,7 +1167,14 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   // ---- RO reject-water ratio card (Device Monitor > Recent Readings) --------
   const rejectStats = useMemo(() => iotRejectStats(chrono), [chrono]);
   const rejectStory = useMemo(() => (rejectStats ? iotRejectNarrative(rejectStats) : null), [rejectStats]);
-  const REJECT_VK = { good: "good", fair: "warning", high: "critical" };
+  // Restyled v2.29.433, per an explicit user-provided mockup — a glossy
+  // glassmorphic card, colored per the same good/fair/high band as before.
+  const REJECT_BAND_COLOR = { good: "#08805A", fair: "#FF9500", high: "#FF3B30" };
+  const rejectTimeLabel = (() => {
+    if (!rejectStats) return "";
+    const d = new Date(rejectStats.timestamp);
+    return `${d.getDate()} ${IOT_MON3[d.getMonth()]} ${d.getFullYear()}, ${((d.getHours() % 12) || 12)}:${String(d.getMinutes()).padStart(2, "0")} ${d.getHours() < 12 ? "AM" : "PM"}`;
+  })();
   const WXLVL = { strong: "#0A7D53", moderate: "#a86e00", weak: "#6b8577", none: "#8aa398" };
   // Colour palette restyled v2.29.415, per an explicit user-provided mockup
   // ("Apple HIG" palette) — #1E9E4F→#34C759, #2A86D6→#007AFF, #7A5AF8→#AF52DE,
@@ -1368,64 +1377,135 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
           add a ratio... add a explanation through AI like how it is done in
           Weather correlation") and the explicit follow-up confirming a
           deterministic, no-API narrative ("i will go without API itself").
-          Sits directly above Recent Readings since it's a read on 2 of that
-          table's own columns (Raw Water Dispensed / Reject Water). */}
-      {rejectStats && (
-        <div style={{ padding: "12px 18px 4px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--f)" }}>RO reject water</div>
-            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>raw water lost to reject vs. recovered as usable RO output</span>
-            <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: "auto" }}>latest reading · {iotStamp(rejectStats.timestamp)}</span>
-          </div>
+          Restyled v2.29.433 per an explicit user-provided mockup — a glossy
+          glassmorphic card with ambient background glows, replacing the
+          plain-card look above. Sits directly above Recent Readings since
+          it's a read on 2 of that table's own columns (Raw Water Dispensed
+          / Reject Water). */}
+      {rejectStats && rejectStory && (() => {
+        const bc = REJECT_BAND_COLOR[rejectStats.band];
+        return (
+          <div style={{ position: "relative", fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif", WebkitFontSmoothing: "antialiased", zIndex: 1, padding: 20 }}>
+            <div style={{ position: "absolute", top: "15%", right: "10%", width: 280, height: 280, background: `radial-gradient(circle, ${bc}33 0%, transparent 60%)`, filter: "blur(40px)", zIndex: -1, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", bottom: "20%", left: "10%", width: 320, height: 320, background: "radial-gradient(circle, rgba(52,199,89,0.2) 0%, transparent 60%)", filter: "blur(50px)", zIndex: -1, pointerEvents: "none" }} />
+            <div style={{ position: "absolute", top: "40%", left: "40%", width: 200, height: 200, background: "radial-gradient(circle, rgba(0,122,255,0.1) 0%, transparent 60%)", filter: "blur(40px)", zIndex: -1, pointerEvents: "none" }} />
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10 }}>
-            {tile("Reject %", `${rejectStats.rejectPct}%`, "of raw water is rejected", REJECT_VK[rejectStats.band])}
-            {tile("RO recovery", `${rejectStats.recoveryPct}%`, "becomes usable output", "good")}
-            {tile("Ratio", `${rejectStats.rejectPct} : ${rejectStats.recoveryPct}`, "reject : RO output", "na")}
-          </div>
+            <div style={{ background: "linear-gradient(145deg, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.4) 100%)", WebkitBackdropFilter: "blur(40px) saturate(200%)", backdropFilter: "blur(40px) saturate(200%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 32, boxShadow: "0 24px 48px -12px rgba(15,23,42,0.1), 0 2px 8px rgba(0,0,0,0.02), inset 0 1px 1.5px rgba(255,255,255,1), inset 0 -1px 1.5px rgba(255,255,255,0.3)", padding: 28, overflow: "hidden", maxWidth: 900, margin: "0 auto" }}>
 
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 5 }}>
-              <span style={{ color: "#0A7D53" }}>RO output · {rejectStats.ro.toFixed(2)} L</span>
-              <span style={{ color: "#DC4141" }}>Reject · {rejectStats.reject.toFixed(2)} L</span>
-            </div>
-            <div style={{ height: 20, borderRadius: 7, overflow: "hidden", display: "flex", border: "1px solid rgba(0,0,0,0.06)" }}>
-              <div style={{ width: `${rejectStats.recoveryPct}%`, background: "#0A7D53" }} />
-              <div style={{ width: `${rejectStats.rejectPct}%`, background: "#DC4141" }} />
-            </div>
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
-              <span>Good &lt; 25%</span><span>Fair 25–35%</span><span>High &gt; 35%</span>
-              <span style={{ marginLeft: "auto" }}>Raw dispensed {rejectStats.raw.toFixed(2)} L = RO output + reject</span>
-            </div>
-          </div>
-
-          {rejectStory && (
-            <div style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>What this means</div>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)", lineHeight: 1.5, marginBottom: 8 }}>{rejectStory.headline}</div>
-              <div style={{ display: "grid", gap: 7 }}>
-                {rejectStory.items.map((it, i) => (
-                  <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
-                    <span style={{ fontSize: 15, lineHeight: 1.3, flex: "0 0 auto" }}>{it.emoji}</span>
-                    <div style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.45 }}><b style={{ color: "var(--f)" }}>{it.label}:</b> {it.text}</div>
-                  </div>
-                ))}
-              </div>
-              {rejectStory.fix.length > 0 && (
-                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
-                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>How it can be fixed</div>
-                  {rejectStory.fix.map((f, i) => (
-                    <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "var(--slate)", lineHeight: 1.45, marginBottom: 4 }}>
-                      <span style={{ fontSize: 14, flex: "0 0 auto" }}>{f.emoji}</span><span>{f.text}</span>
-                    </div>
-                  ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 28 }}>
+                <div>
+                  <h2 style={{ margin: "0 0 6px", fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", color: "#1D1D1F", textShadow: "0 1px 2px #FFF" }}>RO Reject Water</h2>
+                  <div style={{ fontSize: 13.5, fontWeight: 500, color: "#64748B" }}>Raw water lost to reject vs. recovered as usable RO output</div>
                 </div>
-              )}
-              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8, fontStyle: "italic" }}>{rejectStory.footer}</div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 14px 6px 6px", borderRadius: 999, background: "linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.5) 100%)", border: "0.5px solid rgba(255,255,255,1)", boxShadow: "0 4px 12px rgba(0,0,0,0.04), inset 0 1px 1px #FFF", fontSize: 12, fontWeight: 600, color: "#475569" }}>
+                  <span style={{ display: "flex", justifyContent: "center", alignItems: "center", width: 24, height: 24, background: "#FFFFFF", borderRadius: "50%", boxShadow: "0 2px 6px rgba(0,0,0,0.06)" }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#007AFF" }}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                  </span>
+                  {rejectTimeLabel}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16, marginBottom: 28 }}>
+                <div style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.6) 100%)", border: "0.5px solid rgba(255,255,255,1)", borderRadius: 24, padding: 20, boxShadow: `0 12px 24px -8px ${bc}26, inset 0 1px 2px rgba(255,255,255,1), inset 0 -1px 2px rgba(255,255,255,0.5)`, position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", inset: 0, background: `linear-gradient(180deg, ${bc}0D 0%, transparent 100%)`, pointerEvents: "none" }} />
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#86868B", marginBottom: 10, position: "relative" }}>Reject %</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: bc, boxShadow: `0 0 10px ${bc}99, inset 0 1px 2px rgba(255,255,255,0.5)` }} />
+                    <span style={{ fontSize: 28, fontWeight: 800, color: bc, fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em", textShadow: `0 2px 4px ${bc}33` }}>{rejectStats.rejectPct}%</span>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "#64748B", marginTop: 8, position: "relative" }}>of raw water is rejected</div>
+                </div>
+
+                <div style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.6) 100%)", border: "0.5px solid rgba(255,255,255,1)", borderRadius: 24, padding: 20, boxShadow: "0 12px 24px -8px rgba(52,199,89,0.12), inset 0 1px 2px rgba(255,255,255,1), inset 0 -1px 2px rgba(255,255,255,0.5)", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(52,199,89,0.05) 0%, transparent 100%)", pointerEvents: "none" }} />
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#86868B", marginBottom: 10, position: "relative" }}>RO Recovery</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#34C759", boxShadow: "0 0 10px rgba(52,199,89,0.6), inset 0 1px 2px rgba(255,255,255,0.5)" }} />
+                    <span style={{ fontSize: 28, fontWeight: 800, color: "#08805A", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em", textShadow: "0 2px 4px rgba(8,128,90,0.15)" }}>{rejectStats.recoveryPct}%</span>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "#64748B", marginTop: 8, position: "relative" }}>becomes usable output</div>
+                </div>
+
+                <div style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.6) 100%)", border: "0.5px solid rgba(255,255,255,1)", borderRadius: 24, padding: 20, boxShadow: "0 12px 24px -8px rgba(0,0,0,0.05), inset 0 1px 2px rgba(255,255,255,1), inset 0 -1px 2px rgba(255,255,255,0.5)", position: "relative", overflow: "hidden" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#86868B", marginBottom: 10, position: "relative" }}>Ratio</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative" }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#64748B", boxShadow: "inset 0 1px 2px rgba(255,255,255,0.5)" }} />
+                    <span style={{ fontSize: 26, fontWeight: 800, color: "#334155", fontVariantNumeric: "tabular-nums", lineHeight: 1, letterSpacing: "-0.02em" }}>{rejectStats.rejectPct} : {rejectStats.recoveryPct}</span>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: "#64748B", marginTop: 8, position: "relative" }}>reject : RO output</div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 28, padding: 22, background: "rgba(255,255,255,0.5)", borderRadius: 28, border: "0.5px solid rgba(255,255,255,0.8)", boxShadow: "inset 0 2px 8px rgba(0,0,0,0.02)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, fontWeight: 700, marginBottom: 12 }}>
+                  <span style={{ color: "#08805A", textShadow: "0 1px 1px #FFF" }}>RO Output · {rejectStats.ro.toFixed(2)} L</span>
+                  <span style={{ color: "#FF3B30", textShadow: "0 1px 1px #FFF" }}>Reject · {rejectStats.reject.toFixed(2)} L</span>
+                </div>
+                <div style={{ position: "relative", height: 20, borderRadius: 999, background: "rgba(0,0,0,0.08)", boxShadow: "inset 0 2px 6px rgba(0,0,0,0.15), 0 1px 0 rgba(255,255,255,0.8)", overflow: "hidden", display: "flex" }}>
+                  <div style={{ width: `${rejectStats.recoveryPct}%`, background: "linear-gradient(180deg, #30D158 0%, #34C759 40%, #248A3D 100%)", boxShadow: "inset 0 2px 3px rgba(255,255,255,0.6), inset 0 -2px 3px rgba(0,0,0,0.2)" }}>
+                    <div style={{ height: "40%", width: "100%", background: "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 100%)" }} />
+                  </div>
+                  <div style={{ width: `${rejectStats.rejectPct}%`, background: "linear-gradient(180deg, #FF6961 0%, #FF3B30 40%, #D70015 100%)", boxShadow: "inset 0 2px 3px rgba(255,255,255,0.5), inset 0 -2px 3px rgba(0,0,0,0.2)" }}>
+                    <div style={{ height: "40%", width: "100%", background: "linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 100%)" }} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", fontSize: 11.5, fontWeight: 600, color: "#475569", marginTop: 16 }}>
+                  {[["good", "Good < 25%"], ["fair", "Fair 25–35%"], ["high", "High > 35%"]].map(([k, label]) => {
+                    const active = rejectStats.band === k;
+                    const col = REJECT_BAND_COLOR[k];
+                    return <span key={k} style={{ padding: "4px 12px", borderRadius: 10, background: active ? `linear-gradient(180deg, ${col}0D 0%, ${col}26 100%)` : "linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)", color: active ? col : "#475569", border: `0.5px solid ${active ? col + "33" : "rgba(0,0,0,0.05)"}`, boxShadow: active ? "inset 0 1px 1px rgba(255,255,255,0.5)" : "0 2px 4px rgba(0,0,0,0.02), inset 0 1px 1px #FFF" }}>{label}</span>;
+                  })}
+                  <span style={{ marginLeft: "auto", padding: "4px 12px", color: "#64748B" }}>Raw dispensed {rejectStats.raw.toFixed(2)} L = RO output + reject</span>
+                </div>
+              </div>
+
+              <div style={{ background: "rgba(255,255,255,0.5)", border: "0.5px solid rgba(255,255,255,0.8)", borderRadius: 28, padding: 24, boxShadow: "inset 0 1px 1px #FFF, inset 0 0 20px rgba(255,255,255,0.5)" }}>
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: bc, marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, background: `${bc}1A`, borderRadius: 6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                    </div>
+                    What this means
+                  </div>
+                  <div style={{ fontSize: 14.5, fontWeight: 600, color: "#1D1D1F", lineHeight: 1.5, marginBottom: 16 }}>
+                    This device is rejecting <span style={{ color: bc, fontWeight: 800, background: `${bc}1A`, padding: "0 4px", borderRadius: 4 }}>{rejectStats.rejectPct}%</span> of its raw water intake — {rejectStory.verdict} for a well-tuned RO system (target: under ~25%).
+                  </div>
+                  <div style={{ display: "grid", gap: 12, paddingLeft: 4 }}>
+                    {rejectStory.items.map((it, i) => (
+                      <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: 28, height: 28, background: "#FFFFFF", borderRadius: 8, boxShadow: "0 2px 6px rgba(0,0,0,0.04)", fontSize: 14, flex: "0 0 auto" }}>{it.emoji}</div>
+                        <div style={{ fontSize: 13.5, color: "#475569", lineHeight: 1.5, paddingTop: 4 }}><b style={{ color: "#1D1D1F" }}>{it.label}:</b> {it.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {rejectStory.fix.length > 0 && (
+                  <div style={{ paddingTop: 20, borderTop: "0.5px solid rgba(0,0,0,0.06)" }}>
+                    <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#007AFF", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, background: "rgba(0,122,255,0.1)", borderRadius: 6 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                      </div>
+                      How it can be fixed
+                    </div>
+                    <div style={{ display: "grid", gap: 10, paddingLeft: 4 }}>
+                      {rejectStory.fix.map((f, i) => (
+                        <div key={i} style={{ display: "flex", gap: 14, alignItems: "flex-start", fontSize: 13.5, color: "#475569", lineHeight: 1.5 }}>
+                          <span style={{ fontSize: 15, paddingTop: 2 }}>{f.emoji}</span><span>{f.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 20, fontWeight: 500, textAlign: "center", fontStyle: "italic", padding: "0 20px" }}>
+                {rejectStory.footer}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "14px 20px 8px" }}>
         <span style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F" }}>Recent Readings</span>
