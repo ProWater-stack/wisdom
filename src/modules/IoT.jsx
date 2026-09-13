@@ -193,6 +193,59 @@ export function iotWeatherNarrative(wxCorr, weather, chrono) {
   }
   return { headline, items, footer, customer };
 }
+
+// ---- RO reject-water ratio (Device Monitor > Recent Readings) -------------
+// Reject % = how much of the raw water intake never becomes usable RO
+// output, per explicit user request ("can you tell me the reject water
+// ratio... add the reject percentage in a card, also add a ratio"). Walks
+// `chrono` newest-first looking for the most recent reading that actually
+// carries all 3 real numbers (raw/RO/reject can be briefly missing on a
+// heartbeat) rather than trusting the very last array entry blindly.
+export function iotRejectStats(chrono) {
+  for (let i = chrono.length - 1; i >= 0; i--) {
+    const it = chrono[i];
+    const raw = iotWqNum(it.waterQuality?.totalRawWaterDispensed);
+    const ro = iotWqNum(it.waterQuality?.totalRoWaterDispensed);
+    const reject = iotWqNum(it.waterQuality?.roRejectedWater);
+    if (raw != null && ro != null && reject != null && raw > 0) {
+      const rejectPct = Math.round((reject / raw) * 1000) / 10;
+      const recoveryPct = Math.round((ro / raw) * 1000) / 10;
+      const band = rejectPct > 35 ? "high" : rejectPct > 25 ? "fair" : "good";
+      return { raw, ro, reject, rejectPct, recoveryPct, band, timestamp: it.timestamp };
+    }
+  }
+  return null;
+}
+// Plain-English read of `iotRejectStats`, in the same deterministic,
+// no-LLM style as `iotWeatherNarrative` above (explicit user confirmation:
+// "i will go without API itself") — real thresholds/bands feeding
+// hand-written sentences, not a live AI call. 25%/35% are a starting
+// default; easy to retune once this has been seen across more devices.
+export function iotRejectNarrative(stats) {
+  if (!stats) return null;
+  const { rejectPct, recoveryPct, band } = stats;
+  const verdict = band === "good" ? "within the healthy range" : band === "fair" ? "a little above the healthy range" : "well above the healthy range";
+  const headline = `This device is rejecting ${rejectPct}% of its raw water intake (${recoveryPct}% becomes usable RO output) — ${verdict} for a well-tuned RO system (target: under ~25%).`;
+  const causes = [
+    { emoji: "💧", label: "Input pressure", show: band !== "good", text: "Low or unstable feed pressure forces the membrane to work harder per litre of product, pushing more raw water to reject instead of permeate." },
+    { emoji: "⚙️", label: "Reject flow restrictor", show: band !== "good", text: "If it's set too open — or was never tuned for this membrane — excess raw water bypasses straight to waste instead of being processed." },
+    { emoji: "🧪", label: "Membrane condition", show: band === "high", text: "Scaling or fouling on an aging membrane lowers its permeate efficiency, so the system compensates by rejecting more to protect water quality." },
+    { emoji: "🪨", label: "Source water hardness", show: band === "high", text: "Higher incoming TDS/hardness needs more flush water to keep the membrane from scaling, which structurally raises the reject ratio." },
+  ];
+  const items = band === "good"
+    ? [{ emoji: "✅", label: "Recovery", text: `At ${recoveryPct}% recovery, the membrane and its reject-valve tuning both look healthy — no corrective action needed right now.` }]
+    : causes.filter((c) => c.show);
+  const fix = band === "good" ? [] : [
+    { emoji: "🔧", text: "Check the reject flow restrictor / needle valve — re-tune it to the membrane's rated recovery ratio." },
+    { emoji: "📈", text: "Verify booster pump pressure against the membrane's spec sheet; a worn pump under-delivers pressure over time." },
+    ...(band === "high" ? [
+      { emoji: "🧽", text: "Inspect / descale the membrane on its due schedule — a fouled membrane's recovery drops well before it fails outright." },
+      { emoji: "📋", text: "Re-baseline after any fix — confirm the ratio settles near target across a few days, not just one reading." },
+    ] : []),
+  ];
+  const footer = "Rule-based read from this device's own live Raw / RO output / Reject numbers, in the same style as the Weather correlation card above — not a live AI/LLM call. The 25% / 35% thresholds are a starting default and can be tuned once this has been seen across more devices.";
+  return { headline, items, fix, footer, band };
+}
 export const iotTimeAgo = (ts) => { if (!ts) return "Unknown"; const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000); if (s < 60) return `${s}s ago`; if (s < 3600) return `${Math.floor(s / 60)}m ago`; return `${Math.floor(s / 3600)}h ago`; };
 // Liveness window in seconds. junctionBox units heartbeat fast (120s); RO-tank
 // units report roughly every 20 minutes, so they get a much wider window.
@@ -1109,6 +1162,10 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   // ---- weather correlation (outdoor temp vs the sensors) --------------------
   const wxCorr = useMemo(() => iotWeatherCorrelate(chrono, weather?.history), [chrono, weather]);
   const wxStory = useMemo(() => (wxCorr ? iotWeatherNarrative(wxCorr, weather, chrono) : null), [wxCorr, weather, chrono]);
+  // ---- RO reject-water ratio card (Device Monitor > Recent Readings) --------
+  const rejectStats = useMemo(() => iotRejectStats(chrono), [chrono]);
+  const rejectStory = useMemo(() => (rejectStats ? iotRejectNarrative(rejectStats) : null), [rejectStats]);
+  const REJECT_VK = { good: "good", fair: "warning", high: "critical" };
   const WXLVL = { strong: "#0A7D53", moderate: "#a86e00", weak: "#6b8577", none: "#8aa398" };
   // Colour palette restyled v2.29.415, per an explicit user-provided mockup
   // ("Apple HIG" palette) — #1E9E4F→#34C759, #2A86D6→#007AFF, #7A5AF8→#AF52DE,
@@ -1305,6 +1362,71 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
           )}
         </div>
       )}
+
+      {/* RO reject water — per explicit user request ("can you tell me the
+          reject water ratio... add the reject percentage in a card, also
+          add a ratio... add a explanation through AI like how it is done in
+          Weather correlation") and the explicit follow-up confirming a
+          deterministic, no-API narrative ("i will go without API itself").
+          Sits directly above Recent Readings since it's a read on 2 of that
+          table's own columns (Raw Water Dispensed / Reject Water). */}
+      {rejectStats && (
+        <div style={{ padding: "12px 18px 4px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "var(--f)" }}>RO reject water</div>
+            <span style={{ fontSize: 11.5, color: "var(--muted)" }}>raw water lost to reject vs. recovered as usable RO output</span>
+            <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: "auto" }}>latest reading · {iotStamp(rejectStats.timestamp)}</span>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 10 }}>
+            {tile("Reject %", `${rejectStats.rejectPct}%`, "of raw water is rejected", REJECT_VK[rejectStats.band])}
+            {tile("RO recovery", `${rejectStats.recoveryPct}%`, "becomes usable output", "good")}
+            {tile("Ratio", `${rejectStats.rejectPct} : ${rejectStats.recoveryPct}`, "reject : RO output", "na")}
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, fontWeight: 700, marginBottom: 5 }}>
+              <span style={{ color: "#0A7D53" }}>RO output · {rejectStats.ro.toFixed(2)} L</span>
+              <span style={{ color: "#DC4141" }}>Reject · {rejectStats.reject.toFixed(2)} L</span>
+            </div>
+            <div style={{ height: 20, borderRadius: 7, overflow: "hidden", display: "flex", border: "1px solid rgba(0,0,0,0.06)" }}>
+              <div style={{ width: `${rejectStats.recoveryPct}%`, background: "#0A7D53" }} />
+              <div style={{ width: `${rejectStats.rejectPct}%`, background: "#DC4141" }} />
+            </div>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 10.5, color: "var(--muted)", marginTop: 6 }}>
+              <span>Good &lt; 25%</span><span>Fair 25–35%</span><span>High &gt; 35%</span>
+              <span style={{ marginLeft: "auto" }}>Raw dispensed {rejectStats.raw.toFixed(2)} L = RO output + reject</span>
+            </div>
+          </div>
+
+          {rejectStory && (
+            <div style={{ background: "#F6FAF8", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>What this means</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--f)", lineHeight: 1.5, marginBottom: 8 }}>{rejectStory.headline}</div>
+              <div style={{ display: "grid", gap: 7 }}>
+                {rejectStory.items.map((it, i) => (
+                  <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                    <span style={{ fontSize: 15, lineHeight: 1.3, flex: "0 0 auto" }}>{it.emoji}</span>
+                    <div style={{ fontSize: 12.5, color: "var(--slate)", lineHeight: 1.45 }}><b style={{ color: "var(--f)" }}>{it.label}:</b> {it.text}</div>
+                  </div>
+                ))}
+              </div>
+              {rejectStory.fix.length > 0 && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 5 }}>How it can be fixed</div>
+                  {rejectStory.fix.map((f, i) => (
+                    <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", fontSize: 12.5, color: "var(--slate)", lineHeight: 1.45, marginBottom: 4 }}>
+                      <span style={{ fontSize: 14, flex: "0 0 auto" }}>{f.emoji}</span><span>{f.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8, fontStyle: "italic" }}>{rejectStory.footer}</div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "14px 20px 8px" }}>
         <span style={{ fontSize: 16, fontWeight: 700, color: "#1D1D1F" }}>Recent Readings</span>
         <div style={{ flex: 1, minWidth: 8 }} />
