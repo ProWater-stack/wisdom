@@ -1206,9 +1206,6 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   };
   // Flashing red ring at timestamps where taste is likely affected (temp+TDS+pH).
   const tasteDot = (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload || !payload.taste) return null; return (<g key={index}><circle cx={cx} cy={cy} r={5} fill="none" stroke="#FF3B30" strokeWidth={2}><animate attributeName="r" values="5;9;5" dur="1.1s" repeatCount="indefinite" /><animate attributeName="opacity" values="1;0.15;1" dur="1.1s" repeatCount="indefinite" /></circle><circle cx={cx} cy={cy} r={2.6} fill="#FF3B30"><animate attributeName="opacity" values="1;0.25;1" dur="1.1s" repeatCount="indefinite" /></circle></g>); };
-  const RCOL = { strong: "#0A7D53", mod: "#a86e00", weak: "#6b8577", none: "#6b8577", na: "#8aa398" };
-  const rLabel = (r) => r == null ? "—" : (r >= 0 ? "+" : "") + r.toFixed(2);
-  const rStrength = (r) => { if (r == null) return { t: "insufficient data", c: "na" }; const a = Math.abs(r), dir = r > 0 ? "positive" : "inverse"; if (a >= 0.7) return { t: `strong ${dir}`, c: "strong" }; if (a >= 0.4) return { t: `moderate ${dir}`, c: "mod" }; if (a >= 0.2) return { t: `weak ${dir}`, c: "weak" }; return { t: "little / no link", c: "none" }; };
   const WxTT = ({ active, payload }) => { if (!active || !payload || !payload.length) return null; const d = payload[0].payload; return (<div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 10, padding: "7px 10px", fontSize: 12, boxShadow: "0 8px 22px rgba(16,40,28,.14)" }}><div style={{ color: "var(--muted)", marginBottom: 2 }}>{iotStamp(d.t)}</div><div style={{ color: "#FF9500", fontWeight: 700 }}>Outdoor {d.out != null ? d.out.toFixed(1) : "—"} °C</div><div style={{ color: "#34C759", fontWeight: 700 }}>Water {d.wtemp != null ? d.wtemp.toFixed(1) : "—"} °C</div></div>); };
 
   return (
@@ -1309,25 +1306,6 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
                   <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 8, fontStyle: "italic" }}>{wxStory.footer}</div>
                 </div>
               )}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10, marginBottom: 10 }}>
-                {[{ k: "rTemp", label: "Outdoor °C ↔ Water temp", expect: "strong link expected" }, { k: "rTds", label: "Outdoor °C ↔ TDS", expect: "mild link plausible" }, { k: "rPh", label: "Outdoor °C ↔ pH", expect: "weak link expected" }].map(({ k, label, expect }) => {
-                  const r = wxCorr[k], s = rStrength(r), col = RCOL[s.c] || RCOL.na;
-                  const absR = Math.min(1, Math.abs(r || 0));
-                  return (
-                    <div key={k} style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 12px" }}>
-                      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 700 }}>{label}</div>
-                      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4 }}>
-                        <span style={{ fontSize: 20, fontWeight: 800, color: col, fontVariantNumeric: "tabular-nums" }}>{rLabel(r)}</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: col }}>{s.t}</span>
-                      </div>
-                      <div style={{ height: 4, width: "100%", background: "rgba(0,0,0,0.06)", borderRadius: 999, overflow: "hidden", marginTop: 6 }}>
-                        <div style={{ width: `${Math.max(5, absR * 100)}%`, height: "100%", background: col, borderRadius: 999, transition: "width 0.8s ease-in-out" }} />
-                      </div>
-                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>r · {expect}</div>
-                    </div>
-                  );
-                })}
-              </div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Show</span>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: "#FF9500", display: "inline-flex", alignItems: "center", gap: 5 }} title="Outdoor temperature is always shown"><span style={{ width: 12, height: 3, background: "#FF9500", borderRadius: 2 }} />Outdoor temp</span>
