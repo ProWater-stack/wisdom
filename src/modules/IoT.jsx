@@ -1173,6 +1173,18 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   // ---- weather correlation (outdoor temp vs the sensors) --------------------
   const wxCorr = useMemo(() => iotWeatherCorrelate(chrono, weather?.history), [chrono, weather]);
   const wxStory = useMemo(() => (wxCorr ? iotWeatherNarrative(wxCorr, weather, chrono) : null), [wxCorr, weather, chrono]);
+  // Per-series "last real value" index (v2.29.439, per explicit user
+  // request — "add data labels"). Labeling every one of the ~50+ paired
+  // readings on a multi-line chart would be unreadable clutter, so each
+  // visible line gets exactly one label, on its own most recent real
+  // point (not just the last array index — a series can lag behind if
+  // its own sensor missed a beat), matching the common "endpoint label"
+  // convention for dense time-series charts.
+  const wxLastIdx = useMemo(() => {
+    const d = wxCorr?.joined || [];
+    const find = (key) => { for (let i = d.length - 1; i >= 0; i--) if (d[i]?.[key] != null) return i; return -1; };
+    return { out: find("out"), wtemp: find("wtemp"), tds: find("tds"), ph: find("ph"), tank: find("tank") };
+  }, [wxCorr]);
   // ---- RO reject-water ratio card (Device Monitor > Recent Readings) --------
   const rejectStats = useMemo(() => iotRejectStats(chrono), [chrono]);
   const rejectStory = useMemo(() => (rejectStats ? iotRejectNarrative(rejectStats) : null), [rejectStats]);
@@ -1199,6 +1211,21 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
     { key: "tank", oorKey: "oorTank", label: "Tank", unit: "%", color: "#30B0C7", dp: 0 },
   ];
   const wxDot = (s) => (p) => { const { cx, cy, payload, index } = p; if (cx == null || cy == null || !payload) return null; const bad = payload[s.oorKey]; return <circle key={index} cx={cx} cy={cy} r={bad ? 3.2 : 0} fill={bad ? "#FF3B30" : s.color} stroke="#fff" strokeWidth={bad ? 1.5 : 0} style={bad ? { filter: "drop-shadow(0 1px 3px rgba(255,59,48,0.3))" } : undefined} />; };
+  // Endpoint data label — one per line, on its own most recent real point
+  // (see `wxLastIdx` above), a small pill in the series' own color so it
+  // reads as "the current value of that line" rather than a chart-wide clutter.
+  const wxEndLabel = (key, color, dp, unit) => (props) => {
+    const { x, y, value, index } = props;
+    if (value == null || index !== wxLastIdx[key]) return null;
+    const text = `${value.toFixed(dp)}${unit ? " " + unit : ""}`;
+    const w = Math.max(30, text.length * 6.2 + 10);
+    return (
+      <g key={`wx-end-${key}`} transform={`translate(${x},${y})`}>
+        <rect x={8} y={-9} width={w} height={16} rx={5} fill="#fff" stroke={color} strokeOpacity={0.25} />
+        <text x={8 + w / 2} y={2} fontSize={10.5} fontWeight={700} fill={color} textAnchor="middle">{text}</text>
+      </g>
+    );
+  };
   const bigTT = (props) => {
     const { active, payload } = props; if (!active || !payload || !payload.length) return null; const d = payload[0].payload;
     const row = (label, val, unit, bad, col) => val == null ? null : <div key={label} style={{ color: bad ? "#FF3B30" : col, fontWeight: 700 }}>{label} {val.toFixed((unit === "ppm" || unit === "%") ? 0 : 1)}{unit ? " " + unit : ""}</div>;
@@ -1329,7 +1356,7 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
                   </div>
                 </div>
                 <ResponsiveContainer width="100%" height={230}>
-                  <ComposedChart data={wxCorr.joined} margin={{ top: 8, right: 10, bottom: 4, left: 4 }}>
+                  <ComposedChart data={wxCorr.joined} margin={{ top: 8, right: 56, bottom: 4, left: 4 }}>
                     <CartesianGrid stroke="rgba(0,0,0,0.04)" strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={hm} tick={{ fontSize: 11, fontWeight: 500, fill: "#64748B" }} minTickGap={64} axisLine={{ stroke: "rgba(0,0,0,0.08)" }} tickLine={false} />
                     <YAxis yAxisId="out" orientation="left" domain={["auto", "auto"]} tick={{ fontSize: 11, fontWeight: 700, fill: "#FF9500" }} width={44} axisLine={false} tickLine={false} tickFormatter={(v) => Math.round(v) + "°C"} />
@@ -1338,8 +1365,25 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
                     <YAxis yAxisId="ph" hide domain={["auto", "auto"]} />
                     <YAxis yAxisId="tank" hide domain={["auto", "auto"]} />
                     <Tooltip content={bigTT} />
-                    <Line yAxisId="out" type="monotone" dataKey="out" stroke="#FF9500" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" dot={false} isAnimationActive={true} animationDuration={1200} animationEasing="ease-in-out" connectNulls />
-                    {WX_SERIES.filter((s) => wxShow[s.key]).map((s) => <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={s.key === "tank" ? 1.8 : 2} strokeDasharray={s.key === "tank" ? "4 4" : undefined} strokeLinecap="round" strokeLinejoin="round" dot={wxDot(s)} activeDot={{ r: 4 }} isAnimationActive={true} animationDuration={1200} animationEasing="ease-in-out" connectNulls />)}
+                    {/* isAnimationActive={false} on both Lines below (v2.29.439, was
+                        true) — needed the moment a <LabelList> child was added to
+                        show the new endpoint data labels: Recharts has the same
+                        quirk here as the Bar+Cell case already documented elsewhere
+                        in this app (v2.29.429) — a LabelList child of an animated
+                        Line/Bar doesn't reliably render. Confirmed live: with
+                        isAnimationActive true the label's own <g> never appeared in
+                        the DOM at all; false, it renders correctly. The line's
+                        entrance draw was a one-time mount animation anyway (this
+                        chart's own data is memoized and doesn't change on Shell's
+                        per-second re-render), so losing it costs nothing visible. */}
+                    <Line yAxisId="out" type="monotone" dataKey="out" stroke="#FF9500" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" dot={false} isAnimationActive={false} connectNulls>
+                      <LabelList dataKey="out" content={wxEndLabel("out", "#FF9500", 1, "°C")} />
+                    </Line>
+                    {WX_SERIES.filter((s) => wxShow[s.key]).map((s) => (
+                      <Line key={s.key} yAxisId={s.key} type="monotone" dataKey={s.key} stroke={s.color} strokeWidth={s.key === "tank" ? 1.8 : 2} strokeDasharray={s.key === "tank" ? "4 4" : undefined} strokeLinecap="round" strokeLinejoin="round" dot={wxDot(s)} activeDot={{ r: 4 }} isAnimationActive={false} connectNulls>
+                        <LabelList dataKey={s.key} content={wxEndLabel(s.key, s.color, s.dp, s.unit)} />
+                      </Line>
+                    ))}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
