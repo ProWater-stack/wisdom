@@ -947,13 +947,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // actually all of them. `pct`/`flats` are now `null` (not 0) when the
   // flat count is genuinely unknown, so an apartment with no data reads as
   // "no data" rather than a misleading "0% active".
+  // "Active" fixed v2.29.445 — real bug found via explicit user question +
+  // correction ("we need to show active customers only over there... and
+  // not unique devices with a transaction"): this used to add a per-society
+  // Zoho ACTIVE-CUSTOMER count (`zSoc.active`) to a DP UNIQUE-DEVICE count
+  // (`apt.devices` — distinct `current_device`s with a transaction in the
+  // selected period, not customers, and not even necessarily still active
+  // today) — two different kinds of thing added together, inflating the
+  // number and misrepresenting what it claims to measure. Now reuses
+  // `apt.totalCustomers` (already computed just above, same `combinedAptAgg`
+  // pass, and already the exact metric the All Apartment Performance table's
+  // own "Total Customer" column uses) — a single unique-customer count
+  // spanning BOTH Zoho and DP, gated on `canonicalStatus(c.status) ===
+  // "Active"`, matched by society name. Genuinely "active customers", no
+  // device-count mixed in.
   const penetrationRisk = [];
   Object.values(combinedAptAgg).forEach(apt => {
     const zSoc = societies.find(s => cleanAptName(s.society).toLowerCase() === apt.name.toLowerCase());
     const flats = zSoc ? (zSoc.totalFlats || 0) : 0;
-    const activeDp = apt.devices || 0;
-    const activeZoho = zSoc ? (zSoc.active || 0) : 0;
-    const totalActive = activeZoho + activeDp;
+    const totalActive = apt.totalCustomers || 0;
     const pctVal = flats > 0 ? Math.round((totalActive / flats) * 100) : null;
 
     penetrationRisk.push({
