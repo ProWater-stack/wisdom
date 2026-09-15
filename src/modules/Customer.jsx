@@ -85,15 +85,21 @@ export function CustomerSocieties() {
   useEffect(() => { api.logView(user.username, "Viewed Societies"); Promise.all([customerApi.getCustomers(), billingApi.getInvoices().catch(() => [])]).then(([c, i]) => { setRows(c); setInvs(i || []); }).catch(() => setRows([])); }, []);
   if (!rows) return <Loading title="Loading Societies" subtitle="Synchronizing apartment society records…" />;
 
-  // Churned (v2.29.130) — either signal counts: device Un-Installed
-  // (DP-stack `deviceStatus`) or status Inactive (either stack), same
-  // normalisation/logic All Customers' row-highlighting already uses.
+  // Churned / Device Replacement — exact business rule per explicit user
+  // instruction, different source field for each stack rather than one
+  // blended heuristic: a Zoho customer's churn/replacement signal lives on
+  // the Zoho-side fields (`device_status`/`device_replaced_flag`); a DP
+  // customer's own equivalent fields are different (`subscription_status`/
+  // `DR_Checker`) and must be read there instead. `normSt` (case/format
+  // normalizer) still keeps this an exact-value match, not a substring one
+  // — it just also makes "Uninstalled" and "Un-Installed" compare equal.
   const normSt = (s) => String(s || "").toLowerCase().replace(/[\s_-]+/g, "");
-  const isChurned = (c) => {
-    const dev = normSt(c.deviceStatus);
-    const st = normSt(c.status);
-    return dev.includes("uninstall") || st === "inactive" || dev === "inactive";
-  };
+  const isChurned = (c) => c.isDpCustomer
+    ? normSt(c.subscription_status) === "uninstalled"
+    : normSt(c.device_status) === "uninstalled";
+  const isReplaced = (c) => c.isDpCustomer
+    ? normSt(c.DR_Checker) === "replaced"
+    : normSt(c.device_replaced_flag) === "yes";
 
   // Base population (v2.29.159): restricted to customers with a Purifier ID
   // assigned, same `withPur` gate Customer > All Customers uses — per
@@ -122,14 +128,7 @@ export function CustomerSocieties() {
     else if (st === "inactive") g.inactive++;
     else if (st === "dunning") g.dunning++;
     if (isChurned(c)) g.churned++;
-    // Device Replacement column (v2.29.440, per explicit user request —
-    // "remove Active/Own/Normal/Hot & Cold, add a new column as Device
-    // Replacement") — same exact-match convention Analytics > Overview V2's
-    // All Apartment Performance table already uses for its own "Replaced"
-    // column (v2.29.366): compares the normalized `deviceStatus` against
-    // "replaced" only, not a substring match, so it can't accidentally
-    // catch an unrelated status that merely contains that word.
-    if (normSt(c.deviceStatus) === "replaced") g.replaced++;
+    if (isReplaced(c)) g.replaced++;
   });
   const all = Object.values(groups);
 
@@ -193,7 +192,7 @@ export function CustomerSocieties() {
   const sliceOf = (g, key) => {
     switch (key) {
       case "churned": return g.customers.filter(isChurned);
-      case "replaced": return g.customers.filter(c => normSt(c.deviceStatus) === "replaced");
+      case "replaced": return g.customers.filter(isReplaced);
       default: return g.customers;
     }
   };
