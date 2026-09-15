@@ -128,29 +128,41 @@ export function authHeaders() {
     ...(token ? { "Authorization": `Bearer ${token}` } : {}),
   };
 }
+// Strips invisible/zero-width Unicode characters (word joiner, zero-width
+// space/joiners, BOM) that sometimes ride along in Zoho text fields from
+// copy-pasted or rich-text-sourced data. Critically, JS's own `.trim()` does
+// NOT remove these — they aren't part of the Unicode whitespace set it uses —
+// so a value like "⁠Prabhavati Meghna towers" still LOOKS trimmed but its
+// leading character isn't "P", which silently breaks any `^`-anchored regex
+// match against it (v2.29.447: this is what was actually defeating the
+// Prabhavathi Meghana Towers merge below — see that block's comment).
+const stripInvisibleChars = (s) => String(s).replace(/[​-‍⁠﻿]/g, "");
+
 // Canonical society normalizer (v2.29.350): merges variants like "MJR Clique Hydra"
 // into canonical "MJR Clique Hydra Apartment" across all filters, tables, and feeds.
 export function canonicalSociety(s) {
   if (!s) return "";
-  const trimmed = String(s).trim();
+  const trimmed = stripInvisibleChars(String(s)).trim();
   const cleaned = trimmed.replace(/^cro[_\s]+/i, "").replace(/\s*\[[^\]]+\]/g, "").trim();
   if (/^MJR\s+Clique\s+Hydra(\s+Apartments?)?(\s*,.*)?$/i.test(cleaned)) {
     return "MJR Clique Hydra Apartment";
   }
-  // Prabhavathi Meghana Towers (v2.29.446, per explicit user report with a
-  // real Zoho apartment record — apartment_name "Prabhavathi Meghana
-  // Towers", number_of_flats 80): DrinkPrime's own `partner_name` for the
-  // exact same building uses a different, informal spelling ("Prabhavati
-  // Meghna towers"), so the two never matched by exact string comparison
-  // anywhere that joins Zoho and DP data by society name — e.g.
-  // Under-Penetrated Buildings' flats lookup, which showed "flat count
-  // unknown" for the DP-spelled name even though the real flat count (80)
-  // sat right there under the Zoho-spelled one. Same class of bug as "MJR
-  // Clique Hydra" vs "MJR Clique Hydra Apartment" above, fixed the same
-  // way — canonicalizing both spellings to Zoho's real name (the
-  // authoritative source) means every screen that already goes through
-  // this function (or `cleanAptName`, which calls it) merges them
-  // automatically, not just this one table.
+  // Prabhavathi Meghana Towers (v2.29.446, revised v2.29.447): the real root
+  // cause turned out to be a Zoho customer record's own `society` field
+  // carrying an invisible U+2060 WORD JOINER character before "Prabhavati
+  // Meghna towers" (confirmed via a raw customer_profile record the user
+  // pasted: `"society": "⁠Prabhavati Meghna towers"`), NOT a
+  // DrinkPrime-vs-Zoho spelling split as first assumed — the user confirmed
+  // this building has no DrinkPrime records at all ("in drinkprime i am not
+  // getting any Prabhavati customer records / all are in zoho"). The
+  // invisible character survived `.trim()` (see stripInvisibleChars above),
+  // so this regex's `^` anchor never matched the raw value and the name
+  // never merged with Zoho's own correctly-spelled apartment record
+  // ("Prabhavathi Meghana Towers", number_of_flats 80). Stripping invisible
+  // characters up front (now applied to every value through this function)
+  // fixes this instance and guards every other society name against the
+  // same class of hidden-character mismatch — this regex stays as the
+  // spelling-merge safety net for the two known real-word variants.
   if (/^prabhavat(i|hi)\s+(meghana|meghna)\s+towers?(\s*,.*)?$/i.test(cleaned)) {
     return "Prabhavathi Meghana Towers";
   }
@@ -932,9 +944,10 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.446";
+export const APP_VERSION = "2.29.447";
 export const VERSION_DATE = "2026-09-15";
 export const VERSION_HISTORY = [
+  { v: "2.29.447", note: "Found and fixed the REAL root cause of the Prabhavathi Meghana Towers merge failure from v2.29.446 (`canonicalSociety()` in `src/shared/core.js`). The v2.29.446 regex fix was logically correct and confirmed live in production, but the user reported the bug still persisted, then confirmed 'in drinkprime i am not getting any Prabhavati customer records / all are in zoho' — ruling out the original DrinkPrime-vs-Zoho spelling-split theory entirely, since there's no DP data for this building at all. Asked the user for a raw Zoho customer record and found the actual cause: the customer's own `society` field is `\"\\u2060Prabhavati Meghna towers\"` — an invisible U+2060 WORD JOINER character sitting before the name, almost certainly picked up from a copy/paste into Zoho. Critically, JavaScript's `.trim()` does NOT strip this character (it isn't part of the Unicode whitespace set trim() uses), so the string still looked trimmed but its first real character wasn't 'P' — silently breaking the `^`-anchored regex match added in v2.29.446. Fixed by adding a `stripInvisibleChars()` helper (strips U+200B–200D, U+2060, U+FEFF) and applying it inside `canonicalSociety()` before `.trim()`, so every society name flowing through the app (or `cleanAptName()`, which wraps it) is now guarded against this whole class of hidden-character mismatch, not just this one instance. Verified via a standalone 8-case script — including the exact raw value from the user's real customer record — confirming it now canonicalizes to 'Prabhavathi Meghana Towers' (8/8 passed, pre-existing MJR Clique Hydra merge and unrelated society names unaffected), plus a clean `npm run build`." },
   { v: "2.29.446", note: "CRM-wide (`canonicalSociety()` in `src/shared/core.js`): merged 'Prabhavati Meghna towers' into 'Prabhavathi Meghana Towers', per an explicit user report with the real Zoho apartment record attached (apartment_name 'Prabhavathi Meghana Towers', number_of_flats 80). Same class of bug as the pre-existing 'MJR Clique Hydra' vs 'MJR Clique Hydra Apartment' merge (v2.29.350), fixed the same way: DrinkPrime's own `partner_name` for this building uses a different, informal spelling than Zoho's real apartment record, so anywhere the app joins Zoho and DP data by society name never matched the two — visibly, Analytics > Overview V2's Under-Penetrated Buildings showed 'Prabhavati Meghna towers... flat count unknown' as a SEPARATE row instead of merging into the real, correctly-spelled entry that actually has the flat count (80) sitting right there in Zoho's own data. New regex branch in `canonicalSociety()` catches both 'Prabhavati'/'Prabhavathi' and 'Meghna'/'Meghana' spelling variants (case-insensitive, tolerant of a trailing bracket/CRO_ prefix like the MJR branch already is) and canonicalizes both to Zoho's real name — since `cleanAptName()` (used for both Zoho society names and DP `partner_name` throughout Analytics.jsx) already calls `canonicalSociety()`, every screen that merges Zoho+DP data by society name is fixed at once, not just this one table. Verified via a standalone script covering both real spellings, a case-insensitive/bracket-suffix/CRO-prefixed variant, and confirming the pre-existing MJR merge and unrelated society names are unaffected (8/8 passed), plus a clean `npm run build` and a live regression check (this sandbox's own sample data has no Prabhavathi entry to reproduce the exact before/after on, so the fix itself couldn't be visually re-demonstrated here — MJR's own merge and the rest of the page were confirmed unaffected, no console errors beyond the expected sandbox 401s)." },
   { v: "2.29.445", note: "Analytics > Overview V2, 'Under-Penetrated Buildings': fixed a real bug found via an explicit user question about how CBR Aakruti's '69/108 flats' figure was computed, followed by an explicit correction ('we need to show active customers only over there... and not unique devices with a transaction'). The old formula added a per-society Zoho ACTIVE-CUSTOMER count (`zSoc.active`) to a DrinkPrime UNIQUE-DEVICE count (`apt.devices` — distinct `current_device`s with a transaction in the currently-selected date range, not customers, and not necessarily still active today) — two structurally different kinds of count added together, inflating the number and misrepresenting it as 'active customers'. Now reuses `apt.totalCustomers` (already computed earlier in the exact same `combinedAptAgg` pass, and already the identical metric the 'All Apartment Performance' table's own 'Total Customer' column uses) — a single unique-customer count spanning both Zoho and DP, gated on `canonicalStatus(c.status) === \"Active\"`, matched by society name. No device count mixed in anywhere now. Verified via a clean `npm run build` and a live check: Under-Penetrated Buildings' per-society active count now matches All Apartment Performance's Total Customer figure exactly for the same society (both read 0 for CBR Aakruti in this sandbox's sample data) — previously these 2 numbers had no reason to agree at all; no console errors beyond the expected sandbox 401/403s." },
   { v: "2.29.444", note: "Customer > Societies + CRM-wide: marked 'Orchid Lakeview CRO' as an orphan society, per explicit user request ('remove the society count, all active customer count / each and every detail of this society should be removed from the count of all analytics dashboard'). New `ORPHAN_SOCIETIES` array in `src/shared/core.js` is a single source of truth feeding 2 things: (1) `isRealSociety()` — the same CRM-wide default-exclusion helper already used at 12+ sites across the app (Analytics Overview/Sales Insights/Credits/Net Revenue/Earned Revenue/Reconciliation/DP Transactions, Customer > Societies/All Customers, Sales > Leads & Deals/Trend Analysis, v2.29.137) — now also excludes any name in that list, so 'Orchid Lakeview CRO' disappears from every default count everywhere this already runs, the same precedent as the existing 'Apartment (Testing)' exclusion (still explicitly selectable from a society dropdown if ever needed for auditing — never actually deleted from the underlying data); (2) a new small 'Orphan Societies' note table at the bottom of Customer > Societies, listing every excluded society + why, so it's never a silent/mysterious omission — reads directly off the same array, so adding a future orphan society here updates both the exclusion and the visible note together automatically. Verified via a clean `npm run build`, a standalone script confirming `isRealSociety('Orchid Lakeview CRO')` (and case/whitespace variants) now returns `false` while a real society and the pre-existing 'Apartment (Testing)' check are unaffected, and a live check: the new note table renders correctly at the bottom of Societies with the right name/reason, no console errors beyond the expected sandbox 401/403s." },
