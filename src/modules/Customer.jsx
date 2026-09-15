@@ -114,18 +114,22 @@ export function CustomerSocieties() {
   const groups = {};
   scopedRows.forEach(c => {
     const soc = (c.society && String(c.society).trim() && c.society !== "—") ? String(c.society).trim() : NONE;
-    const g = groups[soc] || (groups[soc] = { society: soc, count: 0, active: 0, inactive: 0, dunning: 0, own: 0, normal: 0, hotcold: 0, churned: 0, customers: [] });
+    const g = groups[soc] || (groups[soc] = { society: soc, count: 0, active: 0, inactive: 0, dunning: 0, churned: 0, replaced: 0, customers: [] });
     g.customers.push(c);
     g.count++;
     const st = String(c.status || "").toLowerCase();
     if (st === "active") g.active++;
     else if (st === "inactive") g.inactive++;
     else if (st === "dunning") g.dunning++;
-    const dt = deviceType(c.purifier_id);
-    if (dt === "Own Device") g.own++;
-    else if (dt === "Normal Device") g.normal++;
-    else if (dt === "Hot & Cold") g.hotcold++;
     if (isChurned(c)) g.churned++;
+    // Device Replacement column (v2.29.440, per explicit user request —
+    // "remove Active/Own/Normal/Hot & Cold, add a new column as Device
+    // Replacement") — same exact-match convention Analytics > Overview V2's
+    // All Apartment Performance table already uses for its own "Replaced"
+    // column (v2.29.366): compares the normalized `deviceStatus` against
+    // "replaced" only, not a substring match, so it can't accidentally
+    // catch an unrelated status that merely contains that word.
+    if (normSt(c.deviceStatus) === "replaced") g.replaced++;
   });
   const all = Object.values(groups);
 
@@ -157,7 +161,7 @@ export function CustomerSocieties() {
   const filtered = visible.filter(g => g.society.toLowerCase().includes(q.toLowerCase()));
   const dir = sort.dir === "asc" ? 1 : -1;
   filtered.sort((a, b) => sort.key === "society" ? a.society.localeCompare(b.society) * dir : (a[sort.key] - b[sort.key]) * dir);
-  const tot = filtered.reduce((a, g) => ({ count: a.count + g.count, active: a.active + g.active, own: a.own + g.own, normal: a.normal + g.normal, hotcold: a.hotcold + g.hotcold, churned: a.churned + g.churned }), { count: 0, active: 0, own: 0, normal: 0, hotcold: 0, churned: 0 });
+  const tot = filtered.reduce((a, g) => ({ count: a.count + g.count, churned: a.churned + g.churned, replaced: a.replaced + g.replaced }), { count: 0, churned: 0, replaced: 0 });
 
   const stats = [
     { label: "Societies", value: namedSocieties, icon: Boxes, sub: "with at least one customer", hero: true },
@@ -188,15 +192,12 @@ export function CustomerSocieties() {
   // Which slice of a society's customers to show in its expand panel.
   const sliceOf = (g, key) => {
     switch (key) {
-      case "active": return g.customers.filter(c => normSt(c.status) === "active");
-      case "own": return g.customers.filter(c => deviceType(c.purifier_id) === "Own Device");
-      case "normal": return g.customers.filter(c => deviceType(c.purifier_id) === "Normal Device");
-      case "hotcold": return g.customers.filter(c => deviceType(c.purifier_id) === "Hot & Cold");
       case "churned": return g.customers.filter(isChurned);
+      case "replaced": return g.customers.filter(c => normSt(c.deviceStatus) === "replaced");
       default: return g.customers;
     }
   };
-  const sliceLabel = { all: "All customers", active: "Active customers", own: "Own Device customers", normal: "Normal Device customers", hotcold: "Hot & Cold customers", churned: "Churned customers" };
+  const sliceLabel = { all: "All customers", churned: "Churned customers", replaced: "Device Replacement customers" };
 
   const numCell = (value, key, g, color) => (
     <td style={{ padding: "14px 18px" }}>
@@ -271,9 +272,8 @@ export function CustomerSocieties() {
                   {[
                     <SortHeader key="s" label="Society" k="society" sort={sort} onSort={toggleSort} />,
                     <SortHeader key="c" label="Customers" k="count" sort={sort} onSort={toggleSort} />,
-                    <SortHeader key="a" label="Active" k="active" sort={sort} onSort={toggleSort} />,
-                    "Own", "Normal", "Hot & Cold",
                     <SortHeader key="ch" label="Churned" k="churned" sort={sort} onSort={toggleSort} />,
+                    <SortHeader key="r" label="Device Replacement" k="replaced" sort={sort} onSort={toggleSort} />,
                   ].map((h, idx) => (
                     <th key={idx} style={{ padding: "14px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", whiteSpace: "nowrap", position: "sticky", top: 0, background: "rgba(243,248,236,.92)", zIndex: 1 }}>{h}</th>
                   ))}
@@ -290,15 +290,12 @@ export function CustomerSocieties() {
                         </span>
                       </td>
                       {numCell(g.count, "all", g, "#1D1D1F")}
-                      {numCell(g.active, "active", g, "#08805A")}
-                      {numCell(g.own, "own", g)}
-                      {numCell(g.normal, "normal", g)}
-                      {numCell(g.hotcold, "hotcold", g)}
                       {numCell(g.churned, "churned", g, g.churned ? "#DC4141" : "#475569")}
+                      {numCell(g.replaced, "replaced", g, g.replaced ? "#986315" : "#475569")}
                     </tr>
                     {open && (
                       <tr>
-                        <td colSpan={7} style={{ padding: 0, background: "rgba(8,128,90,0.03)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                        <td colSpan={4} style={{ padding: 0, background: "rgba(8,128,90,0.03)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
                           <div style={{ overflowX: "auto", padding: "10px 18px 18px" }}>
                             <div style={{ fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", padding: "8px 2px 2px" }}>
                               {sliceLabel[filterKey]} ({subCustomers.length})
@@ -353,11 +350,8 @@ export function CustomerSocieties() {
                   <tr style={{ background: "rgba(243,248,236,.5)" }}>
                     <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>Total ({filtered.length})</td>
                     <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.count}</td>
-                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#08805A" }}>{tot.active}</td>
-                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.own}</td>
-                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.normal}</td>
-                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.hotcold}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 800, color: tot.churned ? "#DC4141" : "#0d2119" }}>{tot.churned}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: tot.replaced ? "#986315" : "#0d2119" }}>{tot.replaced}</td>
                   </tr>
                 )}
               </tbody>
