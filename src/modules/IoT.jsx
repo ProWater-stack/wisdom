@@ -403,17 +403,30 @@ export function iotFilterByRange(items, range) {
     return t >= startToday - 6 * 86400000; // "week" (default) = rolling last 7 days
   });
 }
-// totalDispensed is a lifetime, monotonically-increasing counter (not a banded
-// quality metric) — the latest reading is the all-time total; the window delta
-// is latest − oldest in the given (newest-first) window, clamped ≥0 in case a
-// device reset the counter. avgPerDay normalises that delta by the window's
-// actual time span (the feed is a downsampled ~1–2 day window, not exactly a
-// day), so "this window" and "average/day" read as different, useful numbers
-// instead of near-duplicates. Needs ≥30 min of span to avoid a wild
-// division-by-a-sliver-of-time estimate right after the page loads.
+// `totalRoWaterDispensed` (v2.29.458 fix — was reading a field called
+// `totalDispensed`, which per a real device payload the user prompted us to
+// check simply doesn't exist anywhere in the API: `waterQuality` only ever
+// carries `totalRoWaterDispensed` and `totalRawWaterDispensed`. That typo'd
+// field name meant `rows` was ALWAYS empty and this returned `null` for
+// EVERY device, always — not just "no data today", but "Total dispensed"
+// and "Dispensed today" showing empty on every range, for every device,
+// the whole time this stat has existed. Fixed to read the RO (purified)
+// output specifically — this is the Tank panel, and what a tank actually
+// dispenses to residents is the RO output, not the raw intake or the
+// rejected/wasted portion (same interpretation the RO Reject Water
+// Analysis card above already uses for "RO Water Dispensed"). It's a
+// lifetime, monotonically-increasing counter (not a banded quality
+// metric) — the latest reading is the all-time total; the window delta is
+// latest − oldest in the given (newest-first) window, clamped ≥0 in case a
+// device reset the counter. avgPerDay normalises that delta by the
+// window's actual time span (the feed is a downsampled ~1–2 day window,
+// not exactly a day), so "this window" and "average/day" read as
+// different, useful numbers instead of near-duplicates. Needs ≥30 min of
+// span to avoid a wild division-by-a-sliver-of-time estimate right after
+// the page loads.
 export function iotDispensedRange(items) {
   const rows = (items || [])
-    .map((it) => ({ v: iotWqNum(it?.waterQuality?.totalDispensed), t: new Date(it.timestamp).getTime() }))
+    .map((it) => ({ v: iotWqNum(it?.waterQuality?.totalRoWaterDispensed), t: new Date(it.timestamp).getTime() }))
     .filter((r) => r.v != null && r.v >= 0 && !isNaN(r.t));
   if (!rows.length) return null;
   const latest = rows[0], oldest = rows[rows.length - 1]; // newest-first
