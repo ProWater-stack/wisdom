@@ -15,7 +15,7 @@ import {
 import {
   useAuth, api, customerApi, billingApi, creditNoteApi, ticketApi,
   depositForCustomer, CUSTOMER_FIELDS,
-  API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate,
+  API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate, useDateRange, rangeLabel,
   exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety, canonicalStatus,
   parsePartsUsed, jobDurationMin, zdIsClosed, zdStatusColor, gstBreakup, termMonths,
 } from "../shared/core";
@@ -71,6 +71,15 @@ export function CustomerSocieties() {
   const [societyFilter, setSocietyFilter] = useState(null);
   const [statusFilter, setStatusFilter] = useState(null);
   const [deviceTypeFilter, setDeviceTypeFilter] = useState(null);
+  // Date filter (v2.29.442, per explicit user request — "in societies page
+  // add date filter") — same shared preset/custom picker + resolver every
+  // other date-filtered screen in this app already uses, scoped here to
+  // each customer's own `since` (signup/install) date, same field the New
+  // CX KPI elsewhere already keys off. Joins the existing Status/Device
+  // Type filter chain before grouping into societies, so a society whose
+  // customers all fall outside the selected range simply won't appear —
+  // same behavior the other 2 structural filters already have.
+  const { sel, setSel, range } = useDateRange("this_month");
   const NONE = "— No society —";
   // Per-society expand state: society -> which metric's customers to show
   // ("all"|"active"|"own"|"normal"|"hotcold"|"churned"). Clicking the same
@@ -100,6 +109,17 @@ export function CustomerSocieties() {
   const isReplaced = (c) => c.isDpCustomer
     ? normSt(c.DR_Checker) === "replaced"
     : normSt(c.device_replaced_flag) === "yes";
+  // Active column (v2.29.442, per explicit user instruction) — deliberately
+  // NOT branched by `isDpCustomer` like the 2 checks above: checks BOTH raw
+  // fields on every customer regardless of stack ("device_status is not
+  // Uninstalled AND subscription_status is not Un-Installed"). This is
+  // still correct per-stack in practice — a Zoho customer's own
+  // subscription_status never actually holds the DP-side "Un-Installed"
+  // value, and a DP customer's device_status never holds "Uninstalled", so
+  // each customer's irrelevant field is a harmless always-true clause —
+  // but written as one uniform rule exactly as instructed, rather than
+  // relying on that being true.
+  const isActive = (c) => normSt(c.device_status) !== "uninstalled" && normSt(c.subscription_status) !== "uninstalled";
 
   // Base population (v2.29.159): restricted to customers with a Purifier ID
   // assigned, same `withPur` gate Customer > All Customers uses — per
@@ -114,19 +134,21 @@ export function CustomerSocieties() {
   const statusOptions = Array.from(new Set(withPur.map(c => canonicalStatus(c.status)).filter(Boolean))).sort();
   const scopedRows = withPur.filter(c =>
     (statusFilter === null || statusFilter.includes(canonicalStatus(c.status))) &&
-    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceType(c.purifier_id)))
+    (deviceTypeFilter === null || deviceTypeFilter.includes(deviceType(c.purifier_id))) &&
+    dateInRange(parseFlexDate(c.since), range)
   );
 
   const groups = {};
   scopedRows.forEach(c => {
     const soc = (c.society && String(c.society).trim() && c.society !== "—") ? String(c.society).trim() : NONE;
-    const g = groups[soc] || (groups[soc] = { society: soc, count: 0, active: 0, inactive: 0, dunning: 0, churned: 0, replaced: 0, customers: [] });
+    const g = groups[soc] || (groups[soc] = { society: soc, count: 0, active: 0, inactive: 0, dunning: 0, churned: 0, replaced: 0, activeCount: 0, customers: [] });
     g.customers.push(c);
     g.count++;
     const st = String(c.status || "").toLowerCase();
     if (st === "active") g.active++;
     else if (st === "inactive") g.inactive++;
     else if (st === "dunning") g.dunning++;
+    if (isActive(c)) g.activeCount++;
     if (isChurned(c)) g.churned++;
     if (isReplaced(c)) g.replaced++;
   });
@@ -141,12 +163,13 @@ export function CustomerSocieties() {
   const societyOptions = all.map(g => g.society).sort();
   const visible = all.filter(g => societyFilter === null ? isRealSociety(g.society) : societyFilter.includes(g.society));
 
-  const hasActiveFilters = societyFilter !== null || statusFilter !== null || deviceTypeFilter !== null || q !== "";
+  const hasActiveFilters = societyFilter !== null || statusFilter !== null || deviceTypeFilter !== null || q !== "" || sel.preset !== "this_month";
   const handleResetFilters = () => {
     setSocietyFilter(null);
     setStatusFilter(null);
     setDeviceTypeFilter(null);
     setQ("");
+    setSel({ preset: "this_month", from: "", to: "" });
   };
 
   // "Named" KPI stats (Societies count / Avg per society / Largest society)
@@ -160,7 +183,7 @@ export function CustomerSocieties() {
   const filtered = visible.filter(g => g.society.toLowerCase().includes(q.toLowerCase()));
   const dir = sort.dir === "asc" ? 1 : -1;
   filtered.sort((a, b) => sort.key === "society" ? a.society.localeCompare(b.society) * dir : (a[sort.key] - b[sort.key]) * dir);
-  const tot = filtered.reduce((a, g) => ({ count: a.count + g.count, churned: a.churned + g.churned, replaced: a.replaced + g.replaced }), { count: 0, churned: 0, replaced: 0 });
+  const tot = filtered.reduce((a, g) => ({ count: a.count + g.count, activeCount: a.activeCount + g.activeCount, churned: a.churned + g.churned, replaced: a.replaced + g.replaced }), { count: 0, activeCount: 0, churned: 0, replaced: 0 });
 
   const stats = [
     { label: "Societies", value: namedSocieties, icon: Boxes, sub: "with at least one customer", hero: true },
@@ -191,12 +214,13 @@ export function CustomerSocieties() {
   // Which slice of a society's customers to show in its expand panel.
   const sliceOf = (g, key) => {
     switch (key) {
+      case "active": return g.customers.filter(isActive);
       case "churned": return g.customers.filter(isChurned);
       case "replaced": return g.customers.filter(isReplaced);
       default: return g.customers;
     }
   };
-  const sliceLabel = { all: "All customers", churned: "Churned customers", replaced: "Device Replacement customers" };
+  const sliceLabel = { all: "All customers", active: "Active customers", churned: "Churned customers", replaced: "Device Replacement customers" };
 
   const numCell = (value, key, g, color) => (
     <td style={{ padding: "14px 18px" }}>
@@ -250,6 +274,13 @@ export function CustomerSocieties() {
 
       {/* ── Societies list & expand table ─────────────────────────────────── */}
       <div style={{ marginTop: 16 }}>
+        {/* Date filter (v2.29.442) — same shared preset/custom picker every
+            other date-filtered screen in this app uses; scoped to each
+            customer's own signup/install date (`since`). */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+          <DateRangePicker value={sel} onChange={setSel} />
+          <span style={{ fontSize: 12.5, color: "#86868B" }}>{rangeLabel(range)} · by customer signup date</span>
+        </div>
         <Toolbar q={q} setQ={setQ} placeholder="Search society…" count={filtered.length}
           right={<>
             <MultiSelectFilter label="Society" options={societyOptions} value={societyFilter} onChange={setSocietyFilter} width={200} />
@@ -271,6 +302,7 @@ export function CustomerSocieties() {
                   {[
                     <SortHeader key="s" label="Society" k="society" sort={sort} onSort={toggleSort} />,
                     <SortHeader key="c" label="Customers" k="count" sort={sort} onSort={toggleSort} />,
+                    <SortHeader key="ac" label="Active" k="activeCount" sort={sort} onSort={toggleSort} />,
                     <SortHeader key="ch" label="Churned" k="churned" sort={sort} onSort={toggleSort} />,
                     <SortHeader key="r" label="Device Replacement" k="replaced" sort={sort} onSort={toggleSort} />,
                   ].map((h, idx) => (
@@ -289,12 +321,13 @@ export function CustomerSocieties() {
                         </span>
                       </td>
                       {numCell(g.count, "all", g, "#1D1D1F")}
+                      {numCell(g.activeCount, "active", g, "#08805A")}
                       {numCell(g.churned, "churned", g, g.churned ? "#DC4141" : "#475569")}
                       {numCell(g.replaced, "replaced", g, g.replaced ? "#986315" : "#475569")}
                     </tr>
                     {open && (
                       <tr>
-                        <td colSpan={4} style={{ padding: 0, background: "rgba(8,128,90,0.03)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
+                        <td colSpan={5} style={{ padding: 0, background: "rgba(8,128,90,0.03)", borderBottom: "1px solid rgba(0,0,0,.06)" }}>
                           <div style={{ overflowX: "auto", padding: "10px 18px 18px" }}>
                             <div style={{ fontSize: 11.5, fontWeight: 700, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", padding: "8px 2px 2px" }}>
                               {sliceLabel[filterKey]} ({subCustomers.length})
@@ -302,7 +335,7 @@ export function CustomerSocieties() {
                             <table style={{ borderCollapse: "collapse", width: "100%", background: "#fff", border: "1px solid rgba(0,0,0,.08)", borderRadius: 14, overflow: "hidden" }}>
                               <thead>
                                 <tr style={{ background: "rgba(243,248,236,.92)" }}>
-                                  {["Customer ID", "Name", "Purifier ID", "Device", "Phone", "Plan", "Status"].map(h => (
+                                  {["Customer ID", "Name", "Purifier ID", "Phone", "Plan", "Status"].map(h => (
                                     <th key={h} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", padding: "10px 14px", whiteSpace: "nowrap", borderBottom: "1px solid rgba(0,0,0,.06)" }}>{h}</th>
                                   ))}
                                 </tr>
@@ -318,7 +351,6 @@ export function CustomerSocieties() {
                                     <td style={{ ...cell, color: "#86868B" }}>{c.id || "—"}</td>
                                     <td style={{ ...cell, fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{c.name || "—"}</td>
                                     <td style={cell}>{c.purifier_id || "—"}</td>
-                                    <td style={cell}><DeviceTypeBadge purifierId={c.purifier_id} /></td>
                                     <td style={cell}>{fmtPhone(c.phone)}</td>
                                     <td style={cell}>{c.plan || "—"}</td>
                                     <td style={cell}>
@@ -330,10 +362,10 @@ export function CustomerSocieties() {
                                   );
                                 })}
                                 {subCustomers.length === 0 && (
-                                  <tr><td colSpan={7} style={{ padding: "16px 14px", textAlign: "center", fontSize: 12.5, color: "#86868B" }}>No {sliceLabel[filterKey].toLowerCase()} in this society.</td></tr>
+                                  <tr><td colSpan={6} style={{ padding: "16px 14px", textAlign: "center", fontSize: 12.5, color: "#86868B" }}>No {sliceLabel[filterKey].toLowerCase()} in this society.</td></tr>
                                 )}
                                 <tr style={{ background: "rgba(243,248,236,.6)", borderTop: "2px solid rgba(0,0,0,.06)" }}>
-                                  <td colSpan={7} style={{ fontSize: 12, fontWeight: 700, color: "#0d2119", padding: "10px 14px", textAlign: "center" }}>
+                                  <td colSpan={6} style={{ fontSize: 12, fontWeight: 700, color: "#0d2119", padding: "10px 14px", textAlign: "center" }}>
                                     Society total · {g.count} customer{g.count !== 1 ? "s" : ""} · {g.active} active{g.inactive ? ` · ${g.inactive} inactive` : ""}{g.dunning ? ` · ${g.dunning} dunning` : ""}{g.churned ? ` · ${g.churned} churned` : ""}
                                   </td>
                                 </tr>
@@ -349,6 +381,7 @@ export function CustomerSocieties() {
                   <tr style={{ background: "rgba(243,248,236,.5)" }}>
                     <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>Total ({filtered.length})</td>
                     <td style={{ padding: "14px 18px", fontWeight: 800, color: "#0d2119" }}>{tot.count}</td>
+                    <td style={{ padding: "14px 18px", fontWeight: 800, color: "#08805A" }}>{tot.activeCount}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 800, color: tot.churned ? "#DC4141" : "#0d2119" }}>{tot.churned}</td>
                     <td style={{ padding: "14px 18px", fontWeight: 800, color: tot.replaced ? "#986315" : "#0d2119" }}>{tot.replaced}</td>
                   </tr>
