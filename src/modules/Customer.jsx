@@ -79,6 +79,13 @@ export function CustomerSocieties() {
   // Type filter chain before grouping into societies, so a society whose
   // customers all fall outside the selected range simply won't appear —
   // same behavior the other 2 structural filters already have.
+  // `dateAll` (v2.29.443, per explicit user report — defaulting to "This
+  // Month" made every society with only older customers vanish on first
+  // load, "why only 1 society is showing") — true (the default) means no
+  // date restriction at all regardless of what `sel` currently holds;
+  // picking any preset/custom range in the picker flips it off. Reset
+  // Filters (and the "All Time" pill itself) flips it back on.
+  const [dateAll, setDateAll] = useState(true);
   const { sel, setSel, range } = useDateRange("this_month");
   const NONE = "— No society —";
   // Per-society expand state: society -> which metric's customers to show
@@ -135,7 +142,7 @@ export function CustomerSocieties() {
   const scopedRows = withPur.filter(c =>
     (statusFilter === null || statusFilter.includes(canonicalStatus(c.status))) &&
     (deviceTypeFilter === null || deviceTypeFilter.includes(deviceType(c.purifier_id))) &&
-    dateInRange(parseFlexDate(c.since), range)
+    (dateAll || dateInRange(parseFlexDate(c.since), range))
   );
 
   const groups = {};
@@ -163,13 +170,14 @@ export function CustomerSocieties() {
   const societyOptions = all.map(g => g.society).sort();
   const visible = all.filter(g => societyFilter === null ? isRealSociety(g.society) : societyFilter.includes(g.society));
 
-  const hasActiveFilters = societyFilter !== null || statusFilter !== null || deviceTypeFilter !== null || q !== "" || sel.preset !== "this_month";
+  const hasActiveFilters = societyFilter !== null || statusFilter !== null || deviceTypeFilter !== null || q !== "" || !dateAll;
   const handleResetFilters = () => {
     setSocietyFilter(null);
     setStatusFilter(null);
     setDeviceTypeFilter(null);
     setQ("");
     setSel({ preset: "this_month", from: "", to: "" });
+    setDateAll(true);
   };
 
   // "Named" KPI stats (Societies count / Avg per society / Largest society)
@@ -274,12 +282,18 @@ export function CustomerSocieties() {
 
       {/* ── Societies list & expand table ─────────────────────────────────── */}
       <div style={{ marginTop: 16 }}>
-        {/* Date filter (v2.29.442) — same shared preset/custom picker every
-            other date-filtered screen in this app uses; scoped to each
-            customer's own signup/install date (`since`). */}
+        {/* Date filter (v2.29.442, tweaked v2.29.443 per explicit user
+            report — defaulting to an active "This Month" range made every
+            society with only older customers vanish on first load).
+            "All Time" (the default) applies no date restriction at all;
+            picking any preset/custom range in the picker turns it off. */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-          <DateRangePicker value={sel} onChange={setSel} />
-          <span style={{ fontSize: 12.5, color: "#86868B" }}>{rangeLabel(range)} · by customer signup date</span>
+          <button onClick={() => setDateAll(true)} title="Show every society regardless of signup date"
+            style={{ ...btnGhost, fontSize: 12.5, fontWeight: 700, padding: "6px 13px", borderRadius: 8, border: "1px solid " + (dateAll ? "#08805A" : "rgba(0,0,0,0.12)"), background: dateAll ? "#08805A" : "#fff", color: dateAll ? "#fff" : "#475569" }}>
+            All Time
+          </button>
+          <DateRangePicker value={sel} onChange={(v) => { setSel(v); setDateAll(false); }} />
+          <span style={{ fontSize: 12.5, color: "#86868B" }}>{dateAll ? "All time" : rangeLabel(range)} · by customer signup date</span>
         </div>
         <Toolbar q={q} setQ={setQ} placeholder="Search society…" count={filtered.length}
           right={<>
