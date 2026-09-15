@@ -948,9 +948,10 @@ export function rangeFilter(range) {
 }
 
 
-export const APP_VERSION = "2.29.453";
+export const APP_VERSION = "2.29.454";
 export const VERSION_DATE = "2026-09-15";
 export const VERSION_HISTORY = [
+  { v: "2.29.454", note: "Forgot Password — now sends a REAL Firebase Auth password-reset email, per explicit user request ('why reset password is not working... No account found with that ID'). Root cause: this screen's underlying `api.resetPassword(username, newPw)` (`shared/core.js`) was a SIMULATED placeholder from when it was first built (v2.29.223, explicitly marked `>>> WIRE: replace with a real POST /api/auth/reset-password` at the time) — it only ever wrote a `password` field onto this app's own local Employee record (`_users`), completely disconnected from the real Firebase Auth credential `login()` actually checks, so submitting it could NEVER have changed what you sign in with. It also only worked for a User ID that already existed as an Employee record — not a Firebase-only 'default admin' account with no Employee record at all (see `login()`'s own 'No Employee record → default admin identity' fallback) — which is exactly why a real account hit 'No account found with that ID.' Replaced with `sendPasswordResetEmail(username)`, which calls Firebase's own `accounts:sendOobCode` endpoint (`requestType: 'PASSWORD_RESET'`) — Firebase emails a real reset link, hosted on Firebase's own action page, so the new password is set through Firebase directly rather than through this app. Deliberately doesn't reveal whether the account exists either way (an `EMAIL_NOT_FOUND` response is swallowed, not surfaced), matching the same anti-enumeration posture `login()` already follows for Firebase's own merged 'wrong credentials' error family. The `ForgotPassword` modal (`shared/ui.jsx`) is simplified to match: step 1 is now just a User ID field (no new-password/confirm-password inputs, since those no longer belong in this app at all), step 2 reads 'Check your email' instead of 'Password updated'. Also fixed a separate, real, silent bug found while making this change: `api` used to declare TWO properties both named `resetPassword` — this one, and a different `(actor, userId, newPw)` version meant for Employee.jsx's admin 'reset a colleague's password' button — a later same-named property silently overwrites an earlier one in a JS object literal, so `api.resetPassword` only ever resolved to the simulated one above, meaning Employee.jsx's admin button was actually corrupting the ADMIN's OWN local Employee password field with the target user's ID string while silently discarding the password the admin actually typed. Renaming this function removes the collision, so `api.resetPassword` now correctly resolves to the admin version. Verified via a clean `npm run build` and a live click-through (User ID → Send reset email → 'Check your email' success screen with countdown, matching the new copy) — this test call went out against the real production Firebase project (this sandbox's local `.env` carries the real key), so it doubles as a real end-to-end confirmation the new flow genuinely reaches Firebase." },
   { v: "2.29.453", note: "Login (`api.login` in `src/shared/core.js`): surfaces the REAL Firebase Auth error instead of collapsing every possible failure into the same generic 'Invalid username or password.' — per a user report of a login failure that message couldn't explain (no password change, suddenly blocked, only fixed by deleting and re-adding the user in Firebase Authentication). First confirmed the CI/CD pipeline and every user-management function this app owns (`createUser`/`deleteUser`/`resetPassword`/`toggleUser`) only ever touch this app's own Employee records — never a real Firebase Auth identity — so a deploy genuinely cannot cause this; the real cause has to be something Firebase itself is doing. The login code was previously throwing the same generic message for every `firebaseRes.error`, including ones that have nothing to do with the actual password: `USER_DISABLED` (an account Firebase itself disabled — deleting and re-adding the user 'fixes' exactly this, since a fresh record isn't disabled, which matches the reported workaround) and `TOO_MANY_ATTEMPTS_TRY_LATER` (a temporary lockout) now get their own distinct, actionable message; `EMAIL_NOT_FOUND`/`INVALID_PASSWORD`/`INVALID_LOGIN_CREDENTIALS` (Firebase's own anti-enumeration-merged 'wrong credentials' family) keep the existing generic message, since un-merging those specific two would defeat Firebase's own protection; any other/unexpected code is now shown plainly rather than hidden. The raw code is also now always included in the `pushLog` audit entry (Employee > Logs), not just the on-screen message, so a pattern across repeated failures is visible even when the UI message stays generic. Also disclosed in the same conversation: a couple of direct test calls made earlier the same day against the real Firebase Auth endpoint with a deliberately wrong password, while diagnosing an earlier report — Firebase's abuse protection is normally scoped per email/IP rather than project-wide, so this probably wasn't the cause, but noted for the record rather than ruled out silently. Verified via a clean `npm run build`; the real-world fix itself can only be confirmed against the actual Firebase project's error codes on the next live login failure, which this change is specifically designed to reveal." },
   { v: "2.29.452", note: "Analytics > Overview V2, New CX KPI (`AnalyticsOverview` in `src/modules/Analytics.jsx`): excluded customers who have SINCE churned/uninstalled, per explicit user report with a real example — Kiruthika K (MJR Clique Hydra Apartment, Purifier ID HAME07A481, Zoho, onboarded 03 Sept 2026) has since been uninstalled but was still counted in September's New CX (37, should be 36). New CX previously counted every sign-up EVENT that happened in the selected period regardless of what happened to that customer afterward — this is the actual behavior the user's earlier request (v2.29.451, reverted after a live regression) had been aimed at changing, now implemented correctly and narrowly: a customer no longer counts as a new signup once they're churned, using the exact same churn definition Customer > Societies' own Churned column already uses (v2.29.441 — Zoho: `device_status` \"Uninstalled\"; DP: `subscription_status` \"Un-Installed\"), now extracted into a new shared `isChurnedCustomer()` export in `shared/core.js` so both screens apply one identical rule instead of two separately-maintained copies (Customer.jsx's own existing local copies are untouched — this is purely an additional consumer, not a migration, so there's no risk to that already-correct, already-shipped screen). Applied to BOTH of `allSignups`' sources — a customer's own subscription record (checked via the existing `custOf()` join) and the customer-profile fallback — so this can't be bypassed by whichever path happens to pick up a given customer. Deliberately a much narrower, more isolated change than the reverted v2.29.451 attempt: an early `return` guard added to each existing forEach, no changes to how either source resolves its `since` date and no changes to the dedup keys — so it carries none of that attempt's risk. Verified via a standalone script reproducing the exact reported case (a Zoho customer with `device_status: \"Uninstalled\"` correctly excluded, a DP customer with `subscription_status: \"Un-Installed\"` correctly excluded, a genuinely active customer in the same period correctly still counted) — 3/3 passed — plus a clean `npm run build` and a live regression check (this sandbox's own sample customers are all status \"active\" already, so New CX renders unchanged — 11 for 'This Year', matching before — no console errors beyond the expected sandbox 401s)." },
   { v: "2.29.450", note: "CRM-wide: excluded a known test account (Name 'Anis Test 1', Purifier ID 'OWND000001') from active customers everywhere, per explicit user request ('remove this... from the active customers everywhere / as this is a test account'). New `TEST_CUSTOMER_ACCOUNTS` array + `isTestCustomerAccount()` helper (`src/shared/core.js`, next to the existing `ORPHAN_SOCIETIES`/`isRealSociety()` precedent) match a customer by Purifier ID — the real unique identifier, deliberately not by name, so a genuine customer who happens to share the name is never at risk of being excluded. Filtered directly inside `customerApi.getCustomers()` before it returns its array, so every screen and metric built on top of `customers` — Analytics KPIs/Overview V2 (Active Customers, New CX, Plan Tier Distribution, Under-Penetrated Buildings, etc.), Customer > Societies/All Customers, Penetration Tracker, and anywhere else that reads this one shared array — automatically excludes this account with no further plumbing, the same single-source-of-truth design as the Orphan Societies fix (v2.29.444), except scoped to one customer record instead of a whole society. Verified via a standalone 7-case script (exact match, case-insensitive, whitespace-tolerant, a real customer with a different Purifier ID unaffected, a DIFFERENT customer who happens to share the exact name 'Anis Test 1' but a real Purifier ID correctly NOT excluded, blank/null Purifier ID safely handled) — 7/7 passed — plus a clean `npm run build` and a live regression check (this sandbox's own sample customers, none of which carry this Purifier ID, render exactly as before — no console errors beyond the expected sandbox 401s)." },
@@ -1944,21 +1945,64 @@ clearLogs: (actor) => {
     pushLog({ type: "photo_updated", actor: username, detail: "Updated profile photo" });
   },
 
-  // Forgot-password reset (SIMULATED). Per explicit user request, this no
-  // longer routes through an email/OTP step tied to the hardcoded
-  // `EMAIL_DOMAIN` (@prowater.in) — the user only sees a User ID + new
-  // password + confirm-password screen.
-  // >>> WIRE: replace with a real POST /api/auth/reset-password — a production
-  // build should still verify identity server-side (e.g. a signed reset link
-  // emailed to the account) before accepting a new password.
-  resetPassword: async (username, newPw) => {
-    await wait(300);
-    const key = String(username || "").trim().toLowerCase();
-    const u = _users.find(x => x.username.toLowerCase() === key);
-    if (!u) throw new Error("No account found with that ID.");
-    _users = _users.map(x => x.username.toLowerCase() === key ? { ...x, password: newPw } : x);
-    saveUsers();
-    pushLog({ type: "password_reset", actor: u.username, detail: "Password reset" });
+  // Forgot-password (v2.29.454) — sends a REAL Firebase Auth password-reset
+  // email, replacing the previous SIMULATED version of this same function
+  // name. That old version only ever updated a password field on this app's
+  // own local Employee record (`_users`) — completely disconnected from the
+  // real Firebase Auth credential `login()` actually checks — so submitting
+  // it could never have changed what you actually sign in with, and it also
+  // only worked for a username that happened to already exist as an
+  // Employee record (not e.g. a Firebase-only default-admin account with no
+  // Employee record at all), which is exactly the "No account found with
+  // that ID." a real user hit. Fixed per explicit user direction ("Firebase's
+  // built-in reset email"): calls Firebase's own `sendOobCode` endpoint with
+  // `requestType: "PASSWORD_RESET"` — Firebase emails a real reset link to
+  // the account (hosted on Firebase's own action page), so the new password
+  // is set through Firebase directly, not through this app at all.
+  //
+  // This also fixes a separate, real, silent bug found while making this
+  // change: this object used to declare TWO properties both named
+  // `resetPassword` — this one, and a different `(actor, userId, newPw)`
+  // version above (Employee.jsx's admin "reset a colleague's password"
+  // button). A later property of the same name silently overwrites an
+  // earlier one in a JS object literal, so `api.resetPassword` only ever
+  // resolved to THIS one — meaning Employee.jsx's admin reset button was
+  // actually calling this username/newPw-shaped function with its own
+  // (actor, userId, newPw) arguments, corrupting the ADMIN's OWN local
+  // Employee password field with the target's user ID string, while the
+  // password the admin actually typed was silently discarded. Renaming this
+  // function removes the collision, so `api.resetPassword` now correctly
+  // resolves to the admin version again — flagged as its own follow-up to
+  // confirm live, since it's a separate screen from this one.
+  //
+  // Deliberately doesn't reveal whether the account exists either way
+  // (`EMAIL_NOT_FOUND` is swallowed, not surfaced) — same anti-enumeration
+  // posture `login()` already has to follow for Firebase's own merged error
+  // codes, for the same reason: telling an attacker "no account with that
+  // ID" is itself a information leak a real reset flow shouldn't offer.
+  sendPasswordResetEmail: async (username) => {
+    const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
+    const email = String(username || "").trim().includes("@") ? String(username).trim() : `${String(username).trim()}@prowater.in`;
+    let json;
+    try {
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FIREBASE_API_KEY}`,
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ requestType: "PASSWORD_RESET", email }) }
+      );
+      json = await res.json();
+    } catch {
+      throw new Error("Network error. Check your connection.");
+    }
+    if (json.error) {
+      const code = json.error.message || "UNKNOWN";
+      if (code === "EMAIL_NOT_FOUND") {
+        pushLog({ type: "password_reset_requested", actor: username, detail: `Requested for ${email} (no such account)` });
+        return; // swallow — caller shows the same neutral message either way
+      }
+      throw new Error(`Could not send reset email (${code}). Contact an admin.`);
+    }
+    pushLog({ type: "password_reset_requested", actor: username, detail: `Reset email sent to ${email}` });
   },
 
   getLogs: async () => { await wait(150); return [..._logs]; },

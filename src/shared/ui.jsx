@@ -746,30 +746,32 @@ export function Login() {
   );
 }
 export function ForgotPassword({ initialUsername = "", onClose }) {
-  const [step, setStep] = useState(1); // 1=id+password+confirm, 2=done
+  // v2.29.454: now sends a REAL Firebase Auth password-reset email instead
+  // of collecting a new password directly in this app — the previous
+  // version only ever wrote to this app's own local Employee record, never
+  // to Firebase itself, so it could never actually change what you sign in
+  // with (see `sendPasswordResetEmail` in shared/core.js for the full
+  // story). Step 1 now only needs the User ID; the new password itself gets
+  // set on Firebase's own hosted reset page, reached via the emailed link.
+  const [step, setStep] = useState(1); // 1=enter ID, 2=sent
   const [username, setUsername] = useState(initialUsername);
-  const [newPw, setNewPw] = useState("");
-  const [confirmPw, setConfirmPw] = useState("");
-  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [countdown, setCountdown] = useState(3); // 3,2,1 → auto-return to sign in
+  const [countdown, setCountdown] = useState(5); // → auto-return to sign in
 
   const doReset = async () => {
     if (!username.trim()) { setErr("Enter your User ID."); return; }
-    if (newPw.length < 6) { setErr("New password must be at least 6 characters."); return; }
-    if (newPw !== confirmPw) { setErr("Passwords don't match."); return; }
     setErr(""); setBusy(true);
-    try { await api.resetPassword(username.trim(), newPw); setStep(2); }
+    try { await api.sendPasswordResetEmail(username.trim()); setStep(2); }
     catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   };
 
-  // Step 2 success screen counts down 3→2→1 and then returns to sign in on
-  // its own, so the user isn't stuck needing to click anything.
+  // Step 2 success screen counts down and then returns to sign in on its
+  // own, so the user isn't stuck needing to click anything.
   useEffect(() => {
     if (step !== 2) return;
-    setCountdown(3);
+    setCountdown(5);
     const t = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) { clearInterval(t); onClose(); return 0; }
@@ -789,34 +791,19 @@ export function ForgotPassword({ initialUsername = "", onClose }) {
         </div>
 
         {step === 1 && <>
-          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>Enter your User ID and a new password.</p>
+          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>Enter your User ID and we'll email you a link to reset your password.</p>
           <Field label="User ID">
-            <input value={username} onChange={e => setUsername(e.target.value)} placeholder="your-id" style={inp} />
+            <input value={username} onChange={e => setUsername(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && doReset()} placeholder="your-id" style={inp} />
           </Field>
-          <Field label="New password">
-            <div style={{ display: "flex" }}>
-              <input type={showPw ? "text" : "password"} value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="At least 6 characters"
-                style={{ ...inp, borderTopRightRadius: 0, borderBottomRightRadius: 0, borderRight: "none" }} />
-              <span onClick={() => setShowPw(s => !s)} style={{ display: "flex", alignItems: "center", padding: "0 12px", background: "var(--mint-2)", border: "1px solid var(--border)", borderLeft: "none", borderTopRightRadius: 11, borderBottomRightRadius: 11, color: "var(--muted)", cursor: "pointer" }}>
-                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-              </span>
-            </div>
-          </Field>
-          <Field label="Confirm new password">
-            <input type={showPw ? "text" : "password"} value={confirmPw} onChange={e => setConfirmPw(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && doReset()} placeholder="Re-enter the same password" style={inp} />
-          </Field>
-          {newPw && confirmPw && newPw !== confirmPw && (
-            <div style={{ color: "#986315", fontSize: 12.5, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={14} />Passwords don't match yet.</div>
-          )}
           {err && <div style={{ color: "#DC4141", fontSize: 13, marginBottom: 10, display: "flex", gap: 6, alignItems: "center" }}><AlertCircle size={15} />{err}</div>}
-          <button onClick={doReset} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Resetting…" : "Reset password"}</button>
+          <button onClick={doReset} disabled={busy} style={{ ...btnPrimary, width: "100%", opacity: busy ? .7 : 1 }}>{busy ? "Sending…" : "Send reset email"}</button>
         </>}
 
         {step === 2 && <div style={{ textAlign: "center", padding: "10px 0" }}>
           <div style={{ display: "inline-flex", width: 52, height: 52, borderRadius: 999, background: "#E2F3EE", color: "#08805A", alignItems: "center", justifyContent: "center", marginBottom: 12 }}><CheckCircle2 size={26} /></div>
-          <h4 style={{ fontSize: 18, marginBottom: 6 }}>Password updated</h4>
-          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>You can now sign in with your new password.</p>
+          <h4 style={{ fontSize: 18, marginBottom: 6 }}>Check your email</h4>
+          <p style={{ fontSize: 13.5, color: "var(--slate)", marginBottom: 18 }}>If an account exists for that ID, we've sent a password reset link to its email address. Check your inbox (and spam folder), then sign in with your new password.</p>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 14 }}>
             <div style={{ width: 40, height: 40, borderRadius: 999, background: "var(--mint-2)", color: "var(--forest)", display: "grid", placeItems: "center", fontSize: 17, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
               {countdown}
