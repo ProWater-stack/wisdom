@@ -16,7 +16,7 @@ import {
   useAuth, api, customerApi, billingApi, creditNoteApi, ticketApi,
   depositForCustomer, CUSTOMER_FIELDS,
   API_ORIGIN, DATE_PRESETS, dateInRange, resolveRange, parseFlexDate, useDateRange, rangeLabel,
-  exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety, canonicalStatus,
+  exportToCsv, fmtDate, fmtTime, fmtPhone, inr, deviceType, DEVICE_TYPE_STYLE, isRealSociety, canonicalStatus, ORPHAN_SOCIETIES,
   parsePartsUsed, jobDurationMin, zdIsClosed, zdStatusColor, gstBreakup, termMonths,
 } from "../shared/core";
 import { parseLocation, syncPath } from "../shared/router";
@@ -406,6 +406,38 @@ export function CustomerSocieties() {
           {filtered.length === 0 && <Empty msg="No societies to show." />}
         </div>
       </div>
+
+      {/* Orphan Societies note (v2.29.444, per explicit user request) — a
+          small reference table, separate from the main society roster
+          above, listing every society that's been deliberately excluded
+          from every count on this page and CRM-wide (Analytics Overview,
+          Sales, etc. — anywhere `isRealSociety()` already runs). Reads
+          straight off `ORPHAN_SOCIETIES` (shared/core.js), the same list
+          `isRealSociety()` itself checks, so this note can never drift out
+          of sync with what's actually being excluded. */}
+      {ORPHAN_SOCIETIES.length > 0 && (
+        <div style={{ marginTop: 16, background: "rgba(152,99,21,0.04)", border: "1px solid rgba(152,99,21,0.15)", borderRadius: 16, padding: "14px 18px" }}>
+          <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "#986315", marginBottom: 8 }}>
+            Orphan Societies · excluded from every count above &amp; CRM-wide
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", padding: "4px 14px 6px 0", fontSize: 10.5, fontWeight: 700, color: "#986315", textTransform: "uppercase", letterSpacing: ".04em" }}>Society</th>
+                <th style={{ textAlign: "left", padding: "4px 0 6px", fontSize: 10.5, fontWeight: 700, color: "#986315", textTransform: "uppercase", letterSpacing: ".04em" }}>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ORPHAN_SOCIETIES.map((o, i) => (
+                <tr key={i}>
+                  <td style={{ padding: "4px 14px 4px 0", fontWeight: 700, color: "#0d2119", whiteSpace: "nowrap" }}>{o.name}</td>
+                  <td style={{ padding: "4px 0", color: "#475569" }}>{o.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
