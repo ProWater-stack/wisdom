@@ -2598,8 +2598,19 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 Collection" to "Monthly Collection"). v2.29.455 added a
                 Total/Deposit/Recharge slider per explicit user request — the
                 chart still shows one bar per month, just switching which of
-                `dpM7`'s 3 pre-computed combined (Zoho+DP) figures it reads. */}
-            <div style={{ ...softShadow, padding: 22, minWidth: 0, background: "rgba(255,255,255,0.9)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 12px 32px rgba(8,128,90,0.05), 0 2px 6px rgba(0,0,0,0.02)" }}>
+                `dpM7`'s 3 pre-computed combined (Zoho+DP) figures it reads.
+                v2.29.456: this card sits in a CSS grid row next to "Revenue
+                by Source" (donut + legend + comparison strip, generally
+                taller), and the grid's default stretch behavior made this
+                card match that height while the chart itself stayed a fixed
+                240px — leaving a large empty gap below it, per explicit user
+                report ("there is much gap, fill the gap or enlarge the
+                graph"). Made the card a flex column with the chart area set
+                to `flex: 1` (a 240px floor via `minHeight`, not a fixed
+                height) so it grows to fill however tall the row actually
+                is — which varies with the sibling's own content — instead
+                of a hardcoded pixel value that would drift out of sync. */}
+            <div style={{ ...softShadow, padding: 22, minWidth: 0, background: "rgba(255,255,255,0.9)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 12px 32px rgba(8,128,90,0.05), 0 2px 6px rgba(0,0,0,0.02)", display: "flex", flexDirection: "column" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
                 <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Monthly Collection</h3>
                 <div style={{ display: "inline-flex", background: "rgba(0,0,0,0.04)", borderRadius: 10, padding: 3, gap: 2 }}>
@@ -2621,7 +2632,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   ))}
                 </div>
               </div>
-              <div style={{ height: 240 }}>
+              <div style={{ flex: 1, minHeight: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={dpM7}
