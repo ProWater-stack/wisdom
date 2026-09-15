@@ -257,6 +257,35 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     for (const k of [rec.zohoCustomerId, rec.zohoId, rec.customerNumber]) if (k && custByKey[k]) return custByKey[k];
     return null;
   };
+
+  // Onboarding-date fallback for Zoho customers whose own profile carries no
+  // creation/signup date at all (per explicit user report + a real Zoho
+  // customer_profile record confirming it: none of `created_time`/
+  // `created_at`/`signup_date`/`customer_created_time` — the candidates the
+  // customer mapper's `since` field falls back through, `shared/core.js` —
+  // ever appear on a real Zoho record, only on DP ones). The subscription
+  // record's own `createdAt`/`activatedAt` IS a real onboarding date for
+  // these customers though — the exact same source `allSignups`/New CX
+  // above already use — so build a customer → earliest-subscription-date
+  // lookup here and fall back to it wherever a Zoho customer's own `since`
+  // is blank. Earliest (not latest) subscription date, since a customer can
+  // have more than one subscription over time and "onboarding" means their
+  // first.
+  const subSinceByCust = {};
+  (subs || []).forEach(s => {
+    const c = custOf(s);
+    const key = c && (c.zohoId || c.id || c.customerNumber);
+    if (!key) return;
+    const d = parseFlexDate(s.createdAt || s.activatedAt);
+    if (!d) return;
+    if (!subSinceByCust[key] || d < subSinceByCust[key]) subSinceByCust[key] = d;
+  });
+  const sinceOf = (c) => {
+    if (c.since) return c.since;
+    const key = c.zohoId || c.id || c.customerNumber;
+    const fallback = key && subSinceByCust[key];
+    return fallback ? fallback.toISOString() : "";
+  };
   const societyOf = (rec) => canonicalSociety(custOf(rec)?.society || rec.society || "Unknown");
   const allSocieties = [...new Set(customers.map(c => canonicalSociety(c.society)).filter(Boolean))].sort();
   const socOk = (name) => {
@@ -1253,7 +1282,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         { label: "Plan", get: c => c.plan || c.plan_name || "—" },
         { label: "Stack", get: c => c.isDpCustomer ? "DrinkPrime" : "Zoho" },
         { label: "Status", get: c => c.status },
-        { label: "Since", get: c => c.since ? fmtDate(new Date(c.since)) : "—" },
+        { label: "Since", get: c => { const s = sinceOf(c); return s ? fmtDate(new Date(s)) : "—"; } },
       ], filtered);
 
       return (
@@ -1324,7 +1353,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                             Active
                           </span>
                         </td>
-                        <td style={{ padding: "11px 14px", textAlign: "center", color: "#64748B" }}>{c.since ? fmtDate(new Date(c.since)) : "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center", color: "#64748B" }}>{sinceOf(c) ? fmtDate(new Date(sinceOf(c))) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>
