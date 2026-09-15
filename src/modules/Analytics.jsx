@@ -190,6 +190,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const [showNewCustPopup, setShowNewCustPopup] = useState(false);
   const [kpiModal, setKpiModal] = useState(null);              // universal KPI / chart drilldown modal
   const [newCxSortDir, setNewCxSortDir] = useState("asc");     // New CX modal's Onboarding Date sort — default old→new, per explicit user request
+  const [monthlyView, setMonthlyView] = useState("total");     // Monthly Collection card's slider — "total" | "deposit" | "recharge"
   const [modalQ, setModalQ] = useState("");
   const [toast, setToast] = useState("");
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2400); };
@@ -1067,15 +1068,41 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   ].filter(x => x.value > 0);
   const revBySourceTotal = revBySource.reduce((s, x) => s + x.value, 0);
 
-  // 7-month stacked chart: Zoho collected + DP collected per month
+  // 7-month stacked chart: Zoho collected + DP collected per month.
+  // `deposit`/`recharge` (v2.29.455, per explicit user request — a "Total /
+  // Deposit / Recharge" slider on the Monthly Collection card) split the
+  // same combined Zoho+DP total into its two components: Zoho's own side
+  // already separates `deposits` from the rest of `collected` (the same
+  // `depositForCustomer`-derived figure the KPI strip/Revenue by Source use),
+  // and DP's own transaction rows already carry the equivalent split
+  // (`deposit_amount` vs `revenue_amount`) rather than only the combined
+  // sum this chart previously reduced them to.
   const dpM7 = m7.map(x => {
-    const dpCol = dpTxns.filter(r => {
+    const dpRowsThisMonth = dpTxns.filter(r => {
       if (!r.Paid_Date) return false;
       const d = new Date(r.Paid_Date);
       return !isNaN(d) && d.getFullYear() === x.y && d.getMonth() === x.m;
-    }).reduce((s, r) => s + (Number(r.revenue_amount) || 0) + (Number(r.deposit_amount) || 0), 0);
-    return { label: monthShort(x.y, x.m), y: x.y, m: x.m, zoho: Math.round(x.collected), dp: Math.round(dpCol), total: Math.round(x.collected + dpCol) };
+    });
+    const dpDeposit = dpRowsThisMonth.reduce((s, r) => s + (Number(r.deposit_amount) || 0), 0);
+    const dpRecharge = dpRowsThisMonth.reduce((s, r) => s + (Number(r.revenue_amount) || 0), 0);
+    const dpCol = dpDeposit + dpRecharge;
+    const zohoDeposit = Math.round(x.deposits);
+    const zohoRecharge = Math.round(x.collected - x.deposits);
+    return {
+      label: monthShort(x.y, x.m), y: x.y, m: x.m,
+      zoho: Math.round(x.collected), dp: Math.round(dpCol), total: Math.round(x.collected + dpCol),
+      deposit: Math.round(zohoDeposit + dpDeposit),
+      recharge: Math.round(zohoRecharge + dpRecharge),
+    };
   });
+  // Monthly Collection card's Total/Deposit/Recharge slider (v2.29.455) —
+  // each option's chart dataKey, tooltip label, gradient stops, and label
+  // color, keyed the same way `dpM7` names its 3 fields above.
+  const MONTHLY_VIEWS = {
+    total:    { label: "Total",    tooltipLabel: "Collected", colors: ["#10B981", "#046A4A"], labelColor: "#046A4A" },
+    deposit:  { label: "Deposit",  tooltipLabel: "Deposit",   colors: ["#A78BFA", "#5B21B6"], labelColor: "#5B21B6" },
+    recharge: { label: "Recharge", tooltipLabel: "Recharge",  colors: ["#7DD3FC", "#0B6FAE"], labelColor: "#0B6FAE" },
+  };
 
   // DP MoM trend
   const dpMoM = dpM7.map((x, i) => ({
@@ -2568,11 +2595,32 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             {/* 7-month combined collection bar (v2.29.391: single-color total
                 bar, per explicit user request — the Zoho/DP stack + legend +
                 subtitle were "not needed"; renamed from "Combined Monthly
-                Collection" to "Monthly Collection", still shows the same
-                `total` value per month it always did, just as one bar
-                instead of a two-color stack). */}
+                Collection" to "Monthly Collection"). v2.29.455 added a
+                Total/Deposit/Recharge slider per explicit user request — the
+                chart still shows one bar per month, just switching which of
+                `dpM7`'s 3 pre-computed combined (Zoho+DP) figures it reads. */}
             <div style={{ ...softShadow, padding: 22, minWidth: 0, background: "rgba(255,255,255,0.9)", backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)", border: "1px solid rgba(0,0,0,0.06)", boxShadow: "0 12px 32px rgba(8,128,90,0.05), 0 2px 6px rgba(0,0,0,0.02)" }}>
-              <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: "0 0 14px", letterSpacing: "-0.01em" }}>Monthly Collection</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+                <h3 style={{ fontSize: 16, color: "#1D1D1F", fontWeight: 700, margin: 0, letterSpacing: "-0.01em" }}>Monthly Collection</h3>
+                <div style={{ display: "inline-flex", background: "rgba(0,0,0,0.04)", borderRadius: 10, padding: 3, gap: 2 }}>
+                  {Object.entries(MONTHLY_VIEWS).map(([key, cfg]) => (
+                    <button
+                      key={key}
+                      onClick={() => setMonthlyView(key)}
+                      style={{
+                        border: "none", cursor: "pointer", padding: "6px 13px", borderRadius: 8,
+                        fontSize: 12, fontWeight: 700, letterSpacing: "-0.01em",
+                        background: monthlyView === key ? "#fff" : "transparent",
+                        color: monthlyView === key ? cfg.labelColor : "#86868B",
+                        boxShadow: monthlyView === key ? "0 1px 4px rgba(0,0,0,0.1)" : "none",
+                        transition: "all .15s ease",
+                      }}
+                    >
+                      {cfg.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div style={{ height: 240 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
@@ -2597,8 +2645,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   >
                     <defs>
                       <linearGradient id="monthlyCollectionBarGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#10B981" />
-                        <stop offset="100%" stopColor="#046A4A" />
+                        <stop offset="0%" stopColor={MONTHLY_VIEWS[monthlyView].colors[0]} />
+                        <stop offset="100%" stopColor={MONTHLY_VIEWS[monthlyView].colors[1]} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" vertical={false} />
@@ -2606,11 +2654,11 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <YAxis tick={{ fill: "#86868B", fontSize: 11.5, fontWeight: 500 }} axisLine={false} tickLine={false} width={54}
                       tickFormatter={v => v >= 100000 ? `₹${(v / 100000).toFixed(0)}L` : v >= 1000 ? `₹${Math.round(v / 1000)}k` : `₹${v}`} />
                     <Tooltip
-                      formatter={(v) => [inr(v), "Collected"]}
+                      formatter={(v) => [inr(v), MONTHLY_VIEWS[monthlyView].tooltipLabel]}
                       contentStyle={{ borderRadius: 12, border: "1px solid rgba(0,0,0,.08)", fontSize: 13 }}
                     />
-                    <Bar dataKey="total" name="total" fill="url(#monthlyCollectionBarGradient)" radius={[6, 6, 0, 0]} maxBarSize={38} isAnimationActive={false}>
-                      <LabelList dataKey="total" position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 10, fontWeight: 700, fill: "#046A4A", letterSpacing: "-0.01em" }} />
+                    <Bar key={monthlyView} dataKey={monthlyView} name={monthlyView} fill="url(#monthlyCollectionBarGradient)" radius={[6, 6, 0, 0]} maxBarSize={38} isAnimationActive={false}>
+                      <LabelList dataKey={monthlyView} position="top" formatter={v => v ? inr(v) : ""} style={{ fontSize: 10, fontWeight: 700, fill: MONTHLY_VIEWS[monthlyView].labelColor, letterSpacing: "-0.01em" }} />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
