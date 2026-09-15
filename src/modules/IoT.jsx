@@ -1079,8 +1079,14 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const [wxShow, setWxShow] = useState({ wtemp: true, tds: true, ph: true, tank: true }); // which sensor lines show on the weather-correlation chart (outdoor temp is always on)
   const [anomOnly, setAnomOnly] = useState(false);
   const [showAllHist, setShowAllHist] = useState(false);
-  const [catF, setCatF] = useState("all"); // all | contamination | tank | dead (anomaly category)
-  const [sevF, setSevF] = useState("all"); // all | critical | high | medium (severity)
+  // Refill slicer (v2.29.459, replacing the old Anomaly/Severity chip filters
+  // on Recent Readings, per explicit user request) — "on" shows only rows
+  // where Pump Pressure (bar) — `waterQuality.pressure`, the same field the
+  // "Pump Pressure (bar)" column itself renders — is actually >0.00; "off"
+  // (the default) applies no filter at all and shows every reading. (First
+  // shipped keyed off Raw Water Pressure/`rawWaterFlow`, changed to Pump
+  // Pressure/`pressure` per an immediate follow-up correction.)
+  const [refillF, setRefillF] = useState("off"); // "off" | "on"
 
   // Slice the (up-to-62-day) window before anything else, so the chart, tiles,
   // anomaly scan, table and correlation all reflect the chosen range. `range` is
@@ -1146,17 +1152,15 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
   const wqVerdict = wqWorst === "green" ? "Good" : wqWorst === "amber" ? "Warning" : wqWorst === "red" ? "Critical" : "—";
   const wqVk = wqWorst === "green" ? "good" : wqWorst === "amber" ? "warning" : wqWorst === "red" ? "critical" : "na";
 
-  const contamSevOf = (it) => iotContamSev(iotWqNum(it.waterQuality?.ph), iotWqNum(it.waterQuality?.tds));
-  const tankSevOf = (it) => iotTankSev(iotTank(it.tankLevel).pct);
-  const rowSevOf = (it) => iotWorstSev(contamSevOf(it), tankSevOf(it));
   const lastSeenTs = all.length ? Math.max(...all.map((it) => new Date(it.timestamp).getTime()).filter((t) => !isNaN(t))) : NaN;
   const deviceDead = !isNaN(lastSeenTs) && (Date.now() - lastSeenTs) > 24 * 3600000;
-  const catCounts = { contamination: 0, tank: 0, dead: deviceDead ? 1 : 0 };
-  const sevCounts = { critical: 0, high: 0, medium: 0 };
-  chrono.forEach((it) => { if (contamSevOf(it)) catCounts.contamination++; if (tankSevOf(it)) catCounts.tank++; const s = rowSevOf(it); if (s) sevCounts[s]++; });
-  const passCat = (it) => catF === "all" ? true : catF === "contamination" ? contamSevOf(it) != null : catF === "tank" ? tankSevOf(it) != null : deviceDead;
-  const passSev = (it) => sevF === "all" ? true : rowSevOf(it) === sevF;
-  const sorted = [...chrono].filter((it) => (anomOnly ? anyOut(it) : true) && passCat(it) && passSev(it)).sort((a, b) => { const dd = new Date(b.timestamp) - new Date(a.timestamp); return sortDir === "desc" ? dd : -dd; });
+  // Refill slicer (v2.29.459) — "on" keeps only readings where Pump
+  // Pressure (bar) — `waterQuality.pressure`, see the column's own render
+  // just below — is actually >0.00; "off" applies no filter.
+  const refillOn = (it) => { const v = iotWqNum(it.waterQuality?.pressure); return v != null && v > 0; };
+  const refillOnCount = chrono.filter(refillOn).length;
+  const passRefill = (it) => refillF === "off" ? true : refillOn(it);
+  const sorted = [...chrono].filter((it) => (anomOnly ? anyOut(it) : true) && passRefill(it)).sort((a, b) => { const dd = new Date(b.timestamp) - new Date(a.timestamp); return sortDir === "desc" ? dd : -dd; });
   const totalPages = Math.max(1, Math.ceil(sorted.length / PER));
   const cur = Math.min(page, totalPages);
   const rows = sorted.slice((cur - 1) * PER, cur * PER);
@@ -1528,20 +1532,11 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
         </div>
       )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "4px 20px 14px" }}>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>Anomaly</span>
-        {[["all", "All"], ["contamination", "Contamination"], ["tank", "Tank"], ["dead", "Dead device"]].map(([k, label]) => {
-          const active = catF === k; const cnt = k === "all" ? null : catCounts[k]; const dim = k !== "all" && !cnt;
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>Refill</span>
+        {[["off", "Off"], ["on", "On"]].map(([k, label]) => {
+          const active = refillF === k; const cnt = k === "on" ? refillOnCount : null;
           return (
-            <button key={k} disabled={dim} onClick={() => { setCatF(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, cursor: dim ? "not-allowed" : "pointer", border: "1px solid " + (active ? "#08805A" : "rgba(0,0,0,0.08)"), background: active ? "#08805A" : "#fff", color: active ? "#fff" : (dim ? "#c5c5c7" : "#1D1D1F") }}>{label}{cnt != null ? ` (${cnt})` : ""}</button>
-          );
-        })}
-        <span style={{ width: 1, height: 22, background: "rgba(0,0,0,0.08)", margin: "0 4px" }} />
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>Severity</span>
-        {[["all", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"]].map(([k, label]) => {
-          const active = sevF === k; const cnt = k === "all" ? null : sevCounts[k]; const dim = k !== "all" && !cnt;
-          const on = active && k !== "all" ? IOT_CONTAM_SEV[k]?.c : null;
-          return (
-            <button key={k} disabled={dim} onClick={() => { setSevF(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, cursor: dim ? "not-allowed" : "pointer", border: "1px solid " + (active ? (on || "#08805A") : "rgba(0,0,0,0.08)"), background: active ? (on || "#08805A") : "#fff", color: active ? "#fff" : (dim ? "#c5c5c7" : "#1D1D1F") }}>{label}{cnt != null ? ` (${cnt})` : ""}</button>
+            <button key={k} onClick={() => { setRefillF(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "#08805A" : "rgba(0,0,0,0.08)"), background: active ? "#08805A" : "#fff", color: active ? "#fff" : "#1D1D1F" }}>{label}{cnt != null ? ` (${cnt})` : ""}</button>
           );
         })}
       </div>
