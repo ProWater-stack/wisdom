@@ -851,8 +851,20 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // Tier Distribution") by applying the same `socOk(societyOf(s))` check every
   // other society-scoped set in this component already uses (see `fInvs`/
   // `fSubs` above).
+  // Strict month-wise scoping (v2.29.448, per explicit user request: "show
+  // as per the month wise only, not all months"). Previously this chart
+  // counted every currently-active subscription/DP customer regardless of
+  // when it started, so switching the page's own date filter (This Month /
+  // Last Month / a custom range) never changed the numbers at all — every
+  // month's activity was being lumped together. Per the user's explicit
+  // choice ("strict window — only that month's activity"), a Zoho
+  // subscription now only counts here if it was ACTIVATED within the
+  // currently selected `range`, and a DP customer only counts if their
+  // device has a real recharge (COLLECTION_SUMMARY row) PAID within that
+  // same range — both using the exact same `range`/`dateInRange` the rest
+  // of this page's period-scoped figures (paidCur, invCur, etc.) already use.
   const planCounts = {};
-  subs.filter(s => socOk(societyOf(s))).forEach(s => {
+  subs.filter(s => socOk(societyOf(s)) && dateInRange(parseFlexDate(s.activatedAt), range)).forEach(s => {
     if (["live", "active", "in_trial"].includes(String(s.status || "").toLowerCase())) {
       let amt = Number(s.amount) || 0;
       if (!amt && s.planCode) {
@@ -883,35 +895,36 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // `current_device` — the same device identifier as a customer's own
   // `device_code` (added to the customer mapper in shared/core.js for this
   // exact join). Multiple collection events can exist for one device (a
-  // recharge history), so this keeps the most-recent one by `Paid_Date` as
-  // the device's CURRENT plan tier.
+  // recharge history); v2.29.448 (see strict-window comment above) now only
+  // looks at recharges PAID within the currently selected `range` — this
+  // chart is scoped to "this month's activity", not the device's all-time
+  // most-recent recharge — keeping the most-recent one WITHIN that window
+  // as the device's plan tier for the selected period.
   const dpDeviceRecharge = {};
   (dpRows || []).forEach(r => {
     if (r.row_type !== "COLLECTION_SUMMARY" || !r.current_device) return;
     const amt = Number(r.Recharge_received) || 0;
     if (!(amt > 0)) return;
-    const paidAt = parseFlexDate(r.Paid_Date)?.getTime() || 0;
+    const paidAtDate = parseFlexDate(r.Paid_Date);
+    if (!dateInRange(paidAtDate, range)) return;
+    const paidAt = paidAtDate?.getTime() || 0;
     const existing = dpDeviceRecharge[r.current_device];
     if (!existing || paidAt >= existing.paidAt) dpDeviceRecharge[r.current_device] = { amt, paidAt };
   });
 
+  // Strict-window scoping means a DP customer only counts here if their
+  // device actually recharged within the selected period — no fallback to
+  // the plan_name/plan regex guess or the generic "DrinkPrime Purifier"
+  // bucket (both undated, so either one would silently re-introduce "all
+  // months" behavior for DP), and no fallback to `dpUniqueDevices` either,
+  // since that count is likewise not scoped to any specific period.
   const dpActiveCusts = fCustomers.filter(c => c.isDpCustomer && ["active", "in-active", "dunning"].includes(String(c.status || "").toLowerCase()));
-  if (dpActiveCusts.length > 0) {
-    dpActiveCusts.forEach(c => {
-      // Real recharge amount first (device_code -> current_device join);
-      // falls back to the old plan_name/plan regex guess, then finally the
-      // generic bucket, only when neither source resolves a real amount.
-      let amt = dpDeviceRecharge[c.device_code]?.amt || dpDeviceRecharge[c.purifier_id]?.amt || 0;
-      if (!amt) {
-        const m = String(c.plan_name || c.plan || "").match(/\b(\d{3,4})\b/) || String(c.plan_name || c.plan || "").match(/_(\d{3,4})/);
-        if (m) amt = Number(m[1]);
-      }
-      const label = amt > 0 ? inr(amt) : "DrinkPrime Purifier";
-      planCounts[label] = (planCounts[label] || 0) + 1;
-    });
-  } else if (dpUniqueDevices > 0) {
-    planCounts["DrinkPrime Purifier"] = dpUniqueDevices;
-  }
+  dpActiveCusts.forEach(c => {
+    const amt = dpDeviceRecharge[c.device_code]?.amt || dpDeviceRecharge[c.purifier_id]?.amt || 0;
+    if (!(amt > 0)) return; // no recharge in this period — excluded, not bucketed as "Purifier"
+    const label = inr(amt);
+    planCounts[label] = (planCounts[label] || 0) + 1;
+  });
 
   const planCountsTotal = Object.values(planCounts).reduce((s, v) => s + v, 0);
   // `pct` (v2.29.386, per explicit user request: "show percentage" instead
@@ -2985,7 +2998,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
                 <div>
                   <h3 style={{ fontSize: 17, color: "#0F172A", fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.02em" }}>Plan Tier Distribution</h3>
-                  <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>Active subscriptions by plan amount{planDistributionTop.length > 6 ? " · scroll for all " + planDistributionTop.length + " tiers" : ""}</div>
+                  <div style={{ fontSize: 12, color: "#64748B", fontWeight: 500 }}>Plans activated/recharged in {rangeLabel(range)}{planDistributionTop.length > 6 ? " · scroll for all " + planDistributionTop.length + " tiers" : ""}</div>
                 </div>
                 <div title="Sorted by active subscriptions" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: "50%", background: "rgba(0,122,255,0.08)", border: "0.5px solid rgba(0,122,255,0.15)", color: "#007AFF", flexShrink: 0 }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M7 12h10" /><path d="M10 18h4" /></svg>
