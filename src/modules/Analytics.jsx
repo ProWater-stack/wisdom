@@ -24,7 +24,7 @@ import {
   useAuth, api, apartmentApi, billingApi, creditNoteApi, customerApi,
   authHeaders, API_ORIGIN, LS, PRESET_UNIT, dateInRange, depositForCustomer, SEED_PLANS,
   dmy, endOfDay, exportToCsv, fetchAllDpTransactions, fmtDate, fmtPhone,
-  fmtTime, inr, isoDay, isRealSociety, canonicalSociety, canonicalStatus, keyLc, markSample, momPct, monthEnd, monthlyOf,
+  fmtTime, inr, isoDay, isRealSociety, isChurnedCustomer, canonicalSociety, canonicalStatus, keyLc, markSample, momPct, monthEnd, monthlyOf,
   parseFlexDate, presetLabel, prevRange, rangeFilter, rangeLabel,
   startOfDay, termMonths, ticketApi, useDateRange, yoyRange, zdIsClosed,
   bucketKeyOf, bucketsFor, CHART_PALETTE, AOP_MON, titleCaseName,
@@ -342,8 +342,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   (subs || []).forEach(s => {
     const soc = societyOf(s);
     const d = parseFlexDate(s.createdAt || s.activatedAt);
+    const c = custOf(s);
+    // Churn exclusion (v2.29.452, per explicit user report with a real
+    // example — a customer onboarded 03 Sept 2026 who has SINCE been
+    // uninstalled was still showing in New CX for September): New CX should
+    // reflect customers who signed up in the period AND are still real
+    // customers today, not every sign-up EVENT regardless of what happened
+    // to them afterward — same `isChurnedCustomer` definition Customer >
+    // Societies' own Churned column already uses (v2.29.441).
+    if (c && isChurnedCustomer(c)) return;
     if (soc && soc !== "Unknown" && d && socOk(soc)) {
-      const c = custOf(s);
       const name = s.customerName || s.customer_name || s.name || c?.name || "Zoho Customer";
       const phone = c?.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : (s.phone ? String(s.phone).replace(/\D/g, "").slice(-10) : "—");
       const purifierId = c?.purifier_id || s.purifierId || s.purifier_id || "—";
@@ -353,9 +361,26 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   });
 
   // 2. Customers (handles customer profile creation dates and DrinkPrime customers)
+  //
+  // v2.29.451 attempted a fix here (using `sinceOf(c)`'s subscription-date
+  // fallback instead of the raw `c.since`) but caused a REAL regression,
+  // caught live before it ever reached production: this step's own dedup key
+  // (`cust_${...}`/`dp_${...}`) and step 1's key (`sub_${...}`) are different
+  // namespaces, so `allSignupMap.has(key)` never recognized a customer
+  // already added by step 1 as the same person. `c.since` being blank for
+  // most real Zoho customers had been accidentally MASKING that mismatch —
+  // step 2 rarely resolved a date at all, so it rarely collided with step 1.
+  // Making `sinceOf(c)` succeed for those same customers via their
+  // subscription's own date (the same data step 1 already used) meant most
+  // Zoho customers got counted TWICE — once per step — inflating New CX
+  // roughly 2x (reported live as 73 vs. the correct count). Reverted to the
+  // original `c.since`-only read pending a real fix that also closes the
+  // key-namespace gap so the two steps can actually recognize a shared
+  // customer as one signup, not two.
   (customers || []).forEach(c => {
     const soc = canonicalSociety(c.society || "Unknown");
     const d = parseFlexDate(c.since);
+    if (isChurnedCustomer(c)) return; // same churn exclusion as source #1 above
     if (soc && soc !== "Unknown" && d && socOk(soc)) {
       const name = c.name || (c.isDpCustomer ? "DrinkPrime Customer" : "Zoho Customer");
       const phone = c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—";
