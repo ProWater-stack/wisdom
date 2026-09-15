@@ -240,18 +240,24 @@ export function iotRejectNarrative(stats) {
   // layout has less room than the original single-column card did.
   const verdict = band === "good" ? "within the healthy range" : band === "fair" ? "a little above the healthy range" : "well above the healthy range";
   const targetNote = band === "high" ? "Exceeds >35% target" : band === "fair" ? "Above 25% target" : "Within healthy range";
+  // Layman-language rewrite (v2.29.457, per explicit user request — the
+  // original phrasing was written for someone who already knows RO/plumbing
+  // terms like "feed pressure", "needle valve", "recovery ratio", and
+  // "permeate efficiency"). Same 3 causes / 3 fixes, same show/band logic,
+  // just described the way you'd explain it to someone with no technical
+  // background.
   const causes = [
-    { emoji: "💧", label: "Input pressure", show: band !== "good", text: "Unstable feed pressure forces the membrane to work harder." },
-    { emoji: "⚙️", label: "Flow restrictor", show: band !== "good", text: "Set too open, bypassing water directly to waste." },
-    { emoji: "🧪", label: "Membrane scale", show: band === "high", text: "Aging membrane reduces permeate efficiency." },
+    { emoji: "💧", label: "Water pressure", show: band !== "good", text: "If the water coming into the machine is weak or keeps changing, it has to work harder — and ends up wasting more water instead of cleaning it." },
+    { emoji: "⚙️", label: "Waste valve", show: band !== "good", text: "A small valve controls how much water goes to the drain instead of being purified. If it's left too open, extra water gets wasted for no reason." },
+    { emoji: "🧪", label: "Old or dirty filter", show: band === "high", text: "The main filter (membrane) wears out or gets coated with mineral buildup over time, so it can't clean water as well as before." },
   ];
   const items = band === "good"
     ? [{ emoji: "✅", label: "Recovery", text: `At ${recoveryPct}% recovery, no corrective action is needed right now.` }]
     : causes.filter((c) => c.show);
   const fixes = [
-    { emoji: "🔧", label: "Tune restrictor", show: band !== "good", text: "Re-tune needle valve to rated recovery ratio." },
-    { emoji: "📈", label: "Check pressure", show: band !== "good", text: "Verify booster pump against spec sheets." },
-    { emoji: "🧽", label: "Descale membrane", show: band === "high", text: "Inspect and clean on schedule." },
+    { emoji: "🔧", label: "Adjust the waste valve", show: band !== "good", text: "Have a technician re-adjust this valve so it wastes less water for the same amount of clean water produced." },
+    { emoji: "📈", label: "Check the water pump", show: band !== "good", text: "Make sure the pump supplying water to the machine is working at the right strength, not too weak." },
+    { emoji: "🧽", label: "Clean or replace the filter", show: band === "high", text: "Get the filter inspected and cleaned — or replaced if it's too old — as part of regular maintenance." },
   ];
   const fix = fixes.filter((f) => f.show);
   const footer = "Rule-based evaluation from this device's live telemetry stream (not an AI/LLM call). The 25% / 35% thresholds are a starting default.";
