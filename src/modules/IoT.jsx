@@ -1531,14 +1531,26 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
           <AlertCircle size={15} /> Dead device — no ping for {Math.round((Date.now() - lastSeenTs) / 3600000)}h. The readings below are the last known.
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", padding: "4px 20px 14px" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "4px 20px 14px" }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".05em" }}>Refill</span>
-        {[["off", "Off"], ["on", "On"]].map(([k, label]) => {
-          const active = refillF === k; const cnt = k === "on" ? refillOnCount : null;
-          return (
-            <button key={k} onClick={() => { setRefillF(k); setPage(1); }} style={{ fontSize: 12, fontWeight: 700, padding: "4px 12px", borderRadius: 999, cursor: "pointer", border: "1px solid " + (active ? "#08805A" : "rgba(0,0,0,0.08)"), background: active ? "#08805A" : "#fff", color: active ? "#fff" : "#1D1D1F" }}>{label}{cnt != null ? ` (${cnt})` : ""}</button>
-          );
-        })}
+        {/* Real toggle switch (v2.29.460, per explicit user request — was a
+            2-button pill group), same visual convention as the Sign In
+            screen's "Remember ID" switch (`.pw-login-switch` in
+            `shared/ui.jsx`) — reimplemented with inline styles here rather
+            than reusing that class, since it's scoped to the Login
+            component's own injected stylesheet and isn't guaranteed present
+            once a session is logged in and Login is unmounted. */}
+        <button
+          role="switch"
+          aria-checked={refillF === "on"}
+          onClick={() => { setRefillF((f) => (f === "on" ? "off" : "on")); setPage(1); }}
+          style={{ width: 38, height: 22, borderRadius: 20, position: "relative", border: "none", padding: 0, cursor: "pointer", background: refillF === "on" ? "#08805A" : "#e5e5ea", transition: "background .25s ease", flexShrink: 0 }}
+        >
+          <span style={{ position: "absolute", top: 2, left: 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", boxShadow: "0 2px 4px rgba(0,0,0,0.2)", transform: refillF === "on" ? "translateX(16px)" : "translateX(0)", transition: "transform .25s cubic-bezier(0.34,1.56,0.64,1)" }} />
+        </button>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: refillF === "on" ? "#08805A" : "#86868B" }}>
+          {refillF === "on" ? `On (${refillOnCount})` : "Off"}
+        </span>
       </div>
       <div className="scroll-thin" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "center", fontSize: 13.5 }}>
