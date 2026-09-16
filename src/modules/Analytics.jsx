@@ -37,6 +37,12 @@ import {
   btnGhost, btnPrimary, td, ftd, trStyle, grid4, axisTick, selectStyle,
   toastStyle, iconBtn, inp,
 } from "../shared/ui";
+// v2.29.463: "Business View" table on Overview V2 needs the Sales module's
+// own lead/deal feed (for its "Interested" count, apartment-wise) — Sales.jsx
+// has no reverse dependency on this file, so this is a one-way import only.
+// `notHiddenLead` matches the same scoping Sales > Trend Analysis itself
+// already applies to this exact feed.
+import { salesApi, notHiddenLead } from "./Sales";
 
 /* ---- Apple HIG Status Badge Helper --------------------------------------- */
 export function renderHigStatusBadge(status) {
@@ -213,15 +219,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       ticketApi.getTickets().catch(() => []),
       apartmentApi.getAll().catch(() => []),
       combined ? fetchAllDpTransactions().catch(() => []) : Promise.resolve({ rows: [] }),
+      salesApi.getDeals().catch(() => []), // Business View table's "Interested" column
     ])
-      .then(([customers, subs, invs, referrers, tickets, apartments, dpResult]) =>
-        setData({ customers, subs, invs, referrers, tickets, apartments, dpRows: dpResult?.rows || [] }))
+      .then(([customers, subs, invs, referrers, tickets, apartments, dpResult, leads]) =>
+        setData({ customers, subs, invs, referrers, tickets, apartments, dpRows: dpResult?.rows || [], leads: (leads || []).filter(notHiddenLead) }))
       .catch(e => setErr(e.message || "Could not load analytics overview."));
   }, [combined]);
   if (err) return <ApiError msg={err} />;
   if (!data) return <Loading title="Loading Analytics Overview" subtitle="Synchronizing cross-module performance data…" />;
 
-  const { customers, subs, invs, referrers, tickets, apartments, dpRows } = data;
+  const { customers, subs, invs, referrers, tickets, apartments, dpRows, leads } = data;
   const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
   const now = new Date();
   // MTD-aware previous-period window (v2.29.389) — boss ask: "This Month"
@@ -1054,6 +1061,40 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const avgPenetrationPct = penetrationKnown.length > 0
     ? Math.round(penetrationKnown.reduce((s, a) => s + a.pct, 0) / penetrationKnown.length)
     : null;
+
+  // "Business View" table (v2.29.463, per explicit user request: add a new
+  // table with "Apartment Name, Total Flats, Interested, Onboarded,
+  // Penetration %"). Total Flats/Onboarded/Penetration % are exactly
+  // `penetrationRisk`'s own already-established per-apartment figures
+  // (Total Flats from the apartments feed, Onboarded = active customers,
+  // both already used by Under-Penetrated Buildings above) — only
+  // "Interested" is new: how many of that apartment's Sales leads
+  // currently carry the raw Zoho status "Interested", the exact same
+  // check Sales > Trend Analysis's own "Interested" KPI card uses,
+  // grouped by the same `cleanAptName`-normalized apartment name every
+  // other figure on this page already keys by (case-insensitively, since
+  // `cleanAptName` doesn't itself guarantee identical casing across two
+  // different source feeds). Like the other 3 columns, this is a live
+  // snapshot count, not scoped to the page's own date-range filter — an
+  // apartment's current sales pipeline isn't a "this period" figure any
+  // more than its total flats or active-customer count is.
+  const interestedByApt = {};
+  (leads || []).forEach(d => {
+    if ((d.rawStatus || "").toLowerCase() !== "interested") return;
+    const name = cleanAptName(d.society);
+    if (!name) return;
+    const key = name.toLowerCase();
+    interestedByApt[key] = (interestedByApt[key] || 0) + 1;
+  });
+  const businessView = penetrationRisk
+    .map(apt => ({
+      name: apt.name,
+      totalFlats: apt.flats,
+      interested: interestedByApt[apt.name.toLowerCase()] || 0,
+      onboarded: apt.active,
+      pct: apt.pct,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   // Revenue by Source donut (for current period). Colors (v2.29.388, per
   // explicit user-provided redesign) — cyan for Zoho Recharge, green for
@@ -3285,6 +3326,56 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               </div>
             </div>
 
+          </div>
+
+          {/* ── Business View table (v2.29.463, per explicit user request) ─────
+              A single, simple sales-pipeline-vs-onboarding funnel view per
+              apartment: Total Flats and Onboarded (active customers) are
+              exactly `penetrationRisk`'s own already-established figures
+              (same ones Under-Penetrated Buildings above uses); Interested
+              is new — how many of that apartment's Sales leads currently
+              carry the raw Zoho status "Interested". */}
+          <div style={{ ...softShadow, padding: 22, minWidth: 0, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+              <div>
+                <h3 style={{ fontSize: 17, color: "#1D1D1F", fontWeight: 700, margin: "0 0 4px" }}>Business View</h3>
+                <div style={{ fontSize: 12, color: "#86868B" }}>Sales pipeline vs. onboarding, apartment-wise</div>
+              </div>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 999, background: "rgba(8,128,90,0.08)", color: "#08805A" }}>
+                {businessView.length} Apartments
+              </span>
+            </div>
+
+            {businessView.length > 0 ? (
+              <div className="scroll-thin" style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.6)" }}>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "left" }}>Apartment Name</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Flats</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Interested</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Onboarded</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Penetration %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {businessView.map((r, i) => (
+                      <tr key={r.name} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 18px", fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{r.name}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalFlats ?? "—"}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#2A86D6" }}>{r.interested}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#08805A" }}>{r.onboarded}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.pct == null ? "#86868B" : (r.pct >= 50 ? "#08805A" : r.pct >= 25 ? "#a86e00" : "#DC4141") }}>
+                          {r.pct == null ? "—" : `${r.pct}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div style={{ padding: "40px 0", textAlign: "center", color: "#86868B", fontSize: 13 }}>No apartments found for the current filters.</div>
+            )}
           </div>
 
           {/* ── All Apartment Performance Table ───────────────────────────────── */}
