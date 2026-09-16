@@ -424,6 +424,19 @@ export function iotFilterByRange(items, range) {
 // different, useful numbers instead of near-duplicates. Needs ≥30 min of
 // span to avoid a wild division-by-a-sliver-of-time estimate right after
 // the page loads.
+//
+// `days` is floored at 1 (v2.29.461 fix, per a real user report with a live
+// example — "Dispensed today 275.61 L" next to "Average dispensed 656.20
+// L/day", which can't both be true) — for "Today" (or any still-in-progress
+// single day), `spanMs` only covers however much of the day has elapsed so
+// far, e.g. 6 hours; dividing by that fraction of a day EXTRAPOLATED the
+// partial total up to a projected full-day rate, which will always overshoot
+// the real running total for as long as the day is still in progress. A
+// multi-day window (This Week/This Month/etc.) doesn't have this problem —
+// dividing by its real elapsed day count is a genuine "per day, averaged
+// across N whole-or-partial days" rate, not a same-day projection — so only
+// windows narrower than 1 day are affected by the floor; anything ≥1 day is
+// unchanged.
 export function iotDispensedRange(items) {
   const rows = (items || [])
     .map((it) => ({ v: iotWqNum(it?.waterQuality?.totalRoWaterDispensed), t: new Date(it.timestamp).getTime() }))
@@ -432,7 +445,8 @@ export function iotDispensedRange(items) {
   const latest = rows[0], oldest = rows[rows.length - 1]; // newest-first
   const windowDelta = Math.max(0, latest.v - oldest.v);
   const spanMs = Math.max(0, latest.t - oldest.t);
-  const avgPerDay = spanMs >= 30 * 60000 ? windowDelta / (spanMs / 86400000) : null;
+  const days = Math.max(1, spanMs / 86400000);
+  const avgPerDay = spanMs >= 30 * 60000 ? windowDelta / days : null;
   return { total: latest.v, windowDelta, avgPerDay };
 }
 // Precise 3-tier water-quality classification (ProWater thresholds).
