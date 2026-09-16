@@ -1574,43 +1574,80 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     // 2.5. Business View drilldown (v2.29.468, per explicit user request —
     // "if i click on the number show the same popup view of all customer
     // details", for the Total Leads/Interested columns). Same modal shell
-    // (search box, Export CSV, sticky-header table) as `active_customers`
-    // above — Onboarded's own click reuses that modal directly, since
-    // Onboarded IS the active-customers count; this branch covers the two
-    // remaining numbers, which are lead-shaped, not customer-shaped:
+    // (search box, Export CSV) as `active_customers` above — Onboarded's
+    // own click reuses that modal directly, since Onboarded IS the
+    // active-customers count; this branch covers the two remaining
+    // numbers, which are lead-shaped, not customer-shaped:
     // `leadFilter: "interested"` shows just this apartment's Interested
-    // leads; `leadFilter: "total"` shows Total Leads' own definition
-    // (Interested + Onboarded) by combining both populations into one
-    // list, tagged by a "Stage" column so it's clear which is which.
+    // leads (one table); `leadFilter: "total"` shows Total Leads' own
+    // definition (Interested + Onboarded) as TWO SEPARATE tables — per an
+    // explicit user follow-up ("keep a separate table inside the popup for
+    // Onboarded and Interested... makes easy to read") — rather than one
+    // merged table with a Stage badge, since a single shared "ID" column
+    // was mixing Interested's own Flat No with Onboarded's own Purifier
+    // ID, two genuinely different identifiers that read as confusing
+    // side by side.
     if (type === "leads") {
       const aptKey = aptFilter ? cleanAptName(aptFilter).toLowerCase() : null;
       const matchesApt = (soc) => !aptKey || cleanAptName(soc || "").toLowerCase() === aptKey;
 
-      const interestedRows = (leads || [])
+      const interestedAll = (leads || [])
         .filter(d => (d.rawStatus || "").toLowerCase() === "interested" && matchesApt(d.society))
-        .map(d => ({ kind: "Interested", name: d.customer, phone: d.phone, id: d.flatNo || "—", plan: d.plan, society: d.society }));
+        .map(d => ({ name: d.customer, phone: d.phone, flatNo: d.flatNo || "—", plan: d.plan, society: d.society }));
 
-      const onboardedRows = leadFilter === "total"
+      const onboardedAll = leadFilter === "total"
         ? fCustomers
             .filter(c => canonicalStatus(c.status) === "Active" && matchesApt(c.society))
-            .map(c => ({ kind: "Onboarded", name: c.name, phone: c.phone, id: c.purifier_id || "—", plan: c.plan || c.plan_name, society: c.society }))
+            .map(c => ({ name: c.name, phone: c.phone, purifierId: c.purifier_id || "—", plan: c.plan || c.plan_name, society: c.society }))
         : [];
 
-      const combined = [...interestedRows, ...onboardedRows];
-      const filtered = mq
-        ? combined.filter(r => `${r.name} ${r.phone} ${r.id} ${r.society} ${r.plan}`.toLowerCase().includes(mq))
-        : combined;
-      const interestedCount = filtered.filter(r => r.kind === "Interested").length;
-      const onboardedCount = filtered.filter(r => r.kind === "Onboarded").length;
+      const matches = (r, idField) => `${r.name} ${r.phone} ${idField} ${r.society} ${r.plan}`.toLowerCase().includes(mq);
+      const interestedFiltered = mq ? interestedAll.filter(r => matches(r, r.flatNo)) : interestedAll;
+      const onboardedFiltered = mq ? onboardedAll.filter(r => matches(r, r.purifierId)) : onboardedAll;
 
       const exportCsv = () => exportToCsv("prowater-business-view-leads.csv", [
         { label: "Name", get: r => r.name },
         { label: "Phone", get: r => r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—" },
-        { label: "ID", get: r => r.id },
+        { label: "Flat No", get: r => r.flatNo ?? "—" },
+        { label: "Purifier ID", get: r => r.purifierId ?? "—" },
         { label: "Plan", get: r => r.plan || "—" },
         { label: "Society", get: r => r.society },
-        { label: "Stage", get: r => r.kind },
-      ], filtered);
+        { label: "Stage", get: r => r.flatNo != null ? "Interested" : "Onboarded" },
+      ], [...interestedFiltered, ...onboardedFiltered]);
+
+      // One small, self-contained table renderer shared by both sections
+      // below — same row styling as `active_customers`' own table, just
+      // parameterized by which ID column applies to that section.
+      const renderSection = (rows, idLabel, idKey, emptyMsg) => (
+        <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+          {rows.length > 0 ? (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+              <thead>
+                <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                  <th style={modalTh}>Name</th>
+                  <th style={modalTh}>Phone</th>
+                  <th style={modalTh}>{idLabel}</th>
+                  <th style={modalTh}>Plan</th>
+                  <th style={modalTh}>Society</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => (
+                  <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                    <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{r.name || "—"}</td>
+                    <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</td>
+                    <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>{r[idKey]}</td>
+                    <td style={{ padding: "11px 14px", color: "#475569" }}>{r.plan || "—"}</td>
+                    <td style={{ padding: "11px 14px", color: "#1D1D1F" }}>{r.society || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div style={{ padding: 24 }}><Empty msg={emptyMsg} /></div>
+          )}
+        </div>
+      );
 
       return (
         <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
@@ -1639,8 +1676,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
                 <div style={{ fontSize: 12.5, color: "#475569" }}>
-                  Total: <strong style={{ color: "#08805A" }}>{filtered.length}</strong>
-                  {leadFilter === "total" && <> (Interested: <strong>{interestedCount}</strong> · Onboarded: <strong>{onboardedCount}</strong>)</>}
+                  Total: <strong style={{ color: "#08805A" }}>{interestedFiltered.length + onboardedFiltered.length}</strong>
+                  {leadFilter === "total" && <> (Interested: <strong>{interestedFiltered.length}</strong> · Onboarded: <strong>{onboardedFiltered.length}</strong>)</>}
                 </div>
                 <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
                   <Download size={13} /> Export CSV
@@ -1648,38 +1685,21 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               </div>
             </div>
 
-            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
-              {filtered.length > 0 ? (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
-                  <thead>
-                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
-                      <th style={modalTh}>Name</th>
-                      <th style={modalTh}>Phone</th>
-                      <th style={modalTh}>ID</th>
-                      <th style={modalTh}>Plan</th>
-                      <th style={modalTh}>Society</th>
-                      <th style={{ ...modalTh, textAlign: "center" }}>Stage</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((r, idx) => (
-                      <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
-                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{r.name || "—"}</td>
-                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</td>
-                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>{r.id}</td>
-                        <td style={{ padding: "11px 14px", color: "#475569" }}>{r.plan || "—"}</td>
-                        <td style={{ padding: "11px 14px", color: "#1D1D1F" }}>{r.society || "—"}</td>
-                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
-                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, color: r.kind === "Onboarded" ? "#08805A" : "#2A86D6", background: r.kind === "Onboarded" ? "rgba(8,128,90,0.1)" : "rgba(42,134,214,0.1)" }}>
-                            {r.kind}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ padding: 40 }}><Empty msg="No leads match your search." /></div>
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 18 }}>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 800, color: "#2A86D6", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
+                  Interested Leads {leadFilter === "total" && `(${interestedFiltered.length})`}
+                </div>
+                {renderSection(interestedFiltered, "Flat No", "flatNo", "No interested leads match your search.")}
+              </div>
+
+              {leadFilter === "total" && (
+                <div>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
+                    Onboarded Customers ({onboardedFiltered.length})
+                  </div>
+                  {renderSection(onboardedFiltered, "Purifier ID", "purifierId", "No onboarded customers match your search.")}
+                </div>
               )}
             </div>
           </div>
@@ -3608,28 +3628,34 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalMonths ?? "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalFlats ?? "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>
-                          <span
-                            onClick={() => setKpiModal({ type: "leads", aptFilter: r.name, leadFilter: "total", title: `${r.name} · Total Leads`, sub: `${r.totalLeads} total leads (Interested + Onboarded) in ${r.name}` })}
-                            style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(71,85,105,0.3)", textUnderlineOffset: 2 }}
-                            title="Click to view all leads for this apartment"
-                          >{r.totalLeads}</span>
+                          {r.totalLeads > 0 ? (
+                            <span
+                              onClick={() => setKpiModal({ type: "leads", aptFilter: r.name, leadFilter: "total", title: `${r.name} · Total Leads`, sub: `${r.totalLeads} total leads (Interested + Onboarded) in ${r.name}` })}
+                              style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(71,85,105,0.3)", textUnderlineOffset: 2 }}
+                              title="Click to view all leads for this apartment"
+                            >{r.totalLeads}</span>
+                          ) : r.totalLeads}
                         </td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#2A86D6" }}>
-                          <span
-                            onClick={() => setKpiModal({ type: "leads", aptFilter: r.name, leadFilter: "interested", title: `${r.name} · Interested Leads`, sub: `${r.interested} interested leads in ${r.name}` })}
-                            style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(42,134,214,0.3)", textUnderlineOffset: 2 }}
-                            title="Click to view interested leads for this apartment"
-                          >{r.interested}</span>
+                          {r.interested > 0 ? (
+                            <span
+                              onClick={() => setKpiModal({ type: "leads", aptFilter: r.name, leadFilter: "interested", title: `${r.name} · Interested Leads`, sub: `${r.interested} interested leads in ${r.name}` })}
+                              style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(42,134,214,0.3)", textUnderlineOffset: 2 }}
+                              title="Click to view interested leads for this apartment"
+                            >{r.interested}</span>
+                          ) : r.interested}
                         </td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.interestedPct == null ? "#86868B" : "#2A86D6" }}>
                           {r.interestedPct == null ? "—" : `${r.interestedPct}%`}
                         </td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#08805A" }}>
-                          <span
-                            onClick={() => setKpiModal({ type: "active_customers", aptFilter: r.name, title: `${r.name} · Active Customers`, sub: `${r.onboarded} active customers in ${r.name}` })}
-                            style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(8,128,90,0.3)", textUnderlineOffset: 2 }}
-                            title="Click to view active customers for this apartment"
-                          >{r.onboarded}</span>
+                          {r.onboarded > 0 ? (
+                            <span
+                              onClick={() => setKpiModal({ type: "active_customers", aptFilter: r.name, title: `${r.name} · Active Customers`, sub: `${r.onboarded} active customers in ${r.name}` })}
+                              style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(8,128,90,0.3)", textUnderlineOffset: 2 }}
+                              title="Click to view active customers for this apartment"
+                            >{r.onboarded}</span>
+                          ) : r.onboarded}
                         </td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.pct == null ? "#86868B" : (r.pct >= 50 ? "#08805A" : r.pct >= 25 ? "#a86e00" : "#DC4141") }}>
                           {r.pct == null ? "—" : `${r.pct}%`}
