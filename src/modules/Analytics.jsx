@@ -1408,7 +1408,14 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
           <thead>
             <tr style={{ background: theme.headerGradient, borderBottom: `1px solid ${theme.headerBorder}`, position: "sticky", top: 0, zIndex: 2 }}>
               {cols.map(c => (
-                <th key={c.label} style={{ padding: "13px 18px", color: theme.thColor, fontWeight: 800, fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", textAlign: "center" }}>{c.label}</th>
+                <th key={c.label} style={{ padding: "13px 18px", color: theme.thColor, fontWeight: 800, fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", textAlign: "center" }}>
+                  {/* Centered via both `textAlign` on the cell AND a
+                      centered flex wrapper around the label itself — belt
+                      and suspenders, so the header stays visually centered
+                      regardless of column width, per explicit user
+                      request/screenshot flagging this as off. */}
+                  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%" }}>{c.label}</div>
+                </th>
               ))}
             </tr>
           </thead>
