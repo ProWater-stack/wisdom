@@ -3704,7 +3704,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 })
               : allAptRows;
 
-            const allAptTotalCusts    = displayedAptRows.reduce((s, r) => s + (r.totalCustomers || 0), 0);
             const allAptTotalZohoDep  = displayedAptRows.reduce((s, r) => s + r.zohoDeposit, 0);
             const allAptTotalZohoRech = displayedAptRows.reduce((s, r) => s + r.zohoRecharge, 0);
             const allAptTotalDpDep    = displayedAptRows.reduce((s, r) => s + r.dpDeposit, 0);
@@ -3753,7 +3752,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         <thead>
                           <tr>
                             <th rowSpan={2} style={{ padding: "16px 24px", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#64748B", fontWeight: 600, textAlign: "left", verticalAlign: "middle", borderBottom: "0.5px solid rgba(0,0,0,0.04)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "rgba(248,250,252,0.4)" }}>Apartment Name</th>
-                            <th rowSpan={2} style={{ padding: "16px 16px", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#64748B", fontWeight: 600, textAlign: "center", verticalAlign: "middle", borderBottom: "0.5px solid rgba(0,0,0,0.04)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "rgba(248,250,252,0.4)" }}>Total Customer</th>
                             <th colSpan={2} style={{ padding: "12px 24px 8px", fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#007AFF", fontWeight: 700, textAlign: "center", borderBottom: "0.5px solid rgba(0,122,255,0.1)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "linear-gradient(180deg, rgba(0,122,255,0.02) 0%, rgba(0,122,255,0.05) 100%)" }}>Zoho</th>
                             <th colSpan={2} style={{ padding: "12px 24px 8px", fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#08805A", fontWeight: 700, textAlign: "center", borderBottom: "0.5px solid rgba(8,128,90,0.1)", borderRight: "0.5px solid rgba(0,0,0,0.03)", background: "linear-gradient(180deg, rgba(8,128,90,0.02) 0%, rgba(8,128,90,0.05) 100%)" }}>DrinkPrime</th>
                             <th rowSpan={2} style={{ padding: "16px 24px", fontSize: 11, letterSpacing: ".06em", textTransform: "uppercase", color: "#0F172A", fontWeight: 700, textAlign: "right", verticalAlign: "middle", borderBottom: "0.5px solid rgba(0,0,0,0.04)", background: "linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.02) 100%)" }}>Total</th>
@@ -3788,21 +3786,6 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                                   title="Click to view apartment details & recharge customers"
                                 >
                                   <span style={{ borderBottom: "1px solid rgba(8,128,90,0.2)", paddingBottom: 1 }}>{r.name}</span>
-                                </td>
-                                <td
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setKpiModal({
-                                      type: "active_customers",
-                                      aptFilter: r.name,
-                                      title: `${r.name} · Active Customers`,
-                                      sub: `${r.totalCustomers || 0} active customers in ${r.name}`
-                                    });
-                                  }}
-                                  style={{ padding: "16px 16px", textAlign: "center", fontSize: 13, fontWeight: 600, color: "#08805A", borderBottom: rowBorder, borderRight: "0.5px solid rgba(0,0,0,0.02)", fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
-                                  title="Click to view active customer directory for this apartment"
-                                >
-                                  <span style={{ display: "inline-flex", justifyContent: "center", alignItems: "center", background: "rgba(255,255,255,0.8)", border: "0.5px solid rgba(0,0,0,0.06)", boxShadow: "0 1px 2px rgba(0,0,0,0.03)", borderRadius: 6, padding: "2px 10px" }}>{r.totalCustomers || 0}</span>
                                 </td>
                                 <td
                                   onClick={(e) => {
@@ -3869,18 +3852,11 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                           })}
                           {/* Spacer row so the "raised" glass footer visually
                               separates from the last data row, per the mockup. */}
-                          <tr><td colSpan={7} style={{ height: 8 }} /></tr>
+                          <tr><td colSpan={6} style={{ height: 8 }} /></tr>
                           <tr>
                             <td style={{ ...footerCellBase, fontSize: 14, fontWeight: 800, color: "#0F172A", textAlign: "left", borderRadius: "16px 0 0 16px", overflow: "hidden" }}>
                               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, rgba(8,128,90,0.05) 0%, transparent 100%)", pointerEvents: "none" }} />
                               <span style={{ position: "relative" }}>Total ({displayedAptRows.length})</span>
-                            </td>
-                            <td
-                              onClick={() => setKpiModal({ type: "active_customers", title: "Active Customers Directory", sub: "All active customer subscriptions across Zoho & DrinkPrime" })}
-                              style={{ ...footerCellBase, textAlign: "center", fontSize: 14, fontWeight: 800, color: "#08805A", textDecoration: "underline", textUnderlineOffset: 3, textDecorationColor: "rgba(8,128,90,0.3)", fontVariantNumeric: "tabular-nums", cursor: "pointer" }}
-                              title="Click to view all active customers"
-                            >
-                              {allAptTotalCusts}
                             </td>
                             <td
                               onClick={() => setKpiModal({ type: "payments", filter: "zoho_deposit", title: "All Zoho Deposits", sub: `All Zoho deposit payments in ${rangeLabel(range)}` })}
