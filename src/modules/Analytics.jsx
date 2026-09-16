@@ -197,6 +197,12 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const [kpiModal, setKpiModal] = useState(null);              // universal KPI / chart drilldown modal
   const [newCxSortDir, setNewCxSortDir] = useState("asc");     // New CX modal's Onboarding Date sort — default old→new, per explicit user request
   const [monthlyView, setMonthlyView] = useState("total");     // Monthly Collection card's slider — "total" | "deposit" | "recharge"
+  // Business View table's sort (v2.29.468, per explicit user request —
+  // "add a sorting for Total Leads, Interested, Onboarded"). `null` key
+  // means no override — the table falls back to its own default (Total
+  // Months, high to low, v2.29.467).
+  const [businessSort, setBusinessSort] = useState({ key: null, dir: "desc" });
+  const toggleBusinessSort = (k) => setBusinessSort(s => s.key === k ? { key: k, dir: s.dir === "asc" ? "desc" : "asc" } : { key: k, dir: "desc" });
   const [modalQ, setModalQ] = useState("");
   const [toast, setToast] = useState("");
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2400); };
@@ -1172,6 +1178,34 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     // zero" convention `underPenetratedApts` already uses for its own
     // null `pct`.
     .sort((a, b) => (b.totalMonths ?? -Infinity) - (a.totalMonths ?? -Infinity));
+  // Business View's own sortable columns (v2.29.468, per explicit user
+  // request) — an explicit column-header click overrides the table's
+  // default Total-Months sort above; clearing back to the default isn't
+  // offered (matches every other sortable table in this app, which also
+  // has no "un-sort" affordance once a column's been clicked).
+  const businessViewSorted = businessSort.key
+    ? [...businessView].sort((a, b) => businessSort.dir === "asc" ? a[businessSort.key] - b[businessSort.key] : b[businessSort.key] - a[businessSort.key])
+    : businessView;
+  const businessTotals = businessView.reduce((s, r) => ({
+    totalLeads: s.totalLeads + r.totalLeads,
+    interested: s.interested + r.interested,
+    onboarded: s.onboarded + r.onboarded,
+    curMonthAddition: s.curMonthAddition + r.curMonthAddition,
+  }), { totalLeads: 0, interested: 0, onboarded: 0, curMonthAddition: 0 });
+  // Average Interested % / Penetration % (v2.29.469, per explicit user
+  // request) — deliberately excludes a literal 0% from the average, not
+  // just an unknown/`null` one: per the user's own reasoning ("ignore 0%
+  // as that will mess the average"), an apartment that genuinely has zero
+  // interest or zero penetration yet would otherwise drag the average down
+  // in a way that doesn't reflect how the apartments THAT DO have activity
+  // are actually performing — the same intent as excluding `null`, just
+  // extended to a real zero, not only a missing value.
+  const avgIgnoringZero = (vals) => {
+    const real = vals.filter(v => v != null && v !== 0);
+    return real.length ? Math.round(real.reduce((s, v) => s + v, 0) / real.length) : null;
+  };
+  const businessAvgInterestedPct = avgIgnoringZero(businessView.map(r => r.interestedPct));
+  const businessAvgPenetrationPct = avgIgnoringZero(businessView.map(r => r.pct));
 
   // Revenue by Source donut (for current period). Colors (v2.29.388, per
   // explicit user-provided redesign) — cyan for Zoho Recharge, green for
@@ -1297,7 +1331,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // ── Render Universal KPI & Chart Drilldown Modal ──────────────────────
   const renderKpiDrilldownModal = () => {
     if (!kpiModal) return null;
-    const { type, filter, aptFilter, tierName, title, sub } = kpiModal;
+    const { type, filter, aptFilter, tierName, title, sub, leadFilter } = kpiModal;
     const mq = modalQ.toLowerCase().trim();
 
     // 1. Payments drilldown
@@ -1530,6 +1564,122 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 </table>
               ) : (
                 <div style={{ padding: 40 }}><Empty msg="No active customers match your search." /></div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // 2.5. Business View drilldown (v2.29.468, per explicit user request —
+    // "if i click on the number show the same popup view of all customer
+    // details", for the Total Leads/Interested columns). Same modal shell
+    // (search box, Export CSV, sticky-header table) as `active_customers`
+    // above — Onboarded's own click reuses that modal directly, since
+    // Onboarded IS the active-customers count; this branch covers the two
+    // remaining numbers, which are lead-shaped, not customer-shaped:
+    // `leadFilter: "interested"` shows just this apartment's Interested
+    // leads; `leadFilter: "total"` shows Total Leads' own definition
+    // (Interested + Onboarded) by combining both populations into one
+    // list, tagged by a "Stage" column so it's clear which is which.
+    if (type === "leads") {
+      const aptKey = aptFilter ? cleanAptName(aptFilter).toLowerCase() : null;
+      const matchesApt = (soc) => !aptKey || cleanAptName(soc || "").toLowerCase() === aptKey;
+
+      const interestedRows = (leads || [])
+        .filter(d => (d.rawStatus || "").toLowerCase() === "interested" && matchesApt(d.society))
+        .map(d => ({ kind: "Interested", name: d.customer, phone: d.phone, id: d.flatNo || "—", plan: d.plan, society: d.society }));
+
+      const onboardedRows = leadFilter === "total"
+        ? fCustomers
+            .filter(c => canonicalStatus(c.status) === "Active" && matchesApt(c.society))
+            .map(c => ({ kind: "Onboarded", name: c.name, phone: c.phone, id: c.purifier_id || "—", plan: c.plan || c.plan_name, society: c.society }))
+        : [];
+
+      const combined = [...interestedRows, ...onboardedRows];
+      const filtered = mq
+        ? combined.filter(r => `${r.name} ${r.phone} ${r.id} ${r.society} ${r.plan}`.toLowerCase().includes(mq))
+        : combined;
+      const interestedCount = filtered.filter(r => r.kind === "Interested").length;
+      const onboardedCount = filtered.filter(r => r.kind === "Onboarded").length;
+
+      const exportCsv = () => exportToCsv("prowater-business-view-leads.csv", [
+        { label: "Name", get: r => r.name },
+        { label: "Phone", get: r => r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—" },
+        { label: "ID", get: r => r.id },
+        { label: "Plan", get: r => r.plan || "—" },
+        { label: "Society", get: r => r.society },
+        { label: "Stage", get: r => r.kind },
+      ], filtered);
+
+      return (
+        <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
+              <div>
+                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>Business View · Sales Pipeline</p>
+                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{title}</h2>
+                {sub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{sub}</div>}
+              </div>
+              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalCloseBtnStyle}>
+                <X size={18} color="#475569" />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input
+                  type="text"
+                  placeholder="Search name, phone, plan…"
+                  value={modalQ}
+                  onChange={e => setModalQ(e.target.value)}
+                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 12.5, color: "#475569" }}>
+                  Total: <strong style={{ color: "#08805A" }}>{filtered.length}</strong>
+                  {leadFilter === "total" && <> (Interested: <strong>{interestedCount}</strong> · Onboarded: <strong>{onboardedCount}</strong>)</>}
+                </div>
+                <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                  <Download size={13} /> Export CSV
+                </button>
+              </div>
+            </div>
+
+            <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
+              {filtered.length > 0 ? (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
+                      <th style={modalTh}>Name</th>
+                      <th style={modalTh}>Phone</th>
+                      <th style={modalTh}>ID</th>
+                      <th style={modalTh}>Plan</th>
+                      <th style={modalTh}>Society</th>
+                      <th style={{ ...modalTh, textAlign: "center" }}>Stage</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((r, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
+                        <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{r.name || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</td>
+                        <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>{r.id}</td>
+                        <td style={{ padding: "11px 14px", color: "#475569" }}>{r.plan || "—"}</td>
+                        <td style={{ padding: "11px 14px", color: "#1D1D1F" }}>{r.society || "—"}</td>
+                        <td style={{ padding: "11px 14px", textAlign: "center" }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 6, color: r.kind === "Onboarded" ? "#08805A" : "#2A86D6", background: r.kind === "Onboarded" ? "rgba(8,128,90,0.1)" : "rgba(42,134,214,0.1)" }}>
+                            {r.kind}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div style={{ padding: 40 }}><Empty msg="No leads match your search." /></div>
               )}
             </div>
           </div>
@@ -3441,28 +3591,46 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center", whiteSpace: "nowrap" }}>Launch Month</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center", whiteSpace: "nowrap" }}>Total Months</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Flats</th>
-                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Leads</th>
-                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Interested</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}><SortHeader label="Total Leads" k="totalLeads" sort={businessSort} onSort={toggleBusinessSort} /></th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}><SortHeader label="Interested" k="interested" sort={businessSort} onSort={toggleBusinessSort} /></th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Interested %</th>
-                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Onboarded</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}><SortHeader label="Onboarded" k="onboarded" sort={businessSort} onSort={toggleBusinessSort} /></th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Penetration %</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Current Month Addition</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {businessView.map((r, i) => (
+                    {businessViewSorted.map((r, i) => (
                       <tr key={r.name} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
                         <td style={{ padding: "11px 18px", fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{r.name}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, color: "#475569" }}>{r.area || "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569", whiteSpace: "nowrap" }}>{r.launchMonth || "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalMonths ?? "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalFlats ?? "—"}</td>
-                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalLeads}</td>
-                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#2A86D6" }}>{r.interested}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>
+                          <span
+                            onClick={() => setKpiModal({ type: "leads", aptFilter: r.name, leadFilter: "total", title: `${r.name} · Total Leads`, sub: `${r.totalLeads} total leads (Interested + Onboarded) in ${r.name}` })}
+                            style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(71,85,105,0.3)", textUnderlineOffset: 2 }}
+                            title="Click to view all leads for this apartment"
+                          >{r.totalLeads}</span>
+                        </td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#2A86D6" }}>
+                          <span
+                            onClick={() => setKpiModal({ type: "leads", aptFilter: r.name, leadFilter: "interested", title: `${r.name} · Interested Leads`, sub: `${r.interested} interested leads in ${r.name}` })}
+                            style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(42,134,214,0.3)", textUnderlineOffset: 2 }}
+                            title="Click to view interested leads for this apartment"
+                          >{r.interested}</span>
+                        </td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.interestedPct == null ? "#86868B" : "#2A86D6" }}>
                           {r.interestedPct == null ? "—" : `${r.interestedPct}%`}
                         </td>
-                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#08805A" }}>{r.onboarded}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#08805A" }}>
+                          <span
+                            onClick={() => setKpiModal({ type: "active_customers", aptFilter: r.name, title: `${r.name} · Active Customers`, sub: `${r.onboarded} active customers in ${r.name}` })}
+                            style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(8,128,90,0.3)", textUnderlineOffset: 2 }}
+                            title="Click to view active customers for this apartment"
+                          >{r.onboarded}</span>
+                        </td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.pct == null ? "#86868B" : (r.pct >= 50 ? "#08805A" : r.pct >= 25 ? "#a86e00" : "#DC4141") }}>
                           {r.pct == null ? "—" : `${r.pct}%`}
                         </td>
@@ -3470,6 +3638,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: "2px solid rgba(8,128,90,0.15)", background: "rgba(8,128,90,0.04)" }}>
+                      <td style={{ padding: "11px 18px", fontSize: 13, fontWeight: 800, color: "#0d2119" }}>Total</td>
+                      <td style={{ padding: "11px 18px" }} />
+                      <td style={{ padding: "11px 18px" }} />
+                      <td style={{ padding: "11px 18px" }} />
+                      <td style={{ padding: "11px 18px" }} />
+                      <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 800, color: "#475569" }}>{businessTotals.totalLeads}</td>
+                      <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 800, color: "#2A86D6" }}>{businessTotals.interested}</td>
+                      <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 800, color: "#2A86D6" }} title="Average across apartments with a nonzero Interested %, per explicit user request (a real 0% is excluded, not just an unknown one)">
+                        {businessAvgInterestedPct == null ? "—" : `${businessAvgInterestedPct}%`}
+                      </td>
+                      <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 800, color: "#08805A" }}>{businessTotals.onboarded}</td>
+                      <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 800, color: "#08805A" }} title="Average across apartments with a nonzero Penetration %, per explicit user request (a real 0% is excluded, not just an unknown one)">
+                        {businessAvgPenetrationPct == null ? "—" : `${businessAvgPenetrationPct}%`}
+                      </td>
+                      <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 800, color: businessTotals.curMonthAddition > 0 ? "#08805A" : "#86868B" }}>{businessTotals.curMonthAddition}</td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             ) : (
