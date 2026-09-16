@@ -1335,62 +1335,80 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     const mq = modalQ.toLowerCase().trim();
 
     // Glass/Apple-style modal shell — used only by Business View's own
-    // popups (v2.29.471, per explicit user request to restyle the Total
-    // Leads/Interested/Onboarded drilldowns with a frosted-glass look).
-    // Scoped to `variant === "glass"` (set only by Business View's own
-    // onClicks below) so the shared `active_customers` modal keeps its
-    // original look when opened from the "Active Customers" KPI card.
+    // popups (v2.29.471, refined v2.29.472 per an explicit user-supplied
+    // mockup for a glossier look: gradient glass background, radial-
+    // gradient "aura" blobs behind the header, brighter borders/shadows,
+    // hover/focus micro-interactions). Scoped to `variant === "glass"`
+    // (set only by Business View's own onClicks below) so the shared
+    // `active_customers` modal keeps its original look when opened from
+    // the "Active Customers" KPI card.
     const glassModalStyle = {
       ...modalWindowStyle,
-      width: "min(1120px, 95%)",
-      background: "rgba(255,255,255,0.88)",
-      backdropFilter: "blur(40px) saturate(200%)",
-      WebkitBackdropFilter: "blur(40px) saturate(200%)",
-      border: "0.5px solid rgba(255,255,255,0.9)",
-      borderRadius: 24,
-      padding: 28,
-      boxShadow: "0 24px 48px -12px rgba(0,0,0,0.12), inset 0 1px 1px rgba(255,255,255,1)",
+      width: "min(1140px, 95%)",
+      background: "linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(245,247,250,0.88) 100%)",
+      backdropFilter: "blur(60px) saturate(210%)",
+      WebkitBackdropFilter: "blur(60px) saturate(210%)",
+      border: "1px solid rgba(255,255,255,1)",
+      borderRadius: 28,
+      padding: 30,
+      boxShadow: "0 30px 60px -15px rgba(0,0,0,0.15), inset 0 2px 4px rgba(255,255,255,1), inset 0 -2px 4px rgba(0,0,0,0.02)",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif",
       WebkitFontSmoothing: "antialiased",
     };
     const glassCloseBtnStyle = {
-      width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.04)",
+      width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.8)",
       display: "grid", placeItems: "center", cursor: "pointer",
-      border: "0.5px solid rgba(0,0,0,0.06)", transition: "background 0.2s",
+      border: "1px solid rgba(255,255,255,1)", boxShadow: "0 4px 12px rgba(0,0,0,0.06), inset 0 1px 1px #FFF",
+      transition: "all 0.2s ease", zIndex: 1,
     };
     const glassSearchStyle = {
-      width: "100%", padding: "10px 14px 10px 38px", border: "0.5px solid rgba(0,0,0,0.15)",
-      borderRadius: 12, fontSize: 13, color: "#1D1D1F", background: "rgba(255,255,255,0.8)",
-      outline: "none", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)", fontFamily: "inherit",
+      width: "100%", padding: "11px 14px 11px 40px", border: "1px solid rgba(255,255,255,0.9)",
+      borderRadius: 14, fontSize: 13.5, color: "#1D1D1F", background: "rgba(255,255,255,0.9)",
+      outline: "none", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.02)",
+      fontFamily: "inherit", transition: "all 0.2s ease",
     };
     const glassExportBtnStyle = {
-      display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 16px", borderRadius: 12,
-      background: "linear-gradient(135deg, #05A97A 0%, #04825F 100%)", color: "#fff",
-      fontWeight: 650, fontSize: 12.5, boxShadow: "0 4px 12px rgba(5,169,122,0.25)",
-      cursor: "pointer", border: "none", transition: "transform 0.1s ease",
+      display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 18px", borderRadius: 14,
+      background: "linear-gradient(135deg, #05A97A 0%, #047A58 100%)", color: "#fff",
+      fontWeight: 750, fontSize: 13, boxShadow: "0 8px 20px rgba(5,169,122,0.35), inset 0 1px 1px rgba(255,255,255,0.4)",
+      cursor: "pointer", border: "none", transition: "all 0.2s ease",
     };
     const GLASS_AMBER = {
-      border: "rgba(217,119,6,0.2)", boxShadow: "0 4px 20px rgba(217,119,6,0.03)",
-      headerGradient: "linear-gradient(180deg, rgba(254,243,199,0.6) 0%, rgba(253,230,138,0.3) 100%)",
-      headerBorder: "rgba(217,119,6,0.2)", thColor: "#B45309", idColor: "#D97706",
-      hoverBg: "rgba(217,119,6,0.04)", labelColor: "#D97706", badgeBg: "rgba(217,119,6,0.12)", badgeColor: "#B45309",
+      border: "rgba(251,191,36,0.35)", boxShadow: "0 12px 32px rgba(217,119,6,0.06), inset 0 1px 2px rgba(255,255,255,0.9)",
+      headerGradient: "linear-gradient(180deg, rgba(254,243,199,0.85) 0%, rgba(253,230,138,0.4) 100%)",
+      headerBorder: "rgba(251,191,36,0.3)", thColor: "#92400E", idColor: "#D97706",
+      rowBorder: "rgba(251,191,36,0.12)", hoverBg: "rgba(251,191,36,0.08)",
+      labelColor: "#D97706", badgeBg: "linear-gradient(135deg, rgba(251,191,36,0.25) 0%, rgba(217,119,6,0.2) 100%)", badgeColor: "#B45309",
     };
     const GLASS_GREEN = {
-      border: "rgba(5,169,122,0.2)", boxShadow: "0 4px 20px rgba(5,169,122,0.03)",
-      headerGradient: "linear-gradient(180deg, rgba(209,250,229,0.6) 0%, rgba(167,243,208,0.3) 100%)",
-      headerBorder: "rgba(5,169,122,0.2)", thColor: "#04825F", idColor: "#05A97A",
-      hoverBg: "rgba(5,169,122,0.04)", labelColor: "#05A97A", badgeBg: "rgba(5,169,122,0.12)", badgeColor: "#04825F",
+      border: "rgba(5,169,122,0.35)", boxShadow: "0 12px 32px rgba(5,169,122,0.06), inset 0 1px 2px rgba(255,255,255,0.9)",
+      headerGradient: "linear-gradient(180deg, rgba(209,250,229,0.85) 0%, rgba(167,243,208,0.4) 100%)",
+      headerBorder: "rgba(5,169,122,0.3)", thColor: "#065F46", idColor: "#05A97A",
+      rowBorder: "rgba(5,169,122,0.12)", hoverBg: "rgba(5,169,122,0.08)",
+      labelColor: "#05A97A", badgeBg: "linear-gradient(135deg, rgba(5,169,122,0.25) 0%, rgba(4,130,95,0.2) 100%)", badgeColor: "#047A58",
     };
+    // Decorative radial-gradient "aura" blobs behind a glass modal's own
+    // header — purely cosmetic, sits behind the header's real content.
+    const glassAura = (color, top, left, size) => ({
+      position: "absolute", top, left, width: size, height: size,
+      background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
+      borderRadius: "50%", pointerEvents: "none", filter: "blur(22px)",
+    });
     // One themed, self-contained table used by every Business View glass
-    // popup section below — `cols` is [{label, render(row)}], `idKey` picks
-    // which field gets the theme's monospace-ID color treatment.
+    // popup section below — `cols` is [{label, render(row)}]. Headers are
+    // centered per explicit user request. When `rows` is empty this
+    // renders nothing at all — callers decide whether to show the section
+    // header at all (see the "leads"/"active_customers" branches below,
+    // which hide a section entirely rather than showing an empty table
+    // when there's genuinely no data, vs. a real search-filtered-to-zero
+    // result, which still shows this inline empty row).
     const renderGlassSection = (rows, cols, theme, emptyMsg) => (
-      <div style={{ border: `0.5px solid ${theme.border}`, borderRadius: 16, overflow: "hidden", background: "rgba(255,255,255,0.6)", boxShadow: theme.boxShadow }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+      <div style={{ border: `1px solid ${theme.border}`, borderRadius: 20, overflow: "hidden", background: "rgba(255,255,255,0.75)", boxShadow: theme.boxShadow }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, textAlign: "left" }}>
           <thead>
-            <tr style={{ background: theme.headerGradient, borderBottom: `0.5px solid ${theme.headerBorder}`, position: "sticky", top: 0, zIndex: 1 }}>
+            <tr style={{ background: theme.headerGradient, borderBottom: `1px solid ${theme.headerBorder}`, position: "sticky", top: 0, zIndex: 2 }}>
               {cols.map(c => (
-                <th key={c.label} style={{ padding: "12px 16px", color: theme.thColor, fontWeight: 750, fontSize: 11, letterSpacing: ".04em", textTransform: "uppercase" }}>{c.label}</th>
+                <th key={c.label} style={{ padding: "13px 18px", color: theme.thColor, fontWeight: 800, fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", textAlign: "center" }}>{c.label}</th>
               ))}
             </tr>
           </thead>
@@ -1398,11 +1416,11 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             {rows.length > 0 ? rows.map((r, idx) => (
               <tr
                 key={idx}
-                style={{ borderBottom: "0.5px solid rgba(0,0,0,0.04)", background: "transparent", transition: "background 0.15s" }}
+                style={{ borderBottom: `0.5px solid ${theme.rowBorder}`, background: "transparent", transition: "background 0.15s" }}
                 onMouseEnter={e => { e.currentTarget.style.background = theme.hoverBg; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >
-                {cols.map(c => <td key={c.label} style={{ padding: "12px 16px" }}>{c.render(r, theme)}</td>)}
+                {cols.map(c => <td key={c.label} style={{ padding: "13px 18px" }}>{c.render(r, theme)}</td>)}
               </tr>
             )) : (
               <tr><td colSpan={cols.length} style={{ padding: 24 }}><Empty msg={emptyMsg} /></td></tr>
@@ -1573,65 +1591,84 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       // without that flag, so it keeps its original look untouched.
       if (variant === "glass") {
         const cols = [
-          { label: "Name", render: c => <span style={{ fontWeight: 650, color: "#1D1D1F" }}>{c.name || "—"}</span> },
-          { label: "Phone", render: c => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>{c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
-          { label: "Purifier ID", render: (c, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 700, fontSize: 12.5 }}>{c.purifier_id || "—"}</span> },
-          { label: "Plan", render: c => <span style={{ color: "#475569", fontWeight: 500 }}>{c.plan || c.plan_name || "—"}</span> },
+          { label: "Name", render: c => <span style={{ fontWeight: 750, color: "#1D1D1F" }}>{c.name || "—"}</span> },
+          { label: "Phone", render: c => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 550 }}>{c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
+          { label: "Purifier ID", render: (c, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 800, fontSize: 13 }}>{c.purifier_id || "—"}</span> },
+          { label: "Plan", render: c => <span style={{ color: c.plan || c.plan_name ? "#475569" : "#94A3B8", fontWeight: 600 }}>{c.plan || c.plan_name || "—"}</span> },
           { label: "Stack", render: c => <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: c.isDpCustomer ? "rgba(42,134,214,0.1)" : "rgba(30,158,79,0.1)", color: c.isDpCustomer ? "#2A86D6" : "#1E9E4F" }}>{c.isDpCustomer ? "DrinkPrime" : "Zoho"}</span> },
-          { label: "Society", render: c => <span style={{ color: "#1D1D1F", fontWeight: 500 }}>{c.society || "—"}</span> },
+          { label: "Society", render: c => <span style={{ color: "#1D1D1F", fontWeight: 600 }}>{c.society || "—"}</span> },
           { label: "Since Date", render: c => <span style={{ color: "#64748B" }}>{sinceOf(c) ? fmtDate(new Date(sinceOf(c))) : "—"}</span> },
         ];
+        // "No active customers" here (before the search box narrows
+        // anything) would mean the apartment's own onboarded count doesn't
+        // match its real customer data — an edge case, but per explicit
+        // user request ("if there are no ... customers don't show the
+        // section unnecessarily, show it as empty") this shows one plain
+        // empty state for the whole popup instead of an empty section
+        // header sitting above an empty table.
         return (
           <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
             <div onClick={e => e.stopPropagation()} className="pw-pop" style={glassModalStyle}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Business View · Sales Pipeline</div>
-                  <h2 style={{ fontSize: 20, margin: 0, color: "#1D1D1F", fontWeight: 750, letterSpacing: "-0.02em" }}>{title}</h2>
-                  {sub && <div style={{ fontSize: 13, color: "#64748B", marginTop: 4, fontWeight: 500 }}>{sub}</div>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, position: "relative" }}>
+                <div style={glassAura("rgba(5,169,122,0.15)", -30, -30, 140)} />
+                <div style={glassAura("rgba(217,119,6,0.12)", -20, 300, 160)} />
+                <div style={{ zIndex: 1 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 800, color: "#86868B", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 5 }}>Business View · Sales Pipeline</div>
+                  <h2 style={{ fontSize: 22, margin: 0, color: "#1D1D1F", fontWeight: 800, letterSpacing: "-0.03em", textShadow: "0 1px 1px rgba(255,255,255,0.8)" }}>{title}</h2>
+                  {sub && <div style={{ fontSize: 13.5, color: "#64748B", marginTop: 5, fontWeight: 550 }}>{sub}</div>}
                 </div>
                 <button
                   onClick={() => { setKpiModal(null); setModalQ(""); }}
-                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.08)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.background = "#FFF"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "rgba(255,255,255,0.8)"; }}
                   style={glassCloseBtnStyle}
                 >
                   <X size={16} color="#1D1D1F" strokeWidth={2.5} />
                 </button>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20, zIndex: 1 }}>
                 <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 380 }}>
-                  <Search size={15} color="#86868B" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
+                  <Search size={16} color="#86868B" strokeWidth={2.2} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
                   <input
                     type="text"
                     placeholder="Search name, phone, plan…"
                     value={modalQ}
                     onChange={e => setModalQ(e.target.value)}
+                    onFocus={e => { e.currentTarget.style.background = "#FFF"; e.currentTarget.style.borderColor = "#05A97A"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.02), 0 0 0 4px rgba(5,169,122,0.15)"; }}
+                    onBlur={e => { e.currentTarget.style.background = "rgba(255,255,255,0.9)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.02)"; }}
                     style={glassSearchStyle}
                   />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ fontSize: 12.5, color: "#475569", fontWeight: 500 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                  <div style={{ fontSize: 13, color: "#475569", fontWeight: 600, background: "rgba(255,255,255,0.7)", padding: "8px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.9)", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
                     Total: <strong style={{ color: "#05A97A" }}>{filtered.length}</strong> (Zoho: <strong>{zohoActive}</strong> · DP: <strong>{dpActive}</strong>) · Societies: <strong>{socCount}</strong>
                   </div>
                   <button
                     onClick={exportCsv}
+                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(5,169,122,0.45), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(5,169,122,0.35), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
                     onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
                     onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
                     style={glassExportBtnStyle}
                   >
-                    <Download size={13} /> Export CSV
+                    <Download size={14} /> Export CSV
                   </button>
                 </div>
               </div>
 
-              <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }} className="scroll-thin">
-                <div style={{ fontSize: 12, fontWeight: 800, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span>Onboarded Customers</span>
-                  <span style={{ fontSize: 10.5, padding: "2px 8px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 750 }}>{filtered.length}</span>
-                </div>
-                {renderGlassSection(filtered, cols, GLASS_GREEN, "No active customers match your search.")}
+              <div style={{ flex: 1, overflowY: "auto", paddingRight: 4, zIndex: 1 }} className="scroll-thin">
+                {custs.length > 0 ? (
+                  <>
+                    <div style={{ fontSize: 12.5, fontWeight: 850, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+                      <span>Onboarded Customers</span>
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 800, boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6)" }}>{filtered.length}</span>
+                    </div>
+                    {renderGlassSection(filtered, cols, GLASS_GREEN, "No active customers match your search.")}
+                  </>
+                ) : (
+                  <div style={{ padding: 40 }}><Empty msg="No active customers found for this apartment." /></div>
+                )}
               </div>
             </div>
           </div>
@@ -1771,78 +1808,102 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       // the section's own themed ID column (Flat No for Interested,
       // Purifier ID for Onboarded).
       const glassCols = (idLabel, idKey) => [
-        { label: "Name", render: r => <span style={{ fontWeight: 650, color: "#1D1D1F" }}>{r.name || "—"}</span> },
-        { label: "Phone", render: r => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
-        { label: idLabel, render: (r, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 700, fontSize: 12.5 }}>{r[idKey]}</span> },
-        { label: "Plan", render: r => <span style={{ color: r.plan ? "#475569" : "#94A3B8", fontWeight: 500 }}>{r.plan || "—"}</span> },
-        { label: "Society", render: r => <span style={{ color: "#1D1D1F", fontWeight: 500 }}>{r.society || "—"}</span> },
+        { label: "Name", render: r => <span style={{ fontWeight: 750, color: "#1D1D1F" }}>{r.name || "—"}</span> },
+        { label: "Phone", render: r => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 550 }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
+        { label: idLabel, render: (r, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 800, fontSize: 13 }}>{r[idKey]}</span> },
+        { label: "Plan", render: r => <span style={{ color: r.plan ? "#475569" : "#94A3B8", fontWeight: 600 }}>{r.plan || "—"}</span> },
+        { label: "Society", render: r => <span style={{ color: "#1D1D1F", fontWeight: 600 }}>{r.society || "—"}</span> },
       ];
+
+      // Per explicit user request: a section with genuinely no data (not
+      // just a search miss) is hidden entirely, rather than showing its
+      // header above an empty table. `interestedAll`/`onboardedAll` are
+      // the RAW, pre-search populations — a search query narrowing a
+      // real, non-empty section down to zero matches still shows that
+      // section (with its own inline "no match" row from
+      // renderGlassSection), since that's a genuine search result, not an
+      // absence of data.
+      const showInterested = interestedAll.length > 0;
+      const showOnboarded = leadFilter === "total" && onboardedAll.length > 0;
+      const nothingToShow = !showInterested && !showOnboarded;
 
       return (
         <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
           <div onClick={e => e.stopPropagation()} className="pw-pop" style={glassModalStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Business View · Sales Pipeline</div>
-                <h2 style={{ fontSize: 20, margin: 0, color: "#1D1D1F", fontWeight: 750, letterSpacing: "-0.02em" }}>{title}</h2>
-                {sub && <div style={{ fontSize: 13, color: "#64748B", marginTop: 4, fontWeight: 500 }}>{sub}</div>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, position: "relative" }}>
+              <div style={glassAura("rgba(5,169,122,0.15)", -30, -30, 140)} />
+              <div style={glassAura("rgba(217,119,6,0.12)", -20, 300, 160)} />
+              <div style={{ zIndex: 1 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 800, color: "#86868B", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 5 }}>Business View · Sales Pipeline</div>
+                <h2 style={{ fontSize: 22, margin: 0, color: "#1D1D1F", fontWeight: 800, letterSpacing: "-0.03em", textShadow: "0 1px 1px rgba(255,255,255,0.8)" }}>{title}</h2>
+                {sub && <div style={{ fontSize: 13.5, color: "#64748B", marginTop: 5, fontWeight: 550 }}>{sub}</div>}
               </div>
               <button
                 onClick={() => { setKpiModal(null); setModalQ(""); }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.08)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.background = "#FFF"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "rgba(255,255,255,0.8)"; }}
                 style={glassCloseBtnStyle}
               >
                 <X size={16} color="#1D1D1F" strokeWidth={2.5} />
               </button>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20, zIndex: 1 }}>
               <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 380 }}>
-                <Search size={15} color="#86868B" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
+                <Search size={16} color="#86868B" strokeWidth={2.2} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
                 <input
                   type="text"
                   placeholder="Search name, phone, plan…"
                   value={modalQ}
                   onChange={e => setModalQ(e.target.value)}
+                  onFocus={e => { e.currentTarget.style.background = "#FFF"; e.currentTarget.style.borderColor = "#05A97A"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.02), 0 0 0 4px rgba(5,169,122,0.15)"; }}
+                  onBlur={e => { e.currentTarget.style.background = "rgba(255,255,255,0.9)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.02)"; }}
                   style={glassSearchStyle}
                 />
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ fontSize: 12.5, color: "#475569", fontWeight: 500 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                <div style={{ fontSize: 13, color: "#475569", fontWeight: 600, background: "rgba(255,255,255,0.7)", padding: "8px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.9)", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
                   Total: <strong style={{ color: "#05A97A" }}>{interestedFiltered.length + onboardedFiltered.length}</strong>
                   {leadFilter === "total" && <> (Interested: <strong style={{ color: "#D97706" }}>{interestedFiltered.length}</strong> · Onboarded: <strong style={{ color: "#05A97A" }}>{onboardedFiltered.length}</strong>)</>}
                 </div>
                 <button
                   onClick={exportCsv}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(5,169,122,0.45), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(5,169,122,0.35), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
                   onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
                   onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
                   style={glassExportBtnStyle}
                 >
-                  <Download size={13} /> Export CSV
+                  <Download size={14} /> Export CSV
                 </button>
               </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 24, paddingRight: 4 }} className="scroll-thin">
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 800, color: GLASS_AMBER.labelColor, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span>Interested Leads</span>
-                  <span style={{ fontSize: 10.5, padding: "2px 8px", borderRadius: 999, background: GLASS_AMBER.badgeBg, color: GLASS_AMBER.badgeColor, fontWeight: 750 }}>{interestedFiltered.length}</span>
-                </div>
-                {renderGlassSection(interestedFiltered, glassCols("Flat No", "flatNo"), GLASS_AMBER, "No interested leads match your search.")}
-              </div>
-
-              {leadFilter === "total" && (
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                    <span>Onboarded Customers</span>
-                    <span style={{ fontSize: 10.5, padding: "2px 8px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 750 }}>{onboardedFiltered.length}</span>
+            {nothingToShow ? (
+              <div style={{ padding: 40, zIndex: 1 }}><Empty msg="No leads or customers found for this apartment." /></div>
+            ) : (
+              <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 26, paddingRight: 4, zIndex: 1 }} className="scroll-thin">
+                {showInterested && (
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 850, color: GLASS_AMBER.labelColor, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+                      <span>Interested Leads</span>
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: GLASS_AMBER.badgeBg, color: GLASS_AMBER.badgeColor, fontWeight: 800, boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6)" }}>{interestedFiltered.length}</span>
+                    </div>
+                    {renderGlassSection(interestedFiltered, glassCols("Flat No", "flatNo"), GLASS_AMBER, "No interested leads match your search.")}
                   </div>
-                  {renderGlassSection(onboardedFiltered, glassCols("Purifier ID", "purifierId"), GLASS_GREEN, "No onboarded customers match your search.")}
-                </div>
-              )}
-            </div>
+                )}
+
+                {showOnboarded && (
+                  <div>
+                    <div style={{ fontSize: 12.5, fontWeight: 850, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+                      <span>Onboarded Customers</span>
+                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 800, boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6)" }}>{onboardedFiltered.length}</span>
+                    </div>
+                    {renderGlassSection(onboardedFiltered, glassCols("Purifier ID", "purifierId"), GLASS_GREEN, "No onboarded customers match your search.")}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       );
