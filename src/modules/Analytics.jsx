@@ -1166,7 +1166,12 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         curMonthAddition: curMonthAdditionByApt[key] || 0,
       };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    // Sorted by Total Months, high to low (v2.29.467, per explicit user
+    // request) — an apartment with no launch date on file (`null`) sorts
+    // last rather than first, same "unknown sorts last, not as if it were
+    // zero" convention `underPenetratedApts` already uses for its own
+    // null `pct`.
+    .sort((a, b) => (b.totalMonths ?? -Infinity) - (a.totalMonths ?? -Infinity));
 
   // Revenue by Source donut (for current period). Colors (v2.29.388, per
   // explicit user-provided redesign) — cyan for Zoho Recharge, green for
