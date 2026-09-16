@@ -1331,8 +1331,86 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // ── Render Universal KPI & Chart Drilldown Modal ──────────────────────
   const renderKpiDrilldownModal = () => {
     if (!kpiModal) return null;
-    const { type, filter, aptFilter, tierName, title, sub, leadFilter } = kpiModal;
+    const { type, filter, aptFilter, tierName, title, sub, leadFilter, variant } = kpiModal;
     const mq = modalQ.toLowerCase().trim();
+
+    // Glass/Apple-style modal shell — used only by Business View's own
+    // popups (v2.29.471, per explicit user request to restyle the Total
+    // Leads/Interested/Onboarded drilldowns with a frosted-glass look).
+    // Scoped to `variant === "glass"` (set only by Business View's own
+    // onClicks below) so the shared `active_customers` modal keeps its
+    // original look when opened from the "Active Customers" KPI card.
+    const glassModalStyle = {
+      ...modalWindowStyle,
+      width: "min(1120px, 95%)",
+      background: "rgba(255,255,255,0.88)",
+      backdropFilter: "blur(40px) saturate(200%)",
+      WebkitBackdropFilter: "blur(40px) saturate(200%)",
+      border: "0.5px solid rgba(255,255,255,0.9)",
+      borderRadius: 24,
+      padding: 28,
+      boxShadow: "0 24px 48px -12px rgba(0,0,0,0.12), inset 0 1px 1px rgba(255,255,255,1)",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif",
+      WebkitFontSmoothing: "antialiased",
+    };
+    const glassCloseBtnStyle = {
+      width: 32, height: 32, borderRadius: "50%", background: "rgba(0,0,0,0.04)",
+      display: "grid", placeItems: "center", cursor: "pointer",
+      border: "0.5px solid rgba(0,0,0,0.06)", transition: "background 0.2s",
+    };
+    const glassSearchStyle = {
+      width: "100%", padding: "10px 14px 10px 38px", border: "0.5px solid rgba(0,0,0,0.15)",
+      borderRadius: 12, fontSize: 13, color: "#1D1D1F", background: "rgba(255,255,255,0.8)",
+      outline: "none", boxShadow: "inset 0 1px 2px rgba(0,0,0,0.02)", fontFamily: "inherit",
+    };
+    const glassExportBtnStyle = {
+      display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 16px", borderRadius: 12,
+      background: "linear-gradient(135deg, #05A97A 0%, #04825F 100%)", color: "#fff",
+      fontWeight: 650, fontSize: 12.5, boxShadow: "0 4px 12px rgba(5,169,122,0.25)",
+      cursor: "pointer", border: "none", transition: "transform 0.1s ease",
+    };
+    const GLASS_AMBER = {
+      border: "rgba(217,119,6,0.2)", boxShadow: "0 4px 20px rgba(217,119,6,0.03)",
+      headerGradient: "linear-gradient(180deg, rgba(254,243,199,0.6) 0%, rgba(253,230,138,0.3) 100%)",
+      headerBorder: "rgba(217,119,6,0.2)", thColor: "#B45309", idColor: "#D97706",
+      hoverBg: "rgba(217,119,6,0.04)", labelColor: "#D97706", badgeBg: "rgba(217,119,6,0.12)", badgeColor: "#B45309",
+    };
+    const GLASS_GREEN = {
+      border: "rgba(5,169,122,0.2)", boxShadow: "0 4px 20px rgba(5,169,122,0.03)",
+      headerGradient: "linear-gradient(180deg, rgba(209,250,229,0.6) 0%, rgba(167,243,208,0.3) 100%)",
+      headerBorder: "rgba(5,169,122,0.2)", thColor: "#04825F", idColor: "#05A97A",
+      hoverBg: "rgba(5,169,122,0.04)", labelColor: "#05A97A", badgeBg: "rgba(5,169,122,0.12)", badgeColor: "#04825F",
+    };
+    // One themed, self-contained table used by every Business View glass
+    // popup section below — `cols` is [{label, render(row)}], `idKey` picks
+    // which field gets the theme's monospace-ID color treatment.
+    const renderGlassSection = (rows, cols, theme, emptyMsg) => (
+      <div style={{ border: `0.5px solid ${theme.border}`, borderRadius: 16, overflow: "hidden", background: "rgba(255,255,255,0.6)", boxShadow: theme.boxShadow }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
+          <thead>
+            <tr style={{ background: theme.headerGradient, borderBottom: `0.5px solid ${theme.headerBorder}`, position: "sticky", top: 0, zIndex: 1 }}>
+              {cols.map(c => (
+                <th key={c.label} style={{ padding: "12px 16px", color: theme.thColor, fontWeight: 750, fontSize: 11, letterSpacing: ".04em", textTransform: "uppercase" }}>{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length > 0 ? rows.map((r, idx) => (
+              <tr
+                key={idx}
+                style={{ borderBottom: "0.5px solid rgba(0,0,0,0.04)", background: "transparent", transition: "background 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.background = theme.hoverBg; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+              >
+                {cols.map(c => <td key={c.label} style={{ padding: "12px 16px" }}>{c.render(r, theme)}</td>)}
+              </tr>
+            )) : (
+              <tr><td colSpan={cols.length} style={{ padding: 24 }}><Empty msg={emptyMsg} /></td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
 
     // 1. Payments drilldown
     if (type === "payments") {
@@ -1489,6 +1567,77 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         { label: "Since", get: c => { const s = sinceOf(c); return s ? fmtDate(new Date(s)) : "—"; } },
       ], filtered);
 
+      // Glass variant (v2.29.471) — only reachable via Business View's own
+      // Onboarded column click (which sets `variant: "glass"`); the "Active
+      // Customers" KPI card click above still opens this same modal type
+      // without that flag, so it keeps its original look untouched.
+      if (variant === "glass") {
+        const cols = [
+          { label: "Name", render: c => <span style={{ fontWeight: 650, color: "#1D1D1F" }}>{c.name || "—"}</span> },
+          { label: "Phone", render: c => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>{c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
+          { label: "Purifier ID", render: (c, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 700, fontSize: 12.5 }}>{c.purifier_id || "—"}</span> },
+          { label: "Plan", render: c => <span style={{ color: "#475569", fontWeight: 500 }}>{c.plan || c.plan_name || "—"}</span> },
+          { label: "Stack", render: c => <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: c.isDpCustomer ? "rgba(42,134,214,0.1)" : "rgba(30,158,79,0.1)", color: c.isDpCustomer ? "#2A86D6" : "#1E9E4F" }}>{c.isDpCustomer ? "DrinkPrime" : "Zoho"}</span> },
+          { label: "Society", render: c => <span style={{ color: "#1D1D1F", fontWeight: 500 }}>{c.society || "—"}</span> },
+          { label: "Since Date", render: c => <span style={{ color: "#64748B" }}>{sinceOf(c) ? fmtDate(new Date(sinceOf(c))) : "—"}</span> },
+        ];
+        return (
+          <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
+            <div onClick={e => e.stopPropagation()} className="pw-pop" style={glassModalStyle}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Business View · Sales Pipeline</div>
+                  <h2 style={{ fontSize: 20, margin: 0, color: "#1D1D1F", fontWeight: 750, letterSpacing: "-0.02em" }}>{title}</h2>
+                  {sub && <div style={{ fontSize: 13, color: "#64748B", marginTop: 4, fontWeight: 500 }}>{sub}</div>}
+                </div>
+                <button
+                  onClick={() => { setKpiModal(null); setModalQ(""); }}
+                  onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.08)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                  style={glassCloseBtnStyle}
+                >
+                  <X size={16} color="#1D1D1F" strokeWidth={2.5} />
+                </button>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
+                <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 380 }}>
+                  <Search size={15} color="#86868B" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
+                  <input
+                    type="text"
+                    placeholder="Search name, phone, plan…"
+                    value={modalQ}
+                    onChange={e => setModalQ(e.target.value)}
+                    style={glassSearchStyle}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ fontSize: 12.5, color: "#475569", fontWeight: 500 }}>
+                    Total: <strong style={{ color: "#05A97A" }}>{filtered.length}</strong> (Zoho: <strong>{zohoActive}</strong> · DP: <strong>{dpActive}</strong>) · Societies: <strong>{socCount}</strong>
+                  </div>
+                  <button
+                    onClick={exportCsv}
+                    onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
+                    onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
+                    style={glassExportBtnStyle}
+                  >
+                    <Download size={13} /> Export CSV
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }} className="scroll-thin">
+                <div style={{ fontSize: 12, fontWeight: 800, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>Onboarded Customers</span>
+                  <span style={{ fontSize: 10.5, padding: "2px 8px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 750 }}>{filtered.length}</span>
+                </div>
+                {renderGlassSection(filtered, cols, GLASS_GREEN, "No active customers match your search.")}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
           <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
@@ -1615,90 +1764,82 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         { label: "Stage", get: r => r.flatNo != null ? "Interested" : "Onboarded" },
       ], [...interestedFiltered, ...onboardedFiltered]);
 
-      // One small, self-contained table renderer shared by both sections
-      // below — same row styling as `active_customers`' own table, just
-      // parameterized by which ID column applies to that section.
-      const renderSection = (rows, idLabel, idKey, emptyMsg) => (
-        <div className="scroll-thin" style={{ flex: 1, overflowY: "auto", border: "1px solid rgba(0,0,0,0.08)", borderRadius: 12 }}>
-          {rows.length > 0 ? (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, textAlign: "left" }}>
-              <thead>
-                <tr style={{ background: "rgba(243,248,236,.92)", borderBottom: "1px solid rgba(0,0,0,.08)", position: "sticky", top: 0, zIndex: 1 }}>
-                  <th style={modalTh}>Name</th>
-                  <th style={modalTh}>Phone</th>
-                  <th style={modalTh}>{idLabel}</th>
-                  <th style={modalTh}>Plan</th>
-                  <th style={modalTh}>Society</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, idx) => (
-                  <tr key={idx} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: idx % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
-                    <td style={{ padding: "11px 14px", fontWeight: 650, color: "#1D1D1F" }}>{r.name || "—"}</td>
-                    <td style={{ padding: "11px 14px", color: "#64748B", fontFamily: "monospace" }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</td>
-                    <td style={{ padding: "11px 14px", fontFamily: "monospace", color: "#08805A", fontWeight: 600 }}>{r[idKey]}</td>
-                    <td style={{ padding: "11px 14px", color: "#475569" }}>{r.plan || "—"}</td>
-                    <td style={{ padding: "11px 14px", color: "#1D1D1F" }}>{r.society || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div style={{ padding: 24 }}><Empty msg={emptyMsg} /></div>
-          )}
-        </div>
-      );
+      // Glass/Apple-style leads+customers table columns (v2.29.471, per
+      // explicit user request to restyle this popup) — same shape as
+      // `active_customers`' own cols, minus Stack/Device Status/Since,
+      // since leads carry neither. `idLabel`/`idKey` pick which field gets
+      // the section's own themed ID column (Flat No for Interested,
+      // Purifier ID for Onboarded).
+      const glassCols = (idLabel, idKey) => [
+        { label: "Name", render: r => <span style={{ fontWeight: 650, color: "#1D1D1F" }}>{r.name || "—"}</span> },
+        { label: "Phone", render: r => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 12.5 }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
+        { label: idLabel, render: (r, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 700, fontSize: 12.5 }}>{r[idKey]}</span> },
+        { label: "Plan", render: r => <span style={{ color: r.plan ? "#475569" : "#94A3B8", fontWeight: 500 }}>{r.plan || "—"}</span> },
+        { label: "Society", render: r => <span style={{ color: "#1D1D1F", fontWeight: 500 }}>{r.society || "—"}</span> },
+      ];
 
       return (
         <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
-          <div onClick={e => e.stopPropagation()} className="pw-pop" style={modalWindowStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: 16 }}>
+          <div onClick={e => e.stopPropagation()} className="pw-pop" style={glassModalStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
               <div>
-                <p className="eyebrow" style={{ margin: 0, color: "#86868B" }}>Business View · Sales Pipeline</p>
-                <h2 style={{ fontSize: 21, margin: "3px 0 0", color: "#1D1D1F", fontWeight: 700 }}>{title}</h2>
-                {sub && <div style={{ fontSize: 12.5, color: "#64748B", marginTop: 2 }}>{sub}</div>}
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#86868B", textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Business View · Sales Pipeline</div>
+                <h2 style={{ fontSize: 20, margin: 0, color: "#1D1D1F", fontWeight: 750, letterSpacing: "-0.02em" }}>{title}</h2>
+                {sub && <div style={{ fontSize: 13, color: "#64748B", marginTop: 4, fontWeight: 500 }}>{sub}</div>}
               </div>
-              <button onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalCloseBtnStyle}>
-                <X size={18} color="#475569" />
+              <button
+                onClick={() => { setKpiModal(null); setModalQ(""); }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,0,0,0.08)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(0,0,0,0.04)"; }}
+                style={glassCloseBtnStyle}
+              >
+                <X size={16} color="#1D1D1F" strokeWidth={2.5} />
               </button>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
-              <div style={{ position: "relative", flex: 1, minWidth: 240, maxWidth: 380 }}>
-                <Search size={15} color="#86868B" style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 18 }}>
+              <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 380 }}>
+                <Search size={15} color="#86868B" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
                 <input
                   type="text"
                   placeholder="Search name, phone, plan…"
                   value={modalQ}
                   onChange={e => setModalQ(e.target.value)}
-                  style={{ ...inp, paddingLeft: 34, marginBottom: 0, width: "100%", fontSize: 13, background: "#f8fafc" }}
+                  style={glassSearchStyle}
                 />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ fontSize: 12.5, color: "#475569" }}>
-                  Total: <strong style={{ color: "#08805A" }}>{interestedFiltered.length + onboardedFiltered.length}</strong>
-                  {leadFilter === "total" && <> (Interested: <strong>{interestedFiltered.length}</strong> · Onboarded: <strong>{onboardedFiltered.length}</strong>)</>}
+                <div style={{ fontSize: 12.5, color: "#475569", fontWeight: 500 }}>
+                  Total: <strong style={{ color: "#05A97A" }}>{interestedFiltered.length + onboardedFiltered.length}</strong>
+                  {leadFilter === "total" && <> (Interested: <strong style={{ color: "#D97706" }}>{interestedFiltered.length}</strong> · Onboarded: <strong style={{ color: "#05A97A" }}>{onboardedFiltered.length}</strong>)</>}
                 </div>
-                <button onClick={exportCsv} style={{ ...btnPrimary, background: "#08805A", color: "#fff", border: "none", padding: "6px 14px", fontSize: 12 }}>
+                <button
+                  onClick={exportCsv}
+                  onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
+                  onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
+                  style={glassExportBtnStyle}
+                >
                   <Download size={13} /> Export CSV
                 </button>
               </div>
             </div>
 
-            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 24, paddingRight: 4 }} className="scroll-thin">
               <div>
-                <div style={{ fontSize: 12.5, fontWeight: 800, color: "#2A86D6", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
-                  Interested Leads {leadFilter === "total" && `(${interestedFiltered.length})`}
+                <div style={{ fontSize: 12, fontWeight: 800, color: GLASS_AMBER.labelColor, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>Interested Leads</span>
+                  <span style={{ fontSize: 10.5, padding: "2px 8px", borderRadius: 999, background: GLASS_AMBER.badgeBg, color: GLASS_AMBER.badgeColor, fontWeight: 750 }}>{interestedFiltered.length}</span>
                 </div>
-                {renderSection(interestedFiltered, "Flat No", "flatNo", "No interested leads match your search.")}
+                {renderGlassSection(interestedFiltered, glassCols("Flat No", "flatNo"), GLASS_AMBER, "No interested leads match your search.")}
               </div>
 
               {leadFilter === "total" && (
                 <div>
-                  <div style={{ fontSize: 12.5, fontWeight: 800, color: "#08805A", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
-                    Onboarded Customers ({onboardedFiltered.length})
+                  <div style={{ fontSize: 12, fontWeight: 800, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>Onboarded Customers</span>
+                    <span style={{ fontSize: 10.5, padding: "2px 8px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 750 }}>{onboardedFiltered.length}</span>
                   </div>
-                  {renderSection(onboardedFiltered, "Purifier ID", "purifierId", "No onboarded customers match your search.")}
+                  {renderGlassSection(onboardedFiltered, glassCols("Purifier ID", "purifierId"), GLASS_GREEN, "No onboarded customers match your search.")}
                 </div>
               )}
             </div>
@@ -3651,7 +3792,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#08805A" }}>
                           {r.onboarded > 0 ? (
                             <span
-                              onClick={() => setKpiModal({ type: "active_customers", aptFilter: r.name, title: `${r.name} · Active Customers`, sub: `${r.onboarded} active customers in ${r.name}` })}
+                              onClick={() => setKpiModal({ type: "active_customers", aptFilter: r.name, variant: "glass", title: `${r.name} · Active Customers`, sub: `${r.onboarded} active customers in ${r.name}` })}
                               style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(8,128,90,0.3)", textUnderlineOffset: 2 }}
                               title="Click to view active customers for this apartment"
                             >{r.onboarded}</span>
@@ -3690,7 +3831,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             )}
           </div>
 
-          {/* ── All Apartment Performance Table ───────────────────────────────── */}
+          {/* ── Apartment Revenue Performance Table ───────────────────────────── */}
           {(() => {
             const displayedAptRows = selSource
               ? allAptRows.filter(r => {
@@ -3727,7 +3868,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                 <div style={{ background: "rgba(255,255,255,0.65)", WebkitBackdropFilter: "blur(40px) saturate(180%)", backdropFilter: "blur(40px) saturate(180%)", border: "0.5px solid rgba(255,255,255,0.9)", borderRadius: 28, boxShadow: "0 24px 48px -12px rgba(15,23,42,0.08), 0 2px 6px rgba(0,0,0,0.02), inset 0 1px 1px rgba(255,255,255,1)", padding: 24, overflow: "hidden" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 24 }}>
                     <div>
-                      <h3 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.02em", background: "linear-gradient(135deg, #0F172A 0%, #334155 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>All Apartment Performance</h3>
+                      <h3 style={{ fontSize: 20, fontWeight: 700, margin: "0 0 4px", letterSpacing: "-0.02em", background: "linear-gradient(135deg, #0F172A 0%, #334155 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Apartment Revenue Performance</h3>
                       <div style={{ fontSize: 13, color: "#64748B", fontWeight: 500 }}>Combined Zoho &amp; DrinkPrime metrics · {rangeLabel(range)}{selSource ? ` · Filtered: ${selSource}` : ""}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
