@@ -1583,8 +1583,14 @@ export function IoTTankReadings({ items, weather, range, setRange }) {
               const roDisp = iotWqNum(it.waterQuality?.totalRoWaterDispensed), roFlow = iotWqNum(it.waterQuality?.roWaterFlow);
               const pr = iotWqNum(it.waterQuality?.pressure), rejectWater = iotWqNum(it.waterQuality?.roRejectedWater);
               const cellTd = { padding: "12px 18px", fontVariantNumeric: "tabular-nums", textAlign: "center" };
+              // Highlight refill rows in amber (v2.29.462, per explicit user
+              // request) — same `refillOn` predicate the Refill toggle
+              // itself filters by (Pump Pressure > 0.00), so a row is
+              // amber-highlighted exactly when it would pass "Refill: On",
+              // regardless of the toggle's own current position.
+              const isRefillRow = refillOn(it);
               return (
-                <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", transition: ".12s" }}>
+                <tr key={(cur - 1) * PER + i} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: isRefillRow ? "rgba(245,158,11,0.12)" : "transparent", transition: ".12s" }}>
                   <td style={{ padding: "12px 18px", fontFamily: "-apple-system,SF Mono,monospace", fontSize: 12, color: "#86868B", whiteSpace: "nowrap", textAlign: "center" }}>{iotStamp(it.timestamp)}</td>
                   <td style={{ ...cellTd, color: "#1D1D1F", fontWeight: 600 }}>{rawDisp == null ? "—" : rawDisp.toFixed(2)}</td>
                   <td style={{ ...cellTd, ...iotBandText(iotWqClass("flowMLPM", rawFlow)) }}>{rawFlow == null ? "—" : rawFlow.toFixed(2)}</td>
