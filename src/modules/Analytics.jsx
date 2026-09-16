@@ -1086,14 +1086,49 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     const key = name.toLowerCase();
     interestedByApt[key] = (interestedByApt[key] || 0) + 1;
   });
+  // "Current Month Addition" (v2.29.464, per explicit user follow-up —
+  // "similar logic what you show in KPI card in New CX") — reuses
+  // `allSignups`, the exact same deduplicated, already-churn-excluded
+  // (v2.29.452) signup list the New CX KPI card itself counts from, just
+  // grouped per apartment instead of summed into one page-wide total.
+  // Deliberately scoped to the real CURRENT calendar month (from the 1st
+  // to now) rather than whatever period the page's own date-range filter
+  // happens to be set to — the column is labeled "Current Month", a fixed
+  // period, not "New CX in the selected range", so it shouldn't silently
+  // relabel itself depending on an unrelated filter elsewhere on the page.
+  const curMonthAdditionByApt = {};
+  const curMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  allSignups.forEach(x => {
+    if (!(x.since >= curMonthStart && x.since <= now)) return;
+    const name = cleanAptName(x.society);
+    if (!name) return;
+    const key = name.toLowerCase();
+    curMonthAdditionByApt[key] = (curMonthAdditionByApt[key] || 0) + 1;
+  });
   const businessView = penetrationRisk
-    .map(apt => ({
-      name: apt.name,
-      totalFlats: apt.flats,
-      interested: interestedByApt[apt.name.toLowerCase()] || 0,
-      onboarded: apt.active,
-      pct: apt.pct,
-    }))
+    .map(apt => {
+      const key = apt.name.toLowerCase();
+      const interested = interestedByApt[key] || 0;
+      const onboarded = apt.active;
+      // Total Leads / Interested % (v2.29.464, per explicit user request:
+      // "Show Total Leads where it will be Interested plus Onboarded" —
+      // i.e. every prospect this apartment has ever produced, whichever
+      // stage they're currently at, not a separate raw-lead-count field).
+      // Interested % mirrors Penetration %'s own convention exactly
+      // (a share of Total Leads instead of a share of Total Flats).
+      const totalLeads = interested + onboarded;
+      const interestedPct = totalLeads > 0 ? Math.round((interested / totalLeads) * 100) : null;
+      return {
+        name: apt.name,
+        totalFlats: apt.flats,
+        totalLeads,
+        interested,
+        interestedPct,
+        onboarded,
+        pct: apt.pct,
+        curMonthAddition: curMonthAdditionByApt[key] || 0,
+      };
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // Revenue by Source donut (for current period). Colors (v2.29.388, per
@@ -3328,13 +3363,21 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
           </div>
 
-          {/* ── Business View table (v2.29.463, per explicit user request) ─────
-              A single, simple sales-pipeline-vs-onboarding funnel view per
-              apartment: Total Flats and Onboarded (active customers) are
-              exactly `penetrationRisk`'s own already-established figures
-              (same ones Under-Penetrated Buildings above uses); Interested
-              is new — how many of that apartment's Sales leads currently
-              carry the raw Zoho status "Interested". */}
+          {/* ── Business View table (v2.29.463; extended v2.29.464 per
+              explicit user follow-up — Total Leads/Interested %/Current
+              Month Addition) ─── A sales-pipeline-vs-onboarding funnel view
+              per apartment: Total Flats and Onboarded (active customers)
+              are exactly `penetrationRisk`'s own already-established
+              figures (same ones Under-Penetrated Buildings above uses);
+              Interested comes from the Sales module's own lead feed
+              (raw status "Interested"); Total Leads = Interested +
+              Onboarded (every prospect this apartment has produced,
+              regardless of current stage, per explicit user definition —
+              not a separate raw-lead-count field); Interested % mirrors
+              Penetration %'s own convention (a share of Total Leads
+              instead of Total Flats); Current Month Addition reuses the
+              New CX KPI card's own `allSignups` logic, grouped per
+              apartment and scoped to the real current calendar month. */}
           <div style={{ ...softShadow, padding: 22, minWidth: 0, marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
               <div>
@@ -3348,14 +3391,17 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
 
             {businessView.length > 0 ? (
               <div className="scroll-thin" style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
                   <thead>
                     <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.6)" }}>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "left" }}>Apartment Name</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Flats</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Leads</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Interested</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Interested %</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Onboarded</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Penetration %</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Current Month Addition</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -3363,11 +3409,16 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       <tr key={r.name} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
                         <td style={{ padding: "11px 18px", fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{r.name}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalFlats ?? "—"}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalLeads}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#2A86D6" }}>{r.interested}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.interestedPct == null ? "#86868B" : "#2A86D6" }}>
+                          {r.interestedPct == null ? "—" : `${r.interestedPct}%`}
+                        </td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#08805A" }}>{r.onboarded}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.pct == null ? "#86868B" : (r.pct >= 50 ? "#08805A" : r.pct >= 25 ? "#a86e00" : "#DC4141") }}>
                           {r.pct == null ? "—" : `${r.pct}%`}
                         </td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: r.curMonthAddition > 0 ? "#08805A" : "#86868B" }}>{r.curMonthAddition}</td>
                       </tr>
                     ))}
                   </tbody>
