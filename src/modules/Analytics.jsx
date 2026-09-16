@@ -677,6 +677,15 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   // `a.flats`.
   const areaBySoc = {};
   (apartments || []).forEach(a => { const n = normSoc(a.name); if (n && a.area && !areaBySoc[n]) areaBySoc[n] = a.area; });
+  // Launch date lookup (v2.29.466, per explicit user request — Business
+  // View's new "Launch Month"/"Total Months" columns) — same join, reading
+  // the apartments feed's own real `launchDate` (e.g. "2024-06-04") rather
+  // than inferring one from subscription history the way the pre-existing
+  // `monthsFromLaunch()`/`launchIdxBySoc` below (used by "Top performing
+  // societies", an unrelated section) already does — deliberately left
+  // untouched, since it's a different metric for a different table.
+  const launchDateBySoc = {};
+  (apartments || []).forEach(a => { const n = normSoc(a.name); if (n && a.launchDate && !launchDateBySoc[n]) launchDateBySoc[n] = a.launchDate; });
 
   const curMo = now.getMonth(), curYr = now.getFullYear();
   const [prvYr, prvMo] = [curMo === 0 ? curYr - 1 : curYr, curMo === 0 ? 11 : curMo - 1];
@@ -1124,12 +1133,30 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       // (a share of Total Leads instead of a share of Total Flats).
       const totalLeads = interested + onboarded;
       const interestedPct = totalLeads > 0 ? Math.round((interested / totalLeads) * 100) : null;
+      // Launch Month / Total Months (v2.29.466, per explicit user request)
+      // — "Launch Month" is the apartments feed's own real
+      // `apartment_launch_date` (e.g. "2024-06-04"), formatted as "June
+      // 2024"; "Total Months" counts inclusively from that launch month
+      // through the current month (so the launch month itself is month 1
+      // — the same inclusive convention the pre-existing, unrelated
+      // `monthsFromLaunch()`/"Top performing societies" section already
+      // uses, just driven by this real launch date instead of an inferred
+      // first-subscription date). Both are `null`/"—" when this apartment
+      // has no real launch date on file, rather than a wrong 0/blank date.
+      const launchDateRaw = launchDateBySoc[normSoc(apt.name)] || "";
+      const launchDateObj = launchDateRaw ? parseFlexDate(launchDateRaw) : null;
+      const launchMonth = launchDateObj ? launchDateObj.toLocaleDateString("en-IN", { month: "long", year: "numeric" }) : null;
+      const totalMonths = launchDateObj
+        ? Math.max(1, (now.getFullYear() * 12 + now.getMonth()) - (launchDateObj.getFullYear() * 12 + launchDateObj.getMonth()) + 1)
+        : null;
       return {
         name: apt.name,
         // Area (v2.29.465, per explicit user request — a real API field
         // from the apartments feed, e.g. "Old Fort Rd") — same `normSoc`
         // join Total Flats already uses against the same feed.
         area: areaBySoc[normSoc(apt.name)] || "",
+        launchMonth,
+        totalMonths,
         totalFlats: apt.flats,
         totalLeads,
         interested,
@@ -3406,6 +3433,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.6)" }}>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "left" }}>Apartment Name</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "left" }}>Area</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center", whiteSpace: "nowrap" }}>Launch Month</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center", whiteSpace: "nowrap" }}>Total Months</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Flats</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Leads</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Interested</th>
@@ -3420,6 +3449,8 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                       <tr key={r.name} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
                         <td style={{ padding: "11px 18px", fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{r.name}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, color: "#475569" }}>{r.area || "—"}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569", whiteSpace: "nowrap" }}>{r.launchMonth || "—"}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalMonths ?? "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalFlats ?? "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalLeads}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#2A86D6" }}>{r.interested}</td>
