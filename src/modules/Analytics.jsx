@@ -671,6 +671,12 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
   const normSoc = (s) => String(s || "").toLowerCase().replace(/\bapartments?\b/g, "").replace(/[^a-z0-9]/g, "");
   const flatsBySoc = {};
   (apartments || []).forEach(a => { const n = normSoc(a.name); if (n) flatsBySoc[n] = (flatsBySoc[n] || 0) + (a.flats || 0); });
+  // Area lookup (v2.29.465, per explicit user request — Business View's new
+  // "Area" column) — same apartments feed/`normSoc` join Total Flats above
+  // already uses, just reading `a.area` (e.g. "Old Fort Rd") instead of
+  // `a.flats`.
+  const areaBySoc = {};
+  (apartments || []).forEach(a => { const n = normSoc(a.name); if (n && a.area && !areaBySoc[n]) areaBySoc[n] = a.area; });
 
   const curMo = now.getMonth(), curYr = now.getFullYear();
   const [prvYr, prvMo] = [curMo === 0 ? curYr - 1 : curYr, curMo === 0 ? 11 : curMo - 1];
@@ -1120,6 +1126,10 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       const interestedPct = totalLeads > 0 ? Math.round((interested / totalLeads) * 100) : null;
       return {
         name: apt.name,
+        // Area (v2.29.465, per explicit user request — a real API field
+        // from the apartments feed, e.g. "Old Fort Rd") — same `normSoc`
+        // join Total Flats already uses against the same feed.
+        area: areaBySoc[normSoc(apt.name)] || "",
         totalFlats: apt.flats,
         totalLeads,
         interested,
@@ -3395,6 +3405,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   <thead>
                     <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.06)", background: "rgba(243,248,236,.6)" }}>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "left" }}>Apartment Name</th>
+                      <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "left" }}>Area</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Flats</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Total Leads</th>
                       <th style={{ padding: "12px 18px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".05em", color: "#0a805a", textAlign: "center" }}>Interested</th>
@@ -3408,6 +3419,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     {businessView.map((r, i) => (
                       <tr key={r.name} style={{ borderBottom: "1px solid rgba(0,0,0,0.04)", background: i % 2 === 0 ? "transparent" : "rgba(243,248,236,.15)" }}>
                         <td style={{ padding: "11px 18px", fontSize: 13, fontWeight: 600, color: "#1D1D1F" }}>{r.name}</td>
+                        <td style={{ padding: "11px 18px", fontSize: 13, color: "#475569" }}>{r.area || "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalFlats ?? "—"}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", color: "#475569" }}>{r.totalLeads}</td>
                         <td style={{ padding: "11px 18px", fontSize: 13, textAlign: "center", fontWeight: 700, color: "#2A86D6" }}>{r.interested}</td>
