@@ -1335,85 +1335,91 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
     const mq = modalQ.toLowerCase().trim();
 
     // Glass/Apple-style modal shell — used only by Business View's own
-    // popups (v2.29.471, refined v2.29.472 per an explicit user-supplied
-    // mockup for a glossier look: gradient glass background, radial-
-    // gradient "aura" blobs behind the header, brighter borders/shadows,
-    // hover/focus micro-interactions). Scoped to `variant === "glass"`
-    // (set only by Business View's own onClicks below) so the shared
+    // popups (v2.29.471; glossier look v2.29.472; bulletproof header
+    // centering v2.29.473; recolored/refined again v2.29.474 per another
+    // explicit user-supplied mockup — ambient dual-tone glow baked
+    // directly into the modal's own background instead of separate aura
+    // blobs, a pill-shaped eyebrow badge with a small brand dot, a
+    // rotating close-button hover, and a new gold/olive color pairing
+    // (#C49A45 for Interested, #689D4B for Onboarded) replacing the
+    // earlier amber/teal one). Scoped to `variant === "glass"` (set only
+    // by Business View's own onClicks below) so the shared
     // `active_customers` modal keeps its original look when opened from
     // the "Active Customers" KPI card.
     const glassModalStyle = {
       ...modalWindowStyle,
       width: "min(1140px, 95%)",
-      background: "linear-gradient(135deg, rgba(255,255,255,0.94) 0%, rgba(245,247,250,0.88) 100%)",
-      backdropFilter: "blur(60px) saturate(210%)",
-      WebkitBackdropFilter: "blur(60px) saturate(210%)",
+      background: "radial-gradient(circle at 100% 0%, rgba(104,157,75,0.06) 0%, transparent 40%), radial-gradient(circle at 0% 100%, rgba(196,154,69,0.06) 0%, transparent 40%), rgba(255,255,255,0.92)",
+      backdropFilter: "blur(80px) saturate(220%)",
+      WebkitBackdropFilter: "blur(80px) saturate(220%)",
       border: "1px solid rgba(255,255,255,1)",
-      borderRadius: 28,
-      padding: 30,
-      boxShadow: "0 30px 60px -15px rgba(0,0,0,0.15), inset 0 2px 4px rgba(255,255,255,1), inset 0 -2px 4px rgba(0,0,0,0.02)",
+      borderRadius: 32,
+      padding: 32,
+      boxShadow: "0 40px 80px -20px rgba(0,0,0,0.12), inset 0 2px 6px rgba(255,255,255,1), inset 0 -3px 8px rgba(0,0,0,0.02)",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif",
       WebkitFontSmoothing: "antialiased",
     };
     const glassCloseBtnStyle = {
-      width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.8)",
+      width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.9)",
       display: "grid", placeItems: "center", cursor: "pointer",
-      border: "1px solid rgba(255,255,255,1)", boxShadow: "0 4px 12px rgba(0,0,0,0.06), inset 0 1px 1px #FFF",
-      transition: "all 0.2s ease", zIndex: 1,
+      border: "1px solid rgba(255,255,255,1)", boxShadow: "0 6px 16px rgba(0,0,0,0.08), inset 0 1px 1px #FFF",
+      transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)", zIndex: 1,
     };
     const glassSearchStyle = {
-      width: "100%", padding: "11px 14px 11px 40px", border: "1px solid rgba(255,255,255,0.9)",
-      borderRadius: 14, fontSize: 13.5, color: "#1D1D1F", background: "rgba(255,255,255,0.9)",
-      outline: "none", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.02)",
-      fontFamily: "inherit", transition: "all 0.2s ease",
+      width: "100%", padding: "12px 14px 12px 42px", border: "1px solid rgba(255,255,255,1)",
+      borderRadius: 16, fontSize: 13.5, color: "#1D1D1F", background: "rgba(255,255,255,0.85)",
+      outline: "none", boxShadow: "inset 0 2px 5px rgba(0,0,0,0.03), 0 6px 16px rgba(0,0,0,0.03)",
+      fontFamily: "inherit", transition: "all 0.25s ease",
     };
     const glassExportBtnStyle = {
-      display: "inline-flex", alignItems: "center", gap: 8, padding: "9px 18px", borderRadius: 14,
-      background: "linear-gradient(135deg, #05A97A 0%, #047A58 100%)", color: "#fff",
-      fontWeight: 750, fontSize: 13, boxShadow: "0 8px 20px rgba(5,169,122,0.35), inset 0 1px 1px rgba(255,255,255,0.4)",
-      cursor: "pointer", border: "none", transition: "all 0.2s ease",
+      display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 16,
+      background: "linear-gradient(135deg, #689D4B 0%, #527E38 100%)", color: "#fff",
+      fontWeight: 800, fontSize: 13.5, boxShadow: "0 10px 24px rgba(104,157,75,0.4), inset 0 1px 1px rgba(255,255,255,0.5)",
+      cursor: "pointer", border: "none", transition: "all 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
     };
     const GLASS_AMBER = {
-      border: "rgba(251,191,36,0.35)", boxShadow: "0 12px 32px rgba(217,119,6,0.06), inset 0 1px 2px rgba(255,255,255,0.9)",
-      headerGradient: "linear-gradient(180deg, rgba(254,243,199,0.85) 0%, rgba(253,230,138,0.4) 100%)",
-      headerBorder: "rgba(251,191,36,0.3)", thColor: "#92400E", idColor: "#D97706",
-      rowBorder: "rgba(251,191,36,0.12)", hoverBg: "rgba(251,191,36,0.08)",
-      labelColor: "#D97706", badgeBg: "linear-gradient(135deg, rgba(251,191,36,0.25) 0%, rgba(217,119,6,0.2) 100%)", badgeColor: "#B45309",
+      border: "rgba(196,154,69,0.35)", boxShadow: "0 16px 40px rgba(196,154,69,0.06), inset 0 1px 3px rgba(255,255,255,1)",
+      headerGradient: "linear-gradient(180deg, rgba(196,154,69,0.12) 0%, rgba(196,154,69,0.05) 100%)",
+      headerBorder: "rgba(196,154,69,0.25)", thColor: "#A07B32", idColor: "#C49A45",
+      rowBorder: "rgba(196,154,69,0.1)", hoverBg: "rgba(196,154,69,0.06)",
+      labelColor: "#C49A45", badgeBg: "linear-gradient(135deg, rgba(196,154,69,0.18) 0%, rgba(196,154,69,0.1) 100%)", badgeColor: "#A07B32",
+      badgeShadow: "0 2px 6px rgba(196,154,69,0.15), inset 0 1px 1px rgba(255,255,255,1)",
     };
     const GLASS_GREEN = {
-      border: "rgba(5,169,122,0.35)", boxShadow: "0 12px 32px rgba(5,169,122,0.06), inset 0 1px 2px rgba(255,255,255,0.9)",
-      headerGradient: "linear-gradient(180deg, rgba(209,250,229,0.85) 0%, rgba(167,243,208,0.4) 100%)",
-      headerBorder: "rgba(5,169,122,0.3)", thColor: "#065F46", idColor: "#05A97A",
-      rowBorder: "rgba(5,169,122,0.12)", hoverBg: "rgba(5,169,122,0.08)",
-      labelColor: "#05A97A", badgeBg: "linear-gradient(135deg, rgba(5,169,122,0.25) 0%, rgba(4,130,95,0.2) 100%)", badgeColor: "#047A58",
+      border: "rgba(104,157,75,0.35)", boxShadow: "0 16px 40px rgba(104,157,75,0.06), inset 0 1px 3px rgba(255,255,255,1)",
+      headerGradient: "linear-gradient(180deg, rgba(104,157,75,0.12) 0%, rgba(104,157,75,0.05) 100%)",
+      headerBorder: "rgba(104,157,75,0.25)", thColor: "#527E38", idColor: "#689D4B",
+      rowBorder: "rgba(104,157,75,0.1)", hoverBg: "rgba(104,157,75,0.06)",
+      labelColor: "#689D4B", badgeBg: "linear-gradient(135deg, rgba(104,157,75,0.18) 0%, rgba(104,157,75,0.1) 100%)", badgeColor: "#527E38",
+      badgeShadow: "0 2px 6px rgba(104,157,75,0.15), inset 0 1px 1px rgba(255,255,255,1)",
     };
-    // Decorative radial-gradient "aura" blobs behind a glass modal's own
-    // header — purely cosmetic, sits behind the header's real content.
-    const glassAura = (color, top, left, size) => ({
-      position: "absolute", top, left, width: size, height: size,
-      background: `radial-gradient(circle, ${color} 0%, transparent 70%)`,
-      borderRadius: "50%", pointerEvents: "none", filter: "blur(22px)",
-    });
+    // A section's own label row — small glowing dot (matching the
+    // section's theme color) + uppercase label + a gradient count badge.
+    const glassSectionLabel = (text, count, theme) => (
+      <div style={{ fontSize: 13, fontWeight: 850, color: theme.labelColor, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: theme.labelColor, boxShadow: `0 0 10px ${theme.labelColor}` }} />
+        <span>{text}</span>
+        <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: theme.badgeBg, color: theme.badgeColor, fontWeight: 850, boxShadow: theme.badgeShadow }}>{count}</span>
+      </div>
+    );
     // One themed, self-contained table used by every Business View glass
     // popup section below — `cols` is [{label, render(row)}]. Headers are
-    // centered per explicit user request. When `rows` is empty this
-    // renders nothing at all — callers decide whether to show the section
-    // header at all (see the "leads"/"active_customers" branches below,
-    // which hide a section entirely rather than showing an empty table
-    // when there's genuinely no data, vs. a real search-filtered-to-zero
-    // result, which still shows this inline empty row).
+    // centered per explicit user request (both `textAlign` on the cell AND
+    // a centered flex wrapper around the label itself — belt and
+    // suspenders, so centering holds regardless of column width). When
+    // `rows` is empty this still renders the table with an inline empty
+    // row — callers decide whether to show the section header at all (see
+    // the "leads"/"active_customers" branches below, which hide a section
+    // entirely rather than showing an empty table when there's genuinely
+    // no data, vs. a real search-filtered-to-zero result, which still
+    // shows this inline empty row).
     const renderGlassSection = (rows, cols, theme, emptyMsg) => (
-      <div style={{ border: `1px solid ${theme.border}`, borderRadius: 20, overflow: "hidden", background: "rgba(255,255,255,0.75)", boxShadow: theme.boxShadow }}>
+      <div style={{ border: `1px solid ${theme.border}`, borderRadius: 24, overflow: "hidden", background: "rgba(255,255,255,0.85)", boxShadow: theme.boxShadow }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5, textAlign: "left" }}>
           <thead>
-            <tr style={{ background: theme.headerGradient, borderBottom: `1px solid ${theme.headerBorder}`, position: "sticky", top: 0, zIndex: 2 }}>
+            <tr style={{ background: theme.headerGradient, borderBottom: `1.5px solid ${theme.headerBorder}`, position: "sticky", top: 0, zIndex: 2 }}>
               {cols.map(c => (
-                <th key={c.label} style={{ padding: "13px 18px", color: theme.thColor, fontWeight: 800, fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", textAlign: "center" }}>
-                  {/* Centered via both `textAlign` on the cell AND a
-                      centered flex wrapper around the label itself — belt
-                      and suspenders, so the header stays visually centered
-                      regardless of column width, per explicit user
-                      request/screenshot flagging this as off. */}
+                <th key={c.label} style={{ padding: "14px 18px", color: theme.thColor, fontWeight: 850, fontSize: 11.5, letterSpacing: ".06em", textTransform: "uppercase", textAlign: "center" }}>
                   <div style={{ display: "flex", justifyContent: "center", alignItems: "center", width: "100%" }}>{c.label}</div>
                 </th>
               ))}
@@ -1423,7 +1429,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             {rows.length > 0 ? rows.map((r, idx) => (
               <tr
                 key={idx}
-                style={{ borderBottom: `0.5px solid ${theme.rowBorder}`, background: "transparent", transition: "background 0.15s" }}
+                style={{ borderBottom: `0.5px solid ${theme.rowBorder}`, background: "transparent", transition: "background 0.2s" }}
                 onMouseEnter={e => { e.currentTarget.style.background = theme.hoverBg; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
               >
@@ -1599,11 +1605,11 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       if (variant === "glass") {
         const cols = [
           { label: "Name", render: c => <span style={{ fontWeight: 750, color: "#1D1D1F" }}>{c.name || "—"}</span> },
-          { label: "Phone", render: c => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 550 }}>{c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
-          { label: "Purifier ID", render: (c, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 800, fontSize: 13 }}>{c.purifier_id || "—"}</span> },
-          { label: "Plan", render: c => <span style={{ color: c.plan || c.plan_name ? "#475569" : "#94A3B8", fontWeight: 600 }}>{c.plan || c.plan_name || "—"}</span> },
+          { label: "Phone", render: c => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 600 }}>{c.phone ? String(c.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
+          { label: "Purifier ID", render: (c, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 850, fontSize: 13 }}>{c.purifier_id || "—"}</span> },
+          { label: "Plan", render: c => <span style={{ color: c.plan || c.plan_name ? "#475569" : "#94A3B8", fontWeight: 650 }}>{c.plan || c.plan_name || "—"}</span> },
           { label: "Stack", render: c => <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 6px", borderRadius: 4, background: c.isDpCustomer ? "rgba(42,134,214,0.1)" : "rgba(30,158,79,0.1)", color: c.isDpCustomer ? "#2A86D6" : "#1E9E4F" }}>{c.isDpCustomer ? "DrinkPrime" : "Zoho"}</span> },
-          { label: "Society", render: c => <span style={{ color: "#1D1D1F", fontWeight: 600 }}>{c.society || "—"}</span> },
+          { label: "Society", render: c => <span style={{ color: "#1D1D1F", fontWeight: 650 }}>{c.society || "—"}</span> },
           { label: "Since Date", render: c => <span style={{ color: "#64748B" }}>{sinceOf(c) ? fmtDate(new Date(sinceOf(c))) : "—"}</span> },
         ];
         // "No active customers" here (before the search box narrows
@@ -1616,25 +1622,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
         return (
           <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
             <div onClick={e => e.stopPropagation()} className="pw-pop" style={glassModalStyle}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, position: "relative" }}>
-                <div style={glassAura("rgba(5,169,122,0.15)", -30, -30, 140)} />
-                <div style={glassAura("rgba(217,119,6,0.12)", -20, 300, 160)} />
-                <div style={{ zIndex: 1 }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 800, color: "#86868B", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 5 }}>Business View · Sales Pipeline</div>
-                  <h2 style={{ fontSize: 22, margin: 0, color: "#1D1D1F", fontWeight: 800, letterSpacing: "-0.03em", textShadow: "0 1px 1px rgba(255,255,255,0.8)" }}>{title}</h2>
-                  {sub && <div style={{ fontSize: 13.5, color: "#64748B", marginTop: 5, fontWeight: 550 }}>{sub}</div>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, position: "relative", zIndex: 2 }}>
+                <div>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: "rgba(0,0,0,0.04)", fontSize: 11, fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#689D4B" }} /> Business View · Sales Pipeline
+                  </div>
+                  <h2 style={{ fontSize: 23, margin: 0, color: "#1D1D1F", fontWeight: 850, letterSpacing: "-0.03em" }}>{title}</h2>
+                  {sub && <div style={{ fontSize: 13.5, color: "#64748B", marginTop: 6, fontWeight: 550 }}>{sub}</div>}
                 </div>
                 <button
                   onClick={() => { setKpiModal(null); setModalQ(""); }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.background = "#FFF"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "rgba(255,255,255,0.8)"; }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08) rotate(90deg)"; e.currentTarget.style.background = "#FFF"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.12), inset 0 1px 1px #FFF"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "scale(1) rotate(0deg)"; e.currentTarget.style.background = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.08), inset 0 1px 1px #FFF"; }}
                   style={glassCloseBtnStyle}
                 >
                   <X size={16} color="#1D1D1F" strokeWidth={2.5} />
                 </button>
               </div>
 
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20, zIndex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 22, zIndex: 2 }}>
                 <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 380 }}>
                   <Search size={16} color="#86868B" strokeWidth={2.2} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
                   <input
@@ -1642,20 +1648,20 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                     placeholder="Search name, phone, plan…"
                     value={modalQ}
                     onChange={e => setModalQ(e.target.value)}
-                    onFocus={e => { e.currentTarget.style.background = "#FFF"; e.currentTarget.style.borderColor = "#05A97A"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.02), 0 0 0 4px rgba(5,169,122,0.15)"; }}
-                    onBlur={e => { e.currentTarget.style.background = "rgba(255,255,255,0.9)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.02)"; }}
+                    onFocus={e => { e.currentTarget.style.background = "#FFF"; e.currentTarget.style.borderColor = "#689D4B"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.02), 0 0 0 4px rgba(104,157,75,0.15)"; }}
+                    onBlur={e => { e.currentTarget.style.background = "rgba(255,255,255,0.85)"; e.currentTarget.style.borderColor = "rgba(255,255,255,1)"; e.currentTarget.style.boxShadow = "inset 0 2px 5px rgba(0,0,0,0.03), 0 6px 16px rgba(0,0,0,0.03)"; }}
                     style={glassSearchStyle}
                   />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-                  <div style={{ fontSize: 13, color: "#475569", fontWeight: 600, background: "rgba(255,255,255,0.7)", padding: "8px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.9)", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
-                    Total: <strong style={{ color: "#05A97A" }}>{filtered.length}</strong> (Zoho: <strong>{zohoActive}</strong> · DP: <strong>{dpActive}</strong>) · Societies: <strong>{socCount}</strong>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ fontSize: 13, color: "#475569", fontWeight: 650, background: "rgba(255,255,255,0.8)", padding: "9px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,1)", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
+                    Total: <strong style={{ color: "#689D4B" }}>{filtered.length}</strong> (Zoho: <strong>{zohoActive}</strong> · DP: <strong>{dpActive}</strong>) · Societies: <strong>{socCount}</strong>
                   </div>
                   <button
                     onClick={exportCsv}
-                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(5,169,122,0.45), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(5,169,122,0.35), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
-                    onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 14px 28px rgba(104,157,75,0.5), inset 0 1px 1px rgba(255,255,255,0.5)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(104,157,75,0.4), inset 0 1px 1px rgba(255,255,255,0.5)"; }}
+                    onMouseDown={e => { e.currentTarget.style.transform = "scale(0.96)"; }}
                     onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
                     style={glassExportBtnStyle}
                   >
@@ -1667,10 +1673,7 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
               <div style={{ flex: 1, overflowY: "auto", paddingRight: 4, zIndex: 1 }} className="scroll-thin">
                 {custs.length > 0 ? (
                   <>
-                    <div style={{ fontSize: 12.5, fontWeight: 850, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
-                      <span>Onboarded Customers</span>
-                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 800, boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6)" }}>{filtered.length}</span>
-                    </div>
+                    {glassSectionLabel("Onboarded Customers", filtered.length, GLASS_GREEN)}
                     {renderGlassSection(filtered, cols, GLASS_GREEN, "No active customers match your search.")}
                   </>
                 ) : (
@@ -1816,10 +1819,10 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       // Purifier ID for Onboarded).
       const glassCols = (idLabel, idKey) => [
         { label: "Name", render: r => <span style={{ fontWeight: 750, color: "#1D1D1F" }}>{r.name || "—"}</span> },
-        { label: "Phone", render: r => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 550 }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
-        { label: idLabel, render: (r, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 800, fontSize: 13 }}>{r[idKey]}</span> },
-        { label: "Plan", render: r => <span style={{ color: r.plan ? "#475569" : "#94A3B8", fontWeight: 600 }}>{r.plan || "—"}</span> },
-        { label: "Society", render: r => <span style={{ color: "#1D1D1F", fontWeight: 600 }}>{r.society || "—"}</span> },
+        { label: "Phone", render: r => <span style={{ color: "#64748B", fontFamily: "ui-monospace, monospace", fontSize: 13, fontWeight: 600 }}>{r.phone ? String(r.phone).replace(/\D/g, "").slice(-10) : "—"}</span> },
+        { label: idLabel, render: (r, theme) => <span style={{ fontFamily: "ui-monospace, monospace", color: theme.idColor, fontWeight: 850, fontSize: 13 }}>{r[idKey]}</span> },
+        { label: "Plan", render: r => <span style={{ color: r.plan ? "#475569" : "#94A3B8", fontWeight: 650 }}>{r.plan || "—"}</span> },
+        { label: "Society", render: r => <span style={{ color: "#1D1D1F", fontWeight: 650 }}>{r.society || "—"}</span> },
       ];
 
       // Per explicit user request: a section with genuinely no data (not
@@ -1837,25 +1840,25 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
       return (
         <div onClick={() => { setKpiModal(null); setModalQ(""); }} style={modalOverlayStyle}>
           <div onClick={e => e.stopPropagation()} className="pw-pop" style={glassModalStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, position: "relative" }}>
-              <div style={glassAura("rgba(5,169,122,0.15)", -30, -30, 140)} />
-              <div style={glassAura("rgba(217,119,6,0.12)", -20, 300, 160)} />
-              <div style={{ zIndex: 1 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 800, color: "#86868B", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 5 }}>Business View · Sales Pipeline</div>
-                <h2 style={{ fontSize: 22, margin: 0, color: "#1D1D1F", fontWeight: 800, letterSpacing: "-0.03em", textShadow: "0 1px 1px rgba(255,255,255,0.8)" }}>{title}</h2>
-                {sub && <div style={{ fontSize: 13.5, color: "#64748B", marginTop: 5, fontWeight: 550 }}>{sub}</div>}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, position: "relative", zIndex: 2 }}>
+              <div>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: "rgba(0,0,0,0.04)", fontSize: 11, fontWeight: 800, color: "#64748B", textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#689D4B" }} /> Business View · Sales Pipeline
+                </div>
+                <h2 style={{ fontSize: 23, margin: 0, color: "#1D1D1F", fontWeight: 850, letterSpacing: "-0.03em" }}>{title}</h2>
+                {sub && <div style={{ fontSize: 13.5, color: "#64748B", marginTop: 6, fontWeight: 550 }}>{sub}</div>}
               </div>
               <button
                 onClick={() => { setKpiModal(null); setModalQ(""); }}
-                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.05)"; e.currentTarget.style.background = "#FFF"; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.background = "rgba(255,255,255,0.8)"; }}
+                onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08) rotate(90deg)"; e.currentTarget.style.background = "#FFF"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.12), inset 0 1px 1px #FFF"; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = "scale(1) rotate(0deg)"; e.currentTarget.style.background = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.08), inset 0 1px 1px #FFF"; }}
                 style={glassCloseBtnStyle}
               >
                 <X size={16} color="#1D1D1F" strokeWidth={2.5} />
               </button>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 20, zIndex: 1 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 22, zIndex: 2 }}>
               <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 380 }}>
                 <Search size={16} color="#86868B" strokeWidth={2.2} style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
                 <input
@@ -1863,21 +1866,21 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
                   placeholder="Search name, phone, plan…"
                   value={modalQ}
                   onChange={e => setModalQ(e.target.value)}
-                  onFocus={e => { e.currentTarget.style.background = "#FFF"; e.currentTarget.style.borderColor = "#05A97A"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.02), 0 0 0 4px rgba(5,169,122,0.15)"; }}
-                  onBlur={e => { e.currentTarget.style.background = "rgba(255,255,255,0.9)"; e.currentTarget.style.borderColor = "rgba(255,255,255,0.9)"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.03), 0 4px 12px rgba(0,0,0,0.02)"; }}
+                  onFocus={e => { e.currentTarget.style.background = "#FFF"; e.currentTarget.style.borderColor = "#689D4B"; e.currentTarget.style.boxShadow = "inset 0 2px 4px rgba(0,0,0,0.02), 0 0 0 4px rgba(104,157,75,0.15)"; }}
+                  onBlur={e => { e.currentTarget.style.background = "rgba(255,255,255,0.85)"; e.currentTarget.style.borderColor = "rgba(255,255,255,1)"; e.currentTarget.style.boxShadow = "inset 0 2px 5px rgba(0,0,0,0.03), 0 6px 16px rgba(0,0,0,0.03)"; }}
                   style={glassSearchStyle}
                 />
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-                <div style={{ fontSize: 13, color: "#475569", fontWeight: 600, background: "rgba(255,255,255,0.7)", padding: "8px 16px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.9)", boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
-                  Total: <strong style={{ color: "#05A97A" }}>{interestedFiltered.length + onboardedFiltered.length}</strong>
-                  {leadFilter === "total" && <> (Interested: <strong style={{ color: "#D97706" }}>{interestedFiltered.length}</strong> · Onboarded: <strong style={{ color: "#05A97A" }}>{onboardedFiltered.length}</strong>)</>}
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ fontSize: 13, color: "#475569", fontWeight: 650, background: "rgba(255,255,255,0.8)", padding: "9px 18px", borderRadius: 14, border: "1px solid rgba(255,255,255,1)", boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
+                  Total: <strong style={{ color: "#689D4B" }}>{interestedFiltered.length + onboardedFiltered.length}</strong>
+                  {leadFilter === "total" && <> (Interested: <strong style={{ color: "#C49A45" }}>{interestedFiltered.length}</strong> · Onboarded: <strong style={{ color: "#689D4B" }}>{onboardedFiltered.length}</strong>)</>}
                 </div>
                 <button
                   onClick={exportCsv}
-                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(5,169,122,0.45), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 8px 20px rgba(5,169,122,0.35), inset 0 1px 1px rgba(255,255,255,0.4)"; }}
-                  onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 14px 28px rgba(104,157,75,0.5), inset 0 1px 1px rgba(255,255,255,0.5)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 10px 24px rgba(104,157,75,0.4), inset 0 1px 1px rgba(255,255,255,0.5)"; }}
+                  onMouseDown={e => { e.currentTarget.style.transform = "scale(0.96)"; }}
                   onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
                   style={glassExportBtnStyle}
                 >
@@ -1889,23 +1892,17 @@ export function AnalyticsOverview({ isAdmin = false, combined = false }) {
             {nothingToShow ? (
               <div style={{ padding: 40, zIndex: 1 }}><Empty msg="No leads or customers found for this apartment." /></div>
             ) : (
-              <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 26, paddingRight: 4, zIndex: 1 }} className="scroll-thin">
+              <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 28, paddingRight: 4, zIndex: 1 }} className="scroll-thin">
                 {showInterested && (
                   <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 850, color: GLASS_AMBER.labelColor, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
-                      <span>Interested Leads</span>
-                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: GLASS_AMBER.badgeBg, color: GLASS_AMBER.badgeColor, fontWeight: 800, boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6)" }}>{interestedFiltered.length}</span>
-                    </div>
+                    {glassSectionLabel("Interested Leads", interestedFiltered.length, GLASS_AMBER)}
                     {renderGlassSection(interestedFiltered, glassCols("Flat No", "flatNo"), GLASS_AMBER, "No interested leads match your search.")}
                   </div>
                 )}
 
                 {showOnboarded && (
                   <div>
-                    <div style={{ fontSize: 12.5, fontWeight: 850, color: GLASS_GREEN.labelColor, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
-                      <span>Onboarded Customers</span>
-                      <span style={{ fontSize: 11, padding: "3px 10px", borderRadius: 999, background: GLASS_GREEN.badgeBg, color: GLASS_GREEN.badgeColor, fontWeight: 800, boxShadow: "inset 0 1px 1px rgba(255,255,255,0.6)" }}>{onboardedFiltered.length}</span>
-                    </div>
+                    {glassSectionLabel("Onboarded Customers", onboardedFiltered.length, GLASS_GREEN)}
                     {renderGlassSection(onboardedFiltered, glassCols("Purifier ID", "purifierId"), GLASS_GREEN, "No onboarded customers match your search.")}
                   </div>
                 )}
