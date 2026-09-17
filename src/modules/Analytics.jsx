@@ -4654,7 +4654,21 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
     return { society: s, times, launchIdx, span: nowIdx - launchIdx + 1 };
   }).sort((a, b) => a.launchIdx - b.launchIdx || a.society.localeCompare(b.society));
 
-  const maxM = Math.min(24, Math.max(1, ...societies.map(s => s.span))); // cap M-columns (≥1)
+  // v2.29.480 fix — per explicit user report ("you need to show the count"
+  // for MJR Clique Hydra Apartment, whose real ~80 Active residents all
+  // start around Feb 2026, but ONE real, legitimately-Active device named
+  // after the building itself was installed back in Feb 2024 — a real
+  // date the user explicitly wants counted, not excluded (see v2.29.479).
+  // With the old 24-column cap, that one 2024 launch pushed every one of
+  // MJR's real 2026 residents past column 24 — entirely off the visible
+  // table, even though they were all correctly counted in the total. This
+  // cap only exists as a safety net against a truly pathological span (an
+  // unparseable date defaulting to some far-off epoch), not to limit a
+  // real multi-year history — raised from 24 to 60 (5 years) so a
+  // genuine early outlier like this one no longer hides everything after
+  // it; still bounded so a genuinely broken date can't render thousands
+  // of columns.
+  const maxM = Math.min(60, Math.max(1, ...societies.map(s => s.span))); // cap M-columns (≥1) — safety net only
   const mCols = Array.from({ length: maxM }, (_, k) => k); // 0-based → M(k+1)
 
   // Cumulative customers in a society by the end of its k-th month since launch.
