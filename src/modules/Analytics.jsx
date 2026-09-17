@@ -4608,19 +4608,30 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
   // customers). Each real customer now counts exactly once toward their
   // own society's growth, rather than once per subscription (a customer
   // with two plans over time no longer inflates their society's count).
+  // v2.29.479 fix — per explicit user request ("I want only active
+  // customers data to be shown / if the customer has uninstalled then
+  // reduce the numbers", plus "Active Customers is 232, so i want that
+  // data to be shown here also"): gated to `canonicalStatus(c.status) ===
+  // "Active"` — the exact same definition Business View's own Active
+  // Customers Directory/Onboarded column already uses — so a customer who
+  // later uninstalls/pauses no longer counts toward their society's
+  // running total at all (rather than staying counted forever once they
+  // ever signed up), and this screen's own grand total now matches the
+  // Active Customers KPI figure directly.
   const custs = data.custs
-    .filter(c => stackOk(c.isDpCustomer ? "DP" : "Zoho"))
+    .filter(c => stackOk(c.isDpCustomer ? "DP" : "Zoho") && canonicalStatus(c.status) === "Active")
     .map(c => ({ society: canonicalSociety(c.society || ""), since: sinceOfCust(c) }))
     .filter(x => x.society && x.since && isRealSociety(x.society) && (!socFilterSet || socFilterSet.has(x.society)));
 
   if (!custs.length) {
     const total = data.custs.length;
+    const active = data.custs.filter(c => canonicalStatus(c.status) === "Active").length;
     const withSoc = data.custs.filter(c => canonicalSociety(c.society || "") && isRealSociety(canonicalSociety(c.society || ""))).length;
     const withDate = data.custs.filter(c => sinceOfCust(c)).length;
     return (
       <div className="fade-up">
         <div style={{ marginBottom: 12, fontSize: 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
-        <Empty msg={`Nothing to track yet. Loaded ${total} customer${total !== 1 ? "s" : ""} and ${data.subs.length} subscriptions — ${withSoc} customers have a real society and ${withDate} have an onboarding date (own profile or earliest subscription). The tracker needs both.`} />
+        <Empty msg={`Nothing to track yet. Loaded ${total} customer${total !== 1 ? "s" : ""} and ${data.subs.length} subscriptions — ${active} are Active, ${withSoc} have a real society, and ${withDate} have an onboarding date (own profile or earliest subscription). The tracker needs all three.`} />
       </div>
     );
   }
@@ -4696,7 +4707,7 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
           {!embedded && <div className="eyebrow">Analytics</div>}
           <div style={{ fontSize: embedded ? 16 : 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
         </div>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{matrix.length} societ{matrix.length === 1 ? "y" : "ies"} · {grand} sign-ups to date · months since each society’s first subscription (M1 = launch month){canEditLaunch ? " · edit a Launch month to realign that society" : ""}</span>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{matrix.length} societ{matrix.length === 1 ? "y" : "ies"} · {grand} active customers to date · months since each society’s first subscription (M1 = launch month){canEditLaunch ? " · edit a Launch month to realign that society" : ""}</span>
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
 
