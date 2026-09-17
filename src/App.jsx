@@ -5,7 +5,7 @@ import {
   LogOut, Search, Plus, Eye, EyeOff, ShieldCheck, Filter,
   TrendingUp, Award, Wallet, ChevronRight, X, CheckCircle2, Clock,
   AlertCircle, Download, Lock, ArrowUpRight, Trash2, KeyRound, Menu,
-  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Landmark, Scale, ArrowLeftRight, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical, Gauge, Waves, Upload, PlayCircle, Monitor, PanelLeftClose, PanelLeftOpen
+  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Scale, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical, Gauge, Waves, Upload, PlayCircle, Monitor, PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -73,7 +73,7 @@ import { IoTDevices, IoTAlertsPage } from "./modules/IoT";
 import {
   AnalyticsOverview, CreditsAnalytics, NetRevenue,
   PenetrationTracker, BillingAnalytics, AppLogs, EarnedRevenue,
-  Reconciliation, DPTransactions, AOP, ChurnRiskRadar, ApartmentPerformance,
+  AOP,
   ApiLoadTracker,
 } from "./modules/Analytics";
 
@@ -1335,11 +1335,7 @@ const doRefresh = async () => {
       { id: "an_overview_v2", label: "Overview V2", icon: Sparkles },
       { id: "analytics", label: "Referral", icon: BarChart3 },
       { id: "an_earned", label: "Earned Revenue", icon: Scale },
-      { id: "an_reconciliation", label: "Reconciliation", icon: ArrowLeftRight },
-      { id: "an_dptxn", label: "DP Transaction", icon: Landmark },
       ...(isModuleAdmin ? [{ id: "an_aop", label: "AOP", icon: Target }] : []),
-      { id: "an_apartment", label: "Apartment Performance", icon: Boxes },
-      { id: "an_churn", label: "Renewal & Churn Risk", icon: AlertCircle },
       { id: "an_billing", label: "Billing", icon: Receipt },
       { id: "an_revenue", label: "Revenue", icon: TrendingUp },
       { id: "an_penetration", label: "Penetration Tracker", icon: Boxes },
@@ -1572,11 +1568,7 @@ const doRefresh = async () => {
             {tab === "an_overview_v2" && <AnalyticsOverview key={refreshKey} isAdmin={tabIsAdmin} combined={true} />}
             {tab === "analytics" && <ReferralAnalyticsTab key={refreshKey} />}
             {tab === "an_earned" && <EarnedRevenue key={refreshKey} />}
-            {tab === "an_reconciliation" && <Reconciliation key={refreshKey} />}
-            {tab === "an_dptxn" && <DPTransactions key={refreshKey} />}
             {tab === "an_aop" && isModuleAdmin && <AOP key={refreshKey} accessLevel={tabAccess} />}
-            {tab === "an_apartment" && <ApartmentPerformance key={refreshKey} />}
-            {tab === "an_churn" && <ChurnRiskRadar key={refreshKey} />}
             {tab === "an_billing" && <BillingAnalytics key={refreshKey} />}
             {tab === "an_revenue" && <NetRevenue key={refreshKey} />}
             {tab === "an_penetration" && <PenetrationTracker key={refreshKey} />}
