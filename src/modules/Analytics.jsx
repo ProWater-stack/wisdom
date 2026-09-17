@@ -4661,8 +4661,23 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
       return s.times.filter(t => t <= end).length;
     }),
   }));
-  const colTotals = mCols.map(k => matrix.reduce((sum, r) => sum + (r.cells[k] ?? 0), 0));
   const grand = matrix.reduce((s, r) => s + r.total, 0);
+
+  // Real calendar-month combined total (v2.29.478 fix, per explicit user
+  // report — "the total logic is wrong"): the table's own M1/M2/M3…
+  // columns are aligned to EACH SOCIETY'S OWN launch month, so the same
+  // column index means a different real calendar month per row (one
+  // society's M5 might be March 2024, another's M5 might be June 2026).
+  // Summing cell values at the same column index — what this screen used
+  // to do — silently added together numbers from different real time
+  // periods, producing a "total" that didn't correspond to any single
+  // point in time. This instead uses ONE shared, real calendar-month axis
+  // across every society, so the combined total means something concrete:
+  // the actual combined sign-up count as of each real calendar month.
+  const globalLaunchIdx = Math.min(...societies.map(s => s.launchIdx));
+  const calCols = Array.from({ length: Math.max(1, nowIdx - globalLaunchIdx + 1) }, (_, k) => globalLaunchIdx + k);
+  const allTimes = custs.map(c => c.since.getTime());
+  const calTotals = calCols.map(idx => allTimes.filter(t => t <= monthEndTs(idx)).length);
 
   const exportCsv = () => exportToCsv("prowater-penetration.csv",
     [{ label: "Society", get: r => r.society }, { label: "Launch", get: r => r.launch },
@@ -4685,16 +4700,34 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
 
+      {/* Combined Total — real calendar-month axis, per the v2.29.478 fix
+          above (replaces the old per-column-index "Total" row, which mixed
+          different real time periods across societies together). */}
+      <Card pad={false} style={{ marginBottom: 16 }}>
+        <div style={{ padding: "12px 16px 8px" }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)" }}>Combined Total — All Societies</span>
+          <span style={{ fontSize: 12, color: "var(--muted)", marginLeft: 8 }}>by real calendar month (not months-since-launch)</span>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
+            <thead>
+              <tr>
+                {calCols.map((idx, i) => <th key={i} style={{ ...thBase, textAlign: "center", color: "var(--muted)", minWidth: 56 }}>{labelOf(idx)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {calTotals.map((t, i) => <td key={i} style={{ ...tdNum, fontWeight: 700, color: "var(--forest)" }}>{t}</td>)}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       <Card pad={false}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
             <thead>
-              {/* column totals across the top (only societies that reached that M) */}
-              <tr style={{ background: "var(--mint-2)" }}>
-                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 0, 3), textAlign: "center", color: "var(--f)" }}>Total</th>
-                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 210, 3), textAlign: "center" }} />
-                {colTotals.map((t, i) => <th key={i} style={{ ...thBase, textAlign: "center", color: "var(--forest)", fontSize: 13 }}>{t}</th>)}
-              </tr>
               <tr>
                 <th style={{ ...thBase, ...stickyL("#fff", 0, 3), textAlign: "center", color: "var(--f)", minWidth: 210 }}>Society Name</th>
                 <th style={{ ...thBase, ...stickyL("#fff", 210, 3), textAlign: "center", color: "var(--muted)", minWidth: 88, borderRight: "1px solid var(--border)" }}>Launch</th>
