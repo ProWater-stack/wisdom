@@ -4557,45 +4557,70 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const keyLc = (x) => String(x || "").toLowerCase().trim();
 
-  // Society lookup, keyed on every customer id we might match a subscription by
-  // (zoho_customer_id / customer_number / email).
-  const socByCust = {};
+  // Customer lookup, keyed on every id a subscription might reference back
+  // (zoho_customer_id / customer_number / email) — used ONLY to find a
+  // customer's OWN earliest subscription date below, never to determine
+  // their society.
+  const custByKey = {};
   data.custs.forEach(c => {
-    const soc = (c.society && c.society !== "—") ? c.society : "";
-    if (!soc) return;
-    [c.zohoId, c.id, c.email].forEach(k => { if (k) socByCust[keyLc(k)] = soc; });
+    [c.zohoId, c.id, c.customerNumber, c.email].forEach(k => { if (k) custByKey[keyLc(k)] = c; });
   });
-  const societyOfSub = (s) =>
-    socByCust[keyLc(s.zohoCustomerId)] || socByCust[keyLc(s.zohoId)] ||
-    socByCust[keyLc(s.customerNumber)] || socByCust[keyLc(s.email)] || "";
+  const custOfSub = (s) =>
+    custByKey[keyLc(s.zohoCustomerId)] || custByKey[keyLc(s.zohoId)] ||
+    custByKey[keyLc(s.customerNumber)] || custByKey[keyLc(s.email)] || null;
+
+  // Earliest subscription date per customer (v2.29.476 fix — mirrors
+  // AnalyticsOverview's own `subSinceByCust`) — a real onboarding date for
+  // Zoho customers, whose own profile almost never carries a creation/
+  // signup date at all (only DP ones do, via `since`).
+  const subSinceByCust = {};
+  data.subs.forEach(s => {
+    const c = custOfSub(s);
+    const key = c && (keyLc(c.zohoId) || keyLc(c.id) || keyLc(c.customerNumber));
+    if (!key) return;
+    const d = parseFlexDate(s.createdAt || s.activatedAt);
+    if (!d) return;
+    if (!subSinceByCust[key] || d < subSinceByCust[key]) subSinceByCust[key] = d;
+  });
+  const sinceOfCust = (c) => {
+    const own = parseFlexDate(c.since);
+    if (own) return own;
+    const key = keyLc(c.zohoId) || keyLc(c.id) || keyLc(c.customerNumber);
+    return (key && subSinceByCust[key]) || null;
+  };
 
   // Stack filter & Society filter scoping
   const stackOk = (st) => !stackFilter || stackFilter.length === 0 || stackFilter.includes(st);
   const socFilterSet = societyFilter && societyFilter.length ? new Set(societyFilter) : null;
 
-  const custsFromSubs = stackOk("Zoho")
-    ? data.subs
-        .map(s => ({ society: canonicalSociety(societyOfSub(s)), since: parseFlexDate(s.createdAt || s.activatedAt) }))
-        .filter(x => x.society && x.since && isRealSociety(x.society) && (!socFilterSet || socFilterSet.has(x.society)))
-    : [];
-
-  const custsFromDp = stackOk("DP")
-    ? (data.custs || [])
-        .filter(c => c.isDpCustomer)
-        .map(c => ({ society: canonicalSociety(c.society || ""), since: parseFlexDate(c.since) }))
-        .filter(x => x.society && x.since && isRealSociety(x.society) && (!socFilterSet || socFilterSet.has(x.society)))
-    : [];
-
-  const custs = [...custsFromSubs, ...custsFromDp];
+  // v2.29.476 fix — per an explicit user report ("MJR apartment is showing
+  // wrong data"): this used to count SUBSCRIPTIONS, re-deriving each one's
+  // society via a fragile subscription→customer ID join (`societyOfSub`,
+  // now removed) that silently dropped the whole row whenever that join
+  // missed — exactly what was happening for MJR Clique Hydra Apartment's
+  // own real Zoho subscriptions, undercounting it down to a single sign-up
+  // despite Business View's own count (a different, working code path
+  // that reads `c.society` directly) showing 67 real onboarded customers
+  // there. Now iterates CUSTOMERS instead — the same population Business
+  // View already trusts for `c.society` — and only uses the subscription
+  // join for the (much lower-stakes) onboarding DATE, with `c.since`
+  // preferred when a customer's own profile already carries one (DP
+  // customers). Each real customer now counts exactly once toward their
+  // own society's growth, rather than once per subscription (a customer
+  // with two plans over time no longer inflates their society's count).
+  const custs = data.custs
+    .filter(c => stackOk(c.isDpCustomer ? "DP" : "Zoho"))
+    .map(c => ({ society: canonicalSociety(c.society || ""), since: sinceOfCust(c) }))
+    .filter(x => x.society && x.since && isRealSociety(x.society) && (!socFilterSet || socFilterSet.has(x.society)));
 
   if (!custs.length) {
-    const total = data.subs.length;
-    const withSoc = data.subs.filter(s => societyOfSub(s)).length;
-    const withDate = data.subs.filter(s => parseFlexDate(s.createdAt || s.activatedAt)).length;
+    const total = data.custs.length;
+    const withSoc = data.custs.filter(c => canonicalSociety(c.society || "") && isRealSociety(canonicalSociety(c.society || ""))).length;
+    const withDate = data.custs.filter(c => sinceOfCust(c)).length;
     return (
       <div className="fade-up">
         <div style={{ marginBottom: 12, fontSize: 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
-        <Empty msg={`Nothing to track yet. Loaded ${total} subscription${total !== 1 ? "s" : ""} and ${data.custs.length} customers — ${withSoc} subscriptions matched a society (via customer_id → zoho_customer_id) and ${withDate} have a created date. The tracker needs both.`} />
+        <Empty msg={`Nothing to track yet. Loaded ${total} customer${total !== 1 ? "s" : ""} and ${data.subs.length} subscriptions — ${withSoc} customers have a real society and ${withDate} have an onboarding date (own profile or earliest subscription). The tracker needs both.`} />
       </div>
     );
   }
