@@ -4640,73 +4640,60 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
   const idxOf = (d) => d.getFullYear() * 12 + d.getMonth();
   const now = (asOf instanceof Date && !isNaN(asOf)) ? asOf : new Date();   // as-of end of the selected period
   const nowIdx = idxOf(now);
-  const labelOf = (idx) => `${MONTHS[((idx % 12) + 12) % 12]} '${String(Math.floor(idx / 12)).slice(2)}`;
+  const labelOf = (idx) => `${MONTHS[((idx % 12) + 12) % 12]} '${String(Math.floor(idx / 12)).slice(2)}`; // used for the Launch column's own text
   const monthEndTs = (idx) => new Date(Math.floor(idx / 12), (idx % 12) + 1, 0, 23, 59, 59).getTime();
 
-  // Group by society; each society's launch = the month of its FIRST sign-up.
-  // M1 = that month, M2 = the next, … so every society is aligned to its own M1.
+  // Group by society; launch = the month of its first real sign-up (an
+  // admin can override this — see the Launch column below — e.g. to
+  // discount a known-outlier record for blanking purposes).
   const bySoc = {};
   custs.forEach(c => { (bySoc[c.society] = bySoc[c.society] || []).push(c.since.getTime()); });
   const societies = Object.keys(bySoc).map(s => {
     const times = bySoc[s].sort((a, b) => a - b);
     const ovIdx = ymToIdx(getLaunchOverride(s));                       // admin override wins
     const launchIdx = (ovIdx != null) ? ovIdx : idxOf(new Date(times[0]));
-    return { society: s, times, launchIdx, span: nowIdx - launchIdx + 1 };
+    return { society: s, times, launchIdx };
   }).sort((a, b) => a.launchIdx - b.launchIdx || a.society.localeCompare(b.society));
 
-  // v2.29.480 fix — per explicit user report ("you need to show the count"
-  // for MJR Clique Hydra Apartment, whose real ~80 Active residents all
-  // start around Feb 2026, but ONE real, legitimately-Active device named
-  // after the building itself was installed back in Feb 2024 — a real
-  // date the user explicitly wants counted, not excluded (see v2.29.479).
-  // With the old 24-column cap, that one 2024 launch pushed every one of
-  // MJR's real 2026 residents past column 24 — entirely off the visible
-  // table, even though they were all correctly counted in the total. This
-  // cap only exists as a safety net against a truly pathological span (an
-  // unparseable date defaulting to some far-off epoch), not to limit a
-  // real multi-year history — raised from 24 to 60 (5 years) so a
-  // genuine early outlier like this one no longer hides everything after
-  // it; still bounded so a genuinely broken date can't render thousands
-  // of columns.
-  const maxM = Math.min(60, Math.max(1, ...societies.map(s => s.span))); // cap M-columns (≥1) — safety net only
-  const mCols = Array.from({ length: maxM }, (_, k) => k); // 0-based → M(k+1)
+  // v2.29.481 — per explicit user request: instead of each society's own
+  // "months since launch" (M1, M2, M3…, which put every row on a
+  // DIFFERENT real calendar axis and needed an ever-larger column cap to
+  // avoid hiding real growth — see v2.29.480's 24→60 bump), every row now
+  // shares ONE real calendar axis: one compact column per FULL PAST YEAR
+  // ("2024", "2025", …), then one column per MONTH of the CURRENT year
+  // (Jan, Feb, … through the current month). This also makes a shared
+  // "Total" row meaningful again — every row's column N now means the
+  // exact same real time period — so the separate "Combined Total" strip
+  // added in v2.29.478 purely to work around the old mismatched-axis
+  // problem is no longer needed and folds back into this one table.
+  const globalLaunchIdx = Math.min(...societies.map(s => s.launchIdx));
+  const startYear = Math.floor(globalLaunchIdx / 12);
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth();
+  const calCols = [];
+  for (let y = startYear; y < nowYear; y++) calCols.push({ label: String(y), endIdx: idxOf(new Date(y, 11, 1)) });
+  for (let m = 0; m <= nowMonth; m++) calCols.push({ label: MONTHS[m], endIdx: idxOf(new Date(nowYear, m, 1)) });
 
-  // Cumulative customers in a society by the end of its k-th month since launch.
-  // null once we run past the current calendar month (that M hasn't happened yet).
+  // Cumulative customers in a society as of the end of each real calendar
+  // column. null before the society's own launch (hasn't started yet).
   const matrix = societies.map(s => ({
     society: s.society,
     launch: labelOf(s.launchIdx),
     launchIdx: s.launchIdx,
     overridden: getLaunchOverride(s.society) != null,
     total: s.times.length,
-    cells: mCols.map(k => {
-      const mIdx = s.launchIdx + k;
-      if (mIdx > nowIdx) return null;
-      const end = monthEndTs(mIdx);
+    cells: calCols.map(col => {
+      if (col.endIdx < s.launchIdx) return null;
+      const end = monthEndTs(col.endIdx);
       return s.times.filter(t => t <= end).length;
     }),
   }));
   const grand = matrix.reduce((s, r) => s + r.total, 0);
-
-  // Real calendar-month combined total (v2.29.478 fix, per explicit user
-  // report — "the total logic is wrong"): the table's own M1/M2/M3…
-  // columns are aligned to EACH SOCIETY'S OWN launch month, so the same
-  // column index means a different real calendar month per row (one
-  // society's M5 might be March 2024, another's M5 might be June 2026).
-  // Summing cell values at the same column index — what this screen used
-  // to do — silently added together numbers from different real time
-  // periods, producing a "total" that didn't correspond to any single
-  // point in time. This instead uses ONE shared, real calendar-month axis
-  // across every society, so the combined total means something concrete:
-  // the actual combined sign-up count as of each real calendar month.
-  const globalLaunchIdx = Math.min(...societies.map(s => s.launchIdx));
-  const calCols = Array.from({ length: Math.max(1, nowIdx - globalLaunchIdx + 1) }, (_, k) => globalLaunchIdx + k);
-  const allTimes = custs.map(c => c.since.getTime());
-  const calTotals = calCols.map(idx => allTimes.filter(t => t <= monthEndTs(idx)).length);
+  const colTotals = calCols.map((col, k) => matrix.reduce((sum, r) => sum + (r.cells[k] ?? 0), 0));
 
   const exportCsv = () => exportToCsv("prowater-penetration.csv",
     [{ label: "Society", get: r => r.society }, { label: "Launch", get: r => r.launch },
-     ...mCols.map(k => ({ label: `M${k + 1}`, get: r => r.cells[k] ?? "" }))],
+     ...calCols.map((col, k) => ({ label: col.label, get: r => r.cells[k] ?? "" }))],
     matrix);
 
   const thBase = { fontWeight: 700, fontSize: 12, padding: "10px 14px", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" };
@@ -4721,42 +4708,25 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
           {!embedded && <div className="eyebrow">Analytics</div>}
           <div style={{ fontSize: embedded ? 16 : 20, fontWeight: 700, color: "var(--f)" }}>Penetration Tracker</div>
         </div>
-        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{matrix.length} societ{matrix.length === 1 ? "y" : "ies"} · {grand} active customers to date · months since each society’s first subscription (M1 = launch month){canEditLaunch ? " · edit a Launch month to realign that society" : ""}</span>
+        <span style={{ fontSize: 12.5, color: "var(--muted)" }}>{matrix.length} societ{matrix.length === 1 ? "y" : "ies"} · {grand} active customers to date · past years shown as one column, current year broken out by month{canEditLaunch ? " · edit a Launch month to realign that society" : ""}</span>
         <button onClick={exportCsv} style={{ ...btnGhost, marginLeft: "auto" }}><Download size={15} /> Export</button>
       </div>
-
-      {/* Combined Total — real calendar-month axis, per the v2.29.478 fix
-          above (replaces the old per-column-index "Total" row, which mixed
-          different real time periods across societies together). */}
-      <Card pad={false} style={{ marginBottom: 16 }}>
-        <div style={{ padding: "12px 16px 8px" }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--f)" }}>Combined Total — All Societies</span>
-          <span style={{ fontSize: 12, color: "var(--muted)", marginLeft: 8 }}>by real calendar month (not months-since-launch)</span>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
-            <thead>
-              <tr>
-                {calCols.map((idx, i) => <th key={i} style={{ ...thBase, textAlign: "center", color: "var(--muted)", minWidth: 56 }}>{labelOf(idx)}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                {calTotals.map((t, i) => <td key={i} style={{ ...tdNum, fontWeight: 700, color: "var(--forest)" }}>{t}</td>)}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </Card>
 
       <Card pad={false}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ borderCollapse: "collapse", width: "max-content", minWidth: "100%" }}>
             <thead>
+              {/* column totals across the top — valid now that every row
+                  shares the SAME real calendar column axis (see v2.29.481). */}
+              <tr style={{ background: "var(--mint-2)" }}>
+                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 0, 3), textAlign: "center", color: "var(--f)" }}>Total</th>
+                <th style={{ ...thBase, ...stickyL("var(--mint-2)", 210, 3), textAlign: "center" }} />
+                {colTotals.map((t, i) => <th key={i} style={{ ...thBase, textAlign: "center", color: "var(--forest)", fontSize: 13 }}>{t}</th>)}
+              </tr>
               <tr>
                 <th style={{ ...thBase, ...stickyL("#fff", 0, 3), textAlign: "center", color: "var(--f)", minWidth: 210 }}>Society Name</th>
                 <th style={{ ...thBase, ...stickyL("#fff", 210, 3), textAlign: "center", color: "var(--muted)", minWidth: 88, borderRight: "1px solid var(--border)" }}>Launch</th>
-                {mCols.map(k => <th key={k} style={{ ...thBase, textAlign: "center", color: "var(--muted)", minWidth: 56 }}>M{k + 1}</th>)}
+                {calCols.map((col, k) => <th key={k} style={{ ...thBase, textAlign: "center", color: "var(--muted)", minWidth: 56 }}>{col.label}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -4786,7 +4756,7 @@ export function PenetrationTracker({ subsData, custsData, societyFilter = null, 
         </div>
       </Card>
       <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
-        Each row is aligned to the society’s own <b>M1</b> = the month of its first subscription (subscriptions API <code>created_at</code>, joined to the customer’s society via customer_id → zoho_customer_id). Cells are cumulative sign-ups by that month; blank = that month hasn’t occurred yet for the society. Green = grew that month.
+        Columns are one shared real calendar timeline across every society — a full past year compressed into one column (e.g. <b>2024</b>), the current year broken out month by month (<b>Jan</b>, <b>Feb</b>, …). Cells are cumulative active customers by the end of that period; blank = the society hadn’t launched yet. Green = grew that period.
       </div>
     </div>
   );
