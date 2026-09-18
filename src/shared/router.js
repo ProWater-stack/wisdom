@@ -97,11 +97,9 @@ export const MODULE_TABS = {
     { id: "bill_deposits", label: "Deposits & Refunds" },
     { id: "bill_plans", label: "Plans" },
   ],
-  fsm: [
-    { id: "fsm_track", label: "Track Technician" },
-    { id: "fsm_amc", label: "AMC / Maintenance" },
-    { id: "fsm_quality", label: "Water Quality" },
-  ],
+  // fsm: no sections — all 3 removed per explicit user request; the
+  // "FSM System" tile itself stays on Home (per explicit follow-up).
+  fsm: [],
   erp: [{ id: "erp_assets", label: "Asset Lifecycle" }],
   autoscheduler: [
     { id: "as_society", label: "Auto GS - Society" },

@@ -5,7 +5,7 @@ import {
   LogOut, Search, Plus, Eye, EyeOff, ShieldCheck, Filter,
   TrendingUp, Award, Wallet, ChevronRight, X, CheckCircle2, Clock,
   AlertCircle, Download, Lock, ArrowUpRight, Trash2, KeyRound, Menu,
-  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Scale, Droplets, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical, Gauge, Waves, Upload, PlayCircle, Monitor, PanelLeftClose, PanelLeftOpen
+  Coins, Check, Ban, Hourglass, Globe, MapPin, Undo2, RotateCcw, RefreshCw, Camera, Image as ImageIcon, Trophy, Medal, MessageCircle, Phone, ArrowUpDown, ChevronLeft, Moon, Sun, Printer, Briefcase, Receipt, Boxes, Wrench, Home as HomeIcon, LayoutGrid, Construction, Ticket, UserRound, PencilLine, Cpu, Scale, CalendarClock, Repeat, Info, Paperclip, GripVertical, CalendarDays, Bell, Tag, CalendarRange, Rocket, Target, ArrowUp, ArrowDown, ChevronDown, ChevronUp, SlidersHorizontal, Sparkles, Thermometer, FlaskConical, Gauge, Waves, Upload, PlayCircle, Monitor, PanelLeftClose, PanelLeftOpen
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis,
@@ -59,7 +59,6 @@ import { AssetLifecycle } from "./modules/ERP";
 import { UsersAdmin } from "./modules/Employee";
 import { DeviceReplacement } from "./modules/DeviceReplacement";
 import { PasswordVault } from "./modules/Vault";
-import { TrackTechnician, MaintenanceSchedule, WaterQuality } from "./modules/FSM";
 import { AutoGSSociety, IoTAlerts } from "./modules/AutoScheduler";
 import { tkStatus, TicketBadge, TicketOverview, SparesTable, TicketList } from "./modules/Ticketing";
 import { ApiUsageDashboard, Logs, Failures } from "./modules/LogsTracker";
@@ -1199,7 +1198,6 @@ function Shell({ module = "referral", onHome }) {
     : module === "ticketing" ? "tk_overview"
     : module === "customer" ? "cust_all"
     : module === "billing" ? "bill_subs"
-    : module === "fsm" ? "fsm_track"
     : module === "erp" ? "erp_assets"
     : module === "autoscheduler" ? "as_society"
     : module === "iot" ? "iot_devices"
@@ -1364,11 +1362,11 @@ const doRefresh = async () => {
       { id: "bill_deposits", label: "Deposits & Refunds", icon: Wallet },
       { id: "bill_plans", label: "Plans", icon: Tag },
     ],
-    fsm: [
-      { id: "fsm_track", label: "Track Technician", icon: MapPin },
-      { id: "fsm_amc", label: "AMC / Maintenance", icon: CalendarClock },
-      { id: "fsm_quality", label: "Water Quality", icon: Droplets },
-    ],
+    // fsm: no sections — all 3 (Track Technician, AMC/Maintenance, Water
+    // Quality) removed per explicit user request; the "FSM System" tile
+    // itself stays on Home (per explicit follow-up), showing the existing
+    // generic "No sections enabled" placeholder below.
+    fsm: [],
     erp: [
       { id: "erp_assets", label: "Asset Lifecycle", icon: Boxes },
     ],
@@ -1618,9 +1616,6 @@ const doRefresh = async () => {
             {tab === "bill_invoices" && <Invoices key={refreshKey} />}
             {tab === "bill_deposits" && <DepositRefunds key={refreshKey} />}
             {tab === "bill_plans" && <Plans key={refreshKey} />}
-            {tab === "fsm_track" && <TrackTechnician key={refreshKey} />}
-            {tab === "fsm_amc" && <MaintenanceSchedule key={refreshKey} />}
-            {tab === "fsm_quality" && <WaterQuality key={refreshKey} />}
             {tab === "erp_assets" && <AssetLifecycle key={refreshKey} />}
             {tab === "as_society" && <AutoGSSociety key={refreshKey} accessLevel={tabAccess} />}
             {tab === "as_iot" && <IoTAlerts key={refreshKey} />}
