@@ -173,9 +173,9 @@ function AppleSegmentedControl({ options, value, onChange, style = {} }) {
 }
 
 /* ── Apple-style Search Bar ───────────────────────────────────────────────── */
-function AppleSearchBar({ value, onChange, placeholder = "Search…" }) {
+function AppleSearchBar({ value, onChange, placeholder = "Search…", style = {} }) {
   return (
-    <div style={{ position: "relative", minWidth: 200, maxWidth: 360, flex: 1 }}>
+    <div style={{ position: "relative", width: "100%", maxWidth: 360, ...style }}>
       <Search
         size={15}
         style={{
@@ -1442,123 +1442,219 @@ export function CustomerSatisfaction() {
 const FLEET_TECHNICIANS = [
   {
     id: "TECH-01",
-    name: "Ramesh K",
-    status: "en_route", // 'en_route' | 'on_job' | 'available'
-    lat: 12.9280,
-    lng: 77.6320,
-    destLat: 12.8750,
-    destLng: 77.7200,
-    area: "Koramangala, South Zone",
-    rating: 4.9,
+    name: "Ramesh Kumar",
+    status: "en_route", // 'en_route' | 'on_job' | 'delayed' | 'available' | 'unavailable'
+    lat: 12.9352,
+    lng: 77.6245,
+    destLat: 12.9560,
+    destLng: 77.7010,
+    area: "Koramangala · South Zone",
     phone: "+91 98450 11223",
+    delayedBy: null,
+    unavailableSince: null,
     currentJob: {
       id: "JOB-101",
       customer: "Abhijit Dey",
       society: "MJR Clique Hydra Apartment",
       flat: "Tower B, Flat 402",
       jobType: "Filter Service & TDS Tune",
-      etaMins: 12,
+      etaMins: 14,
       distanceKm: 4.2,
       timeSlot: "2:00 PM - 2:45 PM",
       progressStep: 2,
-    }
+      priority: "High",
+      customerPhone: "+91 98450 99881",
+    },
   },
   {
     id: "TECH-02",
-    name: "Suresh M",
-    status: "available",
+    name: "Suresh Murthy",
+    status: "on_job",
     lat: 12.9719,
     lng: 77.6412,
-    destLat: null,
-    destLng: null,
-    area: "Indiranagar Hub Standby",
-    rating: 4.8,
+    destLat: 12.9719,
+    destLng: 77.6412,
+    area: "Indiranagar · East Zone",
     phone: "+91 98801 44556",
-    currentJob: null,
+    delayedBy: null,
+    unavailableSince: null,
+    currentJob: {
+      id: "JOB-102",
+      customer: "Ravi Kumar",
+      society: "Prestige Lakeside",
+      flat: "Tower 3, Flat 804",
+      jobType: "Quarterly AMC Periodic Service",
+      etaMins: 0,
+      distanceKm: 0,
+      timeSlot: "1:30 PM - 2:30 PM",
+      progressStep: 3,
+      priority: "Normal",
+      customerPhone: "+91 98801 77665",
+    },
   },
   {
     id: "TECH-03",
-    name: "Anil P",
-    status: "on_job",
+    name: "Anil Patel",
+    status: "delayed",
     lat: 12.9081,
     lng: 77.6476,
-    destLat: 12.9081,
-    destLng: 77.6476,
-    area: "HSR Layout Sector 2",
-    rating: 4.7,
+    destLat: 12.9350,
+    destLng: 77.6820,
+    area: "HSR Layout · South-East",
     phone: "+91 99002 77889",
+    delayedBy: "+25 mins",
+    unavailableSince: null,
+    delayReason: "Heavy ORR Junction Traffic Congestion",
+    currentJob: {
+      id: "JOB-103",
+      customer: "Sneha Patil",
+      society: "Sobha Dream Acres",
+      flat: "Wing C, Flat 1201",
+      jobType: "RO Membrane Replacement",
+      etaMins: 35,
+      distanceKm: 5.8,
+      timeSlot: "2:30 PM - 3:15 PM",
+      progressStep: 2,
+      priority: "Urgent",
+      customerPhone: "+91 99002 33441",
+    },
+  },
+  {
+    id: "TECH-04",
+    name: "Vijay Raghavan",
+    status: "on_job",
+    lat: 13.0298,
+    lng: 77.5400,
+    destLat: 13.0298,
+    destLng: 77.5400,
+    area: "Malleswaram · North Zone",
+    phone: "+91 97403 99001",
+    delayedBy: null,
+    unavailableSince: null,
     currentJob: {
       id: "JOB-104",
       customer: "Deepa Nair",
       society: "Ashish JK",
-      flat: "Block C, Flat 104",
-      jobType: "Membrane Replacement",
+      flat: "Block A, Flat 204",
+      jobType: "High TDS & Flow Check",
       etaMins: 0,
       distanceKm: 0,
-      timeSlot: "1:15 PM - 2:00 PM",
-      progressStep: 4,
-    }
-  },
-  {
-    id: "TECH-04",
-    name: "Vijay R",
-    status: "en_route",
-    lat: 12.9850,
-    lng: 77.5800,
-    destLat: 13.0298,
-    destLng: 77.5400,
-    area: "Malleswaram, North Zone",
-    rating: 4.9,
-    phone: "+91 97403 99001",
-    currentJob: {
-      id: "JOB-105",
-      customer: "Sneha Patil",
-      society: "Sobha Dream Acres",
-      flat: "Tower 6, Flat 1201",
-      jobType: "Emergency Flow Check",
-      etaMins: 18,
-      distanceKm: 6.8,
-      timeSlot: "2:30 PM - 3:15 PM",
-      progressStep: 2,
-    }
+      timeSlot: "1:15 PM - 2:15 PM",
+      progressStep: 3,
+      priority: "High",
+      customerPhone: "+91 97403 11220",
+    },
   },
   {
     id: "TECH-05",
-    name: "Manoj S",
-    status: "on_job",
+    name: "Manoj Sharma",
+    status: "available",
     lat: 12.9250,
     lng: 77.5938,
-    destLat: 12.9250,
-    destLng: 77.5938,
-    area: "Jayanagar 4th Block",
-    rating: 4.6,
+    destLat: null,
+    destLng: null,
+    area: "Jayanagar 4th Block Hub",
     phone: "+91 96112 33445",
+    delayedBy: null,
+    unavailableSince: null,
+    currentJob: null,
+  },
+  {
+    id: "TECH-06",
+    name: "Deepak Thapa",
+    status: "delayed",
+    lat: 12.9850,
+    lng: 77.7280,
+    destLat: 12.9920,
+    destLng: 77.6950,
+    area: "Whitefield · Tech Corridor",
+    phone: "+91 93420 88990",
+    delayedBy: "+15 mins",
+    unavailableSince: null,
+    delayReason: "Visitor Gate Clearance Hold",
     currentJob: {
-      id: "JOB-112",
-      customer: "Dhananjaya Samanta",
-      society: "The Green Terraces",
-      flat: "Villa 18",
-      jobType: "Quarterly AMC Calibration",
+      id: "JOB-106",
+      customer: "Anand Ray",
+      society: "CBR Aakruti",
+      flat: "Tower 2, Flat 501",
+      jobType: "Active Carbon Cartridge Replacement",
+      etaMins: 20,
+      distanceKm: 2.8,
+      timeSlot: "3:00 PM - 3:45 PM",
+      progressStep: 2,
+      priority: "Normal",
+      customerPhone: "+91 96112 55441",
+    },
+  },
+  {
+    id: "TECH-07",
+    name: "Prakash Nayak",
+    status: "unavailable",
+    lat: 12.9120,
+    lng: 77.5850,
+    destLat: 12.9120,
+    destLng: 77.5850,
+    area: "JP Nagar · 6th Phase",
+    phone: "+91 98802 66778",
+    delayedBy: null,
+    unavailableSince: "45 mins ago",
+    currentJob: {
+      id: "JOB-107",
+      customer: "Asha Anandan",
+      society: "SVS Ananda Nilayam",
+      flat: "Flat 102",
+      jobType: "Sanitization & Purge",
       etaMins: 0,
       distanceKm: 0,
-      timeSlot: "11:00 AM - 12:00 PM",
-      progressStep: 4,
-    }
+      timeSlot: "11:00 AM - 12:30 PM",
+      progressStep: 3,
+      priority: "Normal",
+      customerPhone: "+91 93420 77112",
+    },
+  },
+  {
+    id: "TECH-08",
+    name: "Kiran Gowda",
+    status: "available",
+    lat: 12.9610,
+    lng: 77.5300,
+    destLat: null,
+    destLng: null,
+    area: "Vijayanagar · West Hub",
+    phone: "+91 94480 11992",
+    delayedBy: null,
+    unavailableSince: null,
+    currentJob: null,
   },
 ];
 
-const TECH_STATUS_LABELS = { en_route: "En Route", on_job: "On Site", available: "Available" };
+const TECH_STATUS_LABELS = {
+  en_route: "In Transit",
+  on_job: "On Site",
+  delayed: "Delayed",
+  available: "Available",
+  unavailable: "Unavailable / Lost Contact",
+};
+
 const TECH_STATUS_COLORS = {
-  "En Route": { color: "#B45309", bg: "rgba(180, 83, 9, 0.1)" },
+  "In Transit": { color: "#B45309", bg: "rgba(180, 83, 9, 0.1)" },
   "On Site": { color: "#08805A", bg: "rgba(8, 128, 90, 0.1)" },
+  "Delayed": { color: "#DC4141", bg: "rgba(220, 38, 38, 0.1)" },
   "Available": { color: "#0066CC", bg: "rgba(0, 102, 204, 0.1)" },
+  "Unavailable / Lost Contact": { color: "#991B1B", bg: "rgba(153, 27, 27, 0.1)" },
 };
 
 export function TrackTechnician() {
   const { user } = useAuth();
+  const mapRef = useRef(null);
+  const mapObj = useRef(null);
+  const markersRef = useRef([]);
+  const polylinesRef = useRef([]);
   const [techs] = useState(FLEET_TECHNICIANS);
+  const [selectedTech, setSelectedTech] = useState(FLEET_TECHNICIANS[0]);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchQ, setSearchQ] = useState("");
+  const [msgToast, setMsgToast] = useState("");
 
   useEffect(() => {
     api.logView(user.username, "Viewed Track Technician");
@@ -1568,7 +1664,9 @@ export function TrackTechnician() {
     all: techs.length,
     en_route: techs.filter((t) => t.status === "en_route").length,
     on_job: techs.filter((t) => t.status === "on_job").length,
+    delayed: techs.filter((t) => t.status === "delayed").length,
     available: techs.filter((t) => t.status === "available").length,
+    unavailable: techs.filter((t) => t.status === "unavailable").length,
   }), [techs]);
 
   const searchQl = searchQ.toLowerCase();
@@ -1576,32 +1674,271 @@ export function TrackTechnician() {
     return techs.filter((t) => {
       const matchStatus = (filterStatus === "all" || t.status === filterStatus);
       const matchSearch = (!searchQl ||
-        `${t.name} ${t.area} ${t.phone} ${t.currentJob?.customer || ""} ${t.currentJob?.society || ""}`.toLowerCase().includes(searchQl));
+        `${t.name} ${t.area} ${t.phone} ${t.delayedBy || ""} ${t.unavailableSince || ""} ${t.currentJob?.customer || ""} ${t.currentJob?.society || ""}`.toLowerCase().includes(searchQl));
       return matchStatus && matchSearch;
     });
   }, [techs, filterStatus, searchQl]);
 
   const filterOptions = [
     { id: "all", label: "All", count: statusCounts.all },
-    { id: "en_route", label: "En Route", count: statusCounts.en_route },
+    { id: "en_route", label: "In Transit", count: statusCounts.en_route },
     { id: "on_job", label: "On Site", count: statusCounts.on_job },
+    { id: "delayed", label: "Delayed", count: statusCounts.delayed },
     { id: "available", label: "Available", count: statusCounts.available },
+    { id: "unavailable", label: "Unavailable", count: statusCounts.unavailable },
   ];
+
+  // Leaflet CDN Script & Stylesheet loader
+  useEffect(() => {
+    let cancelled = false;
+    const CSS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    const JS_URL = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+
+    const loadLeaflet = async () => {
+      if (!document.querySelector(`link[href="${CSS_URL}"]`)) {
+        const link = document.createElement("link");
+        link.rel = "stylesheet";
+        link.href = CSS_URL;
+        document.head.appendChild(link);
+      }
+
+      if (window.L) return window.L;
+
+      return new Promise((resolve, reject) => {
+        let script = document.querySelector(`script[src="${JS_URL}"]`);
+        if (script) {
+          if (window.L) return resolve(window.L);
+          script.addEventListener("load", () => resolve(window.L));
+          return;
+        }
+        script = document.createElement("script");
+        script.src = JS_URL;
+        script.async = true;
+        script.onload = () => resolve(window.L);
+        script.onerror = () => reject(new Error("Failed to load Leaflet"));
+        document.head.appendChild(script);
+      });
+    };
+
+    loadLeaflet().then((L) => {
+      if (cancelled || !mapRef.current || mapObj.current) return;
+
+      const map = L.map(mapRef.current, {
+        center: [12.9550, 77.6200],
+        zoom: 12,
+        zoomControl: true,
+      });
+
+      // CartoDB Voyager tiles with crisp rendering
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        attribution: "© OpenStreetMap contributors, © CARTO",
+        maxZoom: 19,
+        subdomains: "abcd",
+      }).addTo(map);
+
+      mapObj.current = map;
+      renderMapEntities(L, map);
+
+      // Invalidate sizes for robust rendering inside flexbox/grid containers
+      setTimeout(() => map.invalidateSize(), 100);
+      setTimeout(() => map.invalidateSize(), 350);
+      setTimeout(() => map.invalidateSize(), 700);
+    }).catch(() => {});
+
+    return () => {
+      cancelled = true;
+      if (mapObj.current) {
+        mapObj.current.remove();
+        mapObj.current = null;
+      }
+    };
+  }, []);
+
+  // Update markers and routes whenever filtered technicians or selected technician changes
+  useEffect(() => {
+    if (window.L && mapObj.current) {
+      renderMapEntities(window.L, mapObj.current);
+    }
+  }, [filteredTechs, selectedTech]);
+
+  const renderMapEntities = (L, map) => {
+    markersRef.current.forEach((m) => map.removeLayer(m));
+    markersRef.current = [];
+    polylinesRef.current.forEach((p) => map.removeLayer(p));
+    polylinesRef.current = [];
+
+    filteredTechs.forEach((t) => {
+      const isSelected = selectedTech?.id === t.id;
+      let markerHtml = "";
+
+      if (t.status === "delayed") {
+        markerHtml = `
+          <div style="position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:40px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:rgba(220, 38, 38, 0.3);animation:pulse 1.6s infinite ease-out;"></div>
+            <div style="position:relative;width:34px;height:34px;border-radius:50%;background:#DC4141;border:2.5px solid #FFFFFF;box-shadow:0 4px 14px rgba(220, 38, 38, 0.45);display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;cursor:pointer;transform:${isSelected ? "scale(1.2)" : "scale(1)"};transition:transform 0.2s ease;">
+              ⏱️
+            </div>
+          </div>
+        `;
+      } else if (t.status === "unavailable") {
+        markerHtml = `
+          <div style="position:relative;display:flex;align-items:center;justify-content:center;width:38px;height:38px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:#6E6E73;border:2.5px solid #FFFFFF;box-shadow:0 4px 12px rgba(110, 110, 115, 0.4);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;cursor:pointer;transform:${isSelected ? "scale(1.2)" : "scale(1)"};transition:transform 0.2s ease;">
+              ⚠️
+            </div>
+          </div>
+        `;
+      } else if (t.status === "en_route") {
+        markerHtml = `
+          <div style="position:relative;display:flex;align-items:center;justify-content:center;width:40px;height:40px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:rgba(180, 83, 9, 0.25);animation:pulse 2s infinite ease-out;"></div>
+            <div style="position:relative;width:34px;height:34px;border-radius:50%;background:#B45309;border:2.5px solid #FFFFFF;box-shadow:0 4px 14px rgba(180, 83, 9, 0.4);display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff;cursor:pointer;transform:${isSelected ? "scale(1.2)" : "scale(1)"};transition:transform 0.2s ease;">
+              🏍️
+            </div>
+          </div>
+        `;
+      } else if (t.status === "on_job") {
+        markerHtml = `
+          <div style="position:relative;display:flex;align-items:center;justify-content:center;width:38px;height:38px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:#08805A;border:2.5px solid #FFFFFF;box-shadow:0 4px 14px rgba(8, 128, 90, 0.4);display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;cursor:pointer;transform:${isSelected ? "scale(1.2)" : "scale(1)"};transition:transform 0.2s ease;">
+              🔧
+            </div>
+          </div>
+        `;
+      } else {
+        markerHtml = `
+          <div style="position:relative;display:flex;align-items:center;justify-content:center;width:36px;height:36px;">
+            <div style="width:30px;height:30px;border-radius:50%;background:#0066CC;border:2.5px solid #FFFFFF;box-shadow:0 4px 12px rgba(0, 102, 204, 0.35);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;font-weight:bold;cursor:pointer;transform:${isSelected ? "scale(1.2)" : "scale(1)"};transition:transform 0.2s ease;">
+              ✓
+            </div>
+          </div>
+        `;
+      }
+
+      const icon = L.divIcon({
+        className: "custom-tech-pin",
+        html: markerHtml,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+
+      const m = L.marker([t.lat, t.lng], { icon }).addTo(map);
+
+      // Popup formatted cleanly
+      const popupHtml = `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;padding:6px;min-width:210px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+            <strong style="font-size:14px;color:#1D1D1F;">${t.name}</strong>
+            <span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;background:${t.status === "delayed" ? "rgba(220,38,38,0.12)" : t.status === "unavailable" ? "rgba(153,27,27,0.12)" : t.status === "en_route" ? "rgba(180,83,9,0.12)" : t.status === "on_job" ? "rgba(8,128,90,0.12)" : "rgba(0,102,204,0.12)"};color:${t.status === "delayed" ? "#DC4141" : t.status === "unavailable" ? "#991B1B" : t.status === "en_route" ? "#B45309" : t.status === "on_job" ? "#08805A" : "#0066CC"};">
+              ${TECH_STATUS_LABELS[t.status]}
+            </span>
+          </div>
+          <div style="font-size:12px;color:#6E6E73;margin-bottom:4px;">📍 ${t.area}</div>
+          ${t.delayedBy ? `<div style="font-size:11.5px;color:#DC4141;font-weight:700;margin-bottom:4px;">⚠️ Delayed by: ${t.delayedBy}</div>` : ""}
+          ${t.unavailableSince ? `<div style="font-size:11.5px;color:#991B1B;font-weight:700;margin-bottom:4px;">📡 Lost Contact: ${t.unavailableSince}</div>` : ""}
+          ${t.currentJob ? `
+            <div style="font-size:12px;color:#1D1D1F;font-weight:600;margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,0.06);">
+              ${t.currentJob.customer} · <span style="font-weight:400;color:#6E6E73;">${t.currentJob.society}</span>
+            </div>
+            <div style="font-size:11px;color:#86868B;margin-top:2px;">
+              ${t.status === "delayed" || t.status === "en_route" ? `⏱️ ETA: ${t.currentJob.etaMins} mins (${t.currentJob.distanceKm} km)` : `🛠️ ${t.currentJob.jobType}`}
+            </div>
+          ` : `
+            <div style="font-size:11.5px;color:#08805A;font-weight:600;margin-top:4px;">Standby at Base Hub</div>
+          `}
+        </div>
+      `;
+      m.bindPopup(popupHtml);
+
+      m.on("click", () => {
+        setSelectedTech(t);
+        map.flyTo([t.lat, t.lng], 14, { duration: 0.8 });
+      });
+
+      markersRef.current.push(m);
+
+      // If En Route / Delayed and has destination coordinates, draw destination pin and polyline route
+      if ((t.status === "en_route" || t.status === "delayed") && t.destLat && t.destLng) {
+        const destIcon = L.divIcon({
+          className: "custom-dest-pin",
+          html: `
+            <div style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#1D1D1F;border:2px solid #FFFFFF;box-shadow:0 3px 10px rgba(0,0,0,0.3);font-size:13px;color:#fff;">
+              📍
+            </div>
+          `,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+        });
+
+        const destMarker = L.marker([t.destLat, t.destLng], { icon: destIcon }).addTo(map);
+        destMarker.bindPopup(`
+          <div style="font-family:-apple-system,sans-serif;padding:4px;">
+            <div style="font-size:11px;font-weight:700;color:#86868B;text-transform:uppercase;">Customer Destination</div>
+            <div style="font-size:13px;font-weight:700;color:#1D1D1F;margin-top:2px;">${t.currentJob.customer}</div>
+            <div style="font-size:12px;color:#6E6E73;">${t.currentJob.society}</div>
+          </div>
+        `);
+        markersRef.current.push(destMarker);
+
+        const poly = L.polyline([[t.lat, t.lng], [t.destLat, t.destLng]], {
+          color: t.status === "delayed" ? "#DC4141" : "#B45309",
+          weight: 3.5,
+          dashArray: "6, 8",
+          opacity: 0.85,
+        }).addTo(map);
+
+        polylinesRef.current.push(poly);
+      }
+    });
+  };
+
+  const handleSelectTech = (t) => {
+    setSelectedTech(t);
+    if (mapObj.current) {
+      mapObj.current.flyTo([t.lat, t.lng], 14, { duration: 0.8 });
+    }
+  };
+
+  const handleResetMap = () => {
+    if (mapObj.current) {
+      mapObj.current.flyTo([12.9550, 77.6200], 12, { duration: 0.8 });
+    }
+  };
 
   const exportTechCsv = () => exportToCsv("prowater-technician-fleet.csv", [
     { label: "Technician", get: (t) => t.name },
     { label: "Area", get: (t) => t.area },
     { label: "Status", get: (t) => TECH_STATUS_LABELS[t.status] || t.status },
+    { label: "Delayed By", get: (t) => t.delayedBy || (t.currentJob ? "On Time" : "—") },
+    { label: "Unavailable Since", get: (t) => t.unavailableSince || "Active Now" },
     { label: "Phone", get: (t) => t.phone },
     { label: "Current Customer", get: (t) => t.currentJob?.customer || "" },
     { label: "Society", get: (t) => t.currentJob?.society || "" },
     { label: "Job Type", get: (t) => t.currentJob?.jobType || "" },
-    { label: "ETA (mins)", get: (t) => (t.status === "en_route" ? (t.currentJob?.etaMins ?? "") : "") },
+    { label: "ETA (mins)", get: (t) => (t.status === "en_route" || t.status === "delayed" ? (t.currentJob?.etaMins ?? "") : "") },
   ], filteredTechs);
 
   return (
     <div className="fade-up ov-sans" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+      <style>{`
+        .ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",system-ui,sans-serif;letter-spacing:-.02em}
+        @keyframes pulse {
+          0% { transform: scale(1); opacity: 0.9; }
+          70% { transform: scale(2.2); opacity: 0; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+        .leaflet-container {
+          width: 100% !important;
+          height: 100% !important;
+          border-radius: 18px;
+          z-index: 1;
+        }
+        .leaflet-popup-content-wrapper {
+          border-radius: 16px !important;
+          box-shadow: 0 16px 36px rgba(0,0,0,0.15) !important;
+          padding: 6px !important;
+        }
+      `}</style>
 
       {/* Top Banner */}
       <div
@@ -1621,66 +1958,517 @@ export function TrackTechnician() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Sparkles size={16} />
           <span>
-            <strong>Track Technician:</strong> Field status of every technician and their current job assignment.
+            <strong>Track Technician:</strong> Real-time field locations, delays, lost contact alerts, and customer dispatch journeys.
           </span>
         </div>
-        <span style={{ fontSize: 11.5, fontWeight: 700, opacity: 0.8 }}>Sample Fleet Feed</span>
+        <button
+          type="button"
+          onClick={handleResetMap}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            background: "#FFFFFF",
+            border: "1px solid rgba(8, 128, 90, 0.2)",
+            borderRadius: 999,
+            padding: "4px 12px",
+            fontSize: 11.5,
+            fontWeight: 700,
+            color: "#08805A",
+            cursor: "pointer",
+          }}
+        >
+          <Compass size={13} /> Reset View
+        </button>
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-        <AppleKpiCard label="Total Technicians" value={statusCounts.all} sub="Active field workforce" icon={UserRound} color="#0066CC" bg="rgba(0, 102, 204, 0.1)" />
-        <AppleKpiCard label="En Route" value={statusCounts.en_route} sub="Travelling to a job" icon={Truck} color="#B45309" bg="rgba(180, 83, 9, 0.1)" activeDot={statusCounts.en_route > 0} />
-        <AppleKpiCard label="On Site" value={statusCounts.on_job} sub="Currently servicing a customer" icon={Wrench} color="#08805A" bg="rgba(8, 128, 90, 0.1)" />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+        <AppleKpiCard label="Total Techs" value={statusCounts.all} sub="Active field workforce" icon={UserRound} color="#0066CC" bg="rgba(0, 102, 204, 0.1)" />
+        <AppleKpiCard label="In Transit" value={statusCounts.en_route} sub="On schedule to site" icon={Truck} color="#B45309" bg="rgba(180, 83, 9, 0.1)" />
+        <AppleKpiCard label="On Site" value={statusCounts.on_job} sub="Currently servicing" icon={Wrench} color="#08805A" bg="rgba(8, 128, 90, 0.1)" />
+        <AppleKpiCard label="Delayed" value={statusCounts.delayed} sub="Behind schedule" icon={AlertTriangle} color="#DC4141" bg="rgba(220, 38, 38, 0.1)" activeDot={statusCounts.delayed > 0} />
+        <AppleKpiCard label="Lost Contact" value={statusCounts.unavailable} sub="GPS offline" icon={Ban} color="#991B1B" bg="rgba(153, 27, 27, 0.1)" activeDot={statusCounts.unavailable > 0} />
         <AppleKpiCard label="Available" value={statusCounts.available} sub="Ready for dispatch" icon={CheckCircle2} color="#7C3AED" bg="rgba(124, 58, 237, 0.1)" />
       </div>
 
-      {/* Technician Roster */}
+      {/* Main Tracking Workspace: Left Drawer + Right Live Map */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "360px 1fr",
+          gap: 18,
+          alignItems: "stretch",
+        }}
+      >
+        {/* Left Drawer: Filter & Technician List */}
+        <div
+          style={{
+            ...APPLE_CARD,
+            padding: "18px 16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            maxHeight: 680,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 750, color: "#1D1D1F" }}>Field Technicians</h3>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "#86868B" }}>
+              {filteredTechs.length} shown
+            </span>
+          </div>
+
+          <AppleSearchBar
+            value={searchQ}
+            onChange={setSearchQ}
+            placeholder="Search tech, area, customer…"
+          />
+
+          <div style={{ width: "100%" }}>
+            <AppleSegmentedControl
+              options={filterOptions}
+              value={filterStatus}
+              onChange={setFilterStatus}
+            />
+          </div>
+
+          {/* Technician Cards List */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              overflowY: "auto",
+              paddingRight: 4,
+              flex: 1,
+            }}
+          >
+            {filteredTechs.map((t) => {
+              const isSelected = selectedTech?.id === t.id;
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => handleSelectTech(t)}
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: 14,
+                    background: isSelected ? "rgba(8, 128, 90, 0.08)" : "rgba(0, 0, 0, 0.02)",
+                    border: `1px solid ${isSelected ? "#08805A" : "rgba(0, 0, 0, 0.06)"}`,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = "rgba(0, 0, 0, 0.04)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = "rgba(0, 0, 0, 0.02)";
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <AppleAvatar name={t.name} size={30} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 750, color: "#1D1D1F" }}>{t.name}</div>
+                        <div style={{ fontSize: 11, color: "#86868B" }}>{t.phone}</div>
+                      </div>
+                    </div>
+                    <StatusPill value={TECH_STATUS_LABELS[t.status]} map={TECH_STATUS_COLORS} />
+                  </div>
+
+                  <div style={{ fontSize: 11.5, color: "#48484A", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>📍 {t.area}</span>
+                    {t.delayedBy && (
+                      <span style={{ fontSize: 11, fontWeight: 750, color: "#DC4141", background: "rgba(220,38,38,0.1)", padding: "1px 6px", borderRadius: 999 }}>
+                        {t.delayedBy}
+                      </span>
+                    )}
+                    {t.unavailableSince && (
+                      <span style={{ fontSize: 11, fontWeight: 750, color: "#991B1B", background: "rgba(153,27,27,0.1)", padding: "1px 6px", borderRadius: 999 }}>
+                        Offline {t.unavailableSince}
+                      </span>
+                    )}
+                  </div>
+
+                  {t.currentJob ? (
+                    <div
+                      style={{
+                        padding: "6px 10px",
+                        borderRadius: 10,
+                        background: isSelected ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.03)",
+                        border: "1px solid rgba(0, 0, 0, 0.04)",
+                        fontSize: 11.5,
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontWeight: 700, color: "#1D1D1F" }}>{t.currentJob.customer}</span>
+                        {(t.status === "en_route" || t.status === "delayed") && (
+                          <span style={{ color: t.status === "delayed" ? "#DC4141" : "#B45309", fontWeight: 750 }}>
+                            {t.currentJob.etaMins} min ETA
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ color: "#6E6E73", fontSize: 11, marginTop: 1 }}>
+                        {t.currentJob.society} · {t.currentJob.jobType}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11.5, color: "#08805A", fontWeight: 600 }}>
+                      ✓ Standby at Hub
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {filteredTechs.length === 0 && (
+              <Empty msg="No technicians match your search/filter." />
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel: Map Container + Floating Bottom Inspector */}
+        <div
+          style={{
+            ...APPLE_CARD,
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            position: "relative",
+            minHeight: 680,
+          }}
+        >
+          {/* Leaflet Map DOM Node */}
+          <div
+            ref={mapRef}
+            style={{
+              width: "100%",
+              flex: 1,
+              minHeight: 440,
+              borderRadius: 16,
+              overflow: "hidden",
+              background: "#E5E3DF",
+            }}
+          />
+
+          {/* Selected Technician Bottom Inspector */}
+          {selectedTech && (
+            <div
+              style={{
+                ...APPLE_SUBTLE_CARD,
+                padding: "16px 18px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+                background: "rgba(255, 255, 255, 0.96)",
+                border: "1px solid rgba(8, 128, 90, 0.2)",
+              }}
+            >
+              {/* Header */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <AppleAvatar name={selectedTech.name} size={40} />
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#1D1D1F" }}>{selectedTech.name}</h4>
+                      <StatusPill value={TECH_STATUS_LABELS[selectedTech.status]} map={TECH_STATUS_COLORS} />
+                    </div>
+                    <div style={{ fontSize: 12, color: "#6E6E73", marginTop: 2 }}>
+                      📍 {selectedTech.area} · {selectedTech.phone}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <a
+                    href={`tel:${selectedTech.phone}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "6px 12px",
+                      borderRadius: 10,
+                      background: "#08805A",
+                      color: "#FFFFFF",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      textDecoration: "none",
+                    }}
+                  >
+                    <Phone size={13} /> Call Tech ({selectedTech.phone})
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMsgToast(`Notification dispatched to ${selectedTech.currentJob ? selectedTech.currentJob.customer : selectedTech.name}`);
+                      setTimeout(() => setMsgToast(""), 3500);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "6px 12px",
+                      borderRadius: 10,
+                      background: "rgba(0, 0, 0, 0.05)",
+                      border: "1px solid rgba(0, 0, 0, 0.1)",
+                      color: "#1D1D1F",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <MessageSquare size={13} /> Message
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTech(selectedTech)}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 5,
+                      padding: "6px 10px",
+                      borderRadius: 10,
+                      background: "rgba(0, 102, 204, 0.08)",
+                      border: "1px solid rgba(0, 102, 204, 0.2)",
+                      color: "#0066CC",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Navigation size={13} /> Center
+                  </button>
+                </div>
+              </div>
+
+              {/* Alert Status Banners */}
+              {selectedTech.delayedBy && (
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "rgba(220, 38, 38, 0.08)",
+                    border: "1px solid rgba(220, 38, 38, 0.2)",
+                    color: "#DC4141",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <AlertTriangle size={15} />
+                  <span><strong>Schedule Delay:</strong> Technician is delayed by <strong>{selectedTech.delayedBy}</strong> ({selectedTech.delayReason || "Traffic bottleneck"}). Customer notified.</span>
+                </div>
+              )}
+
+              {selectedTech.unavailableSince && (
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "rgba(153, 27, 27, 0.08)",
+                    border: "1px solid rgba(153, 27, 27, 0.2)",
+                    color: "#991B1B",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <Ban size={15} />
+                  <span><strong>Lost Contact / Offline:</strong> GPS ping timed out. Technician marked unavailable since <strong>{selectedTech.unavailableSince}</strong>.</span>
+                </div>
+              )}
+
+              {/* Toast Message */}
+              {msgToast && (
+                <div
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: 10,
+                    background: "rgba(8, 128, 90, 0.12)",
+                    color: "#08805A",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <CheckCircle size={14} /> {msgToast}
+                </div>
+              )}
+
+              {/* Current Job Detail */}
+              {selectedTech.currentJob ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: 12,
+                    background: "rgba(0, 0, 0, 0.02)",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: "1px solid rgba(0, 0, 0, 0.05)",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "#86868B", textTransform: "uppercase" }}>Customer & Society</div>
+                    <div style={{ fontSize: 13, fontWeight: 750, color: "#1D1D1F", marginTop: 2 }}>{selectedTech.currentJob.customer}</div>
+                    <div style={{ fontSize: 11.5, color: "#6E6E73" }}>{selectedTech.currentJob.society} · {selectedTech.currentJob.flat}</div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "#86868B", textTransform: "uppercase" }}>Job Type & Priority</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1D1D1F", marginTop: 2 }}>{selectedTech.currentJob.jobType}</div>
+                    <div style={{ fontSize: 11.5, color: selectedTech.currentJob.priority === "Urgent" ? "#DC4141" : "#08805A", fontWeight: 700 }}>
+                      Priority: {selectedTech.currentJob.priority}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "#86868B", textTransform: "uppercase" }}>Scheduled Time Slot</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1D1D1F", marginTop: 2 }}>{selectedTech.currentJob.timeSlot}</div>
+                    <div style={{ fontSize: 11.5, color: selectedTech.status === "delayed" ? "#DC4141" : selectedTech.status === "en_route" ? "#B45309" : "#08805A", fontWeight: 700 }}>
+                      {selectedTech.status === "delayed" || selectedTech.status === "en_route" ? `⏱️ ETA: ${selectedTech.currentJob.etaMins} mins (${selectedTech.currentJob.distanceKm} km)` : "🛠️ Service in Progress"}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 12,
+                    background: "rgba(0, 102, 204, 0.05)",
+                    border: "1px solid rgba(0, 102, 204, 0.15)",
+                    fontSize: 12.5,
+                    color: "#0066CC",
+                  }}
+                >
+                  ℹ️ Technician is currently in standby mode at the regional hub, ready for instant job dispatch.
+                </div>
+              )}
+
+              {/* 4-Step Progress Journey */}
+              {selectedTech.currentJob && (
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 750, color: "#86868B", textTransform: "uppercase", marginBottom: 6 }}>
+                    Dispatch Journey Progress
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                    {[
+                      { step: 1, label: "Dispatched", active: selectedTech.currentJob.progressStep >= 1 },
+                      { step: 2, label: selectedTech.status === "delayed" ? "Delayed in Transit" : "In Transit", active: selectedTech.currentJob.progressStep >= 2 },
+                      { step: 3, label: "On Site", active: selectedTech.currentJob.progressStep >= 3 },
+                      { step: 4, label: "Completed", active: selectedTech.currentJob.progressStep >= 4 },
+                    ].map((s) => (
+                      <div
+                        key={s.step}
+                        style={{
+                          padding: "6px 8px",
+                          borderRadius: 8,
+                          background: s.active ? (selectedTech.status === "delayed" && s.step === 2 ? "rgba(220, 38, 38, 0.12)" : "rgba(8, 128, 90, 0.12)") : "rgba(0, 0, 0, 0.04)",
+                          border: `1px solid ${s.active ? (selectedTech.status === "delayed" && s.step === 2 ? "rgba(220, 38, 38, 0.3)" : "rgba(8, 128, 90, 0.3)") : "rgba(0, 0, 0, 0.06)"}`,
+                          textAlign: "center",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: s.active ? (selectedTech.status === "delayed" && s.step === 2 ? "#DC4141" : "#08805A") : "#86868B",
+                        }}
+                      >
+                        {s.active ? "✓ " : ""}{s.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Full Fleet Roster Table */}
       <div style={{ ...APPLE_CARD, padding: "20px 22px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, marginBottom: 18 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "#1D1D1F" }}>Technician Roster</h3>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "#1D1D1F" }}>Fleet Technician Directory</h3>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#86868B" }}>Live field records, delay alerts, unavailable tracking, and assignments</p>
+          </div>
           <button type="button" onClick={exportTechCsv} style={EXPORT_BTN}>
             <Download size={14} /> Export CSV
           </button>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <AppleSearchBar value={searchQ} onChange={setSearchQ} placeholder="Search technician, area, customer, society…" />
-          <div style={{ flex: 1, minWidth: 280 }}>
-            <AppleSegmentedControl options={filterOptions} value={filterStatus} onChange={setFilterStatus} />
-          </div>
-        </div>
-        <Table head={["Technician", "Area", "Status", "Phone", "Current Job", "ETA"]} maxHeight={560}>
+
+        <Table head={["Technician", "Assigned Zone", "Status", "Delayed By", "Unavailable Since", "Contact", "Current Customer / Assignment", "ETA / Stage"]} maxHeight={480}>
           {filteredTechs.map((t) => (
-            <tr key={t.id} style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-              <td style={td}>
+            <tr
+              key={t.id}
+              onClick={() => handleSelectTech(t)}
+              style={{
+                borderBottom: "1px solid rgba(0,0,0,0.06)",
+                cursor: "pointer",
+                background: selectedTech?.id === t.id ? "rgba(8, 128, 90, 0.04)" : "transparent",
+              }}
+            >
+              <td style={{ ...td, textAlign: "left", whiteSpace: "nowrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <AppleAvatar name={t.name} size={28} />
-                  <strong style={{ fontSize: 13, color: "#1D1D1F" }}>{t.name}</strong>
+                  <div>
+                    <strong style={{ fontSize: 13, color: "#1D1D1F", display: "block" }}>{t.name}</strong>
+                    <div style={{ fontSize: 11, color: "#86868B" }}>{t.id}</div>
+                  </div>
                 </div>
               </td>
-              <td style={{ ...td, color: "#48484A" }}>{t.area}</td>
-              <td style={td}>
+              <td style={{ ...td, color: "#48484A", whiteSpace: "nowrap" }}>{t.area}</td>
+              <td style={{ ...td, whiteSpace: "nowrap" }}>
                 <StatusPill value={TECH_STATUS_LABELS[t.status]} map={TECH_STATUS_COLORS} />
               </td>
-              <td style={{ ...td, color: "#48484A" }}>{t.phone}</td>
-              <td style={{ ...td, textAlign: "left" }}>
+              <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
+                {t.delayedBy ? (
+                  <span style={{ fontSize: 11.5, fontWeight: 750, color: "#DC4141", background: "rgba(220, 38, 38, 0.1)", padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    ⚠️ {t.delayedBy}
+                  </span>
+                ) : t.currentJob ? (
+                  <span style={{ fontSize: 11.5, color: "#08805A", fontWeight: 600, whiteSpace: "nowrap" }}>On Time</span>
+                ) : (
+                  <span style={{ color: "#86868B" }}>—</span>
+                )}
+              </td>
+              <td style={{ ...td, textAlign: "center", whiteSpace: "nowrap" }}>
+                {t.unavailableSince ? (
+                  <span style={{ fontSize: 11.5, fontWeight: 750, color: "#991B1B", background: "rgba(153, 27, 27, 0.1)", padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    ⚠️ {t.unavailableSince}
+                  </span>
+                ) : (
+                  <span style={{ fontSize: 11.5, color: "#08805A", whiteSpace: "nowrap" }}>Active Now</span>
+                )}
+              </td>
+              <td style={{ ...td, color: "#48484A", whiteSpace: "nowrap" }}>
+                <a href={`tel:${t.phone}`} style={{ color: "#08805A", fontWeight: 650, textDecoration: "none", whiteSpace: "nowrap" }}>{t.phone}</a>
+              </td>
+              <td style={{ ...td, textAlign: "left", minWidth: 220 }}>
                 {t.currentJob ? (
                   <div>
                     <div style={{ fontWeight: 650, color: "#1D1D1F" }}>{t.currentJob.customer}</div>
                     <div style={{ fontSize: 11.5, color: "#6E6E73" }}>{t.currentJob.society} · {t.currentJob.jobType}</div>
                   </div>
                 ) : (
-                  <span style={{ color: "#86868B" }}>—</span>
+                  <span style={{ color: "#86868B" }}>Standby at Base</span>
                 )}
               </td>
-              <td style={{ ...td, color: t.status === "en_route" ? "#B45309" : "#86868B", fontWeight: t.status === "en_route" ? 700 : 400 }}>
-                {t.status === "en_route" ? `${t.currentJob.etaMins} min` : "—"}
+              <td style={{ ...td, color: t.status === "delayed" ? "#DC4141" : t.status === "en_route" ? "#B45309" : "#08805A", fontWeight: 700, whiteSpace: "nowrap" }}>
+                {t.status === "delayed" || t.status === "en_route" ? `${t.currentJob.etaMins} mins` : t.status === "on_job" ? "On Site" : t.status === "unavailable" ? "Offline" : "Available"}
               </td>
             </tr>
           ))}
           {filteredTechs.length === 0 && (
             <tr>
-              <td colSpan={6} style={{ padding: 0 }}><Empty msg="No technicians match this filter." /></td>
+              <td colSpan={8} style={{ padding: 0 }}><Empty msg="No technicians match this filter." /></td>
             </tr>
           )}
         </Table>
