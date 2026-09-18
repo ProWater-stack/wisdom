@@ -27,6 +27,9 @@ import {
   Card, Table, Toolbar, Loading, Empty, ApiError, Stat, Chip, Status,
   Person, DeviceTypeBadge, grid4, btnGhost, td, Modal,
 } from "../shared/ui";
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 
 /* ── Apple HIG Glassmorphism and UI Tokens ────────────────────────────────── */
 const APPLE_CARD = {
@@ -400,39 +403,74 @@ const CUSTOMER_STATUS_COLORS = {
   Postponed:   { color: "#986315", bg: "rgba(152, 99, 21, 0.1)" },
 };
 
+// `priority`/`repeat`/`spares`/`zone`/`pincode` (v2.29.486) are dummy fields added
+// per explicit request to make this board read as ticket-centric (priority, type of
+// job, society, spares required, technician assigned) and to support Priority/
+// Repeat/Society/Zone/PIN-code filters — neither "zone" nor "PIN code" exist on any
+// real ticket/customer/society record yet (confirmed repo-wide), so both are
+// placeholders here until the backend feed carries them.
 const SAMPLE_TECH_JOBS = [
-  { id: "JOB-101", customer: "Abhijit Dey",                    society: "MJR Clique Hydra Apartment",  technician: "Ramesh K", jobType: "Filter Service",         scheduled: "Today, 2:00 PM",         status: "assigned",   customerStatus: "Available",   phone: "+91 98450 11223", email: "abhijit.dey@example.com" },
-  { id: "JOB-102", customer: "Ravi Kumar",                     society: "Prestige Lakeside",            technician: "Suresh M", jobType: "AMC Service",             scheduled: "Today, 4:30 PM",         status: "assigned",   customerStatus: "Postponed",   phone: "+91 98801 44556", email: "ravi.kumar@example.com" },
-  { id: "JOB-103", customer: "Sneha Patil",                    society: "Sobha Dream Acres",            technician: "Anil P",   jobType: "Installation",            scheduled: "Tomorrow, 11:00 AM",     status: "assigned",   customerStatus: "Available",   phone: "+91 99002 77889", email: "sneha.patil@example.com" },
-  { id: "JOB-104", customer: "Deepa Nair",                     society: "Ashish JK",                    technician: "Vijay R",  jobType: "Repair Visit",            scheduled: "Today, 1:15 PM",         status: "in_transit", customerStatus: "Available",   phone: "+91 97403 99001", email: "deepa.nair@example.com" },
-  { id: "JOB-105", customer: "Anand Ray",                      society: "CBR Aakruti",                  technician: "Manoj S",  jobType: "Complaint Resolution",    scheduled: "Today, 3:00 PM",         status: "in_transit", customerStatus: "Unavailable", phone: "+91 96112 33445", email: "anand.ray@example.com" },
-  { id: "JOB-106", customer: "Arun K Sinha",                   society: "MJR Clique Hydra Apartment",   technician: "Ramesh K", jobType: "Filter Service",          scheduled: "Yesterday, 5:00 PM",     status: "cancelled",  customerStatus: "Unavailable", phone: "+91 94480 55667", email: "arun.sinha@example.com" },
-  { id: "JOB-107", customer: "Asha Anandan",                   society: "SVS Ananda Nilayam",           technician: "Deepak T", jobType: "AMC Service",             scheduled: "Yesterday, 10:00 AM",    status: "cancelled",  customerStatus: "Postponed",   phone: "+91 93420 88990", email: "asha.anandan@example.com" },
-  { id: "JOB-108", customer: "Bikram",                         society: "MJR Clique Hydra Apartment",   technician: "Suresh M", jobType: "Installation",            scheduled: "Today, 6:00 PM",         status: "not_ack",    customerStatus: "Available",   phone: "+91 98451 22334", email: "bikram@example.com" },
-  { id: "JOB-109", customer: "Bibhuranjan Mohapatra",          society: "Prabhavathi Meghana Towers",   technician: "Prakash N", jobType: "Filter Service",         scheduled: "Tomorrow, 9:30 AM",      status: "not_ack",    customerStatus: "Unavailable", phone: "+91 98802 66778", email: "bibhuranjan@example.com" },
-  { id: "JOB-110", customer: "Binay Pradhan",                  society: "Ashish JK",                    technician: "Anil P",   jobType: "Repair Visit",            scheduled: "Rescheduled → Fri, 12:00 PM", status: "postponed", customerStatus: "Postponed", phone: "+91 99003 11224", email: "binay.pradhan@example.com" },
-  { id: "JOB-111", customer: "Chaudari Vipool",                society: "Sai Poorna Premier",           technician: "Vijay R",  jobType: "AMC Service",             scheduled: "Rescheduled → Sat, 2:00 PM",  status: "postponed", customerStatus: "Postponed", phone: "+91 97404 55668", email: "chaudari.vipool@example.com" },
-  { id: "JOB-112", customer: "Dhananjaya Samanta Singhar",     society: "The Green Terraces",           technician: "Manoj S",  jobType: "Complaint Resolution",    scheduled: "Today, 11:00 AM",        status: "not_moving", customerStatus: "Available",   phone: "+91 96113 77880", email: "dhananjaya@example.com" },
-  { id: "JOB-113", customer: "Divya Vijayaraghavan",           society: "CBR Aakruti",                  technician: "Deepak T", jobType: "Filter Service",          scheduled: "Today, 9:00 AM",         status: "not_moving", customerStatus: "Unavailable", phone: "+91 94481 99002", email: "divya.v@example.com" },
+  { id: "JOB-101", customer: "Abhijit Dey",                    society: "MJR Clique Hydra Apartment",  technician: "Ramesh K", jobType: "Filter Service",         scheduled: "Today, 2:00 PM",         status: "assigned",   customerStatus: "Available",   phone: "+91 98450 11223", email: "abhijit.dey@example.com", priority: "High",   repeat: false, spares: ["Pre-filter"], zone: "South", pincode: "560095" },
+  { id: "JOB-102", customer: "Ravi Kumar",                     society: "Prestige Lakeside",            technician: "Suresh M", jobType: "AMC Service",             scheduled: "Today, 4:30 PM",         status: "assigned",   customerStatus: "Postponed",   phone: "+91 98801 44556", email: "ravi.kumar@example.com", priority: "Normal", repeat: false, spares: [], zone: "East", pincode: "560037" },
+  { id: "JOB-103", customer: "Sneha Patil",                    society: "Sobha Dream Acres",            technician: "Anil P",   jobType: "Installation",            scheduled: "Tomorrow, 11:00 AM",     status: "assigned",   customerStatus: "Available",   phone: "+91 99002 77889", email: "sneha.patil@example.com", priority: "Normal", repeat: false, spares: ["O-ring"], zone: "East", pincode: "560103" },
+  { id: "JOB-104", customer: "Deepa Nair",                     society: "Ashish JK",                    technician: "Vijay R",  jobType: "Repair Visit",            scheduled: "Today, 1:15 PM",         status: "in_transit", customerStatus: "Available",   phone: "+91 97403 99001", email: "deepa.nair@example.com", priority: "High",   repeat: true,  spares: ["RO Membrane"], zone: "North", pincode: "560022" },
+  { id: "JOB-105", customer: "Anand Ray",                      society: "CBR Aakruti",                  technician: "Manoj S",  jobType: "Complaint Resolution",    scheduled: "Today, 3:00 PM",         status: "in_transit", customerStatus: "Unavailable", phone: "+91 96112 33445", email: "anand.ray@example.com", priority: "Urgent", repeat: true,  spares: ["Solenoid Valve", "Pre-filter"], zone: "South", pincode: "560078" },
+  { id: "JOB-106", customer: "Arun K Sinha",                   society: "MJR Clique Hydra Apartment",   technician: "Ramesh K", jobType: "Filter Service",          scheduled: "Yesterday, 5:00 PM",     status: "cancelled",  customerStatus: "Unavailable", phone: "+91 94480 55667", email: "arun.sinha@example.com", priority: "Normal", repeat: false, spares: [], zone: "South", pincode: "560095" },
+  { id: "JOB-107", customer: "Asha Anandan",                   society: "SVS Ananda Nilayam",           technician: "Deepak T", jobType: "AMC Service",             scheduled: "Yesterday, 10:00 AM",    status: "cancelled",  customerStatus: "Postponed",   phone: "+91 93420 88990", email: "asha.anandan@example.com", priority: "Normal", repeat: false, spares: [], zone: "West", pincode: "560040" },
+  { id: "JOB-108", customer: "Bikram",                         society: "MJR Clique Hydra Apartment",   technician: "Suresh M", jobType: "Installation",            scheduled: "Today, 6:00 PM",         status: "not_ack",    customerStatus: "Available",   phone: "+91 98451 22334", email: "bikram@example.com", priority: "High",   repeat: false, spares: ["Faucet"], zone: "South", pincode: "560095" },
+  { id: "JOB-109", customer: "Bibhuranjan Mohapatra",          society: "Prabhavathi Meghana Towers",   technician: "Prakash N", jobType: "Filter Service",         scheduled: "Tomorrow, 9:30 AM",      status: "not_ack",    customerStatus: "Unavailable", phone: "+91 98802 66778", email: "bibhuranjan@example.com", priority: "Normal", repeat: true,  spares: [], zone: "East", pincode: "560066" },
+  { id: "JOB-110", customer: "Binay Pradhan",                  society: "Ashish JK",                    technician: "Anil P",   jobType: "Repair Visit",            scheduled: "Rescheduled → Fri, 12:00 PM", status: "postponed", customerStatus: "Postponed", phone: "+91 99003 11224", email: "binay.pradhan@example.com", priority: "Normal", repeat: false, spares: ["O-ring"], zone: "North", pincode: "560022" },
+  { id: "JOB-111", customer: "Chaudari Vipool",                society: "Sai Poorna Premier",           technician: "Vijay R",  jobType: "AMC Service",             scheduled: "Rescheduled → Sat, 2:00 PM",  status: "postponed", customerStatus: "Postponed", phone: "+91 97404 55668", email: "chaudari.vipool@example.com", priority: "Normal", repeat: false, spares: [], zone: "Central", pincode: "560001" },
+  { id: "JOB-112", customer: "Dhananjaya Samanta Singhar",     society: "The Green Terraces",           technician: "Manoj S",  jobType: "Complaint Resolution",    scheduled: "Today, 11:00 AM",        status: "not_moving", customerStatus: "Available",   phone: "+91 96113 77880", email: "dhananjaya@example.com", priority: "Urgent", repeat: true,  spares: ["Pump", "Carbon Filter"], zone: "West", pincode: "560010" },
+  { id: "JOB-113", customer: "Divya Vijayaraghavan",           society: "CBR Aakruti",                  technician: "Deepak T", jobType: "Filter Service",          scheduled: "Today, 9:00 AM",         status: "not_moving", customerStatus: "Unavailable", phone: "+91 94481 99002", email: "divya.v@example.com", priority: "High",   repeat: false, spares: ["Membrane"], zone: "South", pincode: "560078" },
+];
+
+const JOB_PRIORITY_COLORS = {
+  Urgent: { color: "#991B1B", bg: "rgba(153, 27, 27, 0.1)" },
+  High:   { color: "#DC4141", bg: "rgba(220, 38, 38, 0.1)" },
+  Normal: { color: "#0066CC", bg: "rgba(0, 102, 204, 0.1)" },
+};
+
+// Weekly ticket-volume + active-technician timeseries for Command Center's trend
+// chart — dummy data (8 weeks), same Bar+Line trend-overlay pattern already used
+// elsewhere in this app (Ticketing.jsx's "Daily Tickets Created", Sales.jsx's
+// monthly trend chart) rather than a new chart style.
+const WEEKLY_OPS_TREND = [
+  { week: "Wk 1 (Jul 28)", tickets: 42, activeTechs: 8 },
+  { week: "Wk 2 (Aug 4)",  tickets: 48, activeTechs: 8 },
+  { week: "Wk 3 (Aug 11)", tickets: 51, activeTechs: 9 },
+  { week: "Wk 4 (Aug 18)", tickets: 46, activeTechs: 9 },
+  { week: "Wk 5 (Aug 25)", tickets: 57, activeTechs: 10 },
+  { week: "Wk 6 (Sep 1)",  tickets: 61, activeTechs: 10 },
+  { week: "Wk 7 (Sep 8)",  tickets: 55, activeTechs: 9 },
+  { week: "Wk 8 (Sep 15)", tickets: 63, activeTechs: 10 },
 ];
 
 export function OpsCommand() {
   const { user } = useAuth();
   const [custStatusFilter, setCustStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [societyFilter, setSocietyFilter] = useState("all");
+  const [zoneFilter, setZoneFilter] = useState("all");
+  const [pincodeFilter, setPincodeFilter] = useState("all");
   const [jobQ, setJobQ] = useState("");
   const [activeJob, setActiveJob] = useState(null);
 
   useEffect(() => {
-    api.logView(user.username, "Viewed Ops Command");
+    api.logView(user.username, "Viewed Command Center");
   }, [user]);
 
   const jobQl = jobQ.toLowerCase();
   const jobsFiltered = useMemo(() => {
     return SAMPLE_TECH_JOBS.filter((j) =>
       (custStatusFilter === "all" || j.customerStatus === custStatusFilter) &&
+      (priorityFilter === "all" || (priorityFilter === "high" ? j.priority === "High" || j.priority === "Urgent" : j.repeat)) &&
+      (societyFilter === "all" || j.society === societyFilter) &&
+      (zoneFilter === "all" || j.zone === zoneFilter) &&
+      (pincodeFilter === "all" || j.pincode === pincodeFilter) &&
       (!jobQl || `${j.customer} ${j.technician} ${j.society} ${j.jobType} ${j.id}`.toLowerCase().includes(jobQl))
     );
-  }, [custStatusFilter, jobQl]);
+  }, [custStatusFilter, priorityFilter, societyFilter, zoneFilter, pincodeFilter, jobQl]);
 
   const custStatusCounts = useMemo(() => ({
     Available: SAMPLE_TECH_JOBS.filter((j) => j.customerStatus === "Available").length,
@@ -440,18 +478,43 @@ export function OpsCommand() {
     Postponed: SAMPLE_TECH_JOBS.filter((j) => j.customerStatus === "Postponed").length,
   }), []);
 
-  const inTransitCount = SAMPLE_TECH_JOBS.filter((j) => j.status === "in_transit").length;
-  const assignedCount = SAMPLE_TECH_JOBS.filter((j) => j.status === "assigned").length;
-  const availPct = Math.round((custStatusCounts.Available / SAMPLE_TECH_JOBS.length) * 100);
-  const actionNeeded = SAMPLE_TECH_JOBS.filter((j) => j.status === "cancelled" || j.status === "not_moving" || j.status === "postponed").length;
+  const priorityCounts = useMemo(() => ({
+    high: SAMPLE_TECH_JOBS.filter((j) => j.priority === "High" || j.priority === "Urgent").length,
+    repeat: SAMPLE_TECH_JOBS.filter((j) => j.repeat).length,
+  }), []);
+
+  // Top-of-funnel ticket-status KPIs, per explicit request (Total Tickets/Assigned/
+  // In Progress/Postponed/Cancelled/Unplanned-New — mapped from this board's own 6
+  // job statuses; `not_ack` and `not_moving` both fold into "Unplanned / New" since
+  // both represent a job that hasn't been properly actioned yet).
+  const ticketStatusCounts = useMemo(() => {
+    const c = { assigned: 0, in_transit: 0, postponed: 0, cancelled: 0, unplanned: 0 };
+    SAMPLE_TECH_JOBS.forEach((j) => {
+      if (j.status === "assigned") c.assigned++;
+      else if (j.status === "in_transit") c.in_transit++;
+      else if (j.status === "postponed") c.postponed++;
+      else if (j.status === "cancelled") c.cancelled++;
+      else if (j.status === "not_ack" || j.status === "not_moving") c.unplanned++;
+    });
+    return c;
+  }, []);
+
+  const societies = useMemo(() => Array.from(new Set(SAMPLE_TECH_JOBS.map((j) => j.society))).sort(), []);
+  const zones = useMemo(() => Array.from(new Set(SAMPLE_TECH_JOBS.map((j) => j.zone))).sort(), []);
+  const pincodes = useMemo(() => Array.from(new Set(SAMPLE_TECH_JOBS.map((j) => j.pincode))).sort(), []);
 
   const exportJobsCsv = () => exportToCsv("prowater-ops-technician-jobs.csv", [
     { label: "Job ID", get: (j) => j.id },
     { label: "Customer", get: (j) => j.customer },
     { label: "Phone", get: (j) => j.phone || "" },
     { label: "Society", get: (j) => j.society },
+    { label: "Zone", get: (j) => j.zone },
+    { label: "PIN Code", get: (j) => j.pincode },
     { label: "Technician", get: (j) => j.technician },
     { label: "Job Type", get: (j) => j.jobType },
+    { label: "Priority", get: (j) => j.priority },
+    { label: "Repeat", get: (j) => (j.repeat ? "Yes" : "No") },
+    { label: "Spares Required", get: (j) => (j.spares || []).join(", ") },
     { label: "Scheduled", get: (j) => j.scheduled },
     { label: "Job Status", get: (j) => JOB_STATUSES.find((s) => s.key === j.status)?.label || j.status },
     { label: "Customer Status", get: (j) => j.customerStatus },
@@ -463,6 +526,23 @@ export function OpsCommand() {
     { id: "Unavailable", label: "Unavailable", count: custStatusCounts.Unavailable },
     { id: "Postponed", label: "Postponed", count: custStatusCounts.Postponed },
   ];
+
+  const priorityFilterOptions = [
+    { id: "all", label: "All Priority", count: SAMPLE_TECH_JOBS.length },
+    { id: "high", label: "High Priority", count: priorityCounts.high },
+    { id: "repeat", label: "Repeat", count: priorityCounts.repeat },
+  ];
+
+  const selectStyle = {
+    padding: "7px 10px",
+    borderRadius: 11,
+    border: "1px solid rgba(0, 0, 0, 0.1)",
+    background: "#FFFFFF",
+    fontSize: 12.5,
+    color: "#1D1D1F",
+    outline: "none",
+    cursor: "pointer",
+  };
 
   return (
     <div className="fade-up ov-sans" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -496,46 +576,63 @@ export function OpsCommand() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Sparkles size={16} />
           <span>
-            <strong>Ops Command Dispatch Center:</strong> Live monitoring of technician dispatches, field status, and customer availability.
+            <strong>Command Center:</strong> Top-of-funnel view of every dispatched job/ticket — the ticket is the source of truth; Technician, Customer, Device and Society drill-down views are a planned next step, not built here yet.
           </span>
         </div>
         <span style={{ fontSize: 11.5, fontWeight: 700, opacity: 0.8 }}>Sample Dispatch Feed</span>
       </div>
 
-      {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+      {/* KPI Cards — top-of-funnel ticket status, per explicit request */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
         <AppleKpiCard
-          label="Total Dispatched Jobs"
+          label="Total Tickets (Today)"
           value={SAMPLE_TECH_JOBS.length}
-          sub="Dispatches logged today"
+          sub="All dispatched jobs"
           icon={ClipboardList}
           color="#0066CC"
           bg="rgba(0, 102, 204, 0.1)"
         />
         <AppleKpiCard
-          label="In Transit / Active"
-          value={inTransitCount + assignedCount}
-          sub={`${inTransitCount} travelling · ${assignedCount} assigned`}
+          label="Assigned"
+          value={ticketStatusCounts.assigned}
+          sub="Awaiting departure"
+          icon={UserRound}
+          color="#0066CC"
+          bg="rgba(0, 102, 204, 0.1)"
+        />
+        <AppleKpiCard
+          label="In Progress"
+          value={ticketStatusCounts.in_transit}
+          sub="Technician travelling/on site"
           icon={Truck}
           color="#B45309"
           bg="rgba(180, 83, 9, 0.1)"
           activeDot
         />
         <AppleKpiCard
-          label="Customer Availability"
-          value={`${availPct}%`}
-          sub={`${custStatusCounts.Available} of ${SAMPLE_TECH_JOBS.length} customers ready`}
-          icon={CheckCircle2}
-          color="#08805A"
-          bg="rgba(8, 128, 90, 0.1)"
+          label="Postponed"
+          value={ticketStatusCounts.postponed}
+          sub="Rescheduled"
+          icon={PauseCircle}
+          color="#7C3AED"
+          bg="rgba(124, 58, 237, 0.1)"
         />
         <AppleKpiCard
-          label="Attention Needed"
-          value={actionNeeded}
-          sub="Cancelled, delayed or postponed"
-          icon={AlertCircle}
+          label="Cancelled"
+          value={ticketStatusCounts.cancelled}
+          sub="Closed without service"
+          icon={XCircle}
           color="#DC4141"
           bg="rgba(220, 38, 38, 0.1)"
+        />
+        <AppleKpiCard
+          label="Unplanned / New"
+          value={ticketStatusCounts.unplanned}
+          sub="Not yet acknowledged or moving"
+          icon={AlertCircle}
+          color="#991B1B"
+          bg="rgba(153, 27, 27, 0.1)"
+          activeDot={ticketStatusCounts.unplanned > 0}
         />
       </div>
 
@@ -580,6 +677,25 @@ export function OpsCommand() {
           >
             <Download size={14} /> Export CSV
           </button>
+        </div>
+
+        {/* Priority/Repeat + Society/Zone/PIN filter row, per explicit request */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+          <div style={{ minWidth: 260 }}>
+            <AppleSegmentedControl options={priorityFilterOptions} value={priorityFilter} onChange={setPriorityFilter} />
+          </div>
+          <select style={selectStyle} value={societyFilter} onChange={(e) => setSocietyFilter(e.target.value)}>
+            <option value="all">All Societies</option>
+            {societies.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select style={selectStyle} value={zoneFilter} onChange={(e) => setZoneFilter(e.target.value)}>
+            <option value="all">All Zones</option>
+            {zones.map((z) => <option key={z} value={z}>{z}</option>)}
+          </select>
+          <select style={selectStyle} value={pincodeFilter} onChange={(e) => setPincodeFilter(e.target.value)}>
+            <option value="all">All PIN Codes</option>
+            {pincodes.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
         </div>
 
         {/* Horizontal Kanban Columns */}
@@ -665,7 +781,15 @@ export function OpsCommand() {
                         <span style={{ fontSize: 11, fontWeight: 750, color: "#86868B", letterSpacing: ".02em" }}>
                           {j.id}
                         </span>
-                        <StatusPill value={j.customerStatus} map={CUSTOMER_STATUS_COLORS} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          {j.repeat && (
+                            <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 999, background: "rgba(124, 58, 237, 0.1)", color: "#7C3AED" }}>
+                              REPEAT
+                            </span>
+                          )}
+                          <StatusPill value={j.priority} map={JOB_PRIORITY_COLORS} />
+                          <StatusPill value={j.customerStatus} map={CUSTOMER_STATUS_COLORS} />
+                        </div>
                       </div>
 
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -727,6 +851,12 @@ export function OpsCommand() {
                           </span>
                           <span>{j.scheduled}</span>
                         </div>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#6E6E73" }}>
+                            <Wrench size={12} /> Spares:
+                          </span>
+                          <span style={{ textAlign: "right" }}>{j.spares?.length ? j.spares.join(", ") : "None required"}</span>
+                        </div>
                       </div>
 
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
@@ -769,6 +899,26 @@ export function OpsCommand() {
             );
           })}
         </div>
+      </div>
+
+      {/* Weekly Trend Analytics — dummy timeseries, per explicit request */}
+      <div style={{ ...APPLE_CARD, padding: "20px 22px" }}>
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "#1D1D1F" }}>Weekly Ticket & Technician Trend</h3>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#86868B" }}>Ticket volume vs. active technicians, last 8 weeks</p>
+        </div>
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={WEEKLY_OPS_TREND} margin={{ left: -10, right: 14, top: 10, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
+            <XAxis dataKey="week" tick={{ fill: "#86868B", fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis yAxisId="left" tick={{ fill: "#86868B", fontSize: 11.5 }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <YAxis yAxisId="right" orientation="right" tick={{ fill: "#86868B", fontSize: 11.5 }} axisLine={false} tickLine={false} allowDecimals={false} />
+            <Tooltip cursor={{ fill: "rgba(8,128,90,0.06)" }} />
+            <Legend iconType="circle" wrapperStyle={{ fontSize: 12, color: "#1D1D1F" }} />
+            <Bar yAxisId="left" dataKey="tickets" name="Tickets" fill="#08805A" radius={[6, 6, 0, 0]} maxBarSize={32} isAnimationActive={false} />
+            <Line yAxisId="right" type="monotone" dataKey="activeTechs" name="Active Technicians" stroke="#0066CC" strokeWidth={3} dot={{ r: 3.5, fill: "#fff", stroke: "#0066CC", strokeWidth: 2 }} isAnimationActive={false} />
+          </ComposedChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Interactive Job Details Modal */}
@@ -1450,6 +1600,7 @@ const FLEET_TECHNICIANS = [
     destLng: 77.7010,
     area: "Koramangala · South Zone",
     phone: "+91 98450 11223",
+    checkedIn: true, // dummy placeholder for a future technician-app check-in feed
     delayedBy: null,
     unavailableSince: null,
     currentJob: {
@@ -1476,6 +1627,7 @@ const FLEET_TECHNICIANS = [
     destLng: 77.6412,
     area: "Indiranagar · East Zone",
     phone: "+91 98801 44556",
+    checkedIn: true, // dummy placeholder for a future technician-app check-in feed
     delayedBy: null,
     unavailableSince: null,
     currentJob: {
@@ -1502,6 +1654,7 @@ const FLEET_TECHNICIANS = [
     destLng: 77.6820,
     area: "HSR Layout · South-East",
     phone: "+91 99002 77889",
+    checkedIn: true, // dummy placeholder for a future technician-app check-in feed
     delayedBy: "+25 mins",
     unavailableSince: null,
     delayReason: "Heavy ORR Junction Traffic Congestion",
@@ -1529,6 +1682,7 @@ const FLEET_TECHNICIANS = [
     destLng: 77.5400,
     area: "Malleswaram · North Zone",
     phone: "+91 97403 99001",
+    checkedIn: true, // dummy placeholder for a future technician-app check-in feed
     delayedBy: null,
     unavailableSince: null,
     currentJob: {
@@ -1555,6 +1709,7 @@ const FLEET_TECHNICIANS = [
     destLng: null,
     area: "Jayanagar 4th Block Hub",
     phone: "+91 96112 33445",
+    checkedIn: true, // dummy placeholder for a future technician-app check-in feed
     delayedBy: null,
     unavailableSince: null,
     currentJob: null,
@@ -1569,6 +1724,7 @@ const FLEET_TECHNICIANS = [
     destLng: 77.6950,
     area: "Whitefield · Tech Corridor",
     phone: "+91 93420 88990",
+    checkedIn: true, // dummy placeholder for a future technician-app check-in feed
     delayedBy: "+15 mins",
     unavailableSince: null,
     delayReason: "Visitor Gate Clearance Hold",
@@ -1596,6 +1752,7 @@ const FLEET_TECHNICIANS = [
     destLng: 77.5850,
     area: "JP Nagar · 6th Phase",
     phone: "+91 98802 66778",
+    checkedIn: true, // dummy placeholder for a future technician-app check-in feed
     delayedBy: null,
     unavailableSince: "45 mins ago",
     currentJob: {
@@ -1622,6 +1779,7 @@ const FLEET_TECHNICIANS = [
     destLng: null,
     area: "Vijayanagar · West Hub",
     phone: "+91 94480 11992",
+    checkedIn: false, // dummy placeholder for a future technician-app check-in feed
     delayedBy: null,
     unavailableSince: null,
     currentJob: null,
@@ -1644,6 +1802,22 @@ const TECH_STATUS_COLORS = {
   "Unavailable / Lost Contact": { color: "#991B1B", bg: "rgba(153, 27, 27, 0.1)" },
 };
 
+// Dummy technician login/logout activity log, per explicit request ("add
+// technician logs when they're logging in and logout"). Newest first. Placeholder
+// until the technician app exposes a real session/attendance feed.
+const TECH_ACTIVITY_LOG = [
+  { technician: "Ramesh Kumar", date: "18 Sep 2026", login: "9:02 AM", logout: "—", duration: "In progress" },
+  { technician: "Suresh Murthy", date: "18 Sep 2026", login: "8:47 AM", logout: "—", duration: "In progress" },
+  { technician: "Anil Patel", date: "18 Sep 2026", login: "9:15 AM", logout: "—", duration: "In progress" },
+  { technician: "Vijay Raghavan", date: "18 Sep 2026", login: "8:30 AM", logout: "—", duration: "In progress" },
+  { technician: "Manoj Sharma", date: "18 Sep 2026", login: "8:55 AM", logout: "—", duration: "In progress" },
+  { technician: "Deepak Thapa", date: "18 Sep 2026", login: "9:20 AM", logout: "—", duration: "In progress" },
+  { technician: "Kiran Gowda", date: "17 Sep 2026", login: "9:05 AM", logout: "6:12 PM", duration: "9h 7m" },
+  { technician: "Prakash Nayak", date: "17 Sep 2026", login: "8:40 AM", logout: "5:58 PM", duration: "9h 18m" },
+  { technician: "Ramesh Kumar", date: "17 Sep 2026", login: "8:58 AM", logout: "6:30 PM", duration: "9h 32m" },
+  { technician: "Anil Patel", date: "17 Sep 2026", login: "9:10 AM", logout: "6:05 PM", duration: "8h 55m" },
+];
+
 export function TrackTechnician() {
   const { user } = useAuth();
   const mapRef = useRef(null);
@@ -1662,6 +1836,11 @@ export function TrackTechnician() {
 
   const statusCounts = useMemo(() => ({
     all: techs.length,
+    // Per explicit request, "Total Technicians" should reflect who has marked
+    // themselves present today, not the whole roster — `checkedIn` is dummy data
+    // until the technician app ships a real check-in feed (tracked separately from
+    // the technician-app GPS-ping work).
+    checkedIn: techs.filter((t) => t.checkedIn).length,
     en_route: techs.filter((t) => t.status === "en_route").length,
     on_job: techs.filter((t) => t.status === "on_job").length,
     delayed: techs.filter((t) => t.status === "delayed").length,
@@ -1984,7 +2163,7 @@ export function TrackTechnician() {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
-        <AppleKpiCard label="Total Techs" value={statusCounts.all} sub="Active field workforce" icon={UserRound} color="#0066CC" bg="rgba(0, 102, 204, 0.1)" />
+        <AppleKpiCard label="Total Technicians" value={statusCounts.checkedIn} sub={`Marked present today · of ${statusCounts.all} on roster`} icon={UserRound} color="#0066CC" bg="rgba(0, 102, 204, 0.1)" />
         <AppleKpiCard label="In Transit" value={statusCounts.en_route} sub="On schedule to site" icon={Truck} color="#B45309" bg="rgba(180, 83, 9, 0.1)" />
         <AppleKpiCard label="On Site" value={statusCounts.on_job} sub="Currently servicing" icon={Wrench} color="#08805A" bg="rgba(8, 128, 90, 0.1)" />
         <AppleKpiCard label="Delayed" value={statusCounts.delayed} sub="Behind schedule" icon={AlertTriangle} color="#DC4141" bg="rgba(220, 38, 38, 0.1)" activeDot={statusCounts.delayed > 0} />
@@ -2471,6 +2650,30 @@ export function TrackTechnician() {
               <td colSpan={8} style={{ padding: 0 }}><Empty msg="No technicians match this filter." /></td>
             </tr>
           )}
+        </Table>
+      </div>
+
+      {/* Technician Activity Log — login/logout, per explicit request */}
+      <div style={{ ...APPLE_CARD, padding: "20px 22px" }}>
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "#1D1D1F" }}>Technician Activity Log</h3>
+          <p style={{ margin: "2px 0 0", fontSize: 12, color: "#86868B" }}>Login and logout times, most recent first</p>
+        </div>
+        <Table head={["Technician", "Date", "Login", "Logout", "Duration"]} maxHeight={380}>
+          {TECH_ACTIVITY_LOG.map((r, i) => (
+            <tr key={i} style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+              <td style={{ ...td, textAlign: "left" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <AppleAvatar name={r.technician} size={26} />
+                  <strong style={{ fontSize: 13, color: "#1D1D1F" }}>{r.technician}</strong>
+                </div>
+              </td>
+              <td style={{ ...td, color: "#48484A" }}>{r.date}</td>
+              <td style={{ ...td, color: "#08805A", fontWeight: 650 }}>{r.login}</td>
+              <td style={{ ...td, color: r.logout === "—" ? "#86868B" : "#1D1D1F", fontWeight: r.logout === "—" ? 400 : 650 }}>{r.logout}</td>
+              <td style={{ ...td, color: "#48484A" }}>{r.duration}</td>
+            </tr>
+          ))}
         </Table>
       </div>
     </div>
