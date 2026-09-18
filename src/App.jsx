@@ -56,7 +56,7 @@ import {
   pieLabelLine, renderPieLabel, selectStyle, td, toastStyle, trStyle, GsTextCell, MODULE_ICONS, ProWaterLogo
 } from "./shared/ui";
 import { AssetLifecycle } from "./modules/ERP";
-import { OpsCommand } from "./modules/FSM";
+import { OpsCommand, CustomerSatisfaction } from "./modules/FSM";
 import { UsersAdmin } from "./modules/Employee";
 import { DeviceReplacement } from "./modules/DeviceReplacement";
 import { PasswordVault } from "./modules/Vault";
@@ -1366,6 +1366,7 @@ const doRefresh = async () => {
     ],
     fsm: [
       { id: "fsm_ops", label: "Ops Command", icon: Target },
+      { id: "fsm_satisfaction", label: "Customer Satisfaction", icon: MessageCircle },
     ],
     erp: [
       { id: "erp_assets", label: "Asset Lifecycle", icon: Boxes },
@@ -1618,6 +1619,7 @@ const doRefresh = async () => {
             {tab === "bill_plans" && <Plans key={refreshKey} />}
             {tab === "erp_assets" && <AssetLifecycle key={refreshKey} />}
             {tab === "fsm_ops" && <OpsCommand key={refreshKey} />}
+            {tab === "fsm_satisfaction" && <CustomerSatisfaction key={refreshKey} />}
             {tab === "as_society" && <AutoGSSociety key={refreshKey} accessLevel={tabAccess} />}
             {tab === "as_iot" && <IoTAlerts key={refreshKey} />}
             {tab === "iot_devices" && <IoTDevices key={refreshKey} />}
