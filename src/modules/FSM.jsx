@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   AlertCircle, BarChart3, CalendarClock, CheckCircle2, Download, Droplets,
   MapPin, RotateCcw, Search, ShieldCheck, Target, UserRound, Wrench,
+  ClipboardList, Truck, XCircle, BellOff, PauseCircle, Ban, MessageSquare, Phone,
 } from "lucide-react";
 import { useAuth, api, customerApi, hashStr, exportToCsv, fmtDate, deviceType, BENGALURU_CENTER } from "../shared/core";
 import {
@@ -353,6 +354,274 @@ export function WaterQuality() {
               </tr>
             ))}
             {shown.length === 0 && <tr><td colSpan={7} style={{ padding: 0 }}><Empty msg="No devices match this filter." /></td></tr>}
+          </Table>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+/* ===========================================================================
+   FSM — OPS COMMAND: a Kanban-style Technician Jobs board (job status ×
+   per-job Customer Status), plus Customer Sentiment and Customer Rating
+   tables. All three are populated with SAMPLE_* dummy data below — replace
+   each with your live feed when ready (keep the same field shape); the
+   Customer Sentiment table in particular is meant to be sourced from a
+   real sentiment-analysis API per the original request, not entered by hand.
+   =========================================================================== */
+
+// Technician Jobs — one entry per dispatched job. `status` drives which
+// Kanban column it sits in; `customerStatus` is shown as its own badge on
+// the card (independent of the job's own status).
+const JOB_STATUSES = [
+  { key: "assigned",      label: "Assigned",          icon: ClipboardList, color: "#2A86D6", bg: "#EAF3FC" },
+  { key: "in_transit",    label: "In Transit",        icon: Truck,         color: "#B45309", bg: "#FDF3E7" },
+  { key: "cancelled",     label: "Cancelled",         icon: XCircle,       color: "#DC4141", bg: "#FBE8E8" },
+  { key: "not_ack",       label: "Not Acknowledged",  icon: BellOff,       color: "#6B7280", bg: "#F1F2F4" },
+  { key: "postponed",     label: "Postponed",         icon: PauseCircle,   color: "#7C3AED", bg: "#F3EEFC" },
+  { key: "not_moving",    label: "Not Moving",        icon: Ban,           color: "#8C1D1D", bg: "#F5E4E4" },
+];
+const CUSTOMER_STATUS_COLORS = {
+  Available:   ["#08805A", "#E2F3EE"],
+  Unavailable: ["#DC4141", "#FBE8E8"],
+  Postponed:   ["#986315", "#FBF0E0"],
+};
+const SAMPLE_TECH_JOBS = [
+  { id: "JOB-101", customer: "Abhijit Dey",                    society: "MJR Clique Hydra Apartment",  technician: "Ramesh K", jobType: "Filter Service",         scheduled: "Today, 2:00 PM",         status: "assigned",   customerStatus: "Available" },
+  { id: "JOB-102", customer: "Ravi Kumar",                     society: "Prestige Lakeside",            technician: "Suresh M", jobType: "AMC Service",             scheduled: "Today, 4:30 PM",         status: "assigned",   customerStatus: "Postponed" },
+  { id: "JOB-103", customer: "Sneha Patil",                    society: "Sobha Dream Acres",            technician: "Anil P",   jobType: "Installation",            scheduled: "Tomorrow, 11:00 AM",     status: "assigned",   customerStatus: "Available" },
+  { id: "JOB-104", customer: "Deepa Nair",                     society: "Ashish JK",                    technician: "Vijay R",  jobType: "Repair Visit",            scheduled: "Today, 1:15 PM",         status: "in_transit", customerStatus: "Available" },
+  { id: "JOB-105", customer: "Anand Ray",                      society: "CBR Aakruti",                  technician: "Manoj S",  jobType: "Complaint Resolution",    scheduled: "Today, 3:00 PM",         status: "in_transit", customerStatus: "Unavailable" },
+  { id: "JOB-106", customer: "Arun K Sinha",                   society: "MJR Clique Hydra Apartment",   technician: "Ramesh K", jobType: "Filter Service",          scheduled: "Yesterday, 5:00 PM",     status: "cancelled",  customerStatus: "Unavailable" },
+  { id: "JOB-107", customer: "Asha Anandan",                   society: "SVS Ananda Nilayam",           technician: "Deepak T", jobType: "AMC Service",             scheduled: "Yesterday, 10:00 AM",    status: "cancelled",  customerStatus: "Postponed" },
+  { id: "JOB-108", customer: "Bikram",                         society: "MJR Clique Hydra Apartment",   technician: "Suresh M", jobType: "Installation",            scheduled: "Today, 6:00 PM",         status: "not_ack",    customerStatus: "Available" },
+  { id: "JOB-109", customer: "Bibhuranjan Mohapatra",          society: "Prabhavathi Meghana Towers",   technician: "Prakash N", jobType: "Filter Service",         scheduled: "Tomorrow, 9:30 AM",      status: "not_ack",    customerStatus: "Unavailable" },
+  { id: "JOB-110", customer: "Binay Pradhan",                  society: "Ashish JK",                    technician: "Anil P",   jobType: "Repair Visit",            scheduled: "Rescheduled → Fri, 12:00 PM", status: "postponed", customerStatus: "Postponed" },
+  { id: "JOB-111", customer: "Chaudari Vipool",                society: "Sai Poorna Premier",           technician: "Vijay R",  jobType: "AMC Service",             scheduled: "Rescheduled → Sat, 2:00 PM",  status: "postponed", customerStatus: "Postponed" },
+  { id: "JOB-112", customer: "Dhananjaya Samanta Singhar",     society: "The Green Terraces",           technician: "Manoj S",  jobType: "Complaint Resolution",    scheduled: "Today, 11:00 AM",        status: "not_moving", customerStatus: "Available" },
+  { id: "JOB-113", customer: "Divya Vijayaraghavan",           society: "CBR Aakruti",                  technician: "Deepak T", jobType: "Filter Service",          scheduled: "Today, 9:00 AM",         status: "not_moving", customerStatus: "Unavailable" },
+];
+
+// Customer Sentiment — per the original request, this is meant to be
+// sourced from a real sentiment-analysis API once connected; SAMPLE_SENTIMENT
+// below is dummy data standing in until then (same "replace when live"
+// convention as SAMPLE_TECHNICIANS above).
+const SENTIMENT_COLORS = {
+  "Good":               ["#08805A", "#E2F3EE"],
+  "Neutral":            ["#6B7280", "#F1F2F4"],
+  "Bad":                ["#986315", "#FBF0E0"],
+  "Negative":           ["#DC4141", "#FBE8E8"],
+  "Extremely Negative": ["#FFFFFF", "#B91C1C"],
+};
+const SAMPLE_SENTIMENT = [
+  { customer: "Abhijit Dey",           society: "MJR Clique Hydra Apartment", purifierId: "HAC1F9F778", sentiment: "Good",               date: "2026-09-10", note: "Happy with the new filter, water tastes better." },
+  { customer: "Ravi Kumar",            society: "Prestige Lakeside",          purifierId: "PW-00092",   sentiment: "Neutral",             date: "2026-09-09", note: "No major feedback, service was on time." },
+  { customer: "Sneha Patil",           society: "Sobha Dream Acres",          purifierId: "PW-00101",   sentiment: "Bad",                 date: "2026-09-08", note: "Technician was late by 2 hours." },
+  { customer: "Deepa Nair",            society: "Ashish JK",                  purifierId: "ZB-77",      sentiment: "Negative",            date: "2026-09-07", note: "Second complaint this month, not resolved." },
+  { customer: "Anand Ray",             society: "CBR Aakruti",                purifierId: "PRSC1FE2C3", sentiment: "Extremely Negative",  date: "2026-09-05", note: "Threatening to cancel subscription, very upset." },
+  { customer: "Arun K Sinha",          society: "MJR Clique Hydra Apartment", purifierId: "PRSM95B3A9", sentiment: "Good",               date: "2026-09-11", note: "Appreciated the quick response." },
+  { customer: "Asha Anandan",          society: "SVS Ananda Nilayam",         purifierId: "PRSMFB3B8D", sentiment: "Neutral",             date: "2026-09-06", note: "Standard service, nothing notable." },
+  { customer: "Bikram",                society: "MJR Clique Hydra Apartment", purifierId: "OWND000003", sentiment: "Bad",                 date: "2026-09-04", note: "Water flow still low after service." },
+  { customer: "Bibhuranjan Mohapatra", society: "Prabhavathi Meghana Towers", purifierId: "OWND000006", sentiment: "Negative",            date: "2026-09-03", note: "Missed appointment without notice." },
+  { customer: "Chaudari Vipool",       society: "Sai Poorna Premier",         purifierId: "HAM77E663C", sentiment: "Good",               date: "2026-09-12", note: "Very satisfied with the installation." },
+];
+
+// Customer Rating — dummy data, same "replace when live" convention.
+const RATING_COLORS = {
+  "Positive":     ["#08805A", "#E2F3EE"],
+  "Appreciative": ["#2A86D6", "#EAF3FC"],
+  "Negative":     ["#986315", "#FBF0E0"],
+  "Critical":     ["#FFFFFF", "#B91C1C"],
+};
+const SAMPLE_RATINGS = [
+  { customer: "Abhijit Dey",           society: "MJR Clique Hydra Apartment", rating: "Positive",     date: "2026-09-10", comment: "5-star service, will recommend." },
+  { customer: "Ravi Kumar",            society: "Prestige Lakeside",          rating: "Appreciative", date: "2026-09-09", comment: "Thanked the technician personally." },
+  { customer: "Deepa Nair",            society: "Ashish JK",                  rating: "Negative",     date: "2026-09-07", comment: "Unhappy with repeated visits." },
+  { customer: "Anand Ray",             society: "CBR Aakruti",                rating: "Critical",     date: "2026-09-05", comment: "Escalated to support, considering cancellation." },
+  { customer: "Sneha Patil",           society: "Sobha Dream Acres",          rating: "Negative",     date: "2026-09-08", comment: "Delayed service impacted rating." },
+  { customer: "Arun K Sinha",          society: "MJR Clique Hydra Apartment", rating: "Appreciative", date: "2026-09-11", comment: "Left a thank-you note for the technician." },
+  { customer: "Asha Anandan",          society: "SVS Ananda Nilayam",         rating: "Positive",     date: "2026-09-06", comment: "Smooth, professional visit." },
+  { customer: "Bikram",                society: "MJR Clique Hydra Apartment", rating: "Critical",     date: "2026-09-04", comment: "Filed a formal complaint." },
+  { customer: "Bibhuranjan Mohapatra", society: "Prabhavathi Meghana Towers", rating: "Negative",     date: "2026-09-03", comment: "Frustrated with the no-show." },
+  { customer: "Chaudari Vipool",       society: "Sai Poorna Premier",         rating: "Positive",     date: "2026-09-12", comment: "Extremely happy, gave positive review." },
+];
+
+// Small pill badge shared by all three sections below — `map` is one of
+// the *_COLORS lookups above.
+function StatusPill({ value, map }) {
+  const [color, bg] = map[value] || ["#6B7280", "#F1F2F4"];
+  return <span style={{ fontSize: 11.5, fontWeight: 700, color, background: bg, padding: "3px 10px", borderRadius: 999, whiteSpace: "nowrap", display: "inline-block" }}>{value}</span>;
+}
+
+export function OpsCommand() {
+  const { user } = useAuth();
+  const [custStatusFilter, setCustStatusFilter] = useState("all"); // all | Available | Unavailable | Postponed
+  const [jobQ, setJobQ] = useState("");
+  const [sentQ, setSentQ] = useState("");
+  const [sentFilter, setSentFilter] = useState("all");
+  const [ratingQ, setRatingQ] = useState("");
+  const [ratingFilter, setRatingFilter] = useState("all");
+
+  useEffect(() => { api.logView(user.username, "Viewed Ops Command"); }, []);
+
+  const jobQl = jobQ.toLowerCase();
+  const jobsFiltered = SAMPLE_TECH_JOBS.filter(j =>
+    (custStatusFilter === "all" || j.customerStatus === custStatusFilter) &&
+    (!jobQl || `${j.customer} ${j.technician} ${j.society} ${j.jobType}`.toLowerCase().includes(jobQl))
+  );
+  const custStatusCounts = {
+    Available: SAMPLE_TECH_JOBS.filter(j => j.customerStatus === "Available").length,
+    Unavailable: SAMPLE_TECH_JOBS.filter(j => j.customerStatus === "Unavailable").length,
+    Postponed: SAMPLE_TECH_JOBS.filter(j => j.customerStatus === "Postponed").length,
+  };
+
+  const sentQl = sentQ.toLowerCase();
+  const sentimentShown = SAMPLE_SENTIMENT.filter(r =>
+    (sentFilter === "all" || r.sentiment === sentFilter) &&
+    (!sentQl || `${r.customer} ${r.society} ${r.purifierId}`.toLowerCase().includes(sentQl))
+  );
+  const sentimentChips = ["all", "Good", "Neutral", "Bad", "Negative", "Extremely Negative"];
+
+  const ratingQl = ratingQ.toLowerCase();
+  const ratingsShown = SAMPLE_RATINGS.filter(r =>
+    (ratingFilter === "all" || r.rating === ratingFilter) &&
+    (!ratingQl || `${r.customer} ${r.society}`.toLowerCase().includes(ratingQl))
+  );
+  const ratingChips = ["all", "Positive", "Appreciative", "Negative", "Critical"];
+
+  const exportJobsCsv = () => exportToCsv("prowater-ops-technician-jobs.csv", [
+    { label: "Job ID", get: j => j.id }, { label: "Customer", get: j => j.customer },
+    { label: "Society", get: j => j.society }, { label: "Technician", get: j => j.technician },
+    { label: "Job Type", get: j => j.jobType }, { label: "Scheduled", get: j => j.scheduled },
+    { label: "Job Status", get: j => JOB_STATUSES.find(s => s.key === j.status)?.label || j.status },
+    { label: "Customer Status", get: j => j.customerStatus },
+  ], jobsFiltered);
+  const exportSentimentCsv = () => exportToCsv("prowater-ops-customer-sentiment.csv", [
+    { label: "Customer", get: r => r.customer }, { label: "Society", get: r => r.society },
+    { label: "Purifier ID", get: r => r.purifierId }, { label: "Sentiment", get: r => r.sentiment },
+    { label: "Date", get: r => r.date }, { label: "Note", get: r => r.note },
+  ], sentimentShown);
+  const exportRatingCsv = () => exportToCsv("prowater-ops-customer-rating.csv", [
+    { label: "Customer", get: r => r.customer }, { label: "Society", get: r => r.society },
+    { label: "Rating", get: r => r.rating }, { label: "Date", get: r => r.date }, { label: "Comment", get: r => r.comment },
+  ], ratingsShown);
+
+  return (
+    <div className="fade-up">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--slate)", background: "var(--mint-2)", padding: "10px 14px", borderRadius: 11, marginBottom: 18 }}>
+        <AlertCircle size={15} /> All three sections below show sample data — wire up the live dispatch feed and sentiment-analysis API to replace SAMPLE_TECH_JOBS / SAMPLE_SENTIMENT / SAMPLE_RATINGS with real values.
+      </div>
+
+      {/* ---- Technician Jobs (Kanban) ---- */}
+      <Card pad={false} title="Technician Jobs" sub="Job status × Customer Status, per dispatched job">
+        <div style={{ padding: "0 20px 16px" }}>
+          <Toolbar q={jobQ} setQ={setJobQ} placeholder="Search customer, technician, society…" count={jobsFiltered.length}
+            right={
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "var(--muted)", marginRight: 2 }}>Customer Status:</span>
+                {["all", "Available", "Unavailable", "Postponed"].map(v => (
+                  <button key={v} onClick={() => setCustStatusFilter(v)}
+                    style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: "1.5px solid " + (custStatusFilter === v ? "var(--teal)" : "var(--border)"), background: custStatusFilter === v ? "var(--mint-2)" : "#fff", color: custStatusFilter === v ? "var(--teal-d)" : "var(--slate)" }}>
+                    {v === "all" ? `All (${SAMPLE_TECH_JOBS.length})` : `${v} (${custStatusCounts[v]})`}
+                  </button>
+                ))}
+                <button onClick={exportJobsCsv} style={btnGhost}><Download size={15} /> Export</button>
+              </div>
+            } />
+        </div>
+        <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "0 20px 20px" }}>
+          {JOB_STATUSES.map(col => {
+            const colJobs = jobsFiltered.filter(j => j.status === col.key);
+            const Icon = col.icon;
+            return (
+              <div key={col.key} style={{ flex: "0 0 260px", width: 260, background: col.bg, border: `1.5px solid ${col.color}33`, borderRadius: 14, display: "flex", flexDirection: "column", maxHeight: 640 }}>
+                <div style={{ padding: "12px 14px", borderBottom: `1px solid ${col.color}33`, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Icon size={15} color={col.color} />
+                  <strong style={{ fontSize: 13, color: col.color }}>{col.label}</strong>
+                  <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700, color: col.color, background: "#fff", padding: "2px 8px", borderRadius: 999 }}>{colJobs.length}</span>
+                </div>
+                <div style={{ overflowY: "auto", flex: 1, padding: 10, display: "flex", flexDirection: "column", gap: 9 }}>
+                  {colJobs.map(j => (
+                    <div key={j.id} style={{ background: "#fff", border: "1px solid rgba(0,0,0,0.06)", borderLeft: `3.5px solid ${col.color}`, borderRadius: 12, padding: "11px 13px", boxShadow: "0 3px 10px rgba(0,0,0,0.04)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
+                        <strong style={{ fontSize: 13, color: "var(--f)" }}>{j.customer}</strong>
+                        <StatusPill value={j.customerStatus} map={CUSTOMER_STATUS_COLORS} />
+                      </div>
+                      <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>{j.society}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 7, fontSize: 12, color: "var(--slate)" }}>
+                        <UserRound size={12} /> {j.technician}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, fontSize: 12, color: "var(--slate)" }}>
+                        <CalendarClock size={12} /> {j.scheduled}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 5 }}>{j.jobType}</div>
+                    </div>
+                  ))}
+                  {colJobs.length === 0 && <div style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: "20px 8px" }}>No jobs</div>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* ---- Customer Sentiment ---- */}
+      <div style={{ marginTop: 20 }}>
+        <Card title="Customer Sentiment" sub="From the sentiment-analysis API (dummy data shown until connected)">
+          <Toolbar q={sentQ} setQ={setSentQ} placeholder="Search customer, society, purifier…" count={sentimentShown.length}
+            right={
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {sentimentChips.map(v => (
+                  <button key={v} onClick={() => setSentFilter(v)}
+                    style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: "1.5px solid " + (sentFilter === v ? "var(--teal)" : "var(--border)"), background: sentFilter === v ? "var(--mint-2)" : "#fff", color: sentFilter === v ? "var(--teal-d)" : "var(--slate)" }}>
+                    {v === "all" ? `All (${SAMPLE_SENTIMENT.length})` : v}
+                  </button>
+                ))}
+                <button onClick={exportSentimentCsv} style={btnGhost}><Download size={15} /> Export</button>
+              </div>
+            } />
+          <Table head={["Customer", "Society", "Purifier ID", "Sentiment", "Date", "Note"]} maxHeight={480}>
+            {sentimentShown.map((r, idx) => (
+              <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={td}><Person name={r.customer} /></td>
+                <td style={{ ...td, fontSize: 12.5 }}>{r.society}</td>
+                <td style={{ ...td, textAlign: "center" }}><Chip>{r.purifierId}</Chip></td>
+                <td style={{ ...td, textAlign: "center" }}><StatusPill value={r.sentiment} map={SENTIMENT_COLORS} /></td>
+                <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{fmtDate(new Date(r.date))}</td>
+                <td style={{ ...td, textAlign: "left", fontSize: 12.5, color: "var(--slate)" }}><MessageSquare size={12} style={{ verticalAlign: "-1px", marginRight: 4, opacity: .6 }} />{r.note}</td>
+              </tr>
+            ))}
+            {sentimentShown.length === 0 && <tr><td colSpan={6} style={{ padding: 0 }}><Empty msg="No feedback matches this filter." /></td></tr>}
+          </Table>
+        </Card>
+      </div>
+
+      {/* ---- Customer Rating ---- */}
+      <div style={{ marginTop: 20 }}>
+        <Card title="Customer Rating" sub="Per-visit customer rating">
+          <Toolbar q={ratingQ} setQ={setRatingQ} placeholder="Search customer, society…" count={ratingsShown.length}
+            right={
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                {ratingChips.map(v => (
+                  <button key={v} onClick={() => setRatingFilter(v)}
+                    style={{ padding: "7px 12px", borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: "pointer", border: "1.5px solid " + (ratingFilter === v ? "var(--teal)" : "var(--border)"), background: ratingFilter === v ? "var(--mint-2)" : "#fff", color: ratingFilter === v ? "var(--teal-d)" : "var(--slate)" }}>
+                    {v === "all" ? `All (${SAMPLE_RATINGS.length})` : v}
+                  </button>
+                ))}
+                <button onClick={exportRatingCsv} style={btnGhost}><Download size={15} /> Export</button>
+              </div>
+            } />
+          <Table head={["Customer", "Society", "Rating", "Date", "Comment"]} maxHeight={480}>
+            {ratingsShown.map((r, idx) => (
+              <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
+                <td style={td}><Person name={r.customer} /></td>
+                <td style={{ ...td, fontSize: 12.5 }}>{r.society}</td>
+                <td style={{ ...td, textAlign: "center" }}><StatusPill value={r.rating} map={RATING_COLORS} /></td>
+                <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: "var(--muted)" }}>{fmtDate(new Date(r.date))}</td>
+                <td style={{ ...td, textAlign: "left", fontSize: 12.5, color: "var(--slate)" }}><MessageSquare size={12} style={{ verticalAlign: "-1px", marginRight: 4, opacity: .6 }} />{r.comment}</td>
+              </tr>
+            ))}
+            {ratingsShown.length === 0 && <tr><td colSpan={5} style={{ padding: 0 }}><Empty msg="No ratings match this filter." /></td></tr>}
           </Table>
         </Card>
       </div>

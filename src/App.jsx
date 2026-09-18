@@ -56,6 +56,7 @@ import {
   pieLabelLine, renderPieLabel, selectStyle, td, toastStyle, trStyle, GsTextCell, MODULE_ICONS, ProWaterLogo
 } from "./shared/ui";
 import { AssetLifecycle } from "./modules/ERP";
+import { OpsCommand } from "./modules/FSM";
 import { UsersAdmin } from "./modules/Employee";
 import { DeviceReplacement } from "./modules/DeviceReplacement";
 import { PasswordVault } from "./modules/Vault";
@@ -1198,6 +1199,7 @@ function Shell({ module = "referral", onHome }) {
     : module === "ticketing" ? "tk_overview"
     : module === "customer" ? "cust_all"
     : module === "billing" ? "bill_subs"
+    : module === "fsm" ? "fsm_ops"
     : module === "erp" ? "erp_assets"
     : module === "autoscheduler" ? "as_society"
     : module === "iot" ? "iot_devices"
@@ -1362,11 +1364,9 @@ const doRefresh = async () => {
       { id: "bill_deposits", label: "Deposits & Refunds", icon: Wallet },
       { id: "bill_plans", label: "Plans", icon: Tag },
     ],
-    // fsm: no sections — all 3 (Track Technician, AMC/Maintenance, Water
-    // Quality) removed per explicit user request; the "FSM System" tile
-    // itself stays on Home (per explicit follow-up), showing the existing
-    // generic "No sections enabled" placeholder below.
-    fsm: [],
+    fsm: [
+      { id: "fsm_ops", label: "Ops Command", icon: Target },
+    ],
     erp: [
       { id: "erp_assets", label: "Asset Lifecycle", icon: Boxes },
     ],
@@ -1617,6 +1617,7 @@ const doRefresh = async () => {
             {tab === "bill_deposits" && <DepositRefunds key={refreshKey} />}
             {tab === "bill_plans" && <Plans key={refreshKey} />}
             {tab === "erp_assets" && <AssetLifecycle key={refreshKey} />}
+            {tab === "fsm_ops" && <OpsCommand key={refreshKey} />}
             {tab === "as_society" && <AutoGSSociety key={refreshKey} accessLevel={tabAccess} />}
             {tab === "as_iot" && <IoTAlerts key={refreshKey} />}
             {tab === "iot_devices" && <IoTDevices key={refreshKey} />}
