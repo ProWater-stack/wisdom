@@ -100,6 +100,7 @@ export const MODULE_TABS = {
   fsm: [
     { id: "fsm_ops", label: "Ops Command" },
     { id: "fsm_satisfaction", label: "Customer Satisfaction" },
+    { id: "fsm_track", label: "Track Technician" },
   ],
   erp: [{ id: "erp_assets", label: "Asset Lifecycle" }],
   autoscheduler: [

@@ -2,8 +2,12 @@
    modules/FSM.jsx — FSM (Field Service Management) module.
    Designed in accordance with Apple Human Interface Guidelines (HIG):
    - Ops Command: Kanban Dispatch Board with interactive Job Detail modal
-   - Customer Satisfaction: Sentiment Analysis & Post-Service Ratings
-   - Track Technician, AMC / Maintenance Schedule, Water Quality & Compliance
+   - Customer Satisfaction: Advanced CSAT/NPS Intelligence, Aspect Ratings,
+     interactive sentiment breakdown, Card & Table layouts, & Action Modals
+   - Track Technician: Clean live field tracking with map routes, technician
+     status, assigned jobs, and direct dispatch actions
+   - AMC / Maintenance Schedule: Proactive quarterly service projections
+   - Water Quality & Compliance: Device-level input/output TDS monitoring
    ============================================================================ */
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
@@ -12,7 +16,9 @@ import {
   MapPin, RotateCcw, Search, ShieldCheck, Target, UserRound, Wrench,
   ClipboardList, Truck, XCircle, BellOff, PauseCircle, Ban, MessageSquare, Phone,
   Star, Sparkles, Clock, Check, ChevronRight, X, ExternalLink, ThumbsUp,
-  ThumbsDown, MessageCircle, RefreshCw, Eye,
+  ThumbsDown, MessageCircle, RefreshCw, Eye, LayoutGrid, List, Award,
+  Flame, TrendingUp, AlertTriangle, Send, PhoneCall, Filter, ArrowUpRight,
+  Navigation, Compass, Route, CheckCircle
 } from "lucide-react";
 import {
   useAuth, api, customerApi, hashStr, exportToCsv, fmtDate, deviceType, BENGALURU_CENTER,
@@ -24,9 +30,9 @@ import {
 
 /* ── Apple HIG Glassmorphism and UI Tokens ────────────────────────────────── */
 const APPLE_CARD = {
-  background: "rgba(255, 255, 255, 0.85)",
-  backdropFilter: "blur(20px)",
-  WebkitBackdropFilter: "blur(20px)",
+  background: "rgba(255, 255, 255, 0.88)",
+  backdropFilter: "blur(24px)",
+  WebkitBackdropFilter: "blur(24px)",
   border: "1px solid rgba(0, 0, 0, 0.08)",
   borderRadius: 20,
   boxShadow: "0 10px 30px rgba(0, 0, 0, 0.03)",
@@ -37,6 +43,24 @@ const APPLE_SUBTLE_CARD = {
   border: "1px solid rgba(0, 0, 0, 0.06)",
   borderRadius: 14,
   boxShadow: "0 2px 10px rgba(0, 0, 0, 0.03)",
+};
+
+// Shared plain "Export CSV" button style (v2.29.485) — reused by every simple
+// Card+Table section across FSM so a export action always looks the same,
+// instead of each section re-declaring the same inline style object.
+const EXPORT_BTN = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "7px 14px",
+  borderRadius: 11,
+  fontSize: 12.5,
+  fontWeight: 700,
+  cursor: "pointer",
+  background: "#FFFFFF",
+  border: "1px solid rgba(0, 0, 0, 0.12)",
+  color: "#1D1D1F",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
 };
 
 /* ── Avatar Initial Bubble ────────────────────────────────────────────────── */
@@ -85,13 +109,15 @@ function AppleSegmentedControl({ options, value, onChange, style = {} }) {
   return (
     <div
       style={{
-        display: "inline-flex",
+        display: "flex",
         alignItems: "center",
         gap: 3,
         padding: 3,
         borderRadius: 12,
         background: "rgba(0, 0, 0, 0.05)",
         border: "1px solid rgba(0, 0, 0, 0.04)",
+        width: "100%",
+        boxSizing: "border-box",
         ...style,
       }}
     >
@@ -106,12 +132,14 @@ function AppleSegmentedControl({ options, value, onChange, style = {} }) {
             type="button"
             onClick={() => onChange(id)}
             style={{
+              flex: 1,
               display: "inline-flex",
               alignItems: "center",
-              gap: 6,
-              padding: "6px 13px",
+              justifyContent: "center",
+              gap: 5,
+              padding: "6px 8px",
               borderRadius: 9,
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: active ? 700 : 550,
               cursor: "pointer",
               border: "none",
@@ -128,7 +156,7 @@ function AppleSegmentedControl({ options, value, onChange, style = {} }) {
                 style={{
                   fontSize: 10.5,
                   fontWeight: 700,
-                  padding: "1px 6px",
+                  padding: "1px 5px",
                   borderRadius: 999,
                   background: active ? "rgba(8, 128, 90, 0.12)" : "rgba(0, 0, 0, 0.06)",
                   color: active ? "#08805A" : "#86868B",
@@ -147,7 +175,7 @@ function AppleSegmentedControl({ options, value, onChange, style = {} }) {
 /* ── Apple-style Search Bar ───────────────────────────────────────────────── */
 function AppleSearchBar({ value, onChange, placeholder = "Search…" }) {
   return (
-    <div style={{ position: "relative", minWidth: 240, maxWidth: 380, flex: 1 }}>
+    <div style={{ position: "relative", minWidth: 200, maxWidth: 360, flex: 1 }}>
       <Search
         size={15}
         style={{
@@ -213,7 +241,7 @@ function AppleSearchBar({ value, onChange, placeholder = "Search…" }) {
 }
 
 /* ── Apple KPI Card ───────────────────────────────────────────────────────── */
-function AppleKpiCard({ label, value, sub, icon: Icon, color = "#08805A", bg = "rgba(8,128,90,0.1)", activeDot = false }) {
+function AppleKpiCard({ label, value, sub, icon: Icon, color = "#08805A", bg = "rgba(8,128,90,0.1)", activeDot = false, badge = null }) {
   return (
     <div
       style={{
@@ -240,19 +268,35 @@ function AppleKpiCard({ label, value, sub, icon: Icon, color = "#08805A", bg = "
         <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", color: "#86868B" }}>
           {label}
         </span>
-        <span
-          style={{
-            display: "grid",
-            placeItems: "center",
-            width: 34,
-            height: 34,
-            borderRadius: 10,
-            background: bg,
-            color: color,
-          }}
-        >
-          <Icon size={17} />
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {badge && (
+            <span
+              style={{
+                fontSize: 10.5,
+                fontWeight: 700,
+                padding: "2px 7px",
+                borderRadius: 999,
+                background: badge.bg || "rgba(8, 128, 90, 0.1)",
+                color: badge.color || "#08805A",
+              }}
+            >
+              {badge.label}
+            </span>
+          )}
+          <span
+            style={{
+              display: "grid",
+              placeItems: "center",
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: bg,
+              color: color,
+            }}
+          >
+            <Icon size={17} />
+          </span>
+        </div>
       </div>
       <div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 6, margin: "8px 0 2px" }}>
@@ -287,9 +331,58 @@ function AppleKpiCard({ label, value, sub, icon: Icon, color = "#08805A", bg = "
   );
 }
 
+/* ── Apple-styled Status Pill ─────────────────────────────────────────────── */
+function StatusPill({ value, map, emoji }) {
+  const conf = map[value] || (Array.isArray(map[value]) ? { color: map[value][0], bg: map[value][1] } : { color: "#6E6E73", bg: "rgba(0,0,0,0.06)" });
+  const color = conf.color || (Array.isArray(map[value]) ? map[value][0] : "#6E6E73");
+  const bg = conf.bg || (Array.isArray(map[value]) ? map[value][1] : "rgba(0,0,0,0.06)");
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        fontSize: 11.5,
+        fontWeight: 700,
+        color,
+        background: bg,
+        padding: "3px 10px",
+        borderRadius: 999,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
+      {emoji ? `${emoji} ` : ""}{value}
+    </span>
+  );
+}
+
+/* ── Star Rating Renderer ─────────────────────────────────────────────────── */
+function StarRating({ rating = 5, size = 13, showValue = true }) {
+  return (
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+      <div style={{ display: "inline-flex", gap: 2 }}>
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            size={size}
+            fill={star <= rating ? "#F59E0B" : "rgba(0,0,0,0.08)"}
+            color={star <= rating ? "#F59E0B" : "rgba(0,0,0,0.12)"}
+          />
+        ))}
+      </div>
+      {showValue && (
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#1D1D1F", marginLeft: 3 }}>
+          {rating}.0
+        </span>
+      )}
+    </div>
+  );
+}
+
 /* ===========================================================================
-   FSM — OPS COMMAND: a Kanban-style Technician Jobs board (job status ×
-   per-job Customer Status)
+   FSM — OPS COMMAND: Kanban-style Technician Jobs Board
    =========================================================================== */
 
 const JOB_STATUSES = [
@@ -322,33 +415,6 @@ const SAMPLE_TECH_JOBS = [
   { id: "JOB-112", customer: "Dhananjaya Samanta Singhar",     society: "The Green Terraces",           technician: "Manoj S",  jobType: "Complaint Resolution",    scheduled: "Today, 11:00 AM",        status: "not_moving", customerStatus: "Available",   phone: "+91 96113 77880", email: "dhananjaya@example.com" },
   { id: "JOB-113", customer: "Divya Vijayaraghavan",           society: "CBR Aakruti",                  technician: "Deepak T", jobType: "Filter Service",          scheduled: "Today, 9:00 AM",         status: "not_moving", customerStatus: "Unavailable", phone: "+91 94481 99002", email: "divya.v@example.com" },
 ];
-
-/* ── Apple-styled Status Pill ─────────────────────────────────────────────── */
-function StatusPill({ value, map, emoji }) {
-  const conf = map[value] || (Array.isArray(map[value]) ? { color: map[value][0], bg: map[value][1] } : { color: "#6E6E73", bg: "rgba(0,0,0,0.06)" });
-  const color = conf.color || (Array.isArray(map[value]) ? map[value][0] : "#6E6E73");
-  const bg = conf.bg || (Array.isArray(map[value]) ? map[value][1] : "rgba(0,0,0,0.06)");
-
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        fontSize: 11.5,
-        fontWeight: 700,
-        color,
-        background: bg,
-        padding: "3px 10px",
-        borderRadius: 999,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: color }} />
-      {emoji ? `${emoji} ` : ""}{value}
-    </span>
-  );
-}
 
 export function OpsCommand() {
   const { user } = useAuth();
@@ -475,7 +541,6 @@ export function OpsCommand() {
 
       {/* Main Kanban Board Container */}
       <div style={{ ...APPLE_CARD, padding: "20px 22px", overflow: "hidden" }}>
-        {/* Controls Bar */}
         <div
           style={{
             display: "flex",
@@ -490,7 +555,9 @@ export function OpsCommand() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", flex: 1 }}>
             <AppleSearchBar value={jobQ} onChange={setJobQ} placeholder="Search customer, technician, society, job…" />
-            <AppleSegmentedControl options={filterOptions} value={custStatusFilter} onChange={setCustStatusFilter} />
+            <div style={{ minWidth: 320 }}>
+              <AppleSegmentedControl options={filterOptions} value={custStatusFilter} onChange={setCustStatusFilter} />
+            </div>
           </div>
           <button
             type="button"
@@ -542,7 +609,6 @@ export function OpsCommand() {
                   maxHeight: 680,
                 }}
               >
-                {/* Column Header */}
                 <div
                   style={{
                     padding: "14px 16px",
@@ -572,7 +638,6 @@ export function OpsCommand() {
                   </span>
                 </div>
 
-                {/* Job Cards List */}
                 <div
                   style={{
                     overflowY: "auto",
@@ -596,7 +661,6 @@ export function OpsCommand() {
                         overflow: "hidden",
                       }}
                     >
-                      {/* Top Bar: Job ID & Customer Status */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: 8 }}>
                         <span style={{ fontSize: 11, fontWeight: 750, color: "#86868B", letterSpacing: ".02em" }}>
                           {j.id}
@@ -604,7 +668,6 @@ export function OpsCommand() {
                         <StatusPill value={j.customerStatus} map={CUSTOMER_STATUS_COLORS} />
                       </div>
 
-                      {/* Customer Info */}
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
                         <AppleAvatar name={j.customer} size={28} />
                         <div style={{ minWidth: 0 }}>
@@ -623,7 +686,6 @@ export function OpsCommand() {
                         </div>
                       </div>
 
-                      {/* Society Location */}
                       <div
                         style={{
                           display: "flex",
@@ -641,7 +703,6 @@ export function OpsCommand() {
                         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{j.society}</span>
                       </div>
 
-                      {/* Details Box */}
                       <div
                         style={{
                           background: "rgba(0, 0, 0, 0.025)",
@@ -668,7 +729,6 @@ export function OpsCommand() {
                         </div>
                       </div>
 
-                      {/* Job Type Tag */}
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
                         <span
                           style={{
@@ -735,7 +795,7 @@ export function OpsCommand() {
                 <div style={{ fontSize: 11, color: "#86868B", fontWeight: 700, textTransform: "uppercase" }}>Assigned Technician</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#1D1D1F", marginTop: 4 }}>{activeJob.technician}</div>
                 <div style={{ fontSize: 12, color: "#08805A", marginTop: 2, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <Phone size={12} /> Contactable via fleet radio
+                  <Phone size={12} /> Contactable via phone
                 </div>
               </div>
               <div style={{ ...APPLE_SUBTLE_CARD, padding: "12px 14px" }}>
@@ -751,7 +811,7 @@ export function OpsCommand() {
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: "#1D1D1F" }}>
                   {JOB_STATUSES.find((s) => s.key === activeJob.status)?.label || activeJob.status}
                 </span>
-                <span style={{ fontSize: 12, color: "#86868B" }}>· Dispatched via Bengaluru Central RO Hub</span>
+                <span style={{ fontSize: 12, color: "#86868B" }}>· Dispatched via Bengaluru Central Hub</span>
               </div>
             </div>
 
@@ -781,52 +841,369 @@ export function OpsCommand() {
 }
 
 /* ===========================================================================
-   FSM: Customer Satisfaction (Sentiment Analysis + Ratings Hub)
+   FSM: Customer Satisfaction (Advanced CSAT / NPS Intelligence Hub)
    =========================================================================== */
 
 const SENTIMENT_COLORS = {
-  "Good":               { color: "#08805A", bg: "rgba(8, 128, 90, 0.1)" },
-  "Neutral":            { color: "#6E6E73", bg: "rgba(110, 110, 115, 0.1)" },
-  "Bad":                { color: "#986315", bg: "rgba(152, 99, 21, 0.1)" },
-  "Negative":           { color: "#DC4141", bg: "rgba(220, 38, 38, 0.1)" },
-  "Extremely Negative": { color: "#FFFFFF", bg: "#B91C1C" },
+  "Good":               { color: "#08805A", bg: "rgba(8, 128, 90, 0.1)", border: "rgba(8, 128, 90, 0.2)" },
+  "Neutral":            { color: "#6E6E73", bg: "rgba(110, 110, 115, 0.1)", border: "rgba(110, 110, 115, 0.2)" },
+  "Bad":                { color: "#986315", bg: "rgba(152, 99, 21, 0.1)", border: "rgba(152, 99, 21, 0.2)" },
+  "Negative":           { color: "#DC4141", bg: "rgba(220, 38, 38, 0.1)", border: "rgba(220, 38, 38, 0.2)" },
+  "Extremely Negative": { color: "#FFFFFF", bg: "#B91C1C", border: "#991B1B" },
 };
 
 const SENTIMENT_EMOJI = {
   "Good": "😊", "Bad": "🙁", "Neutral": "😐", "Negative": "😠", "Extremely Negative": "😡",
 };
 
-const SAMPLE_SENTIMENT = [
-  { customer: "Abhijit Dey",           society: "MJR Clique Hydra Apartment", purifierId: "HAC1F9F778", sentiment: "Good",               date: "2026-09-10", note: "Happy with the new filter, water tastes noticeably better." },
-  { customer: "Ravi Kumar",            society: "Prestige Lakeside",          purifierId: "PW-00092",   sentiment: "Neutral",             date: "2026-09-09", note: "No major feedback, service was completed on time." },
-  { customer: "Sneha Patil",           society: "Sobha Dream Acres",          purifierId: "PW-00101",   sentiment: "Bad",                 date: "2026-09-08", note: "Technician was delayed by 2 hours without prior update." },
-  { customer: "Deepa Nair",            society: "Ashish JK",                  purifierId: "ZB-77",      sentiment: "Negative",            date: "2026-09-07", note: "Second complaint this month, membrane pressure still irregular." },
-  { customer: "Anand Ray",             society: "CBR Aakruti",                purifierId: "PRSC1FE2C3", sentiment: "Extremely Negative",  date: "2026-09-05", note: "Threatening to cancel subscription due to repeated delays." },
-  { customer: "Arun K Sinha",          society: "MJR Clique Hydra Apartment", purifierId: "PRSM95B3A9", sentiment: "Good",               date: "2026-09-11", note: "Appreciated the prompt response and clear TDS report." },
-  { customer: "Asha Anandan",          society: "SVS Ananda Nilayam",         purifierId: "PRSMFB3B8D", sentiment: "Neutral",             date: "2026-09-06", note: "Standard quarterly checkup completed smoothly." },
-  { customer: "Bikram",                society: "MJR Clique Hydra Apartment", purifierId: "OWND000003", sentiment: "Bad",                 date: "2026-09-04", note: "Water flow rate still slightly low after technician visit." },
-  { customer: "Bibhuranjan Mohapatra", society: "Prabhavathi Meghana Towers", purifierId: "OWND000006", sentiment: "Negative",            date: "2026-09-03", note: "Missed scheduled appointment slot without phone call." },
-  { customer: "Chaudari Vipool",       society: "Sai Poorna Premier",         purifierId: "HAM77E663C", sentiment: "Good",               date: "2026-09-12", note: "Very satisfied with the neat installation and taste calibration." },
-];
-
 const RATING_COLORS = {
-  "Positive":     { color: "#08805A", bg: "rgba(8, 128, 90, 0.1)" },
-  "Appreciative": { color: "#0066CC", bg: "rgba(0, 102, 204, 0.1)" },
-  "Negative":     { color: "#986315", bg: "rgba(152, 99, 21, 0.1)" },
-  "Critical":     { color: "#FFFFFF", bg: "#B91C1C" },
+  "Positive":     { color: "#08805A", bg: "rgba(8, 128, 90, 0.1)", stars: 5 },
+  "Appreciative": { color: "#0066CC", bg: "rgba(0, 102, 204, 0.1)", stars: 5 },
+  "Neutral":      { color: "#6E6E73", bg: "rgba(110, 110, 115, 0.1)", stars: 3 },
+  "Negative":     { color: "#986315", bg: "rgba(152, 99, 21, 0.1)", stars: 2 },
+  "Critical":     { color: "#DC4141", bg: "rgba(220, 38, 38, 0.1)", stars: 1 },
 };
 
+const SAMPLE_SENTIMENT = [
+  {
+    id: "SAT-01",
+    customer: "Abhijit Dey",
+    society: "MJR Clique Hydra Apartment",
+    purifierId: "HAC1F9F778",
+    technician: "Ramesh K",
+    jobType: "Filter Replacement & TDS Tune",
+    sentiment: "Good",
+    confidence: 98,
+    date: "2026-09-10",
+    tags: ["Water Taste", "Polite Tech", "On Time"],
+    note: "Happy with the new mineral filter. Water tastes noticeably sweet and clean, TDS calibrated down to 42 ppm perfectly.",
+    tdsIn: 440,
+    tdsOut: 42,
+    status: "Resolved",
+  },
+  {
+    id: "SAT-02",
+    customer: "Ravi Kumar",
+    society: "Prestige Lakeside",
+    purifierId: "PW-00092",
+    technician: "Suresh M",
+    jobType: "Quarterly AMC Check",
+    sentiment: "Neutral",
+    confidence: 84,
+    date: "2026-09-09",
+    tags: ["Routine Check", "Average Visit"],
+    note: "No major issues, technician replaced pre-filter and completed test within 25 minutes. Standard service.",
+    tdsIn: 380,
+    tdsOut: 55,
+    status: "Resolved",
+  },
+  {
+    id: "SAT-03",
+    customer: "Sneha Patil",
+    society: "Sobha Dream Acres",
+    purifierId: "PW-00101",
+    technician: "Anil P",
+    jobType: "Emergency Repair Visit",
+    sentiment: "Bad",
+    confidence: 89,
+    date: "2026-09-08",
+    tags: ["Late Arrival", "Communication Gap"],
+    note: "Technician was delayed by 2 hours without prior SMS or phone update. Service work was fine but schedule got disrupted.",
+    tdsIn: 510,
+    tdsOut: 60,
+    status: "Follow-up Scheduled",
+  },
+  {
+    id: "SAT-04",
+    customer: "Deepa Nair",
+    society: "Ashish JK",
+    purifierId: "ZB-77",
+    technician: "Vijay R",
+    jobType: "Membrane Pressure Calibration",
+    sentiment: "Negative",
+    confidence: 94,
+    date: "2026-09-07",
+    tags: ["Low Pressure", "Recurring Complaint"],
+    note: "Second complaint this month. Input pressure fluctuates and tank fills slowly. Need supervisor inspection.",
+    tdsIn: 490,
+    tdsOut: 75,
+    status: "Supervisor Assigned",
+  },
+  {
+    id: "SAT-05",
+    customer: "Anand Ray",
+    society: "CBR Aakruti",
+    purifierId: "PRSC1FE2C3",
+    technician: "Manoj S",
+    jobType: "Service Escalation",
+    sentiment: "Extremely Negative",
+    confidence: 99,
+    date: "2026-09-05",
+    tags: ["Churn Risk", "Missed Visit", "Urgent"],
+    note: "Threatening to cancel subscription due to two missed appointment slots last week. Demanded manager call.",
+    tdsIn: 560,
+    tdsOut: 110,
+    status: "Manager Action Required",
+  },
+  {
+    id: "SAT-06",
+    customer: "Arun K Sinha",
+    society: "MJR Clique Hydra Apartment",
+    purifierId: "PRSM95B3A9",
+    technician: "Ramesh K",
+    jobType: "TDS Calibration & Health Check",
+    sentiment: "Good",
+    confidence: 96,
+    date: "2026-09-11",
+    tags: ["Quick Response", "Clear Report"],
+    note: "Appreciated the prompt same-day response and the live digital TDS certificate shown on the technician app.",
+    tdsIn: 410,
+    tdsOut: 38,
+    status: "Resolved",
+  },
+  {
+    id: "SAT-07",
+    customer: "Asha Anandan",
+    society: "SVS Ananda Nilayam",
+    purifierId: "PRSMFB3B8D",
+    technician: "Deepak T",
+    jobType: "Quarterly AMC Check",
+    sentiment: "Neutral",
+    confidence: 82,
+    date: "2026-09-06",
+    tags: ["Standard AMC", "Smooth Process"],
+    note: "Routine visit completed smoothly without any hitches. Purifier working normally.",
+    tdsIn: 395,
+    tdsOut: 48,
+    status: "Resolved",
+  },
+  {
+    id: "SAT-08",
+    customer: "Bikram",
+    society: "MJR Clique Hydra Apartment",
+    purifierId: "OWND000003",
+    technician: "Suresh M",
+    jobType: "Flow Rate Adjustment",
+    sentiment: "Bad",
+    confidence: 87,
+    date: "2026-09-04",
+    tags: ["Low Flow", "Flow Restrictor"],
+    note: "Water dispensing flow rate is still slightly low after technician visit. Might require booster pump check.",
+    tdsIn: 460,
+    tdsOut: 62,
+    status: "Follow-up Scheduled",
+  },
+  {
+    id: "SAT-09",
+    customer: "Bibhuranjan Mohapatra",
+    society: "Prabhavathi Meghana Towers",
+    purifierId: "OWND000006",
+    technician: "Prakash N",
+    jobType: "Installation & Onboarding",
+    sentiment: "Negative",
+    confidence: 92,
+    date: "2026-09-03",
+    tags: ["Missed Slot", "Support Escalation"],
+    note: "Missed the scheduled Saturday morning slot without advance notice. Rescheduled for Monday.",
+    tdsIn: 520,
+    tdsOut: 70,
+    status: "Resolved",
+  },
+  {
+    id: "SAT-10",
+    customer: "Chaudari Vipool",
+    society: "Sai Poorna Premier",
+    purifierId: "HAM77E663C",
+    technician: "Vijay R",
+    jobType: "New Subscription Setup",
+    sentiment: "Good",
+    confidence: 97,
+    date: "2026-09-12",
+    tags: ["Neat Setup", "Great Experience", "Promoter"],
+    note: "Very satisfied with the clean under-sink installation and comprehensive demo of the ProWater app features.",
+    tdsIn: 430,
+    tdsOut: 36,
+    status: "Resolved",
+  },
+  {
+    id: "SAT-11",
+    customer: "Divya Vijayaraghavan",
+    society: "CBR Aakruti",
+    purifierId: "PRSM22A901",
+    technician: "Deepak T",
+    jobType: "Alkaline Post-Filter Upgrade",
+    sentiment: "Good",
+    confidence: 95,
+    date: "2026-09-13",
+    tags: ["Alkaline Water", "Polite Tech"],
+    note: "The technician explained how the alkaline mineralization works. Water has great mouthfeel and taste.",
+    tdsIn: 415,
+    tdsOut: 45,
+    status: "Resolved",
+  },
+  {
+    id: "SAT-12",
+    customer: "Binay Pradhan",
+    society: "Ashish JK",
+    purifierId: "HAC88F1122",
+    technician: "Anil P",
+    jobType: "Leakage Inspection",
+    sentiment: "Neutral",
+    confidence: 86,
+    date: "2026-09-14",
+    tags: ["Teflon Tape Fixed", "No Leak"],
+    note: "Minor elbow valve drip fixed quickly with replacement connector. Checked under cabinet dry.",
+    tdsIn: 470,
+    tdsOut: 52,
+    status: "Resolved",
+  }
+];
+
 const SAMPLE_RATINGS = [
-  { customer: "Abhijit Dey",           society: "MJR Clique Hydra Apartment", rating: "Positive",     date: "2026-09-10", comment: "5-star service, technician was polite and calibrated TDS perfectly." },
-  { customer: "Ravi Kumar",            society: "Prestige Lakeside",          rating: "Appreciative", date: "2026-09-09", comment: "Thanked the technician personally for fast turnaround." },
-  { customer: "Deepa Nair",            society: "Ashish JK",                  rating: "Negative",     date: "2026-09-07", comment: "Unhappy with repeated maintenance visits in a short span." },
-  { customer: "Anand Ray",             society: "CBR Aakruti",                rating: "Critical",     date: "2026-09-05", comment: "Escalated to support team, requested manager callback." },
-  { customer: "Sneha Patil",           society: "Sobha Dream Acres",          rating: "Negative",     date: "2026-09-08", comment: "Delayed arrival affected afternoon schedule." },
-  { customer: "Arun K Sinha",          society: "MJR Clique Hydra Apartment", rating: "Appreciative", date: "2026-09-11", comment: "Left a positive review on society board for prompt support." },
-  { customer: "Asha Anandan",          society: "SVS Ananda Nilayam",         rating: "Positive",     date: "2026-09-06", comment: "Smooth, professional quarterly visit." },
-  { customer: "Bikram",                society: "MJR Clique Hydra Apartment", rating: "Critical",     date: "2026-09-04", comment: "Filed a formal complaint regarding delayed filter replacement." },
-  { customer: "Bibhuranjan Mohapatra", society: "Prabhavathi Meghana Towers", rating: "Negative",     date: "2026-09-03", comment: "Frustrated with missed technician slot." },
-  { customer: "Chaudari Vipool",       society: "Sai Poorna Premier",         rating: "Positive",     date: "2026-09-12", comment: "Extremely happy, gave 5/5 score." },
+  {
+    id: "RAT-01",
+    customer: "Abhijit Dey",
+    society: "MJR Clique Hydra Apartment",
+    rating: "Positive",
+    stars: 5,
+    date: "2026-09-10",
+    technician: "Ramesh K",
+    category: "Filter Service",
+    comment: "5-star service! Ramesh arrived on time, was extremely polite, and calibrated the TDS down to 42 ppm.",
+    aspects: { taste: 5, punctuality: 5, behavior: 5, speed: 5 },
+  },
+  {
+    id: "RAT-02",
+    customer: "Chaudari Vipool",
+    society: "Sai Poorna Premier",
+    rating: "Positive",
+    stars: 5,
+    date: "2026-09-12",
+    technician: "Vijay R",
+    category: "Installation",
+    comment: "Extremely happy with the neat plumbing and clear explanation of filter life cycles. 5/5 score.",
+    aspects: { taste: 5, punctuality: 5, behavior: 5, speed: 5 },
+  },
+  {
+    id: "RAT-03",
+    customer: "Arun K Sinha",
+    society: "MJR Clique Hydra Apartment",
+    rating: "Appreciative",
+    stars: 5,
+    date: "2026-09-11",
+    technician: "Ramesh K",
+    category: "TDS Health Check",
+    comment: "Posted an appreciative review on our society community group. Outstanding support turnaround.",
+    aspects: { taste: 5, punctuality: 4, behavior: 5, speed: 5 },
+  },
+  {
+    id: "RAT-04",
+    customer: "Divya Vijayaraghavan",
+    society: "CBR Aakruti",
+    rating: "Positive",
+    stars: 5,
+    date: "2026-09-13",
+    technician: "Deepak T",
+    category: "Filter Upgrade",
+    comment: "Alkaline mineral cartridge was installed in 15 mins. Friendly technician and excellent water quality.",
+    aspects: { taste: 5, punctuality: 5, behavior: 5, speed: 4 },
+  },
+  {
+    id: "RAT-05",
+    customer: "Ravi Kumar",
+    society: "Prestige Lakeside",
+    rating: "Appreciative",
+    stars: 4,
+    date: "2026-09-09",
+    technician: "Suresh M",
+    category: "AMC Service",
+    comment: "Thanked the technician personally for finishing before our evening guests arrived. Solid work.",
+    aspects: { taste: 4, punctuality: 4, behavior: 5, speed: 4 },
+  },
+  {
+    id: "RAT-06",
+    customer: "Asha Anandan",
+    society: "SVS Ananda Nilayam",
+    rating: "Positive",
+    stars: 4,
+    date: "2026-09-06",
+    technician: "Deepak T",
+    category: "AMC Service",
+    comment: "Smooth, professional quarterly visit. Quick filter replacement without any mess.",
+    aspects: { taste: 4, punctuality: 4, behavior: 5, speed: 4 },
+  },
+  {
+    id: "RAT-07",
+    customer: "Binay Pradhan",
+    society: "Ashish JK",
+    rating: "Neutral",
+    stars: 3,
+    date: "2026-09-14",
+    technician: "Anil P",
+    category: "Repair Visit",
+    comment: "Leak was resolved promptly, but had to call support twice to get the ticket acknowledged.",
+    aspects: { taste: 4, punctuality: 3, behavior: 4, speed: 3 },
+  },
+  {
+    id: "RAT-08",
+    customer: "Sneha Patil",
+    society: "Sobha Dream Acres",
+    rating: "Negative",
+    stars: 2,
+    date: "2026-09-08",
+    technician: "Anil P",
+    category: "Emergency Repair",
+    comment: "Delayed arrival affected our afternoon schedule. Technician apologized, but communication needs improvement.",
+    aspects: { taste: 4, punctuality: 1, behavior: 3, speed: 3 },
+  },
+  {
+    id: "RAT-09",
+    customer: "Deepa Nair",
+    society: "Ashish JK",
+    rating: "Negative",
+    stars: 2,
+    date: "2026-09-07",
+    technician: "Vijay R",
+    category: "Membrane Service",
+    comment: "Unhappy with repeated maintenance visits in a short span. Pressure regulator should have been fixed on visit 1.",
+    aspects: { taste: 3, punctuality: 3, behavior: 4, speed: 2 },
+  },
+  {
+    id: "RAT-10",
+    customer: "Bibhuranjan Mohapatra",
+    society: "Prabhavathi Meghana Towers",
+    rating: "Negative",
+    stars: 2,
+    date: "2026-09-03",
+    technician: "Prakash N",
+    category: "Installation",
+    comment: "Frustrated with missed technician slot on the weekend. Monday setup was okay though.",
+    aspects: { taste: 4, punctuality: 1, behavior: 3, speed: 3 },
+  },
+  {
+    id: "RAT-11",
+    customer: "Bikram",
+    society: "MJR Clique Hydra Apartment",
+    rating: "Critical",
+    stars: 1,
+    date: "2026-09-04",
+    technician: "Suresh M",
+    category: "Flow Calibration",
+    comment: "Filed a formal complaint regarding delayed filter replacement and low output flow rate.",
+    aspects: { taste: 2, punctuality: 2, behavior: 3, speed: 1 },
+  },
+  {
+    id: "RAT-12",
+    customer: "Anand Ray",
+    society: "CBR Aakruti",
+    rating: "Critical",
+    stars: 1,
+    date: "2026-09-05",
+    technician: "Manoj S",
+    category: "Complaint Escalation",
+    comment: "Escalated to management. Requested account manager callback to discuss subscription cancellation.",
+    aspects: { taste: 2, punctuality: 1, behavior: 2, speed: 1 },
+  },
 ];
 
 export function CustomerSatisfaction() {
@@ -840,23 +1217,6 @@ export function CustomerSatisfaction() {
     api.logView(user.username, "Viewed Customer Satisfaction");
   }, [user]);
 
-  const sentQl = sentQ.toLowerCase();
-  const sentimentShown = useMemo(() => {
-    return SAMPLE_SENTIMENT.filter((r) =>
-      (sentFilter === "all" || r.sentiment === sentFilter) &&
-      (!sentQl || `${r.customer} ${r.society} ${r.purifierId} ${r.note}`.toLowerCase().includes(sentQl))
-    );
-  }, [sentFilter, sentQl]);
-
-  const ratingQl = ratingQ.toLowerCase();
-  const ratingsShown = useMemo(() => {
-    return SAMPLE_RATINGS.filter((r) =>
-      (ratingFilter === "all" || r.rating === ratingFilter) &&
-      (!ratingQl || `${r.customer} ${r.society} ${r.comment}`.toLowerCase().includes(ratingQl))
-    );
-  }, [ratingFilter, ratingQl]);
-
-  // Sentiment Breakdown calculation
   const sentimentCounts = useMemo(() => {
     const counts = { Good: 0, Neutral: 0, Bad: 0, Negative: 0, "Extremely Negative": 0 };
     SAMPLE_SENTIMENT.forEach((s) => {
@@ -864,64 +1224,65 @@ export function CustomerSatisfaction() {
     });
     return counts;
   }, []);
-
-  const positiveCount = sentimentCounts.Good;
-  const positivePct = Math.round((positiveCount / SAMPLE_SENTIMENT.length) * 100);
+  const totalSentiments = SAMPLE_SENTIMENT.length;
+  const positiveSentimentPct = Math.round((sentimentCounts.Good / totalSentiments) * 100);
   const criticalCount = sentimentCounts.Negative + sentimentCounts["Extremely Negative"];
 
+  const totalRatings = SAMPLE_RATINGS.length;
+  const avgStars = (SAMPLE_RATINGS.reduce((acc, r) => acc + r.stars, 0) / totalRatings).toFixed(1);
+
+  const sentQl = sentQ.toLowerCase();
+  const sentimentShown = useMemo(() => SAMPLE_SENTIMENT.filter((r) =>
+    (sentFilter === "all" || r.sentiment === sentFilter) &&
+    (!sentQl || `${r.customer} ${r.society} ${r.purifierId} ${r.note} ${r.technician}`.toLowerCase().includes(sentQl))
+  ), [sentFilter, sentQl]);
+
+  const ratingQl = ratingQ.toLowerCase();
+  const ratingsShown = useMemo(() => SAMPLE_RATINGS.filter((r) =>
+    (ratingFilter === "all" || r.rating === ratingFilter) &&
+    (!ratingQl || `${r.customer} ${r.society} ${r.comment} ${r.technician} ${r.category}`.toLowerCase().includes(ratingQl))
+  ), [ratingFilter, ratingQl]);
+
   const sentimentFilterOptions = [
-    { id: "all", label: "All Sentiment", count: SAMPLE_SENTIMENT.length },
+    { id: "all", label: "All", count: SAMPLE_SENTIMENT.length },
     { id: "Good", label: "😊 Good", count: sentimentCounts.Good },
     { id: "Neutral", label: "😐 Neutral", count: sentimentCounts.Neutral },
     { id: "Bad", label: "🙁 Bad", count: sentimentCounts.Bad },
     { id: "Negative", label: "😠 Negative", count: sentimentCounts.Negative },
     { id: "Extremely Negative", label: "😡 Critical", count: sentimentCounts["Extremely Negative"] },
   ];
-
-  const ratingCounts = useMemo(() => {
-    const counts = { Positive: 0, Appreciative: 0, Negative: 0, Critical: 0 };
-    SAMPLE_RATINGS.forEach((r) => {
-      if (counts[r.rating] !== undefined) counts[r.rating]++;
-    });
-    return counts;
-  }, []);
-
   const ratingFilterOptions = [
-    { id: "all", label: "All Ratings", count: SAMPLE_RATINGS.length },
-    { id: "Positive", label: "Positive", count: ratingCounts.Positive },
-    { id: "Appreciative", label: "Appreciative", count: ratingCounts.Appreciative },
-    { id: "Negative", label: "Negative", count: ratingCounts.Negative },
-    { id: "Critical", label: "Critical", count: ratingCounts.Critical },
+    { id: "all", label: "All", count: SAMPLE_RATINGS.length },
+    { id: "Positive", label: "Positive", count: SAMPLE_RATINGS.filter((r) => r.rating === "Positive").length },
+    { id: "Appreciative", label: "Appreciative", count: SAMPLE_RATINGS.filter((r) => r.rating === "Appreciative").length },
+    { id: "Negative", label: "Negative", count: SAMPLE_RATINGS.filter((r) => r.rating === "Negative").length },
+    { id: "Critical", label: "Critical", count: SAMPLE_RATINGS.filter((r) => r.rating === "Critical").length },
   ];
 
   const exportSentimentCsv = () => exportToCsv("prowater-customer-sentiment.csv", [
     { label: "Customer", get: (r) => r.customer },
     { label: "Society", get: (r) => r.society },
     { label: "Purifier ID", get: (r) => r.purifierId },
+    { label: "Technician", get: (r) => r.technician },
     { label: "Sentiment", get: (r) => r.sentiment },
     { label: "Date", get: (r) => r.date },
-    { label: "Note", get: (r) => r.note },
+    { label: "Feedback Note", get: (r) => r.note },
   ], sentimentShown);
 
-  const exportRatingCsv = () => exportToCsv("prowater-customer-rating.csv", [
+  const exportRatingCsv = () => exportToCsv("prowater-customer-ratings.csv", [
     { label: "Customer", get: (r) => r.customer },
     { label: "Society", get: (r) => r.society },
-    { label: "Rating", get: (r) => r.rating },
+    { label: "Technician", get: (r) => r.technician },
+    { label: "Service Category", get: (r) => r.category },
+    { label: "Stars", get: (r) => r.stars },
+    { label: "Rating Badge", get: (r) => r.rating },
     { label: "Date", get: (r) => r.date },
-    { label: "Comment", get: (r) => r.comment },
+    { label: "Review Comment", get: (r) => r.comment },
   ], ratingsShown);
 
   return (
     <div className="fade-up ov-sans" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <style>{`
-        .ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",system-ui,sans-serif;letter-spacing:-.02em}
-        .apple-table-row {
-          transition: background 0.15s ease;
-        }
-        .apple-table-row:hover {
-          background: rgba(8, 128, 90, 0.035) !important;
-        }
-      `}</style>
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",system-ui,sans-serif;letter-spacing:-.02em}`}</style>
 
       {/* Top Banner */}
       <div
@@ -932,231 +1293,140 @@ export function CustomerSatisfaction() {
           gap: 12,
           padding: "12px 18px",
           borderRadius: 16,
-          background: "rgba(0, 102, 204, 0.06)",
-          border: "1px solid rgba(0, 102, 204, 0.15)",
+          background: "rgba(8, 128, 90, 0.06)",
+          border: "1px solid rgba(8, 128, 90, 0.15)",
           fontSize: 13,
-          color: "#0066CC",
+          color: "#08805A",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Sparkles size={16} />
           <span>
-            <strong>Customer Satisfaction Hub:</strong> AI-powered sentiment extraction from visit feedback notes and post-service customer ratings.
+            <strong>Customer Satisfaction:</strong> Post-visit sentiment and ratings collected from field service encounters.
           </span>
         </div>
-        <span style={{ fontSize: 11.5, fontWeight: 700, opacity: 0.8 }}>Sentiment Analysis Feed</span>
+        <span style={{ fontSize: 11.5, fontWeight: 700, opacity: 0.8 }}>Sample Feedback Feed</span>
       </div>
 
-      {/* KPI Overview Cards */}
+      {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
         <AppleKpiCard
-          label="Positive Sentiment"
-          value={`${positivePct}%`}
-          sub={`${positiveCount} of ${SAMPLE_SENTIMENT.length} happy customers`}
-          icon={ThumbsUp}
-          color="#08805A"
-          bg="rgba(8, 128, 90, 0.1)"
-        />
-        <AppleKpiCard
-          label="CSAT Satisfaction"
-          value="4.6 / 5"
-          sub="Average post-service rating"
-          icon={Star}
-          color="#B45309"
-          bg="rgba(180, 83, 9, 0.1)"
-        />
-        <AppleKpiCard
-          label="Feedback Tracked"
-          value={SAMPLE_SENTIMENT.length}
-          sub="Analyzed customer interactions"
+          label="Total Feedback Logs"
+          value={totalSentiments}
+          sub="Sentiment records captured"
           icon={MessageSquare}
           color="#0066CC"
           bg="rgba(0, 102, 204, 0.1)"
         />
         <AppleKpiCard
-          label="Attention Flags"
+          label="Positive Sentiment"
+          value={`${positiveSentimentPct}%`}
+          sub={`${sentimentCounts.Good} of ${totalSentiments} marked Good`}
+          icon={ThumbsUp}
+          color="#08805A"
+          bg="rgba(8, 128, 90, 0.1)"
+        />
+        <AppleKpiCard
+          label="Needs Attention"
           value={criticalCount}
-          sub="Negative or critical alerts"
-          icon={AlertCircle}
+          sub="Negative or Extremely Negative"
+          icon={AlertTriangle}
           color="#DC4141"
           bg="rgba(220, 38, 38, 0.1)"
+          activeDot={criticalCount > 0}
+        />
+        <AppleKpiCard
+          label="Avg. Customer Rating"
+          value={`${avgStars} / 5.0`}
+          sub={`${totalRatings} post-service reviews`}
+          icon={Star}
+          color="#B45309"
+          bg="rgba(180, 83, 9, 0.1)"
         />
       </div>
 
-      {/* Sentiment Ratio Multi-Segment Bar */}
-      <div style={{ ...APPLE_CARD, padding: "18px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0, color: "#1D1D1F" }}>Sentiment Distribution</h3>
-          <span style={{ fontSize: 12, color: "#86868B" }}>Based on {SAMPLE_SENTIMENT.length} recent service logs</span>
-        </div>
-
-        {/* Segmented bar */}
-        <div style={{ height: 12, borderRadius: 6, overflow: "hidden", display: "flex", gap: 2, background: "rgba(0,0,0,0.04)" }}>
-          <div style={{ width: `${(sentimentCounts.Good / SAMPLE_SENTIMENT.length) * 100}%`, background: "#08805A" }} title={`Good: ${sentimentCounts.Good}`} />
-          <div style={{ width: `${(sentimentCounts.Neutral / SAMPLE_SENTIMENT.length) * 100}%`, background: "#6E6E73" }} title={`Neutral: ${sentimentCounts.Neutral}`} />
-          <div style={{ width: `${(sentimentCounts.Bad / SAMPLE_SENTIMENT.length) * 100}%`, background: "#986315" }} title={`Bad: ${sentimentCounts.Bad}`} />
-          <div style={{ width: `${(sentimentCounts.Negative / SAMPLE_SENTIMENT.length) * 100}%`, background: "#DC4141" }} title={`Negative: ${sentimentCounts.Negative}`} />
-          <div style={{ width: `${(sentimentCounts["Extremely Negative"] / SAMPLE_SENTIMENT.length) * 100}%`, background: "#991B1B" }} title={`Critical: ${sentimentCounts["Extremely Negative"]}`} />
-        </div>
-
-        {/* Legend */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 12, fontSize: 12, color: "#6E6E73" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#08805A" }} /> 😊 Good ({sentimentCounts.Good})
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#6E6E73" }} /> 😐 Neutral ({sentimentCounts.Neutral})
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#986315" }} /> 🙁 Bad ({sentimentCounts.Bad})
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#DC4141" }} /> 😠 Negative ({sentimentCounts.Negative})
-          </span>
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#991B1B" }} /> 😡 Critical ({sentimentCounts["Extremely Negative"]})
-          </span>
-        </div>
-      </div>
-
-      {/* ── Section 1: Customer Sentiment Table ───────────────────────────── */}
+      {/* ── Customer Sentiment ─────────────────────────────────────────────── */}
       <div style={{ ...APPLE_CARD, padding: "20px 22px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <div>
-            <h3 style={{ fontSize: 16, fontWeight: 750, color: "#1D1D1F", margin: 0 }}>Customer Sentiment Analysis</h3>
-            <p style={{ fontSize: 12.5, color: "#86868B", margin: "3px 0 0" }}>NLP-extracted sentiment and notes from recent technician encounters</p>
-          </div>
-          <button
-            type="button"
-            onClick={exportSentimentCsv}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "7px 14px",
-              borderRadius: 11,
-              fontSize: 12.5,
-              fontWeight: 700,
-              cursor: "pointer",
-              background: "#FFFFFF",
-              border: "1px solid rgba(0, 0, 0, 0.12)",
-              color: "#1D1D1F",
-            }}
-          >
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "#1D1D1F" }}>Customer Sentiment</h3>
+          <button type="button" onClick={exportSentimentCsv} style={EXPORT_BTN}>
             <Download size={14} /> Export CSV
           </button>
         </div>
-
-        {/* Toolbar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <AppleSearchBar value={sentQ} onChange={setSentQ} placeholder="Search customer, society, purifier, note…" />
-          <AppleSegmentedControl options={sentimentFilterOptions} value={sentFilter} onChange={setSentFilter} />
+          <AppleSearchBar value={sentQ} onChange={setSentQ} placeholder="Search customer, society, purifier, technician…" />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <AppleSegmentedControl options={sentimentFilterOptions} value={sentFilter} onChange={setSentFilter} />
+          </div>
         </div>
-
-        {/* Table */}
-        <Table head={["Customer", "Society", "Purifier ID", "Sentiment", "Date", "Feedback Note"]} maxHeight={480}>
-          {sentimentShown.map((r, idx) => (
-            <tr key={idx} className="apple-table-row" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+        <Table head={["Customer & Society", "Purifier ID", "Technician", "Sentiment", "Date", "Feedback Note"]} maxHeight={480}>
+          {sentimentShown.map((r) => (
+            <tr key={r.id} style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
               <td style={td}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <AppleAvatar name={r.customer} size={30} />
-                  <strong style={{ fontSize: 13, color: "#1D1D1F" }}>{r.customer}</strong>
+                  <AppleAvatar name={r.customer} size={28} />
+                  <div style={{ textAlign: "left" }}>
+                    <strong style={{ fontSize: 13, color: "#1D1D1F", display: "block" }}>{r.customer}</strong>
+                    <span style={{ fontSize: 11.5, color: "#6E6E73" }}>{r.society}</span>
+                  </div>
                 </div>
               </td>
-              <td style={{ ...td, fontSize: 12.5, color: "#48484A" }}>{r.society}</td>
-              <td style={{ ...td, textAlign: "center" }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, padding: "3px 8px", borderRadius: 8, background: "rgba(0,0,0,0.05)", color: "#1D1D1F" }}>
-                  {r.purifierId}
-                </span>
-              </td>
-              <td style={{ ...td, textAlign: "center" }}>
+              <td style={td}>{r.purifierId}</td>
+              <td style={{ ...td, color: "#48484A" }}>{r.technician}</td>
+              <td style={td}>
                 <StatusPill value={r.sentiment} map={SENTIMENT_COLORS} emoji={SENTIMENT_EMOJI[r.sentiment]} />
               </td>
-              <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: "#86868B", fontVariantNumeric: "tabular-nums" }}>
-                {fmtDate(new Date(r.date))}
-              </td>
-              <td style={{ ...td, textAlign: "left", fontSize: 12.5, color: "#1D1D1F", maxWidth: 320 }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 6, background: "rgba(0,0,0,0.02)", padding: "6px 10px", borderRadius: 8 }}>
-                  <MessageSquare size={13} style={{ flexShrink: 0, marginTop: 2, color: "#86868B" }} />
-                  <span>{r.note}</span>
-                </div>
-              </td>
+              <td style={{ ...td, color: "#86868B", fontVariantNumeric: "tabular-nums" }}>{fmtDate(new Date(r.date))}</td>
+              <td style={{ ...td, textAlign: "left", maxWidth: 320 }}>{r.note}</td>
             </tr>
           ))}
           {sentimentShown.length === 0 && (
             <tr>
-              <td colSpan={6} style={{ padding: 0 }}>
-                <Empty msg="No feedback records match this filter." />
-              </td>
+              <td colSpan={6} style={{ padding: 0 }}><Empty msg="No feedback records match this filter." /></td>
             </tr>
           )}
         </Table>
       </div>
 
-      {/* ── Section 2: Customer Rating Table ─────────────────────────────── */}
+      {/* ── Customer Rating ────────────────────────────────────────────────── */}
       <div style={{ ...APPLE_CARD, padding: "20px 22px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <div>
-            <h3 style={{ fontSize: 16, fontWeight: 750, color: "#1D1D1F", margin: 0 }}>Customer Post-Visit Ratings</h3>
-            <p style={{ fontSize: 12.5, color: "#86868B", margin: "3px 0 0" }}>Direct ratings and service experience reviews</p>
-          </div>
-          <button
-            type="button"
-            onClick={exportRatingCsv}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "7px 14px",
-              borderRadius: 11,
-              fontSize: 12.5,
-              fontWeight: 700,
-              cursor: "pointer",
-              background: "#FFFFFF",
-              border: "1px solid rgba(0, 0, 0, 0.12)",
-              color: "#1D1D1F",
-            }}
-          >
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "#1D1D1F" }}>Customer Rating</h3>
+          <button type="button" onClick={exportRatingCsv} style={EXPORT_BTN}>
             <Download size={14} /> Export CSV
           </button>
         </div>
-
-        {/* Toolbar */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
-          <AppleSearchBar value={ratingQ} onChange={setRatingQ} placeholder="Search customer, society, comment…" />
-          <AppleSegmentedControl options={ratingFilterOptions} value={ratingFilter} onChange={setRatingFilter} />
+          <AppleSearchBar value={ratingQ} onChange={setRatingQ} placeholder="Search customer, society, comment, technician…" />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <AppleSegmentedControl options={ratingFilterOptions} value={ratingFilter} onChange={setRatingFilter} />
+          </div>
         </div>
-
-        {/* Table */}
-        <Table head={["Customer", "Society", "Rating Badge", "Date", "Comment"]} maxHeight={480}>
-          {ratingsShown.map((r, idx) => (
-            <tr key={idx} className="apple-table-row" style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+        <Table head={["Customer & Society", "Technician", "Service Category", "Stars", "Rating", "Date", "Review Comment"]} maxHeight={480}>
+          {ratingsShown.map((r) => (
+            <tr key={r.id} style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
               <td style={td}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <AppleAvatar name={r.customer} size={30} />
-                  <strong style={{ fontSize: 13, color: "#1D1D1F" }}>{r.customer}</strong>
+                  <AppleAvatar name={r.customer} size={28} />
+                  <div style={{ textAlign: "left" }}>
+                    <strong style={{ fontSize: 13, color: "#1D1D1F", display: "block" }}>{r.customer}</strong>
+                    <span style={{ fontSize: 11.5, color: "#6E6E73" }}>{r.society}</span>
+                  </div>
                 </div>
               </td>
-              <td style={{ ...td, fontSize: 12.5, color: "#48484A" }}>{r.society}</td>
-              <td style={{ ...td, textAlign: "center" }}>
+              <td style={{ ...td, color: "#48484A" }}>{r.technician}</td>
+              <td style={td}>{r.category}</td>
+              <td style={td}><StarRating rating={r.stars} /></td>
+              <td style={td}>
                 <StatusPill value={r.rating} map={RATING_COLORS} />
               </td>
-              <td style={{ ...td, textAlign: "center", fontSize: 12.5, color: "#86868B", fontVariantNumeric: "tabular-nums" }}>
-                {fmtDate(new Date(r.date))}
-              </td>
-              <td style={{ ...td, textAlign: "left", fontSize: 12.5, color: "#1D1D1F" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Star size={13} fill="#F59E0B" color="#F59E0B" />
-                  <span>{r.comment}</span>
-                </div>
-              </td>
+              <td style={{ ...td, color: "#86868B", fontVariantNumeric: "tabular-nums" }}>{fmtDate(new Date(r.date))}</td>
+              <td style={{ ...td, textAlign: "left", maxWidth: 320 }}>{r.comment}</td>
             </tr>
           ))}
           {ratingsShown.length === 0 && (
             <tr>
-              <td colSpan={5} style={{ padding: 0 }}>
-                <Empty msg="No ratings match this filter." />
-              </td>
+              <td colSpan={7} style={{ padding: 0 }}><Empty msg="No customer ratings match this filter." /></td>
             </tr>
           )}
         </Table>
@@ -1166,171 +1436,254 @@ export function CustomerSatisfaction() {
 }
 
 /* ===========================================================================
-   FSM — TRACK TECHNICIAN (Bengaluru map via Leaflet + OpenStreetMap)
+   FSM — TRACK TECHNICIAN: Clean Field Live Fleet Radar
    =========================================================================== */
 
-const SAMPLE_TECHNICIANS = [
-  { id: "T-01", name: "Ramesh K", status: "on_job",    lat: 12.9352, lng: 77.6245, area: "Koramangala", job: "Installation · CUS-00045", phone: "+91 98450 11223" },
-  { id: "T-02", name: "Suresh M", status: "available", lat: 12.9719, lng: 77.6412, area: "Indiranagar", job: "Idle", phone: "+91 98801 44556" },
-  { id: "T-03", name: "Anil P",   status: "on_job",    lat: 12.9081, lng: 77.6476, area: "HSR Layout",  job: "Service · CUS-00101", phone: "+91 99002 77889" },
-  { id: "T-04", name: "Vijay R",  status: "en_route",  lat: 13.0298, lng: 77.5400, area: "Hebbal",      job: "En route · CUS-00092", phone: "+91 97403 99001" },
-  { id: "T-05", name: "Manoj S",  status: "available", lat: 12.9250, lng: 77.5938, area: "Jayanagar",   job: "Idle", phone: "+91 96112 33445" },
+const FLEET_TECHNICIANS = [
+  {
+    id: "TECH-01",
+    name: "Ramesh K",
+    status: "en_route", // 'en_route' | 'on_job' | 'available'
+    lat: 12.9280,
+    lng: 77.6320,
+    destLat: 12.8750,
+    destLng: 77.7200,
+    area: "Koramangala, South Zone",
+    rating: 4.9,
+    phone: "+91 98450 11223",
+    currentJob: {
+      id: "JOB-101",
+      customer: "Abhijit Dey",
+      society: "MJR Clique Hydra Apartment",
+      flat: "Tower B, Flat 402",
+      jobType: "Filter Service & TDS Tune",
+      etaMins: 12,
+      distanceKm: 4.2,
+      timeSlot: "2:00 PM - 2:45 PM",
+      progressStep: 2,
+    }
+  },
+  {
+    id: "TECH-02",
+    name: "Suresh M",
+    status: "available",
+    lat: 12.9719,
+    lng: 77.6412,
+    destLat: null,
+    destLng: null,
+    area: "Indiranagar Hub Standby",
+    rating: 4.8,
+    phone: "+91 98801 44556",
+    currentJob: null,
+  },
+  {
+    id: "TECH-03",
+    name: "Anil P",
+    status: "on_job",
+    lat: 12.9081,
+    lng: 77.6476,
+    destLat: 12.9081,
+    destLng: 77.6476,
+    area: "HSR Layout Sector 2",
+    rating: 4.7,
+    phone: "+91 99002 77889",
+    currentJob: {
+      id: "JOB-104",
+      customer: "Deepa Nair",
+      society: "Ashish JK",
+      flat: "Block C, Flat 104",
+      jobType: "Membrane Replacement",
+      etaMins: 0,
+      distanceKm: 0,
+      timeSlot: "1:15 PM - 2:00 PM",
+      progressStep: 4,
+    }
+  },
+  {
+    id: "TECH-04",
+    name: "Vijay R",
+    status: "en_route",
+    lat: 12.9850,
+    lng: 77.5800,
+    destLat: 13.0298,
+    destLng: 77.5400,
+    area: "Malleswaram, North Zone",
+    rating: 4.9,
+    phone: "+91 97403 99001",
+    currentJob: {
+      id: "JOB-105",
+      customer: "Sneha Patil",
+      society: "Sobha Dream Acres",
+      flat: "Tower 6, Flat 1201",
+      jobType: "Emergency Flow Check",
+      etaMins: 18,
+      distanceKm: 6.8,
+      timeSlot: "2:30 PM - 3:15 PM",
+      progressStep: 2,
+    }
+  },
+  {
+    id: "TECH-05",
+    name: "Manoj S",
+    status: "on_job",
+    lat: 12.9250,
+    lng: 77.5938,
+    destLat: 12.9250,
+    destLng: 77.5938,
+    area: "Jayanagar 4th Block",
+    rating: 4.6,
+    phone: "+91 96112 33445",
+    currentJob: {
+      id: "JOB-112",
+      customer: "Dhananjaya Samanta",
+      society: "The Green Terraces",
+      flat: "Villa 18",
+      jobType: "Quarterly AMC Calibration",
+      etaMins: 0,
+      distanceKm: 0,
+      timeSlot: "11:00 AM - 12:00 PM",
+      progressStep: 4,
+    }
+  },
 ];
+
+const TECH_STATUS_LABELS = { en_route: "En Route", on_job: "On Site", available: "Available" };
+const TECH_STATUS_COLORS = {
+  "En Route": { color: "#B45309", bg: "rgba(180, 83, 9, 0.1)" },
+  "On Site": { color: "#08805A", bg: "rgba(8, 128, 90, 0.1)" },
+  "Available": { color: "#0066CC", bg: "rgba(0, 102, 204, 0.1)" },
+};
 
 export function TrackTechnician() {
   const { user } = useAuth();
-  const mapRef = useRef(null);
-  const mapObj = useRef(null);
-  const markersRef = useRef([]);
-  const [techs] = useState(SAMPLE_TECHNICIANS);
-  const [sel, setSel] = useState(null);
-
-  const statusColor = (s) => s === "on_job" ? "#DC4141" : s === "en_route" ? "#B45309" : "#08805A";
-  const statusLabel = (s) => s === "on_job" ? "On job" : s === "en_route" ? "En route" : "Available";
+  const [techs] = useState(FLEET_TECHNICIANS);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [searchQ, setSearchQ] = useState("");
 
   useEffect(() => {
     api.logView(user.username, "Viewed Track Technician");
   }, [user]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const CSS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
-    const JS = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-
-    const ensureCss = () => {
-      if (!document.querySelector(`link[href="${CSS}"]`)) {
-        const l = document.createElement("link");
-        l.rel = "stylesheet";
-        l.href = CSS;
-        document.head.appendChild(l);
-      }
-    };
-
-    const ensureJs = () => new Promise((resolve, reject) => {
-      if (window.L) return resolve(window.L);
-      let s = document.querySelector(`script[src="${JS}"]`);
-      if (s) {
-        s.addEventListener("load", () => resolve(window.L));
-        return;
-      }
-      s = document.createElement("script");
-      s.src = JS;
-      s.async = true;
-      s.onload = () => resolve(window.L);
-      s.onerror = () => reject(new Error("Leaflet failed to load"));
-      document.head.appendChild(s);
-    });
-
-    ensureCss();
-    ensureJs().then((L) => {
-      if (cancelled || !mapRef.current || mapObj.current) return;
-      const map = L.map(mapRef.current, { zoomControl: true }).setView([BENGALURU_CENTER.lat, BENGALURU_CENTER.lng], 12);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap contributors",
-        maxZoom: 19,
-      }).addTo(map);
-      mapObj.current = map;
-      renderMarkers(L, map);
-    }).catch(() => {});
-
-    return () => {
-      cancelled = true;
-      if (mapObj.current) {
-        mapObj.current.remove();
-        mapObj.current = null;
-      }
-    };
-  }, []);
-
-  const renderMarkers = (L, map) => {
-    markersRef.current.forEach((m) => map.removeLayer(m));
-    markersRef.current = [];
-    techs.forEach((t) => {
-      let icon;
-      if (t.status === "en_route") {
-        icon = L.divIcon({
-          className: "tech-pin",
-          html: `<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.35))">🏍️</div>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 22],
-        });
-      } else {
-        icon = L.divIcon({
-          className: "tech-pin",
-          html: `<div style="width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${statusColor(t.status)};border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>`,
-          iconSize: [18, 18],
-          iconAnchor: [9, 18],
-        });
-      }
-      const m = L.marker([t.lat, t.lng], { icon }).addTo(map);
-      m.bindPopup(`<strong>${t.name}</strong><br/>${statusLabel(t.status)} · ${t.area}<br/><span style="color:#7D8A83">${t.job}</span>`);
-      m.on("click", () => setSel(t));
-      markersRef.current.push(m);
-    });
-  };
-
-  const counts = {
-    available: techs.filter((t) => t.status === "available").length,
+  const statusCounts = useMemo(() => ({
+    all: techs.length,
     en_route: techs.filter((t) => t.status === "en_route").length,
     on_job: techs.filter((t) => t.status === "on_job").length,
-  };
+    available: techs.filter((t) => t.status === "available").length,
+  }), [techs]);
+
+  const searchQl = searchQ.toLowerCase();
+  const filteredTechs = useMemo(() => {
+    return techs.filter((t) => {
+      const matchStatus = (filterStatus === "all" || t.status === filterStatus);
+      const matchSearch = (!searchQl ||
+        `${t.name} ${t.area} ${t.phone} ${t.currentJob?.customer || ""} ${t.currentJob?.society || ""}`.toLowerCase().includes(searchQl));
+      return matchStatus && matchSearch;
+    });
+  }, [techs, filterStatus, searchQl]);
+
+  const filterOptions = [
+    { id: "all", label: "All", count: statusCounts.all },
+    { id: "en_route", label: "En Route", count: statusCounts.en_route },
+    { id: "on_job", label: "On Site", count: statusCounts.on_job },
+    { id: "available", label: "Available", count: statusCounts.available },
+  ];
+
+  const exportTechCsv = () => exportToCsv("prowater-technician-fleet.csv", [
+    { label: "Technician", get: (t) => t.name },
+    { label: "Area", get: (t) => t.area },
+    { label: "Status", get: (t) => TECH_STATUS_LABELS[t.status] || t.status },
+    { label: "Phone", get: (t) => t.phone },
+    { label: "Current Customer", get: (t) => t.currentJob?.customer || "" },
+    { label: "Society", get: (t) => t.currentJob?.society || "" },
+    { label: "Job Type", get: (t) => t.currentJob?.jobType || "" },
+    { label: "ETA (mins)", get: (t) => (t.status === "en_route" ? (t.currentJob?.etaMins ?? "") : "") },
+  ], filteredTechs);
 
   return (
     <div className="fade-up ov-sans" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-        <AppleKpiCard label="Technicians" value={techs.length} sub="Field staff in Bengaluru" icon={UserRound} color="#0066CC" bg="rgba(0,102,204,0.1)" />
-        <AppleKpiCard label="Available" value={counts.available} sub="Ready for instant dispatch" icon={CheckCircle2} color="#08805A" bg="rgba(8,128,90,0.1)" activeDot />
-        <AppleKpiCard label="En Route" value={counts.en_route} sub="Travelling to site" icon={MapPin} color="#B45309" bg="rgba(180,83,9,0.1)" />
-        <AppleKpiCard label="On Job" value={counts.on_job} sub="Currently servicing" icon={Wrench} color="#DC4141" bg="rgba(220,38,38,0.1)" />
+      <style>{`.ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",system-ui,sans-serif;letter-spacing:-.02em}`}</style>
+
+      {/* Top Banner */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "12px 18px",
+          borderRadius: 16,
+          background: "rgba(8, 128, 90, 0.06)",
+          border: "1px solid rgba(8, 128, 90, 0.15)",
+          fontSize: 13,
+          color: "#08805A",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Sparkles size={16} />
+          <span>
+            <strong>Track Technician:</strong> Field status of every technician and their current job assignment.
+          </span>
+        </div>
+        <span style={{ fontSize: 11.5, fontWeight: 700, opacity: 0.8 }}>Sample Fleet Feed</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 18 }} className="fsm-grid">
-        <style>{`@media(max-width:900px){.fsm-grid{grid-template-columns:1fr!important}}`}</style>
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+        <AppleKpiCard label="Total Technicians" value={statusCounts.all} sub="Active field workforce" icon={UserRound} color="#0066CC" bg="rgba(0, 102, 204, 0.1)" />
+        <AppleKpiCard label="En Route" value={statusCounts.en_route} sub="Travelling to a job" icon={Truck} color="#B45309" bg="rgba(180, 83, 9, 0.1)" activeDot={statusCounts.en_route > 0} />
+        <AppleKpiCard label="On Site" value={statusCounts.on_job} sub="Currently servicing a customer" icon={Wrench} color="#08805A" bg="rgba(8, 128, 90, 0.1)" />
+        <AppleKpiCard label="Available" value={statusCounts.available} sub="Ready for dispatch" icon={CheckCircle2} color="#7C3AED" bg="rgba(124, 58, 237, 0.1)" />
+      </div>
 
-        {/* Map Card */}
-        <div style={{ ...APPLE_CARD, padding: "18px 20px" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <div>
-              <h3 style={{ fontSize: 16, fontWeight: 750, color: "#1D1D1F", margin: 0 }}>Live Dispatch Map · Bengaluru</h3>
-              <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>Real-time GPS positions of active technicians</div>
-            </div>
-          </div>
-          <div ref={mapRef} style={{ width: "100%", height: 520, borderRadius: 16, overflow: "hidden", background: "#EEF7F3" }} />
+      {/* Technician Roster */}
+      <div style={{ ...APPLE_CARD, padding: "20px 22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14, marginBottom: 18 }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 750, color: "#1D1D1F" }}>Technician Roster</h3>
+          <button type="button" onClick={exportTechCsv} style={EXPORT_BTN}>
+            <Download size={14} /> Export CSV
+          </button>
         </div>
-
-        {/* Roster Card */}
-        <div style={{ ...APPLE_CARD, padding: "18px 20px", display: "flex", flexDirection: "column" }}>
-          <h3 style={{ fontSize: 16, fontWeight: 750, color: "#1D1D1F", margin: "0 0 12px" }}>Active Technicians ({techs.length})</h3>
-          <div style={{ maxHeight: 520, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8 }}>
-            {techs.map((t) => (
-              <div
-                key={t.id}
-                onClick={() => {
-                  setSel(t);
-                  if (mapObj.current) mapObj.current.setView([t.lat, t.lng], 14);
-                }}
-                style={{
-                  ...APPLE_SUBTLE_CARD,
-                  padding: "12px 14px",
-                  cursor: "pointer",
-                  background: sel?.id === t.id ? "rgba(8, 128, 90, 0.08)" : "#FFFFFF",
-                  borderColor: sel?.id === t.id ? "#08805A" : "rgba(0, 0, 0, 0.06)",
-                }}
-              >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+          <AppleSearchBar value={searchQ} onChange={setSearchQ} placeholder="Search technician, area, customer, society…" />
+          <div style={{ flex: 1, minWidth: 280 }}>
+            <AppleSegmentedControl options={filterOptions} value={filterStatus} onChange={setFilterStatus} />
+          </div>
+        </div>
+        <Table head={["Technician", "Area", "Status", "Phone", "Current Job", "ETA"]} maxHeight={560}>
+          {filteredTechs.map((t) => (
+            <tr key={t.id} style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+              <td style={td}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <AppleAvatar name={t.name} size={32} />
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <strong style={{ fontSize: 13.5, color: "#1D1D1F" }}>{t.name}</strong>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: statusColor(t.status) }}>{statusLabel(t.status)}</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: "#86868B", marginTop: 2 }}>{t.area} · {t.job}</div>
-                  </div>
+                  <AppleAvatar name={t.name} size={28} />
+                  <strong style={{ fontSize: 13, color: "#1D1D1F" }}>{t.name}</strong>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
+              </td>
+              <td style={{ ...td, color: "#48484A" }}>{t.area}</td>
+              <td style={td}>
+                <StatusPill value={TECH_STATUS_LABELS[t.status]} map={TECH_STATUS_COLORS} />
+              </td>
+              <td style={{ ...td, color: "#48484A" }}>{t.phone}</td>
+              <td style={{ ...td, textAlign: "left" }}>
+                {t.currentJob ? (
+                  <div>
+                    <div style={{ fontWeight: 650, color: "#1D1D1F" }}>{t.currentJob.customer}</div>
+                    <div style={{ fontSize: 11.5, color: "#6E6E73" }}>{t.currentJob.society} · {t.currentJob.jobType}</div>
+                  </div>
+                ) : (
+                  <span style={{ color: "#86868B" }}>—</span>
+                )}
+              </td>
+              <td style={{ ...td, color: t.status === "en_route" ? "#B45309" : "#86868B", fontWeight: t.status === "en_route" ? 700 : 400 }}>
+                {t.status === "en_route" ? `${t.currentJob.etaMins} min` : "—"}
+              </td>
+            </tr>
+          ))}
+          {filteredTechs.length === 0 && (
+            <tr>
+              <td colSpan={6} style={{ padding: 0 }}><Empty msg="No technicians match this filter." /></td>
+            </tr>
+          )}
+        </Table>
       </div>
     </div>
   );
@@ -1458,7 +1811,9 @@ export function MaintenanceSchedule() {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <AppleSearchBar value={q} onChange={setQ} placeholder="Search customer, purifier or society…" />
-          <AppleSegmentedControl options={filterOptions} value={bucket} onChange={setBucket} />
+          <div style={{ minWidth: 320 }}>
+            <AppleSegmentedControl options={filterOptions} value={bucket} onChange={setBucket} />
+          </div>
         </div>
 
         <Table head={["Customer", "Purifier", "Device", "Society", "Last service", "Next due", "Status"]} maxHeight={520}>
@@ -1612,7 +1967,9 @@ export function WaterQuality() {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
           <AppleSearchBar value={q} onChange={setQ} placeholder="Search customer, purifier or society…" />
-          <AppleSegmentedControl options={filterOptions} value={filter} onChange={setFilter} />
+          <div style={{ minWidth: 320 }}>
+            <AppleSegmentedControl options={filterOptions} value={filter} onChange={setFilter} />
+          </div>
         </div>
 
         <Table head={["Customer", "Purifier", "Society", "Input TDS", "Output TDS", "Last test", "Compliance"]} maxHeight={520}>
@@ -1637,4 +1994,3 @@ export function WaterQuality() {
     </div>
   );
 }
-
