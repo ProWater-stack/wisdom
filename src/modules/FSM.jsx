@@ -66,6 +66,17 @@ const EXPORT_BTN = {
   boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
 };
 
+// `#RRGGBB` -> `rgba(r,g,b,alpha)` (v2.29.487) — lets a single status color drive
+// every alpha variant a "premium glass" surface needs (border/shadow/dot-glow/
+// count-badge tint) instead of hand-picking a separate rgba string per variant.
+function hexToRgba(hex, alpha) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /* ── Avatar Initial Bubble ────────────────────────────────────────────────── */
 const AVATAR_COLORS = [
   { bg: "#EBF5FF", text: "#0066CC" },
@@ -176,7 +187,12 @@ function AppleSegmentedControl({ options, value, onChange, style = {} }) {
 }
 
 /* ── Apple-style Search Bar ───────────────────────────────────────────────── */
-function AppleSearchBar({ value, onChange, placeholder = "Search…", style = {} }) {
+// `focusColor`/`radius` (v2.29.487) let one call site (Command Center's premium-
+// glass refresh) restyle its own focus ring/corner radius without touching every
+// other page's search box — both default to the original look, so every existing
+// call site renders unchanged.
+function AppleSearchBar({ value, onChange, placeholder = "Search…", style = {}, focusColor = "#08805A", radius = 11 }) {
+  const focusRgba = hexToRgba(focusColor, 0.14);
   return (
     <div style={{ position: "relative", width: "100%", maxWidth: 360, ...style }}>
       <Search
@@ -198,7 +214,7 @@ function AppleSearchBar({ value, onChange, placeholder = "Search…", style = {}
         style={{
           width: "100%",
           padding: "8px 32px 8px 34px",
-          borderRadius: 11,
+          borderRadius: radius,
           border: "1px solid rgba(0, 0, 0, 0.1)",
           background: "rgba(0, 0, 0, 0.03)",
           fontSize: 13,
@@ -209,8 +225,8 @@ function AppleSearchBar({ value, onChange, placeholder = "Search…", style = {}
         }}
         onFocus={(e) => {
           e.currentTarget.style.background = "#FFFFFF";
-          e.currentTarget.style.borderColor = "#08805A";
-          e.currentTarget.style.boxShadow = "0 0 0 3px rgba(8, 128, 90, 0.14)";
+          e.currentTarget.style.borderColor = focusColor;
+          e.currentTarget.style.boxShadow = `0 0 0 3px ${focusRgba}`;
         }}
         onBlur={(e) => {
           e.currentTarget.style.background = "rgba(0, 0, 0, 0.03)";
@@ -391,11 +407,26 @@ function StarRating({ rating = 5, size = 13, showValue = true }) {
 const JOB_STATUSES = [
   { key: "assigned",      label: "Assigned",          icon: ClipboardList, color: "#0066CC", bg: "rgba(0, 102, 204, 0.05)", border: "rgba(0, 102, 204, 0.2)" },
   { key: "in_transit",    label: "In Transit",        icon: Truck,         color: "#B45309", bg: "rgba(180, 83, 9, 0.05)", border: "rgba(180, 83, 9, 0.2)" },
-  { key: "cancelled",     label: "Cancelled",         icon: XCircle,       color: "#DC4141", bg: "rgba(220, 38, 38, 0.05)", border: "rgba(220, 38, 38, 0.2)" },
+  { key: "cancelled",     label: "Cancelled",         icon: XCircle,       color: "#DC2626", bg: "rgba(220, 38, 38, 0.05)", border: "rgba(220, 38, 38, 0.2)" },
   { key: "not_ack",       label: "Not Acknowledged",  icon: BellOff,       color: "#6E6E73", bg: "rgba(110, 110, 115, 0.05)", border: "rgba(110, 110, 115, 0.2)" },
   { key: "postponed",     label: "Postponed",         icon: PauseCircle,   color: "#7C3AED", bg: "rgba(124, 58, 237, 0.05)", border: "rgba(124, 58, 237, 0.2)" },
   { key: "not_moving",    label: "Not Moving",        icon: Ban,           color: "#991B1B", bg: "rgba(153, 27, 27, 0.05)", border: "rgba(153, 27, 27, 0.2)" },
 ];
+
+// Dotless pill badges used ONLY on Command Center's Kanban cards (v2.29.487
+// premium-glass refresh, per an exact user-supplied mockup) — visually distinct
+// from `StatusPill`'s dot+pill style used elsewhere (the job-detail modal, Track
+// Technician, Customer Satisfaction). Priority is hidden entirely when "Normal"
+// (the uninteresting default), per the mockup's own examples.
+const CARD_PRIORITY_BADGE = {
+  Urgent: { bg: "rgba(153, 27, 27, 0.12)", color: "#991B1B" },
+  High:   { bg: "rgba(255, 59, 48, 0.12)", color: "#FF3B30" },
+};
+const CARD_STATUS_BADGE = {
+  Available:   { bg: "rgba(52, 199, 89, 0.12)", color: "#248A3D" },
+  Unavailable: { bg: "rgba(220, 38, 38, 0.12)", color: "#DC2626" },
+  Postponed:   { bg: "rgba(152, 99, 21, 0.12)", color: "#986315" },
+};
 
 const CUSTOMER_STATUS_COLORS = {
   Available:   { color: "#08805A", bg: "rgba(8, 128, 90, 0.1)" },
@@ -534,14 +565,17 @@ export function OpsCommand() {
   ];
 
   const selectStyle = {
-    padding: "7px 10px",
-    borderRadius: 11,
-    border: "1px solid rgba(0, 0, 0, 0.1)",
-    background: "#FFFFFF",
+    padding: "8px 12px",
+    borderRadius: 12,
+    border: "0.5px solid rgba(0, 0, 0, 0.1)",
+    background: "rgba(255, 255, 255, 0.9)",
     fontSize: 12.5,
+    fontWeight: 600,
     color: "#1D1D1F",
     outline: "none",
     cursor: "pointer",
+    fontFamily: "inherit",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
   };
 
   return (
@@ -549,12 +583,10 @@ export function OpsCommand() {
       <style>{`
         .ov-sans h1,.ov-sans h2,.ov-sans h3,.ov-sans .serif{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text",system-ui,sans-serif;letter-spacing:-.02em}
         .apple-kanban-card {
-          transition: transform 0.16s cubic-bezier(0.16,1,0.3,1), box-shadow 0.16s ease, border-color 0.16s ease;
+          transition: transform 0.2s ease;
         }
         .apple-kanban-card:hover {
           transform: translateY(-2px);
-          box-shadow: 0 8px 22px rgba(0,0,0,0.07);
-          border-color: rgba(8, 128, 90, 0.3) !important;
         }
       `}</style>
 
@@ -636,22 +668,38 @@ export function OpsCommand() {
         />
       </div>
 
-      {/* Main Kanban Board Container */}
-      <div style={{ ...APPLE_CARD, padding: "20px 22px", overflow: "hidden" }}>
+      {/* Main Kanban Board Container — premium-glass refresh (v2.29.487), per an
+          exact user-supplied mockup: thicker blur+saturation, larger radius,
+          layered shadow with an inset highlight, scoped to this container only
+          (the shared APPLE_CARD token used elsewhere is untouched). */}
+      <div
+        style={{
+          background: "rgba(255, 255, 255, 0.82)",
+          WebkitBackdropFilter: "blur(40px) saturate(200%)",
+          backdropFilter: "blur(40px) saturate(200%)",
+          border: "0.5px solid rgba(255, 255, 255, 0.95)",
+          borderRadius: 28,
+          boxShadow: "0 24px 48px -12px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(0, 0, 0, 0.02), inset 0 1px 1px rgba(255, 255, 255, 1)",
+          padding: 24,
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', sans-serif",
+          WebkitFontSmoothing: "antialiased",
+          overflow: "hidden",
+        }}
+      >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             flexWrap: "wrap",
-            gap: 12,
+            gap: 14,
             marginBottom: 20,
-            paddingBottom: 16,
-            borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
+            paddingBottom: 18,
+            borderBottom: "0.5px solid rgba(0, 0, 0, 0.06)",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", flex: 1 }}>
-            <AppleSearchBar value={jobQ} onChange={setJobQ} placeholder="Search customer, technician, society, job…" />
+            <AppleSearchBar value={jobQ} onChange={setJobQ} placeholder="Search customer, technician, society, job…" focusColor="#0066CC" radius={14} />
             <div style={{ minWidth: 320 }}>
               <AppleSegmentedControl options={filterOptions} value={custStatusFilter} onChange={setCustStatusFilter} />
             </div>
@@ -663,17 +711,19 @@ export function OpsCommand() {
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
-              padding: "7px 14px",
-              borderRadius: 11,
+              padding: "8px 16px",
+              borderRadius: 14,
               fontSize: 12.5,
-              fontWeight: 700,
+              fontWeight: 750,
               cursor: "pointer",
-              background: "#FFFFFF",
-              border: "1px solid rgba(0, 0, 0, 0.12)",
+              background: "linear-gradient(180deg, #FFFFFF 0%, #F8F9FA 100%)",
+              border: "0.5px solid rgba(0, 0, 0, 0.12)",
               color: "#1D1D1F",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              transition: "all 0.15s ease",
+              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.04), inset 0 1px 1px #FFFFFF",
+              transition: "all 0.2s ease",
             }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "linear-gradient(180deg, #FFFFFF 0%, #F1F3F5 100%)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "linear-gradient(180deg, #FFFFFF 0%, #F8F9FA 100%)"; }}
           >
             <Download size={14} /> Export CSV
           </button>
@@ -710,32 +760,32 @@ export function OpsCommand() {
         >
           {JOB_STATUSES.map((col) => {
             const colJobs = jobsFiltered.filter((j) => j.status === col.key);
-            const Icon = col.icon;
             return (
               <div
                 key={col.key}
                 style={{
-                  flex: "0 0 280px",
-                  width: 280,
-                  background: col.bg,
-                  border: `1px solid ${col.border}`,
-                  borderRadius: 16,
+                  flex: "0 0 286px",
+                  width: 286,
+                  background: "rgba(255, 255, 255, 0.65)",
+                  border: `0.5px solid ${hexToRgba(col.color, 0.25)}`,
+                  borderRadius: 20,
                   display: "flex",
                   flexDirection: "column",
                   maxHeight: 680,
+                  boxShadow: `0 8px 24px ${hexToRgba(col.color, 0.04)}, inset 0 1px 1px #FFFFFF`,
                 }}
               >
                 <div
                   style={{
-                    padding: "14px 16px",
+                    padding: 16,
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
-                    borderBottom: `1px solid ${col.border}`,
+                    borderBottom: `0.5px solid ${hexToRgba(col.color, 0.15)}`,
                   }}
                 >
-                  <Icon size={16} color={col.color} />
-                  <strong style={{ fontSize: 13.5, color: col.color, fontWeight: 700 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: col.color, boxShadow: `0 0 8px ${hexToRgba(col.color, 0.5)}` }} />
+                  <strong style={{ fontSize: 13.5, color: col.color, fontWeight: 800 }}>
                     {col.label}
                   </strong>
                   <span
@@ -744,10 +794,9 @@ export function OpsCommand() {
                       fontSize: 11,
                       fontWeight: 800,
                       color: col.color,
-                      background: "#FFFFFF",
+                      background: hexToRgba(col.color, 0.1),
                       padding: "2px 8px",
                       borderRadius: 999,
-                      boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
                     }}
                   >
                     {colJobs.length}
@@ -770,109 +819,82 @@ export function OpsCommand() {
                       className="apple-kanban-card"
                       onClick={() => setActiveJob(j)}
                       style={{
-                        ...APPLE_SUBTLE_CARD,
-                        padding: "14px 15px",
+                        background: "rgba(255, 255, 255, 0.95)",
+                        border: "0.5px solid rgba(0, 0, 0, 0.06)",
+                        borderRadius: 16,
+                        boxShadow: "0 4px 14px rgba(0, 0, 0, 0.03), inset 0 1px 1px #FFFFFF",
+                        padding: "14px 16px",
                         cursor: "pointer",
-                        position: "relative",
-                        overflow: "hidden",
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6, marginBottom: 8 }}>
-                        <span style={{ fontSize: 11, fontWeight: 750, color: "#86868B", letterSpacing: ".02em" }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: "#86868B" }}>
                           {j.id}
                         </span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <div style={{ display: "flex", gap: 4 }}>
                           {j.repeat && (
-                            <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 6px", borderRadius: 999, background: "rgba(124, 58, 237, 0.1)", color: "#7C3AED" }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999, background: "rgba(124, 58, 237, 0.12)", color: "#7C3AED" }}>
                               REPEAT
                             </span>
                           )}
-                          <StatusPill value={j.priority} map={JOB_PRIORITY_COLORS} />
-                          <StatusPill value={j.customerStatus} map={CUSTOMER_STATUS_COLORS} />
+                          {CARD_PRIORITY_BADGE[j.priority] && (
+                            <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999, background: CARD_PRIORITY_BADGE[j.priority].bg, color: CARD_PRIORITY_BADGE[j.priority].color }}>
+                              {j.priority}
+                            </span>
+                          )}
+                          <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 7px", borderRadius: 999, background: CARD_STATUS_BADGE[j.customerStatus].bg, color: CARD_STATUS_BADGE[j.customerStatus].color }}>
+                            {j.customerStatus}
+                          </span>
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <AppleAvatar name={j.customer} size={28} />
-                        <div style={{ minWidth: 0 }}>
-                          <strong
-                            style={{
-                              fontSize: 13.5,
-                              color: "#1D1D1F",
-                              display: "block",
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {j.customer}
-                          </strong>
-                        </div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#1D1D1F", marginBottom: 4 }}>
+                        {j.customer}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748B", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
+                        📍 {j.society}
                       </div>
 
                       <div
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 5,
-                          fontSize: 12,
-                          color: "#6E6E73",
-                          marginBottom: 8,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        <MapPin size={12} style={{ flexShrink: 0, opacity: 0.7 }} />
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{j.society}</span>
-                      </div>
-
-                      <div
-                        style={{
-                          background: "rgba(0, 0, 0, 0.025)",
-                          borderRadius: 10,
-                          padding: "8px 10px",
+                          background: "rgba(0, 0, 0, 0.03)",
+                          borderRadius: 12,
+                          padding: 10,
                           display: "flex",
                           flexDirection: "column",
-                          gap: 4,
+                          gap: 5,
                           fontSize: 11.5,
                           color: "#48484A",
                         }}
                       >
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#6E6E73" }}>
-                            <UserRound size={12} /> Tech:
-                          </span>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#86868B" }}>Tech:</span>
                           <strong style={{ color: "#1D1D1F" }}>{j.technician}</strong>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#6E6E73" }}>
-                            <CalendarClock size={12} /> Slot:
-                          </span>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#86868B" }}>Slot:</span>
                           <span>{j.scheduled}</span>
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#6E6E73" }}>
-                            <Wrench size={12} /> Spares:
-                          </span>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ color: "#86868B" }}>Spares:</span>
                           <span style={{ textAlign: "right" }}>{j.spares?.length ? j.spares.join(", ") : "None required"}</span>
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
                         <span
                           style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: "2px 7px",
-                            borderRadius: 6,
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            color: "#64748B",
                             background: "rgba(0, 0, 0, 0.04)",
-                            color: "#6E6E73",
+                            padding: "2px 8px",
+                            borderRadius: 6,
                           }}
                         >
                           {j.jobType}
                         </span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: "#08805A", display: "inline-flex", alignItems: "center", gap: 2 }}>
+                        <span style={{ fontSize: 11, fontWeight: 750, color: "#08805A", display: "inline-flex", alignItems: "center", gap: 2 }}>
                           Details <ChevronRight size={12} />
                         </span>
                       </div>
